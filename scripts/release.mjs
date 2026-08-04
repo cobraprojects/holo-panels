@@ -52,11 +52,16 @@ const version = releases[0].manifest.version
 if (publish && version === '0.0.0') throw new Error('Refusing to publish the unreleased 0.0.0 workspace version')
 const tag = version.includes('-') ? 'next' : 'latest'
 
+const sourceValidation = spawnSync('bun', ['run', 'validate'], { stdio: 'inherit' })
+if (sourceValidation.status !== 0) process.exit(sourceValidation.status ?? 1)
+
 let failureStatus
 await withResolvedReleaseManifests(() => {
-  const validation = dryRun
-    ? spawnSync('node', ['scripts/validate-published-packages.mjs', '--require-build', '--pack'], { stdio: 'inherit' })
-    : spawnSync('bun', ['run', 'validate'], { stdio: 'inherit' })
+  const validation = spawnSync(
+    'node',
+    ['scripts/validate-published-packages.mjs', '--require-build', '--pack'],
+    { stdio: 'inherit' },
+  )
 
   if (validation.status !== 0) {
     failureStatus = validation.status ?? 1

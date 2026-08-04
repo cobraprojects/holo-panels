@@ -1,0 +1,689 @@
+import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import {
+  computed,
+  defineComponent,
+  h,
+  nextTick,
+  onScopeDispose,
+  ref,
+  shallowRef,
+  useId,
+  watch,
+  type Component,
+  type PropType,
+  type Ref,
+  type VNode,
+  type VNodeChild,
+} from 'vue'
+import { displayValue, pages, recordValue, visibleColumns } from './helpers'
+import { PanelsModal } from '../primitives'
+import { VueTableColumnPresentation } from './presentation'
+import type {
+  VueTableAction,
+  VueTableColumn,
+  VueCustomFilterProps,
+  VueTableFilter,
+  VueTableGroup,
+  VueTableRendererProps,
+  VueTableSummary,
+  VueFilterCollectionSlotProps,
+} from './types'
+
+type RuntimeRecord = Readonly<Record<string, unknown>>
+type RuntimeTable = VueTableRendererProps<Record<string, unknown>, TableRecordId>
+
+const filterBreakpoints = ['default', 'sm', 'md', 'lg', 'xl', '2xl'] as const
+
+function filterCollectionStyle(columns: FilterCollectionPresentation['columns']): Record<string, number> {
+  const style: Record<string, number> = {}
+  for (const breakpoint of filterBreakpoints) {
+    const value = columns[breakpoint]
+    if (value !== undefined) style[`--hp-filter-columns-${breakpoint}`] = value
+  }
+  return style
+}
+
+function filterLayoutStyle(layout: NonNullable<VueTableFilter['manifest']['layout']>): Record<string, number | string> {
+  const style: Record<string, number | string> = {}
+  for (const breakpoint of filterBreakpoints) {
+    const span = layout.columnSpan?.[breakpoint]
+    const start = layout.columnStart?.[breakpoint]
+    if (span !== undefined) style[`--hp-filter-column-span-${breakpoint}`] = span === 'full' ? '-1' : `span ${span}`
+    if (start !== undefined) style[`--hp-filter-column-start-${breakpoint}`] = start
+  }
+  const defaultSpan = layout.columnSpan?.default
+  if (defaultSpan !== undefined) style['--hp-filter-column-span'] = defaultSpan === 'full' ? '-1' : `span ${defaultSpan}`
+  if (layout.columnStart?.default !== undefined) style['--hp-filter-column-start'] = layout.columnStart.default
+  return style
+}
+
+function orderedFilters(filters: readonly VueTableFilter[], presentation: FilterCollectionPresentation | undefined): readonly VueTableFilter[] {
+  const ids = presentation?.schema.components.flatMap(component => {
+    const id = component.properties.leaf?.definition.id
+    return typeof id === 'string' ? [id] : []
+  }) ?? []
+  if (ids.length === 0) return filters
+  const byId = new Map(filters.map(filter => [filter.manifest.id, filter]))
+  return [...ids.flatMap(id => byId.get(id) ? [byId.get(id) as VueTableFilter] : []), ...filters.filter(filter => !ids.includes(filter.manifest.id))]
+}
+
+function filterCollectionSlot(table: RuntimeTable, placement: VueFilterCollectionSlotProps['placement']): VNodeChild {
+  const presentation = table.filterPresentation
+  const references = presentation?.slots[placement] ?? []
+  if (references.length === 0) return null
+  if (!table.registry || !presentation) throw new Error(`[Holo Panels] A Vue component registry is required for table filter ${placement} content.`)
+  return references.map(reference => h(table.registry?.resolve(reference.component, table.panelId, `table filter ${placement} content`) as Component, {
+    ...reference.properties,
+    key: `${reference.source}:${reference.order}:${reference.component}`,
+    placement,
+    presentation,
+  }))
+}
+
+const VueTransferAction = defineComponent({
+  props: {
+    manifest: { type: Object as PropType<ClientTransferManifest>, required: true },
+    table: { type: Object as PropType<RuntimeTable>, required: true },
+  },
+  setup(props) {
+    const open = ref(false)
+    const formatId = ref(props.manifest.formatIds[0] ?? '')
+    const mappings = ref<Readonly<Record<string, string>>>({})
+    const columns = ref(new Set(props.manifest.kind === 'export' ? props.manifest.columns.filter(column => column.visibleByDefault).map(column => column.id) : []))
+    const store = props.table.transferTransport ? new ClientTransferStore(props.manifest, props.table.transferTransport) : null
+    const state = shallowRef(store?.state)
+    if (store) onScopeDispose(store.subscribe(next => { state.value = next }))
+    async function submit(): Promise<void> {
+      if (!store) return
+      if (props.manifest.kind === 'import') await store.startImport(formatId.value, Object.entries(mappings.value).flatMap(([column, header]) => header ? [{ column, header }] : []))
+      else await store.startExport(formatId.value, [...columns.value], props.table.store.selectionPayload())
+    }
+    return () => h('span', { class: 'hp-transfer-action' }, [
+      h('button', { disabled: !store, type: 'button', onClick: () => { open.value = true } }, props.manifest.label),
+      h(PanelsModal, { open: open.value, title: props.manifest.label, onClose: () => { store?.cancel(); open.value = false } }, { default: () => [
+        h('label', ['Format', h('select', { value: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
+        props.manifest.kind === 'import' ? h('div', [
+          h('label', ['CSV file', h('input', { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
+          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h('select', { required: column.required, value: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, 'Do not import'), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
+          state.value?.uploadProgress ? h('progress', { 'aria-label': 'Upload progress', max: 100, value: state.value.uploadProgress }) : null,
+        ]) : h('div', props.manifest.columns.map(column => h('label', [h('input', { checked: columns.value.has(column.id), type: 'checkbox', onChange: (event: Event) => { const next = new Set(columns.value); if (eventTarget<HTMLInputElement>(event).checked) next.add(column.id); else next.delete(column.id); columns.value = next } }), column.label]))),
+        h('button', { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, `Start ${props.manifest.kind}`),
+        state.value?.progress ? h('progress', { 'aria-label': 'Transfer progress', max: Math.max(1, state.value.progress.total), value: state.value.progress.completed }) : null,
+        state.value?.error ? h('div', { role: 'alert' }, state.value.error) : null,
+      ] }),
+    ])
+  },
+})
+
+function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value: JsonValue) => void): VNode {
+  const columns = Array.isArray(filter.manifest.properties.columns)
+    ? filter.manifest.properties.columns.filter((column): column is Readonly<Record<string, unknown>> => typeof column === 'object' && column !== null && !Array.isArray(column))
+    : []
+  const conditions = typeof value === 'object' && value !== null && !Array.isArray(value) && Array.isArray(value.conditions) ? value.conditions : []
+  const change = (index: number, name: 'column' | 'operator' | 'value', next: JsonValue): void => update({
+    conditions: conditions.map((condition, conditionIndex) => conditionIndex === index && typeof condition === 'object' && condition !== null && !Array.isArray(condition)
+      ? { ...condition, [name]: next }
+      : condition),
+  })
+  return h('fieldset', [
+    h('legend', filter.manifest.label ?? filter.manifest.id),
+    ...conditions.map((condition, index) => {
+      if (typeof condition !== 'object' || condition === null || Array.isArray(condition)) return null
+      const columnId = typeof condition.column === 'string' ? condition.column : ''
+      const column = columns.find(item => item.id === columnId)
+      const operators = Array.isArray(column?.operators) ? column.operators.filter((item): item is string => typeof item === 'string') : []
+      const operator = typeof condition.operator === 'string' ? condition.operator : ''
+      const scalarType = typeof column?.scalarType === 'string' ? column.scalarType : 'string'
+      const inputValue = Array.isArray(condition.value) ? condition.value.join(', ') : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
+      return h('div', { 'data-advanced-condition': '', key: index }, [
+        h('select', { 'aria-label': 'Column', value: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
+        h('select', { 'aria-label': 'Operator', value: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, item))),
+        ['null', 'not-null'].includes(operator) ? null : h('input', { 'aria-label': 'Value', type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', value: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
+        h('button', { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, 'Remove condition'),
+      ])
+    }),
+    h('button', {
+      disabled: columns.length === 0,
+      type: 'button',
+      onClick: () => {
+        const column = columns[0]
+        const operator = Array.isArray(column?.operators) ? column.operators.find(item => typeof item === 'string') : undefined
+        if (typeof column?.id !== 'string' || typeof operator !== 'string') return
+        update({ conditions: [...conditions, { column: column.id, operator, value: null }] })
+      },
+    }, 'Add condition'),
+  ])
+}
+
+function advancedInputValue(raw: string, scalarType: string, operator: string): JsonValue {
+  const values = ['between', 'in', 'not-in'].includes(operator) ? raw.split(',').map(value => value.trim()).filter(Boolean) : [raw]
+  const parsed = values.map(value => scalarType === 'number'
+    ? Number.isFinite(Number(value)) ? Number(value) : value
+    : scalarType === 'boolean' ? value === 'true' : value)
+  return ['between', 'in', 'not-in'].includes(operator) ? parsed : parsed[0] ?? null
+}
+
+function runtimeTable(value: object): RuntimeTable {
+  return value as RuntimeTable
+}
+
+function eventTarget<TElement extends EventTarget>(event: Event): TElement {
+  return event.currentTarget as TElement
+}
+
+function notifyQueryChange(callback: (() => void) | undefined): void {
+  callback?.()
+}
+
+const TableActionButton = defineComponent({
+  name: 'VueTableActionButton',
+  props: {
+    action: { type: Object as PropType<VueTableAction>, required: true },
+    record: { type: Object as PropType<RuntimeRecord>, default: undefined },
+    table: { type: Object as PropType<object>, required: true },
+  },
+  setup(componentProps) {
+    const pending = ref(false)
+    const error = ref<string | null>(null)
+    const run = async (): Promise<void> => {
+      const table = runtimeTable(componentProps.table)
+      if (!table.actionTransport) {
+        error.value = '[Holo Panels] Vue table actions require an action transport.'
+        return
+      }
+      if (componentProps.action.confirmation && typeof globalThis.confirm === 'function' && !globalThis.confirm(componentProps.action.confirmation)) return
+      pending.value = true
+      error.value = null
+      try {
+        await table.actionTransport.execute({
+          actionId: componentProps.action.id,
+          ...(componentProps.record ? { recordId: table.getRecordId(componentProps.record) } : {}),
+          ...(componentProps.action.scope === 'bulk' ? { selection: table.store.selectionPayload() } : {}),
+        }, new AbortController().signal)
+      } catch (cause) {
+        error.value = cause instanceof Error ? cause.message : 'Action failed'
+      } finally {
+        pending.value = false
+      }
+    }
+    return (): VNode => h('span', [
+      h('button', { disabled: pending.value, type: 'button', onClick: () => void run() }, pending.value ? 'Working…' : componentProps.action.label),
+      error.value ? h('span', { role: 'alert' }, error.value) : null,
+    ])
+  },
+})
+
+function optionValue(option: unknown): boolean | number | string | null | undefined {
+  if (typeof option !== 'object' || option === null || Array.isArray(option)) return undefined
+  const value: unknown = Reflect.get(option, 'value')
+  return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' || value === null ? value : undefined
+}
+
+const InlineTableCell = defineComponent({
+  name: 'VueInlineTableCell',
+  props: {
+    column: { type: Object as PropType<VueTableColumn<Record<string, unknown>>>, required: true },
+    record: { type: Object as PropType<RuntimeRecord>, required: true },
+    table: { type: Object as PropType<object>, required: true },
+  },
+  setup(componentProps) {
+    const original = computed(() => recordValue(componentProps.record, componentProps.column.manifest.path))
+    const editing = ref(false)
+    const value = ref<boolean | number | string | null>(null)
+    const pending = ref(false)
+    const error = ref<string | null>(null)
+    const input = ref<HTMLInputElement>()
+    const begin = (): void => {
+      const current = original.value
+      value.value = typeof current === 'boolean' || typeof current === 'number' || typeof current === 'string' || current === null
+        ? current
+        : displayValue(current) === '—' ? '' : displayValue(current)
+      error.value = null
+      editing.value = true
+    }
+    watch(editing, async active => {
+      if (!active) return
+      await nextTick()
+      input.value?.focus()
+    })
+    const save = async (next = value.value): Promise<void> => {
+      const table = runtimeTable(componentProps.table)
+      const editor = componentProps.column.manifest.inlineEditor
+      const action = editor?.action
+      if (typeof action !== 'string' || !table.inlineEditTransport) {
+        error.value = '[Holo Panels] Inline editing requires a compiled action transport.'
+        return
+      }
+      pending.value = true
+      error.value = null
+      try {
+        await table.inlineEditTransport.execute({
+          action,
+          columnPath: componentProps.column.manifest.path,
+          expectedVersion: table.getRecordVersion?.(componentProps.record) ?? null,
+          recordId: table.getRecordId(componentProps.record),
+          value: next,
+        }, new AbortController().signal)
+        editing.value = false
+      } catch (cause) {
+        error.value = cause instanceof Error ? cause.message : 'Inline edit failed'
+      } finally {
+        pending.value = false
+      }
+    }
+    return (): VNodeChild => {
+      const column = componentProps.column
+      const editor = column.manifest.inlineEditor
+      const kind = editor?.kind
+      const valid = typeof editor?.action === 'string' && ['checkbox', 'select', 'text-input', 'toggle'].includes(String(kind))
+      const table = runtimeTable(componentProps.table)
+      const rendered = h(VueTableColumnPresentation, { presentation: {
+        column,
+        panelId: table.panelId,
+        record: componentProps.record,
+        registry: table.registry,
+        value: original.value,
+      } })
+      if (!valid) return rendered
+      if (!editing.value) return h('button', { 'aria-label': `Edit ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: begin }, [rendered])
+      const label = column.manifest.label ?? column.manifest.path
+      if (kind === 'checkbox' || kind === 'toggle') {
+        return h('span', [
+          h('input', {
+            'aria-label': label,
+            checked: value.value === true,
+            disabled: pending.value,
+            type: 'checkbox',
+            onChange: (event: Event) => {
+              const next = eventTarget<HTMLInputElement>(event).checked
+              value.value = next
+              void save(next)
+            },
+          }),
+          error.value ? h('span', { role: 'alert' }, error.value) : null,
+        ])
+      }
+      if (kind === 'select') {
+        const options: readonly unknown[] = Array.isArray(editor.options) ? editor.options : []
+        return h('span', [
+          h('select', {
+            'aria-label': label,
+            disabled: pending.value,
+            value: String(value.value ?? ''),
+            onChange: (event: Event) => {
+              const raw = eventTarget<HTMLSelectElement>(event).value
+              const next = options.map(optionValue).find(option => typeof option !== 'undefined' && String(option) === raw)
+              if (typeof next === 'undefined') return
+              value.value = next
+              void save(next)
+            },
+          }, options.map((option, index) => {
+            const next = optionValue(option)
+            if (typeof next === 'undefined') return null
+            const labelValue = typeof option === 'object' && option !== null ? Reflect.get(option, 'label') : null
+            return h('option', {
+              disabled: typeof option === 'object' && option !== null && Reflect.get(option, 'disabled') === true,
+              key: String(next),
+              value: String(next ?? ''),
+            }, typeof labelValue === 'string' ? labelValue : `Option ${index + 1}`)
+          })),
+          error.value ? h('span', { role: 'alert' }, error.value) : null,
+        ])
+      }
+      return h('span', [
+        h('input', {
+          'aria-label': label,
+          disabled: pending.value,
+          ref: input,
+          value: String(value.value ?? ''),
+          onInput: (event: Event) => {
+            value.value = eventTarget<HTMLInputElement>(event).value
+          },
+          onKeydown: (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+              editing.value = false
+              error.value = null
+            } else if (event.key === 'Enter') {
+              event.preventDefault()
+              void save()
+            }
+          },
+        }),
+        error.value ? h('span', { role: 'alert' }, error.value) : null,
+      ])
+    }
+  },
+})
+
+function tableFilters(
+  table: RuntimeTable,
+  state: TableState<Record<string, unknown>, TableRecordId>,
+  idPrefix: string,
+  open: Ref<boolean>,
+): VNodeChild {
+  const filters = table.filters ?? []
+  if (filters.length === 0) return null
+  const presentation = table.filterPresentation
+  const placement = presentation?.placement ?? 'inline'
+  const field = (filter: VueTableFilter): VNode => {
+    const id = `${idPrefix}-${filter.manifest.id}`
+    const current = state.filters.draft[filter.manifest.id] ?? filter.manifest.defaultValue
+    const update = (next: JsonValue): void => {
+      const setFilter: unknown = Reflect.get(table.store, 'setFilter')
+      if (typeof setFilter !== 'function') throw new Error('[Holo Panels] Vue table filters require a compatible table store.')
+      Reflect.apply(setFilter, table.store, [filter.manifest.id, next])
+      if (state.filters.mode === 'live') notifyQueryChange(table.onQueryChange)
+    }
+    const layout = filter.manifest.layout ?? {}
+    const wrap = (control: VNodeChild): VNode => h('div', {
+      'data-filter-column-span': layout.columnSpan ? JSON.stringify(layout.columnSpan) : undefined,
+      'data-filter-column-start': layout.columnStart ? JSON.stringify(layout.columnStart) : undefined,
+      key: filter.manifest.id,
+      style: filterLayoutStyle(layout),
+    }, [control])
+    if (filter.manifest.type === 'date-range') {
+      const range = typeof current === 'object' && current !== null && !Array.isArray(current) ? current : {}
+      const from = typeof Reflect.get(range, 'from') === 'string' ? String(Reflect.get(range, 'from')) : ''
+      const to = typeof Reflect.get(range, 'to') === 'string' ? String(Reflect.get(range, 'to')) : ''
+      return wrap(h('fieldset', [
+        h('legend', filter.manifest.label ?? filter.manifest.id),
+        h('label', { for: `${id}-from` }, ['From', h('input', {
+          id: `${id}-from`,
+          type: 'date',
+          value: from,
+          onInput: (event: Event) => update({ from: eventTarget<HTMLInputElement>(event).value || null, to: to || null }),
+        })]),
+        h('label', { for: `${id}-to` }, ['To', h('input', {
+          id: `${id}-to`,
+          type: 'date',
+          value: to,
+          onInput: (event: Event) => update({ from: from || null, to: eventTarget<HTMLInputElement>(event).value || null }),
+        })]),
+      ]))
+    }
+    if (filter.manifest.type === 'ternary') {
+      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h('select', {
+        id,
+        value: typeof current === 'string' ? current : 'all',
+        onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
+      }, [h('option', { value: 'all' }, 'All'), h('option', { value: 'true' }, 'Yes'), h('option', { value: 'false' }, 'No')])]))
+    }
+    if (filter.manifest.type === 'trashed') {
+      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h('select', {
+        id,
+        value: typeof current === 'string' ? current : 'without',
+        onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
+      }, [h('option', { value: 'without' }, 'Without trashed'), h('option', { value: 'with' }, 'With trashed'), h('option', { value: 'only' }, 'Only trashed')])]))
+    }
+    if (filter.manifest.type === 'advanced-query') return wrap(advancedFilter(filter, current, update))
+    if (filter.manifest.type === 'custom' || filter.manifest.type.includes(':filter:')) {
+      if (!table.registry) throw new Error(`[Holo Panels] A Vue component registry is required for filter "${filter.manifest.id}".`)
+      const name = filter.manifest.type === 'custom' ? 'filter.custom' : `filter.${filter.manifest.type.replaceAll(':', '.')}`
+      const Renderer = table.registry.resolve(name, table.panelId, `filter "${filter.manifest.id}"`)
+      const customProps: VueCustomFilterProps = { filter, update, value: current }
+      return wrap(h(Renderer, customProps))
+    }
+    const multiple = filter.manifest.properties.multiple === true
+    const selectedValues = Array.isArray(current) ? current.map(String) : [String(current ?? '')]
+    const control = filter.options
+      ? h('select', {
+          id,
+          multiple,
+          value: multiple ? selectedValues : selectedValues[0],
+          onChange: (event: Event) => {
+            const select = eventTarget<HTMLSelectElement>(event)
+            if (multiple) {
+              update(Array.from(select.selectedOptions).map(selected => filter.options?.find(option => String(option.value ?? '') === selected.value)?.value ?? null))
+              return
+            }
+            update(filter.options?.find(option => String(option.value ?? '') === select.value)?.value ?? null)
+          },
+        }, filter.options.map(option => h('option', { disabled: option.disabled, key: String(option.value), value: String(option.value ?? '') }, option.label)))
+      : filter.manifest.type.includes('boolean') || typeof current === 'boolean'
+        ? h('input', { checked: current === true, id, type: 'checkbox', onChange: (event: Event) => update(eventTarget<HTMLInputElement>(event).checked) })
+        : h('input', {
+            id,
+            type: 'search',
+            value: typeof current === 'number' || typeof current === 'string' ? String(current) : '',
+            onInput: (event: Event) => update(eventTarget<HTMLInputElement>(event).value),
+          })
+    return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, control]))
+  }
+  const content = h('form', {
+    'aria-label': 'Table filters',
+    class: 'hp-table-filters',
+    'data-filter-placement': placement,
+    style: filterCollectionStyle(presentation?.columns ?? { default: 1 }),
+    onSubmit: (event: Event) => {
+      event.preventDefault()
+      table.store.applyDeferredFilters()
+      notifyQueryChange(table.onQueryChange)
+    },
+  }, [
+    filterCollectionSlot(table, 'before'),
+    ...orderedFilters(filters, presentation).map(field),
+    state.filters.mode === 'deferred' ? h('button', { type: 'submit' }, 'Apply filters') : null,
+    h('button', {
+      type: 'button',
+      onClick: () => {
+        table.store.resetFilters()
+        notifyQueryChange(table.onQueryChange)
+      },
+    }, 'Reset filters'),
+    filterCollectionSlot(table, 'after'),
+  ])
+  if (placement === 'inline') return content
+  const trigger = h('button', {
+    'aria-expanded': String(open.value),
+    'aria-haspopup': 'dialog',
+    type: 'button',
+    onClick: () => { open.value = !open.value },
+  }, 'Filters')
+  if (placement === 'dropdown') return h('div', { class: 'hp-table-filters-dropdown' }, [trigger, open.value ? h('div', { role: 'dialog' }, [content]) : null])
+  return [trigger, h(PanelsModal, { open: open.value, title: 'Filters', onClose: () => { open.value = false } }, { default: () => [content] })]
+}
+
+function summaryRows(columnCount: number, summaries: readonly VueTableSummary[]): VNode | null {
+  if (summaries.length === 0) return null
+  return h('tfoot', summaries.map(summary => h('tr', { key: summary.id }, [
+    h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, [summary.label, ': ', summary.value]),
+  ])))
+}
+
+function tableRecords(
+  table: RuntimeTable,
+  columns: readonly VueTableColumn<Record<string, unknown>>[],
+  records: readonly Record<string, unknown>[],
+  group?: VueTableGroup<Record<string, unknown>>,
+  onToggleGroup?: () => void,
+): VNodeChild[] {
+  const nodes: VNodeChild[] = []
+  const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
+  if (group) {
+    nodes.push(h('tr', { class: 'hp-table-group', key: `group-${group.key}` }, [
+      h('th', { colspan: columns.length + 2, scope: 'rowgroup' }, [
+        group.collapsible
+          ? h('button', { 'aria-expanded': !group.collapsed, type: 'button', onClick: onToggleGroup }, group.title)
+          : group.title,
+        group.description ? h('small', group.description) : null,
+      ]),
+    ]))
+  }
+  if (!group?.collapsed) {
+    for (const record of records) {
+      const recordId = table.getRecordId(record)
+      nodes.push(h('tr', { key: String(recordId) }, [
+        h('td', { 'data-label': 'Select' }, [h('input', {
+          'aria-label': `Select record ${String(recordId)}`,
+          checked: table.store.isSelected(recordId),
+          type: 'checkbox',
+          onChange: (event: Event) => table.store.selectRecord(recordId, eventTarget<HTMLInputElement>(event).checked),
+        })]),
+        ...columns.map(column => h('td', {
+          'data-label': column.manifest.label ?? column.manifest.path,
+          key: column.manifest.path,
+          style: { textAlign: column.manifest.alignment },
+        }, [h(InlineTableCell, { column, record, table })])),
+        h('td', { 'data-label': 'Actions' }, rowActions.map(action => h(TableActionButton, { action, key: action.id, record, table }))),
+      ]))
+    }
+  }
+  for (const summary of group?.summaries ?? []) {
+    nodes.push(h('tr', { key: `${group?.key}-${summary.id}` }, [
+      h('th', { colspan: columns.length + 2, scope: 'row' }, [summary.label, ': ', summary.value]),
+    ]))
+  }
+  return nodes
+}
+
+export const VueTableRenderer = defineComponent({
+  name: 'VueTableRenderer',
+  props: {
+    table: { type: Object as PropType<object>, required: true },
+  },
+  setup(componentProps) {
+    const table = runtimeTable(componentProps.table)
+    const state = shallowRef(table.store.snapshot)
+    onScopeDispose(table.store.subscribe(next => {
+      state.value = next
+    }))
+    const captionId = useId()
+    const filterPrefix = `${captionId}-filter`
+    const columnsOpen = ref(false)
+    const filtersOpen = ref(false)
+    const collapsedGroups = ref<ReadonlySet<string>>(new Set(table.groups?.filter(group => group.collapsed).map(group => group.key)))
+    const toggleGroup = (key: string): void => {
+      const next = new Set(collapsedGroups.value)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      collapsedGroups.value = next
+    }
+    return (): VNode => {
+      const snapshot = state.value
+      const columns = visibleColumns(table, snapshot.visibleColumns)
+      const recordIds = snapshot.records.map(table.getRecordId)
+      const selectedOnPage = recordIds.length > 0 && recordIds.every(recordId => table.store.isSelected(recordId))
+      const pageCount = pages(snapshot.total, snapshot.perPage)
+      const headerActions = table.actions?.filter(action => action.scope === 'header') ?? []
+      const bulkActions = table.actions?.filter(action => action.scope === 'bulk') ?? []
+      const hasSelection = snapshot.selection.mode === 'all-matching' || snapshot.selection.selectedRecordIds.length > 0
+      const currentColumns = snapshot.visibleColumns.length > 0
+        ? new Set(snapshot.visibleColumns)
+        : new Set(table.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path))
+      const sort = (column: VueTableColumn<Record<string, unknown>>): void => {
+        if (!column.manifest.sortable) return
+        const active = snapshot.sort.find(item => item.column === column.manifest.path)
+        table.store.setSort([{ column: column.manifest.path, direction: active?.direction === 'asc' ? 'desc' : 'asc' }])
+        notifyQueryChange(table.onQueryChange)
+      }
+      const groups = table.groups?.flatMap(group => tableRecords(
+        table,
+        columns,
+        group.records,
+        { ...group, collapsed: collapsedGroups.value.has(group.key) },
+        () => toggleGroup(group.key),
+      ))
+      const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen)
+      const children: VNodeChild[] = [
+        h('h2', { id: captionId }, table.caption),
+        h('div', { class: 'hp-table-toolbar' }, [
+          h('label', ['Search', h('input', {
+            type: 'search',
+            value: snapshot.search,
+            onInput: (event: Event) => {
+              table.store.setSearch(eventTarget<HTMLInputElement>(event).value)
+              notifyQueryChange(table.onQueryChange)
+            },
+          })]),
+          h('div', { class: 'hp-column-manager' }, [
+            h('button', { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', type: 'button', onClick: () => { columnsOpen.value = !columnsOpen.value } }, 'Columns'),
+            columnsOpen.value ? h('div', { 'aria-label': 'Visible columns', role: 'menu' }, table.columns.filter(column => column.manifest.toggleable).map(column => h('label', {
+              'aria-checked': currentColumns.has(column.manifest.path),
+              key: column.manifest.path,
+              role: 'menuitemcheckbox',
+            }, [
+              h('input', {
+                checked: currentColumns.has(column.manifest.path),
+                type: 'checkbox',
+                onChange: (event: Event) => {
+                  const next = new Set(currentColumns)
+                  if (eventTarget<HTMLInputElement>(event).checked) next.add(column.manifest.path)
+                  else next.delete(column.manifest.path)
+                  table.store.setVisibleColumns([...next])
+                  notifyQueryChange(table.onQueryChange)
+                },
+              }),
+              column.manifest.label ?? column.manifest.path,
+            ]))) : null,
+          ]),
+          ...headerActions.map(action => h(TableActionButton, { action, key: action.id, table })),
+          ...table.transfers?.map(manifest => h(VueTransferAction, { key: manifest.id, manifest, table })) ?? [],
+        ]),
+        filtersNode,
+        hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions' }, [
+          h('span', snapshot.selection.mode === 'all-matching'
+            ? `All ${snapshot.total} matching records selected`
+            : `${snapshot.selection.selectedRecordIds.length} records selected`),
+          ...bulkActions.map(action => h(TableActionButton, { action, key: action.id, table })),
+          h('button', { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
+        ]) : null,
+        snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
+          ? h('button', { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
+          : null,
+        snapshot.error ? h('div', { role: 'alert' }, [h('strong', 'Unable to load table'), h('span', snapshot.error.message)]) : null,
+        snapshot.loading ? h('div', { 'aria-live': 'polite', role: 'status' }, 'Loading records…') : null,
+        !snapshot.loading && !snapshot.error && snapshot.records.length === 0
+          ? h('div', { class: 'hp-table-empty' }, table.emptyMessage ?? 'No records found.')
+          : null,
+        snapshot.records.length > 0 ? h('div', { 'aria-label': `${table.caption} data`, class: 'hp-table-responsive', role: 'region', tabindex: 0 }, [
+          h('table', [
+            h('caption', { class: 'hp-visually-hidden' }, table.caption),
+            h('thead', [h('tr', [
+              h('th', { scope: 'col' }, [h('input', {
+                'aria-label': 'Select page',
+                checked: selectedOnPage,
+                type: 'checkbox',
+                onChange: (event: Event) => table.store.selectPage(recordIds, eventTarget<HTMLInputElement>(event).checked),
+              })]),
+              ...columns.map(column => {
+                const active = snapshot.sort.find(item => item.column === column.manifest.path)
+                return h('th', {
+                  'aria-sort': active?.direction === 'asc' ? 'ascending' : active?.direction === 'desc' ? 'descending' : 'none',
+                  key: column.manifest.path,
+                  scope: 'col',
+                }, [column.manifest.sortable
+                  ? h('button', { type: 'button', onClick: () => sort(column) }, column.manifest.label ?? column.manifest.path)
+                  : column.manifest.label ?? column.manifest.path])
+              }),
+              h('th', { scope: 'col' }, 'Actions'),
+            ])]),
+            h('tbody', groups ?? tableRecords(table, columns, snapshot.records)),
+            summaryRows(columns.length + 2, table.summaries ?? []),
+          ]),
+        ]) : null,
+        h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination' }, [
+          h('button', {
+            'aria-label': 'Previous page',
+            disabled: snapshot.page <= 1 || snapshot.loading,
+            type: 'button',
+            onClick: () => {
+              table.store.setPage(snapshot.page - 1)
+              notifyQueryChange(table.onQueryChange)
+            },
+          }, 'Previous'),
+          h('span', { 'aria-live': 'polite' }, `Page ${snapshot.page} of ${pageCount}`),
+          h('button', {
+            'aria-label': 'Next page',
+            disabled: snapshot.page >= pageCount || snapshot.loading,
+            type: 'button',
+            onClick: () => {
+              table.store.setPage(snapshot.page + 1)
+              notifyQueryChange(table.onQueryChange)
+            },
+          }, 'Next'),
+        ]),
+      ]
+      return h('section', { 'aria-labelledby': captionId, class: 'hp-table-view', 'data-panels-component': 'table' }, children)
+    }
+  },
+})

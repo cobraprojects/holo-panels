@@ -1,0 +1,53 @@
+{
+  "name": "@holo-js/panels",
+  "version": "0.1.0-next.0",
+  "description": "Official resource-driven panel system for Holo-JS",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.mjs",
+      "default": "./dist/plugin.mjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "default": "./dist/server.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "holo": {
+    "plugin": "./dist/plugin.mjs"
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --passWithNoTests --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-core": "workspace:*",
+    "@holo-js/panels-client": "workspace:*",
+    "@holo-js/panels-cli": "workspace:*"
+  },
+  "peerDependencies": {
+    "@holo-js/db": "catalog:",
+    "@holo-js/forms": "catalog:",
+    "@holo-js/kernel": "catalog:"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

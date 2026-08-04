@@ -1,0 +1,572 @@
+import { SchemaFocusIndex } from '../schema/focus'
+import {
+  cloneFormValue,
+  collectDirtyPaths,
+  getPathValue,
+  parseFormPath,
+  pathsOverlap,
+  setPathValue,
+  updateArrayPath,
+} from './paths'
+import type {
+  FormDependency,
+  FormFocusMetadata,
+  FormOperation,
+  FormPath,
+  FormRequestContext,
+  FormRequestResult,
+  FormServerPatch,
+  FormState,
+  FormStateListener,
+  FormStoreOptions,
+  FormSubmitResponse,
+  FormValidationResponse,
+  FormValueAtPath,
+} from './types'
+
+type RequestKind = 'submit' | 'validate'
+
+interface ActiveRequest {
+  readonly controller: AbortController
+  readonly version: number
+}
+
+interface WorkingState<TValues> {
+  values: TValues
+  initialValues: TValues
+  touchedPaths: Set<string>
+  errors: Record<string, readonly string[]>
+  visibility: Record<string, boolean>
+  disabled: Record<string, boolean>
+  readOnly: Record<string, boolean>
+  pending: Record<string, boolean>
+  focus?: FormFocusMetadata
+  changedPaths: Set<string>
+  changed: boolean
+}
+
+function freezeValue<TValue>(value: TValue): TValue {
+  const visited = new WeakSet<object>()
+  const freeze = (current: object): void => {
+    if (visited.has(current)) return
+    visited.add(current)
+    const prototype: unknown = Object.getPrototypeOf(current)
+    const canFreeze = Array.isArray(current) || prototype === Object.prototype || prototype === null
+    if (!canFreeze) return
+    for (const child of Reflect.ownKeys(current).map(key => Reflect.get(current, key))) {
+      if (typeof child === 'object' && child !== null) freeze(child)
+    }
+    Object.freeze(current)
+  }
+  if (typeof value === 'object' && value !== null) freeze(value)
+  return value
+}
+
+function frozenRecord<TValue>(value: Readonly<Record<string, TValue>>): Readonly<Record<string, TValue>> {
+  return Object.freeze({ ...value })
+}
+
+function normalizeErrors(
+  errors: Readonly<Record<string, string | readonly string[]>>,
+): Record<string, readonly string[]> {
+  return Object.fromEntries(Object.entries(errors).flatMap(([path, messages]) => {
+    parseFormPath(path)
+    const normalized = (typeof messages === 'string' ? [messages] : messages)
+      .map(message => message.trim())
+      .filter(Boolean)
+    return normalized.length > 0 ? [[path, Object.freeze(normalized)]] : []
+  }))
+}
+
+function setFlag(record: Record<string, boolean>, path: string, value: boolean): Record<string, boolean> {
+  if (record[path] === value) return record
+  return { ...record, [path]: value }
+}
+
+function removePathAndDescendants<TValue>(record: Record<string, TValue>, path: string): Record<string, TValue> {
+  const entries = Object.entries(record).filter(([candidate]) => !pathsOverlap(candidate, path))
+  return entries.length === Object.keys(record).length ? record : Object.fromEntries(entries)
+}
+
+function sameStringSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every(value => right.has(value))
+}
+
+function remapArrayPath(
+  candidate: string,
+  arrayPath: string,
+  operation: Extract<FormOperation, { kind: 'array-insert' | 'array-move' | 'array-remove' }>,
+): string | undefined {
+  if (!candidate.startsWith(`${arrayPath}.`)) return candidate
+  const suffix = candidate.slice(arrayPath.length + 1)
+  const [indexSegment, ...remaining] = suffix.split('.')
+  const index = Number(indexSegment)
+  if (!Number.isSafeInteger(index) || index < 0) return candidate
+  let nextIndex = index
+  if (operation.kind === 'array-insert') {
+    if (index >= operation.index) nextIndex = index + 1
+  } else if (operation.kind === 'array-remove') {
+    if (index === operation.index) return undefined
+    if (index > operation.index) nextIndex = index - 1
+  } else if (index === operation.from) {
+    nextIndex = operation.to
+  } else if (operation.from < operation.to && index > operation.from && index <= operation.to) {
+    nextIndex = index - 1
+  } else if (operation.from > operation.to && index >= operation.to && index < operation.from) {
+    nextIndex = index + 1
+  }
+  return [arrayPath, String(nextIndex), ...remaining].join('.')
+}
+
+function remapArrayRecord<TValue>(
+  record: Record<string, TValue>,
+  path: string,
+  operation: Extract<FormOperation, { kind: 'array-insert' | 'array-move' | 'array-remove' }>,
+): Record<string, TValue> {
+  return Object.fromEntries(Object.entries(record).flatMap(([candidate, value]) => {
+    const remapped = remapArrayPath(candidate, path, operation)
+    return remapped ? [[remapped, value]] : []
+  }))
+}
+
+export class FormStore<TValues extends object> {
+  #state: FormState<TValues>
+  readonly #listeners = new Set<FormStateListener<TValues>>()
+  readonly #dependencies = new Map<string, FormDependency<TValues>>()
+  readonly #focusIndex: SchemaFocusIndex<TValues>
+  readonly #requests = new Map<RequestKind, ActiveRequest>()
+  #requestSequence = 0
+  #serverPatchVersion = 0
+
+  constructor(initialValues: TValues, options: FormStoreOptions<TValues> = {}) {
+    const values = freezeValue(cloneFormValue(initialValues))
+    this.#focusIndex = new SchemaFocusIndex(options.schema)
+    for (const dependency of options.dependencies ?? []) this.addDependency(dependency)
+    this.#state = Object.freeze({
+      values,
+      initialValues: values,
+      dirtyPaths: Object.freeze([]),
+      touchedPaths: Object.freeze([]),
+      errors: Object.freeze({}),
+      visibility: Object.freeze({}),
+      disabled: Object.freeze({}),
+      readOnly: Object.freeze({}),
+      pending: Object.freeze({}),
+      validating: false,
+      submitting: false,
+      version: 0,
+    })
+  }
+
+  get state(): FormState<TValues> {
+    return this.#state
+  }
+
+  get<TPath extends FormPath<TValues>>(path: TPath): FormValueAtPath<TValues, TPath> {
+    return getPathValue(this.#state.values, path) as FormValueAtPath<TValues, TPath>
+  }
+
+  subscribe(listener: FormStateListener<TValues>): () => void {
+    this.#listeners.add(listener)
+    return () => this.#listeners.delete(listener)
+  }
+
+  registerDependency(dependency: FormDependency<TValues>): () => void {
+    this.addDependency(dependency)
+    return () => this.#dependencies.delete(dependency.id)
+  }
+
+  set<TPath extends FormPath<TValues>>(
+    path: TPath,
+    value: FormValueAtPath<TValues, TPath>,
+    options: { readonly touch?: boolean } = {},
+  ): FormState<TValues> {
+    return this.batch([{ kind: 'set', path, value, touch: options.touch }])
+  }
+
+  touch<TPath extends FormPath<TValues>>(path: TPath, touched = true): FormState<TValues> {
+    return this.batch([{ kind: 'touch', path, touched }])
+  }
+
+  insert<TPath extends FormPath<TValues>>(path: TPath, index: number, value: unknown): FormState<TValues> {
+    return this.batch([{ kind: 'array-insert', path, index, value }])
+  }
+
+  remove<TPath extends FormPath<TValues>>(path: TPath, index: number): FormState<TValues> {
+    return this.batch([{ kind: 'array-remove', path, index }])
+  }
+
+  move<TPath extends FormPath<TValues>>(path: TPath, from: number, to: number): FormState<TValues> {
+    return this.batch([{ kind: 'array-move', path, from, to }])
+  }
+
+  batch(operations: readonly FormOperation[]): FormState<TValues> {
+    if (operations.length === 0) return this.#state
+    const working = this.createWorkingState()
+    this.applyOperations(working, operations)
+    this.recomputeDependencies(working)
+    return this.commit(working)
+  }
+
+  reset(): FormState<TValues> {
+    const working = this.createWorkingState()
+    const changedPaths = collectDirtyPaths(working.values, working.initialValues)
+    working.values = working.initialValues
+    working.changedPaths = new Set(changedPaths)
+    working.touchedPaths.clear()
+    working.errors = {}
+    working.focus = undefined
+    working.changed = working.changed || changedPaths.length > 0
+      || this.#state.touchedPaths.length > 0
+      || Object.keys(this.#state.errors).length > 0
+      || typeof this.#state.focus !== 'undefined'
+    this.recomputeDependencies(working)
+    return this.commit(working)
+  }
+
+  resetField<TPath extends FormPath<TValues>>(path: TPath): FormState<TValues> {
+    parseFormPath(path)
+    const initialValue = getPathValue(this.#state.initialValues, path)
+    const working = this.createWorkingState()
+    const nextValues = setPathValue(working.values, path, initialValue)
+    if (nextValues !== working.values) {
+      working.values = nextValues
+      working.changedPaths.add(path)
+      working.changed = true
+    }
+    const touched = new Set([...working.touchedPaths].filter(candidate => !pathsOverlap(candidate, path)))
+    if (!sameStringSet(touched, working.touchedPaths)) {
+      working.touchedPaths = touched
+      working.changed = true
+    }
+    const errors = removePathAndDescendants(working.errors, path)
+    if (errors !== working.errors) {
+      working.errors = errors
+      working.changed = true
+    }
+    if (working.focus && pathsOverlap(working.focus.path, path)) {
+      working.focus = undefined
+      working.changed = true
+    }
+    this.recomputeDependencies(working)
+    return this.commit(working)
+  }
+
+  focusFirstError(requestVersion?: number): FormFocusMetadata | undefined {
+    const focus = this.#focusIndex.firstError(this.#state.errors, requestVersion)
+    if (focus === this.#state.focus) return focus
+    this.publish({ ...this.#state, focus, version: this.#state.version + 1 })
+    return focus
+  }
+
+  applyServerPatch(patch: FormServerPatch, version?: number): boolean {
+    if (typeof version === 'number') {
+      if (!Number.isSafeInteger(version) || version <= 0) throw new Error(`Invalid server patch version: ${version}`)
+      if (version <= this.#serverPatchVersion) return false
+    }
+    this.applyResponse(patch, version)
+    if (typeof version === 'number') this.#serverPatchVersion = version
+    return true
+  }
+
+  async validateRequest(
+    validate: (context: FormRequestContext<TValues>) => Promise<FormValidationResponse>,
+  ): Promise<FormRequestResult> {
+    return this.runRequest('validate', validate)
+  }
+
+  async submit(
+    submit: (context: FormRequestContext<TValues>) => Promise<FormSubmitResponse>,
+  ): Promise<FormRequestResult> {
+    this.cancelRequests('validate')
+    return this.runRequest('submit', submit)
+  }
+
+  cancelRequests(kind?: RequestKind): void {
+    const requests = kind ? [[kind, this.#requests.get(kind)] as const] : [...this.#requests.entries()]
+    let validating = this.#state.validating
+    let submitting = this.#state.submitting
+    for (const [requestKind, request] of requests) {
+      request?.controller.abort()
+      if (requestKind === 'validate') validating = false
+      else submitting = false
+    }
+    if (validating !== this.#state.validating || submitting !== this.#state.submitting) {
+      this.publish({
+        ...this.#state,
+        validating,
+        submitting,
+        version: this.#state.version + 1,
+      })
+    }
+  }
+
+  private addDependency(dependency: FormDependency<TValues>): void {
+    if (!dependency.id.trim()) throw new Error('Form dependency ID cannot be empty')
+    if (this.#dependencies.has(dependency.id)) throw new Error(`Duplicate form dependency: ${dependency.id}`)
+    dependency.paths.forEach(parseFormPath)
+    this.#dependencies.set(dependency.id, dependency)
+  }
+
+  private createWorkingState(): WorkingState<TValues> {
+    return {
+      values: this.#state.values,
+      initialValues: this.#state.initialValues,
+      touchedPaths: new Set(this.#state.touchedPaths),
+      errors: { ...this.#state.errors },
+      visibility: { ...this.#state.visibility },
+      disabled: { ...this.#state.disabled },
+      readOnly: { ...this.#state.readOnly },
+      pending: { ...this.#state.pending },
+      ...(this.#state.focus ? { focus: this.#state.focus } : {}),
+      changedPaths: new Set(),
+      changed: false,
+    }
+  }
+
+  private applyOperations(working: WorkingState<TValues>, operations: readonly FormOperation[]): void {
+    for (const operation of operations) {
+      parseFormPath(operation.path)
+      if (operation.kind === 'set') {
+        const next = setPathValue(working.values, operation.path, cloneFormValue(operation.value))
+        if (next !== working.values) {
+          working.values = next
+          working.changedPaths.add(operation.path)
+          working.changed = true
+          const errors = removePathAndDescendants(working.errors, operation.path)
+          if (errors !== working.errors) working.errors = errors
+          if (working.focus && pathsOverlap(working.focus.path, operation.path)) working.focus = undefined
+        }
+        if (operation.touch) this.applyTouch(working, operation.path, true)
+      } else if (operation.kind === 'touch') {
+        this.applyTouch(working, operation.path, operation.touched ?? true)
+      } else if (operation.kind === 'errors') {
+        const messages = Object.freeze(operation.errors.map(message => message.trim()).filter(Boolean))
+        const previous = working.errors[operation.path]
+        if (messages.length === 0) {
+          if (previous) {
+            delete working.errors[operation.path]
+            working.changed = true
+          }
+        } else if (!previous || previous.length !== messages.length || previous.some((message, index) => message !== messages[index])) {
+          working.errors[operation.path] = messages
+          working.changed = true
+        }
+      } else if (operation.kind === 'visible') {
+        const next = setFlag(working.visibility, operation.path, operation.value)
+        working.changed ||= next !== working.visibility
+        working.visibility = next
+      } else if (operation.kind === 'disabled') {
+        const next = setFlag(working.disabled, operation.path, operation.value)
+        working.changed ||= next !== working.disabled
+        working.disabled = next
+      } else if (operation.kind === 'read-only') {
+        const next = setFlag(working.readOnly, operation.path, operation.value)
+        working.changed ||= next !== working.readOnly
+        working.readOnly = next
+      } else if (operation.kind === 'pending') {
+        const next = setFlag(working.pending, operation.path, operation.value)
+        working.changed ||= next !== working.pending
+        working.pending = next
+      } else {
+        this.applyArrayOperation(working, operation)
+      }
+    }
+  }
+
+  private applyArrayOperation(
+    working: WorkingState<TValues>,
+    operation: Extract<FormOperation, { kind: 'array-insert' | 'array-move' | 'array-remove' }>,
+  ): void {
+    const next = updateArrayPath(working.values, operation.path, (items) => {
+      if (operation.kind === 'array-insert') {
+        if (!Number.isSafeInteger(operation.index) || operation.index < 0 || operation.index > items.length) throw new Error(`Invalid array insertion index: ${operation.index}`)
+        return [...items.slice(0, operation.index), cloneFormValue(operation.value), ...items.slice(operation.index)]
+      }
+      if (operation.kind === 'array-remove') {
+        if (!Number.isSafeInteger(operation.index) || operation.index < 0 || operation.index >= items.length) throw new Error(`Invalid array removal index: ${operation.index}`)
+        return [...items.slice(0, operation.index), ...items.slice(operation.index + 1)]
+      }
+      if (!Number.isSafeInteger(operation.from) || !Number.isSafeInteger(operation.to) || operation.from < 0 || operation.from >= items.length || operation.to < 0 || operation.to >= items.length) {
+        throw new Error(`Invalid array move: ${operation.from} to ${operation.to}`)
+      }
+      if (operation.from === operation.to) return items
+      const result = [...items]
+      const [item] = result.splice(operation.from, 1)
+      result.splice(operation.to, 0, item)
+      return result
+    })
+    if (next === working.values) return
+    working.values = next
+    working.changedPaths.add(operation.path)
+    working.touchedPaths = new Set([...working.touchedPaths].flatMap((candidate) => {
+      const remapped = remapArrayPath(candidate, operation.path, operation)
+      return remapped ? [remapped] : []
+    }))
+    working.errors = remapArrayRecord(working.errors, operation.path, operation)
+    working.visibility = remapArrayRecord(working.visibility, operation.path, operation)
+    working.disabled = remapArrayRecord(working.disabled, operation.path, operation)
+    working.readOnly = remapArrayRecord(working.readOnly, operation.path, operation)
+    working.pending = remapArrayRecord(working.pending, operation.path, operation)
+    if (working.focus) {
+      const remapped = remapArrayPath(working.focus.path, operation.path, operation)
+      working.focus = remapped ? { ...working.focus, path: remapped } : undefined
+    }
+    working.changed = true
+  }
+
+  private applyTouch(working: WorkingState<TValues>, path: string, touched: boolean): void {
+    const hadPath = working.touchedPaths.has(path)
+    if (touched === hadPath) return
+    if (touched) working.touchedPaths.add(path)
+    else working.touchedPaths.delete(path)
+    working.changed = true
+  }
+
+  private recomputeDependencies(working: WorkingState<TValues>): void {
+    const recomputed = new Set<string>()
+    let found = true
+    while (found) {
+      found = false
+      for (const dependency of this.#dependencies.values()) {
+        if (recomputed.has(dependency.id)) continue
+        if (!dependency.paths.some(path => [...working.changedPaths].some(changed => pathsOverlap(path, changed)))) continue
+        recomputed.add(dependency.id)
+        found = true
+        const operations = dependency.recompute({
+          changedPaths: working.changedPaths,
+          get: path => getPathValue(working.values, path) as FormValueAtPath<TValues, typeof path>,
+        })
+        this.applyOperations(working, operations)
+      }
+    }
+  }
+
+  private commit(working: WorkingState<TValues>): FormState<TValues> {
+    if (!working.changed) return this.#state
+    const values = freezeValue(working.values)
+    const dirtyPaths = Object.freeze([...collectDirtyPaths(values, working.initialValues)].sort())
+    const touchedPaths = Object.freeze([...working.touchedPaths].sort())
+    return this.publish({
+      ...this.#state,
+      values,
+      initialValues: working.initialValues,
+      dirtyPaths,
+      touchedPaths,
+      errors: frozenRecord(working.errors),
+      visibility: frozenRecord(working.visibility),
+      disabled: frozenRecord(working.disabled),
+      readOnly: frozenRecord(working.readOnly),
+      pending: frozenRecord(working.pending),
+      ...(working.focus ? { focus: working.focus } : { focus: undefined }),
+      version: this.#state.version + 1,
+    })
+  }
+
+  private publish(next: FormState<TValues>): FormState<TValues> {
+    const previous = this.#state
+    this.#state = Object.freeze(next)
+    for (const listener of this.#listeners) listener(this.#state, previous)
+    return this.#state
+  }
+
+  private applyResponse(patch: FormServerPatch, requestVersion?: number, requestKind?: RequestKind): void {
+    const working = this.createWorkingState()
+    this.applyOperations(working, patch.operations ?? [])
+    if (patch.errors) {
+      const errors = normalizeErrors(patch.errors)
+      working.changed ||= JSON.stringify(errors) !== JSON.stringify(working.errors)
+      working.errors = errors
+      if (working.focus && !errors[working.focus.path]) {
+        working.focus = undefined
+        working.changed = true
+      }
+    }
+    this.recomputeDependencies(working)
+    if (patch.commitValues) {
+      working.initialValues = working.values
+      working.changed = true
+    }
+    if (patch.focusFirstError) {
+      working.focus = this.#focusIndex.firstError(working.errors, requestVersion)
+      working.changed = true
+    }
+    const previous = this.#state
+    const validating = requestKind === 'validate' ? false : previous.validating
+    const submitting = requestKind === 'submit' ? false : previous.submitting
+    if (!working.changed && validating === previous.validating && submitting === previous.submitting) return
+    const values = freezeValue(working.values)
+    this.publish({
+      ...previous,
+      values,
+      initialValues: working.initialValues,
+      dirtyPaths: Object.freeze([...collectDirtyPaths(values, working.initialValues)].sort()),
+      touchedPaths: Object.freeze([...working.touchedPaths].sort()),
+      errors: frozenRecord(working.errors),
+      visibility: frozenRecord(working.visibility),
+      disabled: frozenRecord(working.disabled),
+      readOnly: frozenRecord(working.readOnly),
+      pending: frozenRecord(working.pending),
+      validating,
+      submitting,
+      ...(working.focus ? { focus: working.focus } : { focus: undefined }),
+      version: previous.version + 1,
+    })
+  }
+
+  private async runRequest<TResponse extends FormServerPatch>(
+    kind: RequestKind,
+    request: (context: FormRequestContext<TValues>) => Promise<TResponse>,
+  ): Promise<FormRequestResult> {
+    this.#requests.get(kind)?.controller.abort()
+    const active: ActiveRequest = {
+      controller: new AbortController(),
+      version: ++this.#requestSequence,
+    }
+    this.#requests.set(kind, active)
+    this.publish({
+      ...this.#state,
+      ...(kind === 'validate' ? { validating: true } : { submitting: true }),
+      version: this.#state.version + 1,
+    })
+    const requestValues = this.#state.values
+    const context: FormRequestContext<TValues> = {
+      values: requestValues,
+      version: active.version,
+      signal: active.controller.signal,
+      get: path => getPathValue(requestValues, path) as FormValueAtPath<TValues, typeof path>,
+    }
+    try {
+      const response = await request(context)
+      if (this.#requests.get(kind) !== active) return { status: 'stale', version: active.version }
+      if (active.version < this.#requestSequence) {
+        this.#requests.delete(kind)
+        this.clearRequestFlag(kind)
+        return { status: 'stale', version: active.version }
+      }
+      this.#requests.delete(kind)
+      if (active.controller.signal.aborted) {
+        this.clearRequestFlag(kind)
+        return { status: 'aborted', version: active.version }
+      }
+      this.applyResponse(response, active.version, kind)
+      return { status: 'applied', version: active.version }
+    } catch (error) {
+      if (this.#requests.get(kind) !== active) return { status: 'stale', version: active.version }
+      this.#requests.delete(kind)
+      this.clearRequestFlag(kind)
+      if (active.controller.signal.aborted || error instanceof DOMException && error.name === 'AbortError') {
+        return { status: 'aborted', version: active.version }
+      }
+      throw error
+    }
+  }
+
+  private clearRequestFlag(kind: RequestKind): void {
+    if ((kind === 'validate' && !this.#state.validating) || (kind === 'submit' && !this.#state.submitting)) return
+    const next = kind === 'validate'
+      ? { ...this.#state, validating: false, version: this.#state.version + 1 }
+      : { ...this.#state, submitting: false, version: this.#state.version + 1 }
+    this.publish(next)
+  }
+}

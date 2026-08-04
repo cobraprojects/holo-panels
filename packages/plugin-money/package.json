@@ -1,0 +1,85 @@
+{
+  "name": "@holo-js/panels-plugin-money",
+  "version": "0.1.0-next.0",
+  "description": "Sample currency field and money column plugin for Holo Panels",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "default": "./dist/react.mjs"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.mjs",
+      "default": "./dist/vue.mjs"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.mjs",
+      "default": "./dist/svelte.mjs"
+    },
+    "./money.css": "./money.css"
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "money.css"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@holo-js/panels-react": "workspace:*",
+    "@holo-js/panels-svelte": "workspace:*",
+    "@holo-js/panels-vue": "workspace:*",
+    "react": "catalog:",
+    "svelte": "catalog:",
+    "vue": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@holo-js/panels-react": {
+      "optional": true
+    },
+    "@holo-js/panels-svelte": {
+      "optional": true
+    },
+    "@holo-js/panels-vue": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@holo-js/forms": "catalog:",
+    "@holo-js/panels-react": "workspace:*",
+    "@holo-js/panels-svelte": "workspace:*",
+    "@holo-js/panels-vue": "workspace:*",
+    "@types/react": "catalog:",
+    "react": "catalog:",
+    "svelte": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vue": "catalog:"
+  }
+}

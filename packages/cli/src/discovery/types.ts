@@ -1,0 +1,69 @@
+import type {
+  ClientManifestValue,
+  ComponentDefaultLayers,
+  DiscoverableKind,
+} from '@holo-js/panels-core'
+
+export {
+  DISCOVERABLE_KINDS,
+  DISCOVERY_MARKER,
+  type ClientManifestValue,
+  type DiscoverableBuilder,
+  type DiscoverableDefinition,
+  type DiscoverableKind,
+  type DiscoveryDirectories,
+} from '@holo-js/panels-core'
+
+export interface DiscoveredDefinition {
+  readonly kind: DiscoverableKind
+  readonly id: string
+  readonly panelId: string
+  readonly projectPath: string
+  readonly exportName: string
+  readonly route?: string
+  readonly permissionKeys: readonly string[]
+  readonly componentKeys: readonly string[]
+  readonly navigationKeys: readonly string[]
+  readonly default: boolean
+  readonly client: Readonly<Record<string, ClientManifestValue>>
+  readonly server?: unknown
+}
+
+export interface DiscoveryModule {
+  readonly [exportName: string]: unknown
+  readonly default?: unknown
+}
+
+export interface DiscoveryModuleLoadContext {
+  readonly componentDefaults?: ComponentDefaultLayers
+}
+
+export type DiscoveryModuleLoader = (
+  absolutePath: string,
+  context?: DiscoveryModuleLoadContext,
+) => DiscoveryModule | Promise<DiscoveryModule>
+
+export interface DiscoveryChange {
+  readonly kind: 'created' | 'changed' | 'deleted'
+  readonly path: string
+}
+
+export interface DiscoveryCompilerOptions {
+  readonly projectRoot: string
+  readonly loadModule: DiscoveryModuleLoader
+  readonly panelRoots?: readonly string[]
+  readonly panelEntries?: readonly string[]
+}
+
+export interface GeneratedPanelArtifact {
+  readonly path: string
+  readonly contents: string
+}
+
+export interface DiscoveryResult {
+  readonly definitions: readonly DiscoveredDefinition[]
+  readonly artifacts: readonly GeneratedPanelArtifact[]
+  readonly changedArtifacts: readonly GeneratedPanelArtifact[]
+  readonly invalidatedPaths: readonly string[]
+  readonly watchRoots: readonly string[]
+}

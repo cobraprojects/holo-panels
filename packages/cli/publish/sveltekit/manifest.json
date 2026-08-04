@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "framework": "sveltekit",
+  "files": [
+    {
+      "path": "PanelPage.svelte",
+      "checksum": "73483259c5780191090befc3fc846ee409230c9c7f30b764e9a5ff76628c6358"
+    },
+    {
+      "path": "ResourcePage.svelte",
+      "checksum": "21413913748908d2de61701286ee7c48f8f2678e6fccb15972f1c86ee9c863e6"
+    },
+    {
+      "path": "contracts.ts",
+      "checksum": "2541514f1d6d1b03b0392514aad3a5361ff5b622325ee400a31da513b74797dd"
+    },
+    {
+      "path": "resource-page.ts",
+      "checksum": "9f9c773ad0aa96cb7de907b02586b249cd085531de4228d648892a05fd7ee980"
+    }
+  ]
+}

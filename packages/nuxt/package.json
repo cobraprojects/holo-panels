@@ -1,0 +1,48 @@
+{
+  "name": "@holo-js/panels-nuxt",
+  "version": "0.1.0-next.0",
+  "description": "Nuxt adapter for Holo Panels",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "default": "./dist/server.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --passWithNoTests --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-vue": "workspace:*"
+  },
+  "peerDependencies": {
+    "@holo-js/adapter-nuxt": "catalog:",
+    "@holo-js/security": "catalog:",
+    "h3": "catalog:",
+    "nuxt": "catalog:",
+    "vue": "catalog:"
+  },
+  "devDependencies": {
+    "h3": "catalog:",
+    "happy-dom": "catalog:",
+    "nuxt": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vue": "catalog:"
+  }
+}

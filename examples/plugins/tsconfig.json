@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "paths": {
+      "@holo-js/forms": ["packages/panels/node_modules/@holo-js/forms/dist/index.d.ts"],
+      "@holo-js/panels": ["packages/panels/src/index.ts"],
+      "@holo-js/panels/plugin": ["packages/panels/src/plugin.ts"],
+      "@holo-js/panels-core": ["packages/core/src/index.ts"],
+      "@holo-js/storage/runtime": ["../holo-js/packages/storage/dist/runtime/composables/index.d.ts"]
+    },
+    "types": ["node", "vitest"]
+  },
+  "include": ["./**/*.ts"]
+}

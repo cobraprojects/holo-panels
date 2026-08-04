@@ -1,0 +1,46 @@
+{
+  "name": "@holo-panels/example-nuxt",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.9",
+  "scripts": {
+    "postinstall": "nuxt prepare",
+    "dev": "holo dev",
+    "build": "holo build",
+    "start": "holo start",
+    "lint": "eslint app config server shared tests *.d.ts --fix --no-warn-ignored --no-error-on-unmatched-pattern",
+    "typecheck": "nuxt typecheck",
+    "config:cache": "holo config:cache",
+    "config:clear": "holo config:clear"
+  },
+  "dependencies": {
+    "@holo-js/adapter-nuxt": "catalog:",
+    "@holo-js/auth": "catalog:",
+    "@holo-js/cli": "catalog:",
+    "@holo-js/config": "catalog:",
+    "@holo-js/core": "catalog:",
+    "@holo-js/db": "catalog:",
+    "@holo-js/db-sqlite": "catalog:",
+    "@holo-js/kernel": "catalog:",
+    "@holo-js/notifications": "catalog:",
+    "@holo-js/panels": "workspace:*",
+    "@holo-js/panels-nuxt": "workspace:*",
+    "@holo-js/security": "catalog:",
+    "@holo-js/session": "catalog:",
+    "esbuild": "catalog:",
+    "nuxt": "catalog:",
+    "vue": "catalog:",
+    "vue-router": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@holo-js/panels-vue": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "globals": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vue-tsc": "catalog:"
+  },
+  "version": "0.0.0"
+}

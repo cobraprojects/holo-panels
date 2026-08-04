@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.holo-js/
+*.tgz

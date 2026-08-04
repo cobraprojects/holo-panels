@@ -1,0 +1,49 @@
+{
+  "name": "@holo-js/panels-svelte",
+  "version": "0.1.0-next.0",
+  "description": "Svelte renderer for Holo Panels",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/svelte/index.js",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "default": "./dist/server.mjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && node ../../scripts/package-svelte-source.mjs",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest --run --passWithNoTests --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-core": "workspace:*",
+    "@holo-js/panels-client": "workspace:*",
+    "@holo-js/panels-ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": "catalog:"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "happy-dom": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

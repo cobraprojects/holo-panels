@@ -1,0 +1,47 @@
+{
+  "name": "@holo-js/panels-client",
+  "version": "0.1.0-next.0",
+  "description": "Framework-neutral Holo Panels client state and transport",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "import": "./dist/browser.mjs",
+        "default": "./dist/browser.mjs"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --passWithNoTests --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@holo-js/flux": "catalog:",
+    "@holo-js/security": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@holo-js/flux": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@holo-js/flux": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

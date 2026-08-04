@@ -1,0 +1,150 @@
+import {
+  panelNotification,
+  type JsonValue,
+} from '@holo-js/panels-core'
+import { describe, expect, it } from 'vitest'
+import {
+  createPanelNotificationTransport,
+  createTransportRecorder,
+  PanelsTransport,
+} from '../src'
+
+const requestId = '00000000-0000-4000-8000-000000000001'
+
+function success(data: JsonValue) {
+  return {
+    status: 200,
+    body: {
+      data,
+      effects: [],
+      id: requestId,
+      ok: true as const,
+      protocolVersion: '1.0',
+    },
+  }
+}
+
+function createClient(steps: readonly ReturnType<typeof success>[]) {
+  const recorder = createTransportRecorder(steps)
+  const transport = new PanelsTransport({
+    adapter: recorder,
+    createId: () => requestId,
+    csrfProvider: { getField: () => ({ name: '_token', value: 'signed' }) },
+  })
+  return {
+    notifications: createPanelNotificationTransport(transport, {
+      endpoint: '/_holo/panels/notifications',
+      panelId: 'commerce',
+    }),
+    recorder,
+  }
+}
+
+function payloads(requests: readonly { readonly body: string }[]): unknown[] {
+  return requests.map(request => {
+    const encoded = new URLSearchParams(request.body).get('request')
+    if (!encoded) throw new Error('Missing request envelope')
+    return JSON.parse(encoded).payload
+  })
+}
+
+describe('panel notification transport', () => {
+  it('sends only allow-listed pagination and mutation payloads', async () => {
+    const presentation = panelNotification('order.ready').title('Order ready').presentation()
+    const page = {
+      items: [{
+        createdAt: '2026-07-28T00:00:00.000Z',
+        id: 'notification-1',
+        presentation,
+        read: false,
+        type: 'panels.order-ready',
+      }],
+      page: 2,
+      pageSize: 20,
+      total: 21,
+      unread: 4,
+    }
+    const { notifications, recorder } = createClient([
+      success(page),
+      success({ affected: 1 }),
+      success({ affected: 1 }),
+      success({ affected: 1 }),
+    ])
+    const signal = new AbortController().signal
+
+    await expect(notifications.list(2, 20, signal)).resolves.toEqual(page)
+    await expect(notifications.markRead(['notification-1'], signal)).resolves.toBe(1)
+    await expect(notifications.markUnread(['notification-1'], signal)).resolves.toBe(1)
+    await expect(notifications.delete(['notification-1'], signal)).resolves.toBe(1)
+
+    expect(payloads(recorder.requests)).toEqual([
+      { action: 'list', page: 2, pageSize: 20 },
+      { action: 'mark-read', ids: ['notification-1'] },
+      { action: 'mark-unread', ids: ['notification-1'] },
+      { action: 'delete', ids: ['notification-1'] },
+    ])
+    for (const request of recorder.requests) {
+      const encoded = new URLSearchParams(request.body).get('request')
+      expect(JSON.parse(encoded!)).toMatchObject({ operation: 'notification', panelId: 'commerce' })
+      expect(encoded).not.toMatch(/guard|tenant|recipient|channel/u)
+    }
+  })
+
+  it('validates request inputs and response page/count shapes before exposing them', async () => {
+    const malformedPage = createClient([success({ items: [], page: 2, pageSize: 20, total: 0, unread: 0 })])
+    const signal = new AbortController().signal
+
+    await expect(malformedPage.notifications.list(1, 20, signal)).rejects.toThrow('requested pagination')
+    expect(() => createPanelNotificationTransport(new PanelsTransport({
+      adapter: malformedPage.recorder,
+      createId: () => requestId,
+      csrfProvider: { getField: () => ({ name: '_token', value: 'signed' }) },
+    }), { endpoint: 'https://example.com/notifications', panelId: 'commerce' })).toThrow('root-relative')
+    for (const endpoint of [
+      '/_holo/panels/../admin',
+      '/_holo%2fpanels/notifications',
+      '/_holo/panels/notifications?tenant=other',
+      '/_holo/panels/notifications#other',
+    ]) {
+      expect(() => createPanelNotificationTransport(new PanelsTransport({
+        adapter: malformedPage.recorder,
+        createId: () => requestId,
+        csrfProvider: { getField: () => ({ name: '_token', value: 'signed' }) },
+      }), { endpoint, panelId: 'commerce' })).toThrow('root-relative')
+    }
+
+    const invalidInputs = createClient([])
+    await expect(invalidInputs.notifications.list(0, 20, signal)).rejects.toThrow('Notification pages')
+    await expect(invalidInputs.notifications.list(10_002, 100, signal)).rejects.toThrow('offsets')
+    await expect(invalidInputs.notifications.markRead(['../../foreign'], signal)).rejects.toThrow('canonical identifiers')
+    expect(invalidInputs.recorder.requests).toHaveLength(0)
+
+    const invalidCount = createClient([success({ affected: 2 })])
+    await expect(invalidCount.notifications.delete(['notification-1'], signal)).rejects.toThrow('affected count')
+
+    const validPresentation = panelNotification('order.ready').title('Order ready').presentation()
+    const hostileItems = [
+      {
+        createdAt: '2026-07-28T00:00:00.000Z',
+        id: 42,
+        presentation: validPresentation,
+        read: false,
+        type: 'panels.order-ready',
+      },
+      {
+        createdAt: '2026-07-28T00:00:00.000Z',
+        id: 'notification-2',
+        presentation: {
+          ...validPresentation,
+          actions: [{ id: 'open', kind: 'navigate', label: 'Open', url: 'javascript:alert(1)' }],
+        },
+        read: false,
+        type: 'panels.order-ready',
+      },
+    ]
+    for (const item of hostileItems) {
+      const hostile = createClient([success({ items: [item], page: 1, pageSize: 20, total: 1, unread: 1 })])
+      await expect(hostile.notifications.list(1, 20, signal)).rejects.toThrow()
+    }
+  })
+})

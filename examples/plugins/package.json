@@ -1,0 +1,41 @@
+{
+  "name": "@acme/panels-plugin-catalog",
+  "version": "0.0.0",
+  "description": "Third-party extension catalog example for Holo Panels",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./renderers": {
+      "types": "./dist/renderers.d.ts",
+      "import": "./dist/renderers.mjs",
+      "default": "./dist/renderers.mjs"
+    },
+    "./style.css": "./style.css"
+  },
+  "files": [
+    "dist",
+    "style.css"
+  ],
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest --run --reporter=json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@holo-js/forms": "^0.3.10",
+    "@holo-js/panels": "^0.1.0-next.0",
+    "@holo-js/panels-core": "^0.1.0-next.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.5"
+  }
+}

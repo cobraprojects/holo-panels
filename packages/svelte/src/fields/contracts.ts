@@ -1,0 +1,79 @@
+import type {
+  CollectionStore,
+  FormStore,
+  JsonObject,
+  JsonValue,
+  OptionStore,
+  OptionValue,
+  UploadStore,
+} from '@holo-js/panels-client'
+import type { Snippet } from 'svelte'
+import type { SvelteComponentRegistry } from '../registry'
+
+export interface FieldControlAttributes {
+  readonly 'aria-describedby'?: string
+  readonly 'aria-errormessage'?: string
+  readonly 'aria-invalid'?: true
+  readonly id: string
+}
+
+export interface SvelteFieldFrameProps {
+  readonly children: Snippet<[FieldControlAttributes]>
+  readonly description?: string
+  readonly errors?: readonly string[]
+  readonly hint?: string
+  readonly inputId: string
+  readonly label: string
+  readonly required?: boolean
+}
+
+export interface SvelteFieldDefinition {
+  readonly type: string
+  readonly path: string
+  readonly label: string
+  readonly helperText?: string
+  readonly hint?: string
+  readonly placeholder?: string
+  readonly visible?: boolean
+  readonly disabled?: boolean
+  readonly readOnly?: boolean
+  readonly required?: boolean
+  readonly properties?: JsonObject
+}
+
+export type SvelteFormStore = FormStore<Record<string, unknown>>
+export type SvelteOptionStore = OptionStore<OptionValue>
+export type SvelteCollectionStore = CollectionStore<JsonValue>
+
+export interface SvelteFieldRendererProps extends Record<string, unknown> {
+  readonly definition: SvelteFieldDefinition
+  readonly form: SvelteFormStore
+  readonly optionStore?: SvelteOptionStore
+  readonly collectionStore?: SvelteCollectionStore
+  readonly uploadStore?: UploadStore
+  readonly registry?: SvelteComponentRegistry
+  readonly panelId?: string
+  readonly requestedFrom?: string
+}
+
+export interface SvelteCustomFieldProps extends SvelteFieldRendererProps {
+  readonly value: unknown
+  readonly errors: readonly string[]
+  readonly disabled: boolean
+  readonly readOnly: boolean
+  readonly required: boolean
+  readonly inputId: string
+  readonly setValue: (value: unknown) => void
+}
+
+export interface SvelteEditorProps extends Record<string, unknown> {
+  readonly value: JsonValue
+  readonly disabled: boolean
+  readonly readOnly: boolean
+  readonly label: string
+  readonly inputId: string
+  readonly describedBy?: string
+  readonly errorMessageId?: string
+  readonly invalid: boolean
+  readonly setValue: (value: JsonValue) => void
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@holo-js/panels-cli",
+  "version": "0.1.0-next.0",
+  "description": "Holo CLI contributions and discovery compiler for Holo Panels",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "publish"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepack": "bun run validate:publish",
+    "smoke:publish": "node scripts/smoke-published-ui.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --passWithNoTests --reporter=json",
+    "validate:publish": "node scripts/validate-publish.mjs"
+  },
+  "dependencies": {
+    "@holo-js/panels-core": "workspace:*",
+    "esbuild": "catalog:"
+  },
+  "peerDependencies": {
+    "@holo-js/kernel": "catalog:"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

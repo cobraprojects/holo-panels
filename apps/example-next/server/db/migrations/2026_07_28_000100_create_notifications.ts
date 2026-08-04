@@ -1,0 +1,20 @@
+import { defineMigration } from '@holo-js/db'
+
+export default defineMigration({
+  async up({ schema }) {
+    await schema.createTable('notifications', (table) => {
+      table.string('id').primaryKey()
+      table.string('type').nullable()
+      table.string('notifiable_type')
+      table.string('notifiable_id')
+      table.json('data').default({})
+      table.timestamp('read_at').nullable()
+      table.timestamps()
+      table.index(['notifiable_type', 'notifiable_id'])
+      table.index(['read_at'])
+    })
+  },
+  async down({ schema }) {
+    await schema.dropTable('notifications')
+  },
+})

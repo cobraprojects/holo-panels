@@ -1,0 +1,209 @@
+@import '@holo-js/panels-ui/style.css';
+
+.hp-notification-toasts {
+  position: fixed;
+  z-index: 50;
+}
+
+.hp-notification-toasts[data-placement='top'] {
+  top: 1rem;
+}
+
+.hp-notification-toasts[data-placement='bottom'] {
+  bottom: 1rem;
+}
+
+.hp-notification-inbox [data-read='false'] {
+  font-weight: 600;
+}
+
+.hp-notification-inbox-trigger {
+  position: relative;
+}
+
+.hp-notification-inbox-trigger-button {
+  align-items: center;
+  display: inline-flex;
+  gap: .5rem;
+}
+
+.hp-notification-inbox-trigger-badge {
+  align-items: center;
+  background: CanvasText;
+  border-radius: 999px;
+  color: Canvas;
+  display: inline-flex;
+  font-size: .75rem;
+  justify-content: center;
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  padding: 0 .35rem;
+}
+
+.hp-notification-inbox-trigger-content[hidden] {
+  display: none;
+}
+
+.hp-notification-inbox-trigger[data-placement='topbar'] .hp-notification-inbox-trigger-content {
+  inset-inline-end: 0;
+  position: absolute;
+  z-index: 40;
+}
+
+.hp-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--hp-widget-columns), minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.hp-widget-grid__item {
+  min-width: 0;
+}
+
+.hp-widget-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+.hp-widget-stat {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--hp-widget-color, inherit);
+}
+
+.hp-widget-sparkline,
+.hp-widget-chart svg {
+  width: 100%;
+  height: auto;
+}
+
+.hp-widget-chart figcaption {
+  display: grid;
+  gap: 0.25rem;
+}
+.hp-schema,
+.hp-schema-node,
+.hp-schema-tabs,
+.hp-schema-wizard {
+  min-width: 0;
+}
+
+.hp-schema-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(var(--hp-schema-columns-default, 1), minmax(0, 1fr));
+}
+
+.hp-schema-node {
+  grid-column: var(--hp-schema-column-start-default, auto) / var(--hp-schema-column-end-default, auto);
+  order: var(--hp-schema-order-default, 0);
+}
+
+.hp-schema-split[data-split-from='default'] {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hp-schema-tabs > [role='tablist'] {
+  display: flex;
+  gap: .5rem;
+}
+
+.hp-schema-wizard nav ol {
+  display: flex;
+  gap: .5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.hp-schema-wizard-navigation {
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (min-width: 40rem) {
+  .hp-schema-grid {
+    grid-template-columns: repeat(var(--hp-schema-columns-sm, var(--hp-schema-columns-default, 1)), minmax(0, 1fr));
+  }
+
+  .hp-schema-node {
+    grid-column: var(--hp-schema-column-start-sm, var(--hp-schema-column-start-default, auto)) / var(--hp-schema-column-end-sm, var(--hp-schema-column-end-default, auto));
+    order: var(--hp-schema-order-sm, var(--hp-schema-order-default, 0));
+  }
+
+  .hp-schema-split[data-split-from='sm'] {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 48rem) {
+  .hp-schema-grid {
+    grid-template-columns: repeat(var(--hp-schema-columns-md, var(--hp-schema-columns-sm, var(--hp-schema-columns-default, 1))), minmax(0, 1fr));
+  }
+
+  .hp-schema-node {
+    grid-column: var(--hp-schema-column-start-md, var(--hp-schema-column-start-sm, var(--hp-schema-column-start-default, auto))) / var(--hp-schema-column-end-md, var(--hp-schema-column-end-sm, var(--hp-schema-column-end-default, auto)));
+    order: var(--hp-schema-order-md, var(--hp-schema-order-sm, var(--hp-schema-order-default, 0)));
+  }
+
+  .hp-schema-split[data-split-from='md'] {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .hp-schema-grid {
+    grid-template-columns: repeat(var(--hp-schema-columns-lg, var(--hp-schema-columns-md, var(--hp-schema-columns-sm, var(--hp-schema-columns-default, 1)))), minmax(0, 1fr));
+  }
+
+  .hp-schema-node {
+    grid-column: var(--hp-schema-column-start-lg, var(--hp-schema-column-start-md, var(--hp-schema-column-start-sm, var(--hp-schema-column-start-default, auto)))) / var(--hp-schema-column-end-lg, var(--hp-schema-column-end-md, var(--hp-schema-column-end-sm, var(--hp-schema-column-end-default, auto))));
+    order: var(--hp-schema-order-lg, var(--hp-schema-order-md, var(--hp-schema-order-sm, var(--hp-schema-order-default, 0))));
+  }
+
+  .hp-schema-split[data-split-from='lg'] {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 80rem) {
+  .hp-schema-grid {
+    grid-template-columns: repeat(var(--hp-schema-columns-xl, var(--hp-schema-columns-lg, var(--hp-schema-columns-md, var(--hp-schema-columns-sm, var(--hp-schema-columns-default, 1))))), minmax(0, 1fr));
+  }
+
+  .hp-schema-node {
+    grid-column: var(--hp-schema-column-start-xl, var(--hp-schema-column-start-lg, var(--hp-schema-column-start-md, var(--hp-schema-column-start-sm, var(--hp-schema-column-start-default, auto))))) / var(--hp-schema-column-end-xl, var(--hp-schema-column-end-lg, var(--hp-schema-column-end-md, var(--hp-schema-column-end-sm, var(--hp-schema-column-end-default, auto)))));
+    order: var(--hp-schema-order-xl, var(--hp-schema-order-lg, var(--hp-schema-order-md, var(--hp-schema-order-sm, var(--hp-schema-order-default, 0)))));
+  }
+
+  .hp-schema-split[data-split-from='xl'] {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 96rem) {
+  .hp-schema-grid {
+    grid-template-columns: repeat(var(--hp-schema-columns-2xl, var(--hp-schema-columns-xl, var(--hp-schema-columns-lg, var(--hp-schema-columns-md, var(--hp-schema-columns-sm, var(--hp-schema-columns-default, 1)))))), minmax(0, 1fr));
+  }
+
+  .hp-schema-node {
+    grid-column: var(--hp-schema-column-start-2xl, var(--hp-schema-column-start-xl, var(--hp-schema-column-start-lg, var(--hp-schema-column-start-md, var(--hp-schema-column-start-sm, var(--hp-schema-column-start-default, auto)))))) / var(--hp-schema-column-end-2xl, var(--hp-schema-column-end-xl, var(--hp-schema-column-end-lg, var(--hp-schema-column-end-md, var(--hp-schema-column-end-sm, var(--hp-schema-column-end-default, auto))))));
+    order: var(--hp-schema-order-2xl, var(--hp-schema-order-xl, var(--hp-schema-order-lg, var(--hp-schema-order-md, var(--hp-schema-order-sm, var(--hp-schema-order-default, 0))))));
+  }
+
+  .hp-schema-split[data-split-from='2xl'] {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

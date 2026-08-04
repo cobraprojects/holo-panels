@@ -1,0 +1,50 @@
+import type { Effect } from './effects'
+import type { JsonObject, JsonValue } from './json'
+import type { PublicSourceLocation } from './source-location'
+
+export type ErrorCategory =
+  | 'authentication'
+  | 'authorization'
+  | 'conflict'
+  | 'internal'
+  | 'not-found'
+  | 'protocol'
+  | 'rate-limit'
+  | 'validation'
+
+export interface PanelsError {
+  category: ErrorCategory
+  code: string
+  details?: JsonObject
+  location?: PublicSourceLocation
+  message: string
+  retryable: boolean
+}
+
+export interface RequestEnvelope<TPayload extends JsonValue = JsonObject> {
+  id: string
+  operation: string
+  panelId: string
+  payload: TPayload
+  protocolVersion: string
+}
+
+export interface SuccessEnvelope<TData extends JsonValue = JsonValue> {
+  data: TData
+  effects: Effect[]
+  id: string
+  ok: true
+  protocolVersion: string
+}
+
+export interface ErrorEnvelope {
+  effects: Effect[]
+  error: PanelsError
+  id: string
+  ok: false
+  protocolVersion: string
+}
+
+export type ResponseEnvelope<TData extends JsonValue = JsonValue> =
+  | ErrorEnvelope
+  | SuccessEnvelope<TData>

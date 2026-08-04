@@ -1,0 +1,8 @@
+.hp-money-field {
+  font-variant-numeric: tabular-nums;
+}
+
+.hp-money-column {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

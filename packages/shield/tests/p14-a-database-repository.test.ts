@@ -1,6 +1,3 @@
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   configureDB,
   createConnectionManager,
@@ -10,21 +7,11 @@ import {
   resetDB,
   type DriverAdapter,
 } from '@holo-js/db'
+import { SQLiteAdapter } from '@holo-js/db-sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPanelShieldTables } from '../src/database/migration'
 import { createHoloShieldRepository } from '../src/database/repository'
 import { shieldAdministrationRepository } from '../src/repository'
-
-interface SQLiteAdapterConstructor {
-  new(options: { filename: string }): DriverAdapter
-}
-
-const bunModulesPath = fileURLToPath(new URL('../../../node_modules/.bun', import.meta.url))
-const sqlitePackageDirectory = readdirSync(bunModulesPath)
-  .find(entry => entry.startsWith('@holo-js+db-sqlite@'))
-if (!sqlitePackageDirectory) throw new Error('The Holo SQLite adapter is required for Shield database contract tests')
-const sqliteModulePath = join(bunModulesPath, sqlitePackageDirectory, 'node_modules/@holo-js/db-sqlite/dist/index.mjs')
-const { SQLiteAdapter } = await import(pathToFileURL(sqliteModulePath).href) as { SQLiteAdapter: SQLiteAdapterConstructor }
 
 describe('Holo database Shield repository', () => {
   let adapter: DriverAdapter

@@ -69,7 +69,7 @@ await withResolvedReleaseManifests(() => {
   }
 
   for (const release of releases) {
-    const publication = spawnSync('bun', [
+    const publication = spawnSync('npm', [
       'publish',
       '--access',
       'public',

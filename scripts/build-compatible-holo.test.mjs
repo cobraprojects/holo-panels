@@ -22,13 +22,13 @@ test('orders Holo packages deterministically after their internal dependencies',
 test('rejects duplicate package names and dependency cycles', () => {
   assert.throws(
     () => orderBuildPackages([packageEntry('@holo-js/core'), packageEntry('@holo-js/core')]),
-    /Duplicate Holo package name/u,
+    /Duplicate workspace package name/u,
   )
   assert.throws(
     () => orderBuildPackages([
       packageEntry('@holo-js/core', ['@holo-js/kernel']),
       packageEntry('@holo-js/kernel', ['@holo-js/core']),
     ]),
-    /Cyclic Holo build dependency/u,
+    /Cyclic workspace build dependency/u,
   )
 })

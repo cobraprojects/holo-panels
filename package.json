@@ -74,8 +74,9 @@
     }
   },
   "scripts": {
-    "build": "bun run --filter '@holo-js/panels*' --sequential build",
-    "typecheck": "bun run --filter '@holo-js/panels*' --sequential typecheck",
+    "build": "node scripts/build-workspace-packages.mjs",
+    "typecheck": "bun run build && bun run typecheck:packages",
+    "typecheck:packages": "bun run --filter '@holo-js/panels*' --sequential typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "link:holo": "node scripts/link-local-holo.mjs",
@@ -90,7 +91,7 @@
     "test:example-parity": "node scripts/validate-example-parity.mjs",
     "test:p0c": "node scripts/p0c-packed-acceptance.mjs",
     "test:registry-release": "node scripts/p0c-packed-acceptance.mjs --registry",
-    "validate": "bun run typecheck && bun run lint && bun run test && bun run build && bun run test:conditions && bun run test:p0c && node scripts/validate-published-packages.mjs --require-build --pack",
+    "validate": "bun run typecheck && bun run lint && bun run test && bun run test:conditions && bun run test:p0c && node scripts/validate-published-packages.mjs --require-build --pack",
     "examples:generate": "node scripts/generate-example-fixtures.mjs",
     "version-packages": "node scripts/version-packages.mjs",
     "release": "node scripts/release.mjs --publish"

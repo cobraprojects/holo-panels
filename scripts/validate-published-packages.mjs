@@ -276,6 +276,7 @@ if (requirePackedSmoke) {
     for (const script of ['typecheck', 'test', 'build']) {
       execFileSync('bun', ['run', script], {
         cwd: pluginPackageRoot,
+        encoding: 'utf8',
         stdio: 'pipe',
       })
     }

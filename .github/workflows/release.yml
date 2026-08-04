@@ -43,6 +43,7 @@ jobs:
         working-directory: holo-js
         run: |
           bun install --frozen-lockfile --ignore-scripts
+          npm rebuild better-sqlite3
           node ../holo-panels/scripts/build-compatible-holo.mjs
       - name: Install Holo Panels
         working-directory: holo-panels

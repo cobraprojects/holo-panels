@@ -21,6 +21,7 @@ const requiredWorkflowText = [
   'path: holo-panels',
   'path: holo-js',
   'bun install --frozen-lockfile --ignore-scripts',
+  'npm rebuild better-sqlite3',
   'node ../holo-panels/scripts/build-compatible-holo.mjs',
   'run: bun run validate',
 ]
@@ -43,6 +44,7 @@ const requiredReleaseWorkflowText = [
   `HOLO_JS_VERSION: ${expectedVersion}`,
   'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
   'bun install --frozen-lockfile --ignore-scripts',
+  'npm rebuild better-sqlite3',
   'node ../holo-panels/scripts/build-compatible-holo.mjs',
   'run: bun run release',
 ]

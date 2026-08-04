@@ -2,7 +2,7 @@
 
 Security issues in Holo Panels should be reported privately. This policy explains what to report, how maintainers handle a report, which versions are eligible for fixes, and how coordinated disclosure works.
 
-Holo Panels is currently an unpublished `0.1.0-next.0` release candidate. It has no stable or supported registry release. The repository is suitable for development and security review, not a production-support commitment.
+Holo Panels `0.1.0-next.0` is an experimental published prerelease. It has no stable release or production-support commitment. Under the prerelease policy below, only the newest published prerelease is eligible for security fixes.
 
 ## Reporting a vulnerability
 
@@ -88,13 +88,12 @@ All publishable Holo Panels packages release in lockstep. An application must no
 
 | Holo Panels line | Holo-JS compatibility evidence | Security status |
 |---|---|---|
-| Repository `0.1.0-next.0` | Validated against the published Holo-JS `0.3.10` release at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243` | Development only until the prerelease is published; no stable-release SLA |
-| Published prerelease | Not published yet | Unsupported until a release is published with explicit compatibility notes |
+| Published `0.1.0-next.0` | Packed minimum-version compatibility against Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`; clean registry lifecycle against Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529` | Newest experimental prerelease; eligible under the prerelease policy below, with no stable-release SLA |
 | Stable release | None | No stable support line exists |
 
-The workspace catalog declares Holo-JS peers as `^0.3.10`, which permits compatible `0.3.x` releases from `0.3.10` onward and excludes `0.4.0`. Packed compatibility and acceptance evidence covers published Holo-JS `0.3.10` at the immutable commit above. The wider peer range permits installation; it does not prove every later `0.3.x` version has passed packed compatibility and acceptance testing. Release notes must identify the Holo-JS and framework lines actually validated for that release.
+The workspace catalog declares Holo-JS peers as `^0.3.10`, which permits compatible `0.3.x` releases from `0.3.10` onward and excludes `0.4.0`. Packed minimum-version evidence covers published Holo-JS `0.3.10`, while registry installation and lifecycle evidence covers `0.3.11` at the immutable commits above. The wider peer range permits installation; it does not prove every later `0.3.x` version has passed packed compatibility and acceptance testing. Release notes must identify the Holo-JS and framework lines actually validated for that release.
 
-The `0.1.0-next.0` workspace version must not be treated as a registry release or long-lived security branch until it is actually published. Source checkouts are moving development targets; reports should name a commit.
+The `0.1.0-next.0` prerelease must not be treated as a stable or long-lived security branch. Source checkouts are moving development targets; reports should name a commit.
 
 ## Prerelease support policy
 

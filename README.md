@@ -2,17 +2,17 @@
 
 Holo Panels is the official resource-driven panel plugin for Holo-JS. It is developed in this separate repository, in the same way that Filament is developed separately from Laravel while building on Laravel's services and conventions.
 
-The workspace contains the core runtime, client, UI, framework renderers and adapters, CLI integration, testing helpers, and optional Shield package. The implementation plan remains the authority for release completeness: Phase P17 acceptance and registry-release work is still in progress.
+The workspace contains the core runtime, client, UI, framework renderers and adapters, CLI integration, testing helpers, and optional Shield package. The complete `0.1.0-next.0` package family is published on npm with the `next` tag, and Phase P17 is complete.
 
 ## Intended integration
 
-Holo Panels will remain native to Holo-JS:
+Holo Panels is native to Holo-JS:
 
-- Users will install the umbrella package `@holo-js/panels` as a Holo plugin.
-- Commands will be contributed to the existing `holo` CLI; Holo Panels will not introduce a second executable.
-- Database access, forms, validation, authentication, authorization, notifications, queues, storage, media, broadcast, realtime, configuration, and security will use the corresponding Holo-JS packages.
-- Next.js, Nuxt, and SvelteKit support will use separate framework adapters and React, Vue, and Svelte renderers.
-- The repository will be one workspace monorepo containing multiple focused, independently testable packages released in lockstep.
+- Users install the umbrella package `@holo-js/panels` as a Holo plugin.
+- Commands are contributed to the existing `holo` CLI; Holo Panels does not introduce a second executable.
+- Database access, forms, validation, authentication, authorization, notifications, queues, storage, media, broadcast, realtime, configuration, and security use the corresponding Holo-JS packages.
+- Next.js, Nuxt, and SvelteKit support uses separate framework adapters and React, Vue, and Svelte renderers.
+- The repository is one workspace monorepo containing multiple focused, independently testable packages released in lockstep.
 
 The complete architecture, phased task breakdown, acceptance criteria, parallel-work rules, and implementation checklist are in [plans/implementation.md](plans/implementation.md).
 
@@ -47,7 +47,7 @@ Code/
 └── holo-panels/
 ```
 
-Coordinated host changes belong in the Holo-JS repository. Panel implementation belongs here. Published Holo Panels packages will depend on compatible published Holo-JS packages; local linking is only a development workflow.
+Coordinated host changes belong in the Holo-JS repository. Panel implementation belongs here. Published Holo Panels packages depend on compatible published Holo-JS packages; local linking is only a development workflow.
 
 ## CI compatibility pin
 

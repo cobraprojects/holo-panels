@@ -2,11 +2,11 @@
 
 All notable changes to the Holo Panels workspace are recorded here. Holo Panels packages release in lockstep, so one entry applies to the complete `@holo-js/panels` package family.
 
-The project has not published a prerelease. The current workspace version is `0.1.0-next.0`; everything below remains unreleased until the first credentialed registry publication.
+The newest published prerelease is `0.1.0-next.0`. All 14 packages are available from npm with the `next` tag.
 
-This prerelease requires Holo-JS `^0.3.10` and is validated against the published Holo-JS `0.3.10` host release.
+This prerelease requires Holo-JS `^0.3.10`. Packed minimum-version compatibility is validated against Holo-JS `0.3.10`, and the clean registry lifecycle is validated against published Holo-JS `0.3.11`.
 
-## Unreleased
+## 0.1.0-next.0 - 2026-08-04
 
 ### Added
 
@@ -32,10 +32,11 @@ This prerelease requires Holo-JS `^0.3.10` and is validated against the publishe
 - The adjacent Holo-JS development dependency includes the approved project-preparation, notification/session, and multi-factor authentication host capabilities required by the current workspace.
 - Example manifests now centralize esbuild through the workspace catalog while preserving generated-scaffold parity.
 
-### Pending before the first prerelease
+### Release evidence
 
-- Publish `0.1.0-next.0` for the lockstep package family through the protected CI release workflow.
-- Install the published prerelease from the external registry and complete the remaining P17 registry and final release acceptance gates. The local three-framework browser gate passes 30/30 with zero retries.
+- The protected release workflow published the complete 14-package family with the `next` tag.
+- Clean external-registry Next.js, Nuxt, and SvelteKit applications passed plugin installation, activation, preparation, generation, adapter selection, Shield, idempotency, and safe uninstall with Holo-JS `0.3.11`.
+- The production browser acceptance gate passes 30/30 with zero retries.
 
 ## Upgrade policy
 

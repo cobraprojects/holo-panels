@@ -20,7 +20,8 @@ const requiredWorkflowText = [
   `HOLO_JS_VERSION: ${expectedVersion}`,
   'path: holo-panels',
   'path: holo-js',
-  "bun run --filter '@holo-js/*' --sequential build",
+  'bun install --frozen-lockfile --ignore-scripts',
+  'node ../holo-panels/scripts/build-compatible-holo.mjs',
   'run: bun run validate',
 ]
 
@@ -41,6 +42,8 @@ const requiredReleaseWorkflowText = [
   `HOLO_JS_REF: ${expectedRef}`,
   `HOLO_JS_VERSION: ${expectedVersion}`,
   'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
+  'bun install --frozen-lockfile --ignore-scripts',
+  'node ../holo-panels/scripts/build-compatible-holo.mjs',
   'run: bun run release',
 ]
 

@@ -42,8 +42,8 @@ jobs:
       - name: Install and build compatible Holo-JS packages
         working-directory: holo-js
         run: |
-          bun install --frozen-lockfile
-          bun run --filter '@holo-js/*' --sequential build
+          bun install --frozen-lockfile --ignore-scripts
+          node ../holo-panels/scripts/build-compatible-holo.mjs
       - name: Install Holo Panels
         working-directory: holo-panels
         run: bun install --frozen-lockfile

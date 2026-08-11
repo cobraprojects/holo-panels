@@ -8,7 +8,7 @@ permissions:
 
 env:
   HOLO_JS_REPOSITORY: cobraprojects/holo-js
-  HOLO_JS_REF: 0d074287272b769cda83fe4886c2127c96c9c529
+  HOLO_JS_REF: da8e8ee6914a6e4526a3a5006edf3ceee8545bfe
   HOLO_JS_VERSION: 0.3.11
 
 jobs:

@@ -18,7 +18,7 @@ Code/
 └── holo-panels/
 ```
 
-The release candidate accepts every stable Holo-JS version at or above `0.3.9` through the `>=0.3.9` dependency floor. Holo-JS `0.3.9` was never published, so minimum-version packed compatibility starts with published Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`, while CI, release, and clean registry lifecycle validation use Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529`. The workflows pin an immutable host revision for reproducible validation, not as an installation ceiling.
+The release candidate accepts every stable Holo-JS version at or above `0.3.9` through the `>=0.3.9` dependency floor. Holo-JS `0.3.9` was never published, so minimum-version packed compatibility starts with published Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`. Published `0.1.0-next.0` lifecycle evidence uses Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529`; current CI and release-candidate validation use the Panels host integration at commit `da8e8ee6914a6e4526a3a5006edf3ceee8545bfe`. The workflows pin an immutable host revision for reproducible validation, not as an installation ceiling.
 
 ## Test layers
 

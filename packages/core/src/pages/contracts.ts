@@ -13,6 +13,7 @@ export interface PageContext<TActor, TTenant, TServices> {
   readonly parameters: Readonly<Record<string, string>>
   readonly services: TServices
   readonly signal: AbortSignal
+  readonly strictAuthorization?: boolean
   readonly tenant: TTenant
 }
 

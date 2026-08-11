@@ -158,6 +158,7 @@ describe('complete public value-source inference contract', () => {
       relationName: 'comments',
       transaction: { run: operation => operation() },
     })
+    const postsWithRelations = posts.relations(commentsRelation)
 
     const formFields = fields(postForm)
     const formTitle = formFields.text('title').default(context => {
@@ -165,12 +166,17 @@ describe('complete public value-source inference contract', () => {
       expectTypeOf(context.values.score).toEqualTypeOf<number>()
       return context.value
     })
+    expect(postsWithRelations.compile().relations[0]).toBe(commentsRelation)
     const layout = defineSchema('post-layout', PostModel)
     const tableColumns = columnsFor(PostModel)
     const tableFilters = filtersFor(PostModel, ResolverContext)
     const tableSummaries = summariesFor(PostModel, ResolverContext)
     const infolistEntries = entriesFor(PostModel)
     const advancedColumns = advancedColumnsFor(PostModel)
+    const composedPosts = posts
+      .form([formTitle])
+      .table([tableColumns.text('title')])
+      .infolist([infolistEntries.text('title')])
 
     const actions = actionsFor({
       actor: Actor,
@@ -179,6 +185,7 @@ describe('complete public value-source inference contract', () => {
       services: Services,
       tenant: Tenant,
     })
+    expect(composedPosts.compile().form).toHaveLength(1)
     const action = actions.builtin('edit', {
       update: async (record, input) => {
         expectTypeOf(record.id).toEqualTypeOf<number>()

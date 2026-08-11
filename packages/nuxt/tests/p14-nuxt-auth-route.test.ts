@@ -50,7 +50,11 @@ function endpoint(): (request: Request) => Promise<Response> {
   const router = createRouter()
   router.post('/:panelId/auth/:operation', createPanelAuthHandler({
     panelIds: ['admin'],
-    runtime: { execute: async () => ({ data: null }), panels: { admin: { access: () => true, definition: panel, guard: 'admin' } } },
+    runtime: {
+      execute: async () => ({ data: null }),
+      panels: { admin: { access: () => true, definition: panel, guard: 'admin' } },
+      resolveTenant: async () => { throw new Error('Tenant could not be resolved') },
+    },
   }))
   app.use(router)
   return toWebHandler(app)

@@ -1,26 +1,20 @@
 import { defineStatsWidget } from '@holo-js/panels'
-import { AdminActor, canManagePosts } from '../pages/posts/access'
+import Comment from '../../models/Comment'
+import Media from '../../models/Media'
+import Post from '../../models/Post'
 
-export interface ContentMetrics {
-  count(resourceId: 'comments' | 'media' | 'posts', tenantId: string): Promise<number>
-}
-
-class ContentOverviewServices {
-  declare readonly contentMetrics: ContentMetrics
-}
-
-export default defineStatsWidget('content-overview', { actor: AdminActor, services: ContentOverviewServices, tenant: String })
+export default defineStatsWidget('content-overview')
   .heading('Content overview')
   .description('Tenant-scoped publishing activity')
   .columnSpan('full')
   .poll(30_000)
-  .authorize(context => context.actor !== null && canManagePosts(context.actor))
+  .authorize(context => context.actor !== null && ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role))
   .visible(context => context.tenant.length > 0)
   .data(async context => {
     const [posts, comments, media] = await Promise.all([
-      context.services.contentMetrics.count('posts', context.tenant),
-      context.services.contentMetrics.count('comments', context.tenant),
-      context.services.contentMetrics.count('media', context.tenant),
+      Post.where('tenantId', context.tenant).count(),
+      Comment.where('tenantId', context.tenant).count(),
+      Media.where('tenantId', context.tenant).count(),
     ])
     return {
       stats: [

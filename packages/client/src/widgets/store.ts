@@ -2,6 +2,7 @@ import { toJsonValue, type JsonValue } from '@holo-js/panels-core'
 import type {
   WidgetClientManifest,
   WidgetClientState,
+  WidgetLoadResult,
   WidgetLoader,
   WidgetScheduler,
   WidgetStateListener,
@@ -39,7 +40,11 @@ export class WidgetStore {
   constructor(
     manifest: WidgetClientManifest,
     loader: WidgetLoader,
-    options: { readonly persistence?: WidgetFilterPersistence, readonly scheduler?: WidgetScheduler } = {},
+    options: {
+      readonly initialResult?: WidgetLoadResult
+      readonly persistence?: WidgetFilterPersistence
+      readonly scheduler?: WidgetScheduler
+    } = {},
   ) {
     if (manifest.polling.enabled && (manifest.polling.interval === null || manifest.polling.interval < 1)) {
       throw new Error('Enabled widget polling requires a positive interval')
@@ -48,12 +53,13 @@ export class WidgetStore {
     this.#loader = loader
     this.#persistence = options.persistence ?? null
     this.#scheduler = options.scheduler ?? defaultScheduler
+    const initialResult = options.initialResult
     this.#state = freezeState({
-      data: null,
+      data: initialResult?.data === undefined ? null : toJsonValue(initialResult.data),
       error: null,
       filters: this.#persistence?.read(manifest.filters) ?? Object.fromEntries(manifest.filters.map(filter => [filter.id, filter.defaultValue])),
       loading: false,
-      status: 'idle',
+      status: initialResult?.status ?? 'idle',
     })
   }
 

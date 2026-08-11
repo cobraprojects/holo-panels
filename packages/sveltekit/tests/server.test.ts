@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ActionExecutionError } from '@holo-js/panels-svelte/server'
+import { definePanel } from '@holo-js/panels-core'
 import type { RequestEvent } from '@sveltejs/kit'
 import type {
   PanelBootstrapData,
@@ -65,6 +66,7 @@ const bootstrap: PanelBootstrapData = {
     branding: { favicon: null, logo: null, name: 'Admin' },
     databaseNotifications: null,
     default: true,
+    globalSearch: true,
     id: 'admin',
     navigation: [],
     navigationMode: 'sidebar',
@@ -158,6 +160,63 @@ beforeEach(() => {
 })
 
 describe('@holo-js/panels-sveltekit server adapter', () => {
+  it('mounts generated public custom routes at their native SvelteKit URL', async () => {
+    const configured = registry()
+    const customPanel = definePanel('admin')
+      .path('/admin')
+      .routes(routes => routes.get('/posts', () => new Response('custom posts')))
+      .compile()
+    const value: SvelteKitPanelRegistry = { ...configured.value, panels: { admin: customPanel } }
+    const { createGeneratedSvelteKitPanelRoute } = await import('../src/server')
+
+    const response = await createGeneratedSvelteKitPanelRoute({ panelId: 'admin', registry: value }).GET(event())
+
+    expect(response.status).toBe(200)
+    await expect(response.text()).resolves.toBe('custom posts')
+  })
+
+  it('returns configured panel error notifications as client toast effects', async () => {
+    const configured = registry()
+    const errorPanel = definePanel('admin')
+      .registerErrorNotification('Save failed', 'The post could not be saved.', 500)
+      .compile()
+    const value: SvelteKitPanelRegistry = {
+      ...configured.value,
+      operations: { 'form-submit': () => { throw new Error('database unavailable') } },
+      panels: { admin: errorPanel },
+    }
+    const { createPanelOperationHandler } = await import('../src/server')
+    const response = await createPanelOperationHandler({ panelIds: ['admin'], registry: value }).POST(event('POST', { operation: 'form-submit', panelId: 'admin' }))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      ok: false,
+    })
+  })
+
+  it('serves the configured tenant billing route before subscription-protected page execution', async () => {
+    const configured = registry()
+    const routeAction = vi.fn(() => new Response(null, { headers: { location: 'https://billing.example.test/session' }, status: 303 }))
+    const billingBootstrap: PanelBootstrapData = {
+      ...bootstrap,
+      manifest: { ...bootstrap.manifest, tenancy: { billing: { path: '/admin/subscription' }, enabled: true, requiresSubscription: true } },
+    }
+    Reflect.set(configured.value, 'panels', {
+      admin: { server: { tenancy: { billing: { getRouteAction: () => routeAction, getSubscribedMiddleware: () => () => false } } } },
+    })
+    Reflect.set(configured.value.runtime, 'bootstrap', async () => [billingBootstrap])
+    const { createPanelPageLoad } = await import('../src/server')
+    const load = createPanelPageLoad({ panelId: 'admin', registry: configured.value })
+
+    await expect(load(event('GET', { path: 'subscription' }))).rejects.toMatchObject({
+      location: 'https://billing.example.test/session',
+      status: 303,
+    })
+    expect(routeAction).toHaveBeenCalledOnce()
+    expect(configured.calls).toEqual(['execute:admin:bootstrap'])
+  })
+
   it('rejects a multibyte operation envelope above 4 MiB without flashing success effects', async () => {
     const configured = registry()
     const effects = [
@@ -200,12 +259,19 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
 
   it('loads an optional catch-all page inside request context and panel authorization', async () => {
     const configured = registry()
+    const value: SvelteKitPanelRegistry = {
+      ...configured.value,
+      resolveWidgets: async input => {
+        configured.calls.push(`widgets:${input.page.manifest.id}`)
+        return { footer: [], header: [] }
+      },
+    }
     const { createPanelPageLoad } = await import('../src/server')
-    const load = createPanelPageLoad({ panelId: 'admin', registry: configured.value })
+    const load = createPanelPageLoad({ panelId: 'admin', registry: value })
     const result = await load(event('GET', { path: 'posts' }))
 
-    expect(result).toEqual({ effects: [], panel: bootstrap, page })
-    expect(configured.calls).toEqual(['bootstrap:admin', 'execute:admin:page-data', 'page:/admin/posts'])
+    expect(result).toEqual({ effects: [], panel: bootstrap, page, widgets: { footer: [], header: [] } })
+    expect(configured.calls).toEqual(['bootstrap:admin', 'execute:admin:page-data', 'page:/admin/posts', 'widgets:posts.list'])
     expect(mocks.contextCalls).toBe(1)
   })
 
@@ -329,7 +395,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     const { handle } = await import('../../../apps/example-sveltekit/src/hooks.server')
     const handler = createPanelOperationHandler({ panelIds: ['admin'], registry: configured.value })
     const base = event('POST', { operation: 'action', panelId: 'admin' })
-    const operationUrl = new URL('https://panels.test/_holo/panels/admin/action')
+    const operationUrl = new URL('https://panels.test/holo/panels/admin/action')
     const request = new Request(operationUrl, {
       body: new URLSearchParams({ ignored: 'x'.repeat(1024 * 1024), request: '{}' }).toString(),
       headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': 'valid' },
@@ -353,7 +419,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
       params: { operation: 'action', panelId: 'admin' },
       platform: undefined,
       request,
-      route: { id: '/_holo/panels/[panelId]/[operation]' },
+      route: { id: '/holo/panels/[panelId]/[operation]' },
       setHeaders: () => undefined,
       tracing: {
         current: {} as RequestEvent['tracing']['current'],

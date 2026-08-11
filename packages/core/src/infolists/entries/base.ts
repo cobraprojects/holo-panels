@@ -114,6 +114,7 @@ export abstract class EntryBuilder<TRecord, TValue, TType extends string> extend
   EntryState<TRecord, TValue>,
   CompiledEntryDefinition<TRecord, TValue, TType>
 > {
+  declare readonly resourceRecordType: TRecord
   readonly #type: TType
 
   protected constructor(type: TType, source: EntryStateSource) {

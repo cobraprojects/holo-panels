@@ -1,6 +1,5 @@
 import { csvExportFormat, csvImportFormat, defineExporter, defineImporter } from '@holo-js/panels'
 import Post from '../../models/Post'
-import { canManagePosts } from '../pages/posts/access'
 import PostResource from '../resources/posts/PostResource'
 
 const queue = Object.freeze({ backoff: [1_000, 5_000, 15_000], connection: 'database', queue: 'panels-transfers', tries: 3 })
@@ -21,8 +20,8 @@ export const PostImporter = defineImporter('post-import', PostResource)
   .column('category', column => column.required().label('Category'))
   .column('city', column => column.required().label('City'))
   .format(csvImportFormat(), { limits: { maxBytes: 10_485_760, maxCellBytes: 65_536, maxColumns: 10, maxRows: 100_000 } })
-  .authorize(context => canManagePosts(context.actor) && context.tenant.length > 0)
-  .authorizeCancellation(context => canManagePosts(context.actor) && context.tenant.length > 0)
+  .authorize(context => ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role) && context.tenant.length > 0)
+  .authorizeCancellation(context => ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role) && context.tenant.length > 0)
   .queue(queue)
   .storage(importStorage)
   .retention(retention)
@@ -53,8 +52,8 @@ export const PostExporter = defineExporter('post-export', PostResource)
   .column('category', 'category', column => column.label('Category'))
   .column('city', 'city', column => column.label('City'))
   .format(csvExportFormat(), {})
-  .authorize(context => canManagePosts(context.actor) && context.tenant.length > 0)
-  .authorizeCancellation(context => canManagePosts(context.actor) && context.tenant.length > 0)
+  .authorize(context => ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role) && context.tenant.length > 0)
+  .authorizeCancellation(context => ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role) && context.tenant.length > 0)
   .queue(queue)
   .storage(exportStorage)
   .retention(retention)
@@ -68,7 +67,7 @@ export const PostExporter = defineExporter('post-export', PostResource)
       : query.whereNotIn('id', selection.excludedRecordIds),
     applyTableState: query => query,
     applyTenantScope: (query, context) => query.where('tenantId', context.tenant),
-    authorize: context => canManagePosts(context.actor),
+    authorize: context => ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role),
     count: query => query.count(),
     createQuery: () => Post.query(),
     fetchChunk: (query, offset, limit) => query.offset(offset).limit(limit).get(),

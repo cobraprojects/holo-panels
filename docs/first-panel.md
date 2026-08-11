@@ -107,16 +107,16 @@ For the `admin` panel at `/admin`, successful preparation requests these framewo
 ```text
 Next.js
   app/admin/[[...panelsPath]]/page.tsx
-  app/%5Fholo/panels/[panelId]/[operation]/route.ts
+  app/holo/panels/[panelId]/[operation]/route.ts
 
 Nuxt
   pages/admin/[[...panelsPath]].vue
-  server/api/_holo/panels/[panelId]/[operation].ts
+  server/routes/holo/panels/[panelId]/[operation].ts
 
 SvelteKit
   src/routes/admin/[...path]/+page.server.ts
   src/routes/admin/[...path]/+page.svelte
-  src/routes/_holo/panels/[panelId]/[operation]/+server.ts
+  src/routes/holo/panels/[panelId]/[operation]/+server.ts
 ```
 
 Do not edit a managed route to add business logic. Put runtime behavior in the application-owned binding. If the expected route already exists and is unmanaged, preparation refuses to overwrite it and reports a manual integration snippet.

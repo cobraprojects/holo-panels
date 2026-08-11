@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-cli",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Holo CLI contributions and discovery compiler for Holo Panels",
   "type": "module",
   "license": "MIT",

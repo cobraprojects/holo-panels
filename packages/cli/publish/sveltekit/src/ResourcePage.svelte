@@ -1,38 +1,74 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+  import Button from './Button.svelte'
   import {
     ClientActionStore,
     ClientEffectSession,
+    CollectionStore,
+    createBrowserUploadAdapter,
+    createUploadStore,
+    EntryRenderer,
     FieldRenderer,
     FormStore,
     OptionStore,
     PanelsTransport,
     SvelteActionRenderer,
+    SvelteRelationManagerRenderer,
     SvelteTableRenderer,
     TableStateStore,
     toJsonValue,
     toSvelteState,
     type JsonObject,
     type JsonValue,
+    type SvelteEntryStore,
+    type SvelteRelationManagerRendererProps,
+    type SvelteTableGroup,
+    type SvelteTableSummary,
+    type UploadPolicy,
   } from '@holo-js/panels-svelte'
   import type { PanelPageData } from './contracts'
   import {
     jsonRecord,
     jsonRecords,
     resourcePageMetadata,
+    resourceOperationIdentifier,
+    resourceOperationIdentifiers,
     resourceRoute,
     slugValue,
     type ResourceOptions,
   } from './resource-page'
 
   let { data, effects }: { readonly data: PanelPageData, readonly effects: ClientEffectSession } = $props()
-  const endpoint = $derived(`/_holo/panels/${data.panel.manifest.id}`)
+  const endpoint = $derived(`/holo/panels/${data.panel.manifest.id}`)
   const pageType = $derived(data.page.manifest.pageType)
-  const resource = $derived(resourcePageMetadata(data.page.data.resource))
+  const resource = $derived(resourcePageMetadata(data.page.data.resource ?? data.page.manifest.body?.properties.resource, data.page.manifest.path, pageType))
   const record = $derived(jsonRecord(data.page.data.record))
   const records = $derived(jsonRecords(data.page.data.records))
+  const relations = $derived(relationManagers(data.page.data.relations))
+  const readOnlyRelations = $derived(data.panel.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true)
+  let persistedRouteIdentifier = $state<number | string>('')
+  const currentRouteIdentifier = $derived(persistedRouteIdentifier === '' ? recordRouteIdentifier(record) : persistedRouteIdentifier)
+  let renderedGroups = $state<readonly SvelteTableGroup<Record<string, unknown>>[]>([])
+  let renderedSummaries = $state<readonly SvelteTableSummary[]>([])
+  const rowActions = $derived.by(() => {
+    if (!resource) return []
+    const configured = resource.actions.flatMap(action => {
+      const scope = action.mount === 'bulk' ? 'bulk' as const : action.mount === 'page' ? 'header' as const : action.mount === 'record' ? 'row' as const : null
+      return scope ? [{ color: action.color, confirmation: action.confirmation ?? undefined, icon: action.icon, id: action.id, label: action.label, scope }] : []
+    })
+    const defaults = [
+      ...(resource.routes.view && !resource.actions.some(action => action.kind === 'view') ? [{ id: `${resource.id}.view`, label: 'View', scope: 'row' as const }] : []),
+      ...(resource.routes.edit && !resource.actions.some(action => action.kind === 'edit') ? [{ id: `${resource.id}.edit`, label: 'Edit', scope: 'row' as const }] : []),
+    ]
+    return [...defaults, ...configured]
+  })
   const createRoute = $derived(resource?.routes.create ?? null)
-  const editRoute = $derived(resourceRoute(resource?.routes.edit ?? null, recordRouteValue(record)))
-  const initialValues = $derived.by(() => Object.fromEntries((resource?.fields ?? []).map(field => [field.path, record?.[field.path] ?? ''])))
+  const editRoute = $derived(resourceRoute(resource?.routes.edit ?? null, encodedRouteIdentifier(currentRouteIdentifier)))
+  const initialValues = $derived.by(() => {
+    const values: Record<string, unknown> = {}
+    for (const field of resource?.fields ?? []) setRecordValue(values, field.path, recordValue(record ?? {}, field.path) ?? field.properties?.defaultValue ?? '')
+    return values
+  })
   const form = $derived.by(() => new FormStore<Record<string, unknown>>(initialValues, {
     dependencies: (resource?.dependencies ?? []).map(dependency => ({
       id: dependency.id,
@@ -48,12 +84,45 @@
     })),
   }))
   const formState = $derived.by(() => toSvelteState(form))
+  onMount(() => {
+    const preventUnload = (event: BeforeUnloadEvent): void => {
+      if (!data.panel.manifest.runtime?.unsavedChangesAlerts || form.state.dirtyPaths.length === 0) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', preventUnload)
+    return () => window.removeEventListener('beforeunload', preventUnload)
+  })
   const optionStores = $derived.by(() => new Map(Object.entries(resource?.options ?? {}).map(([path, definition]) => [path, optionStore(path, definition)])))
+  const collectionStores = $derived.by(() => new Map((resource?.fields ?? []).flatMap((field) => {
+    if (!['builder', 'key-value', 'repeater'].includes(field.type)) return []
+    const value = toJsonValue(recordValue(initialValues, field.path))
+    return [[field.path, new CollectionStore(Array.isArray(value) ? value : [], 'resource-item')] as const]
+  })))
+  const uploadStores = $derived.by(() => new Map((resource?.fields ?? []).flatMap((field) => {
+    const policy = uploadPolicy(field.properties?.uploadPolicy)
+    if (field.type !== 'panels:field:upload' || !policy || !resource) return []
+    const routeId = recordRouteIdentifier(record)
+    const upload = createUploadStore({
+      adapter: createBrowserUploadAdapter({
+        endpoint: `${endpoint}/upload`,
+        fieldId: field.path,
+        intent: pageType === 'edit' ? 'edit' : 'create',
+        panelId: data.panel.manifest.id,
+        recordId: routeId === '' ? null : routeId,
+        resourceId: resource.id,
+      }),
+      context: { actorId: String(data.panel.actor.id ?? 'current'), fieldId: field.path, panelId: data.panel.manifest.id, resourceId: resource.id },
+      policy,
+    })
+    return [[field.path, upload] as const]
+  })))
   const table = $derived.by(() => new TableStateStore<Record<string, unknown>, number | string>({
+    filterMode: resource?.filterMode ?? 'live',
     panelId: data.panel.manifest.id,
     records,
     tableId: resource?.id ?? data.page.manifest.id,
-    total: records.length,
+    total: typeof data.page.data.total === 'number' ? data.page.data.total : records.length,
     visibleColumns: resource?.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path) ?? [],
   }))
   const transport = $derived.by(() => new PanelsTransport({
@@ -81,6 +150,7 @@
           panelId: data.panel.manifest.id,
           payload: {
             actionId: request.actionId,
+            idempotencyKey: request.idempotencyKey,
             input: request.input,
             recordIds: toJsonValue(request.recordIds ?? []),
             resourceId: resource?.id ?? '',
@@ -96,8 +166,30 @@
   let submitError = $state<string | null>(null)
 
   $effect(() => {
+    renderedGroups = tableGroups(data.page.data.groups)
+    renderedSummaries = tableSummaries(data.page.data.summaries)
+  })
+
+  $effect(() => {
+    if (persistedRouteIdentifier === '') persistedRouteIdentifier = recordRouteIdentifier(record)
+  })
+
+  $effect(() => {
     for (const store of optionStores.values()) void store.preload()
   })
+
+  $effect(() => {
+    const unsubscribers = [...uploadStores.entries()].map(([path, upload]) => upload.subscribe(snapshot => {
+      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.token ? [{ id: item.id, token: item.token }] : [])
+      const policy = resource?.fields.find(field => field.path === path)?.properties?.uploadPolicy
+      form.set(path, uploadPolicy(policy)?.maximumFiles === 1 ? stored[0] ?? '' : stored)
+    }))
+    return () => unsubscribers.forEach(unsubscribe => unsubscribe())
+  })
+
+  function uploadPolicy(value: unknown): UploadPolicy | null {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as UploadPolicy : null
+  }
 
   function recordIdentifier(item: Readonly<Record<string, unknown>> | null): number | string {
     const value = resource && item ? item[resource.recordId] : undefined
@@ -105,14 +197,125 @@
   }
 
   function recordRouteValue(item: Readonly<Record<string, unknown>> | null): string {
-    const value = resource && item ? item[resource.routeKey] : undefined
-    return typeof value === 'number' || typeof value === 'string' ? encodeURIComponent(String(value)) : ''
+    return encodedRouteIdentifier(recordRouteIdentifier(item))
+  }
+
+  function encodedRouteIdentifier(value: number | string): string {
+    return value === '' ? '' : encodeURIComponent(String(value))
+  }
+
+  function recordRouteIdentifier(item: Readonly<Record<string, unknown>> | null): number | string {
+    return resource ? resourceOperationIdentifier(item, resource.routeKey) : ''
   }
 
   function displayValue(value: unknown): string {
     if (value === null || value === undefined) return ''
     const serialized = toJsonValue(value)
     return typeof serialized === 'object' ? JSON.stringify(serialized) : String(serialized ?? '')
+  }
+
+  function relationFields(value: JsonValue | undefined): NonNullable<SvelteRelationManagerRendererProps['managers'][number]['fields']> {
+    if (!Array.isArray(value)) return []
+    return value.flatMap((field) => {
+      if (!field || typeof field !== 'object' || Array.isArray(field) || typeof field.id !== 'string' || typeof field.type !== 'string' || !['date-time', 'number', 'text', 'textarea', 'toggle'].includes(field.type)) return []
+      return [{ id: field.id, label: typeof field.label === 'string' ? field.label : field.id, required: field.required === true, type: field.type as 'date-time' | 'number' | 'text' | 'textarea' | 'toggle' }]
+    })
+  }
+
+  function relationManagers(value: JsonValue | undefined): SvelteRelationManagerRendererProps['managers'] {
+    if (!Array.isArray(value)) return []
+    return value.flatMap((manager) => {
+      if (!manager || typeof manager !== 'object' || Array.isArray(manager) || typeof manager.id !== 'string' || typeof manager.label !== 'string') return []
+      const presentation = String(manager.presentation)
+      if (!['groupedTabs', 'inline', 'page', 'tabs'].includes(presentation)) return []
+      const relationRecords = Array.isArray(manager.records) ? manager.records.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item) || !item.values || typeof item.values !== 'object' || Array.isArray(item.values) || (typeof item.id !== 'number' && typeof item.id !== 'string')) return []
+        return [{ id: item.id, values: item.values }]
+      }) : []
+      return [{
+        badge: typeof manager.badge === 'number' || typeof manager.badge === 'string' ? manager.badge : null,
+        columns: Array.isArray(manager.columns) ? manager.columns.flatMap(column => column && typeof column === 'object' && !Array.isArray(column) && typeof column.key === 'string' ? [{ key: column.key, label: typeof column.label === 'string' ? column.label : column.key }] : []) : [],
+        fields: relationFields(manager.fields),
+        group: typeof manager.group === 'string' ? manager.group : null,
+        id: manager.id,
+        label: manager.label,
+        operations: Array.isArray(manager.operations) ? manager.operations.filter(operation => typeof operation === 'string') as SvelteRelationManagerRendererProps['managers'][number]['operations'] : [],
+        presentation: presentation as SvelteRelationManagerRendererProps['managers'][number]['presentation'],
+        pivotFields: relationFields(manager.pivotFields),
+        records: relationRecords,
+        url: typeof manager.url === 'string' ? manager.url : null,
+        visible: manager.visible !== false,
+      }]
+    })
+  }
+
+  function recordValue(value: Record<string, unknown>, path: string): unknown {
+    let current: unknown = value
+    for (const segment of path.split('.')) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined
+      current = Reflect.get(current, segment)
+    }
+    return current
+  }
+
+  function setRecordValue(value: Record<string, unknown>, path: string, next: unknown): void {
+    const segments = path.split('.')
+    let current = value
+    for (const segment of segments.slice(0, -1)) {
+      const child = current[segment]
+      const nested = child && typeof child === 'object' && !Array.isArray(child) ? { ...child } : {}
+      current[segment] = nested
+      current = nested
+    }
+    const final = segments.at(-1)
+    if (final) current[final] = next
+  }
+
+  function entryStore(definition: JsonObject, value: Record<string, unknown>): SvelteEntryStore {
+    const path = typeof definition.path === 'string' ? definition.path : ''
+    const state = toJsonValue(recordValue(value, path))
+    const snapshot = {
+      actions: Array.isArray(definition.actions) ? definition.actions.filter((item): item is string => typeof item === 'string') : [],
+      copyable: definition.copyable === true,
+      error: null,
+      formattedState: state,
+      id: typeof definition.id === 'string' ? definition.id : path,
+      inlineLabel: definition.inlineLabel === true,
+      label: typeof definition.label === 'string' ? definition.label : null,
+      pending: false,
+      placeholder: typeof definition.placeholder === 'string' ? definition.placeholder : null,
+      properties: definition.properties && typeof definition.properties === 'object' && !Array.isArray(definition.properties) ? definition.properties : {},
+      state,
+      tooltip: null,
+      type: typeof definition.type === 'string' ? definition.type : 'text',
+      url: null,
+    }
+    return { snapshot, subscribe: () => () => undefined }
+  }
+
+  function tableSummaries(value: JsonValue | undefined): readonly SvelteTableSummary[] {
+    if (!Array.isArray(value)) return []
+    return value.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.id !== 'string' || typeof item.label !== 'string') return []
+      const summaryValue = item.value && typeof item.value === 'object' ? JSON.stringify(item.value) : item.value ?? ''
+      return [{ id: item.id, label: item.label, value: summaryValue }]
+    })
+  }
+
+  function tableGroups(value: JsonValue | undefined): readonly SvelteTableGroup<Record<string, unknown>>[] {
+    if (!Array.isArray(value)) return []
+    return value.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.key !== 'string' || typeof item.title !== 'string') return []
+      return [{
+        collapsed: item.collapsed === true,
+        collapsible: item.collapsible === true,
+        description: typeof item.description === 'string' ? item.description : null,
+        key: item.key,
+        records: jsonRecords(item.records),
+        summaries: tableSummaries(item.summaries),
+        title: item.title,
+      }]
+    })
   }
 
   function optionValues(definition: ResourceOptions): readonly (number | string)[] {
@@ -125,7 +328,7 @@
     const values = optionValues(definition)
     const available = values.map(value => ({ label: String(value), value }))
     const page = { hasMore: false, options: available, page: 1, perPage: 25, total: available.length }
-    const dependencies = definition.dependsOn ? { [definition.dependsOn]: toJsonValue($formState.values[definition.dependsOn]) } : {}
+    const dependencies = definition.dependsOn ? { [definition.dependsOn]: toJsonValue(recordValue($formState.values, definition.dependsOn)) } : {}
     return new OptionStore<number | string>({
       dependencies,
       fieldId,
@@ -135,11 +338,63 @@
       resourceId: resource?.id ?? '',
       tenantKey: String(data.panel.actor.id ?? ''),
       transport: {
-        hydrateSelected: async (_request, selected) => available.filter(option => selected.includes(option.value)),
-        list: async () => page,
-        validateSelection: async (_request, selected) => selected.every(value => available.some(option => option.value === value)),
+        async hydrateSelected(request, selected) {
+          if (!definition.server) return available.filter(option => selected.includes(option.value))
+          const response = await optionRequest(fieldId, 'hydrate', request, selected)
+          return response.options
+        },
+        async list(request) {
+          if (!definition.server) return page
+          return await optionRequest(fieldId, 'list', request, [])
+        },
+        async validateSelection(request, selected) {
+          if (!definition.server) return selected.every(value => available.some(option => option.value === value))
+          return (await optionRequest(fieldId, 'validate', request, selected)).valid === true
+        },
+        ...(definition.server && definition.canCreate ? {
+          async create(request, label) {
+            const response = await optionRequest(fieldId, 'create', request, [], label)
+            if (!response.option) throw new Error('The created option response is invalid')
+            return response.option
+          },
+        } : {}),
+        ...(definition.server && definition.canEdit ? {
+          async edit(request, value, label) {
+            const response = await optionRequest(fieldId, 'edit', request, [], label, value)
+            if (!response.option) throw new Error('The edited option response is invalid')
+            return response.option
+          },
+        } : {}),
       },
     })
+  }
+
+  async function optionRequest(
+    fieldId: string,
+    action: 'create' | 'edit' | 'hydrate' | 'list' | 'validate',
+    request: Readonly<{ readonly dependencies: Readonly<Record<string, JsonValue>>, readonly page: number, readonly perPage: number, readonly search: string }>,
+    selectedValues: readonly (number | string)[],
+    label?: string,
+    value?: number | string,
+  ): Promise<{ readonly hasMore: boolean, readonly option?: { readonly label: string, readonly value: number | string }, readonly options: readonly { readonly label: string, readonly value: number | string }[], readonly page: number, readonly perPage: number, readonly total?: number, readonly valid?: boolean }> {
+    const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
+      endpoint: `${endpoint}/options`,
+      panelId: data.panel.manifest.id,
+      payload: { action, dependencies: toJsonValue(request.dependencies), fieldId, page: request.page, perPage: request.perPage, resourceId: resource?.id ?? '', search: request.search, selectedValues: toJsonValue(selectedValues), values: toJsonValue($formState.values), ...(label ? { label } : {}), ...(typeof value === 'number' || typeof value === 'string' ? { value } : {}) },
+    })
+    await effects.apply(response)
+    if (!response.ok) throw new Error(response.error.message)
+    const options = Array.isArray(response.data.options) ? response.data.options.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+      const label = item.label
+      const value = item.value
+      return typeof label === 'string' && (typeof value === 'number' || typeof value === 'string') ? [{ label, value }] : []
+    }) : []
+    const optionValue = response.data.option
+    const option = optionValue && typeof optionValue === 'object' && !Array.isArray(optionValue) && typeof optionValue.label === 'string' && (typeof optionValue.value === 'number' || typeof optionValue.value === 'string')
+      ? { label: optionValue.label, value: optionValue.value }
+      : undefined
+    return { hasMore: response.data.hasMore === true, ...(option ? { option } : {}), options, page: typeof response.data.page === 'number' ? response.data.page : request.page, perPage: typeof response.data.perPage === 'number' ? response.data.perPage : request.perPage, ...(typeof response.data.total === 'number' ? { total: response.data.total } : {}), ...(typeof response.data.valid === 'boolean' ? { valid: response.data.valid } : {}) }
   }
 
   async function submit(): Promise<void> {
@@ -152,7 +407,7 @@
           panelId: data.panel.manifest.id,
           payload: {
             intent: pageType === 'create' ? 'create' : 'update',
-            recordId: recordIdentifier(record),
+            recordId: recordRouteIdentifier(record),
             resourceId: resource.id,
             values: toJsonValue(context.values),
           },
@@ -160,11 +415,64 @@
         })
         await effects.apply(response)
         if (!response.ok) throw new Error(response.error.message)
+        const savedRecord = jsonRecord(response.data.record)
+        const nextRouteIdentifier = resourceOperationIdentifier(savedRecord, resource.routeKey)
+        if (nextRouteIdentifier !== '') {
+          persistedRouteIdentifier = nextRouteIdentifier
+          const redirect = pageType === 'create'
+            ? data.panel.manifest.runtime?.resourceCreatePageRedirect ?? 'edit'
+            : data.panel.manifest.runtime?.resourceEditPageRedirect ?? null
+          if (redirect) {
+            const encodedIdentifier = encodedRouteIdentifier(nextRouteIdentifier)
+            const target = redirect === 'index' ? resource.basePath : redirect === 'view' ? `${resource.basePath}/${encodedIdentifier}` : `${resource.basePath}/${encodedIdentifier}/edit`
+            globalThis.location.assign(target)
+          } else if (pageType === 'edit') {
+            const nextRoute = resourceRoute(resource.routes.edit, encodedRouteIdentifier(nextRouteIdentifier))
+            if (nextRoute) globalThis.history.replaceState(null, '', nextRoute)
+          }
+        }
         return { commitValues: true }
       })
     } catch (cause) {
       submitError = cause instanceof Error ? cause.message : 'Unable to save record'
     }
+  }
+
+  async function runRelation(request: Parameters<NonNullable<SvelteRelationManagerRendererProps['onOperation']>>[0]): Promise<void> {
+    if (!resource) throw new Error('Relation operations require resource metadata')
+    const ownerId = currentRouteIdentifier
+    if (ownerId === '') throw new Error('Relation operations require a persisted owner record')
+    const response = await transport.execute<JsonObject, JsonObject>({ kind: 'mutation', name: 'action', supportsIdempotency: true }, {
+      endpoint: `${endpoint}/action`,
+      panelId: data.panel.manifest.id,
+      payload: {
+        intent: 'relation',
+        managerId: request.managerId,
+        ownerId,
+        ...(request.pivot ? { pivot: toJsonValue(request.pivot) } : {}),
+        ...(typeof request.recordId === 'number' || typeof request.recordId === 'string' ? { relatedId: request.recordId } : {}),
+        relationOperation: request.operation,
+        resourceId: resource.id,
+        ...(request.values ? { values: toJsonValue(request.values) } : {}),
+      },
+    })
+    await effects.apply(response)
+    if (!response.ok) throw new Error(response.error.message)
+    globalThis.location.reload()
+  }
+
+  async function loadRelationOptions(managerId: string, search: string): Promise<readonly { readonly label: string, readonly value: number | string }[]> {
+    if (!resource) throw new Error('Relation options require resource metadata')
+    const ownerId = currentRouteIdentifier
+    if (ownerId === '') throw new Error('Relation options require a persisted owner record')
+    const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
+      endpoint: `${endpoint}/options`,
+      panelId: data.panel.manifest.id,
+      payload: { ownerId, relationManagerId: managerId, resourceId: resource.id, search },
+    })
+    await effects.apply(response)
+    if (!response.ok) throw new Error(response.error.message)
+    return Array.isArray(response.data.options) ? response.data.options.flatMap(option => option && typeof option === 'object' && !Array.isArray(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
 
   async function refreshTable(): Promise<void> {
@@ -173,7 +481,7 @@
     const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {
       endpoint: `${endpoint}/table-data`,
       panelId: data.panel.manifest.id,
-      payload: { filters: toJsonValue(query.filters.values), resourceId: resource.id, search: query.search, sort: toJsonValue(query.sort) },
+      payload: { filters: toJsonValue(query.filters), page: query.page, perPage: query.perPage, resourceId: resource.id, search: query.search, sort: toJsonValue(query.sort) },
     })
     await effects.apply(response)
     if (!response.ok) {
@@ -182,6 +490,8 @@
     }
     const nextRecords = jsonRecords(response.data.records)
     const total = typeof response.data.total === 'number' ? response.data.total : nextRecords.length
+    renderedGroups = tableGroups(response.data.groups)
+    renderedSummaries = tableSummaries(response.data.summaries)
     table.applyData({ queryVersion: query.queryVersion, records: nextRecords, total })
   }
 </script>
@@ -189,45 +499,79 @@
 {#if !resource}
   <div role="alert">Resource page metadata is unavailable.</div>
 {:else if pageType === 'list'}
-  {#if createRoute && data.page.manifest.actions.header.includes(`${resource.id}.create`)}
-    <a href={createRoute}>{resource.createLabel}</a>
-  {/if}
+  <div class="hp-resource-page">
+    {#if createRoute && data.page.manifest.actions.header.includes(`${resource.id}.create`)}
+      <div class="hp-resource-toolbar"><a class="hp-button hp-button-primary" href={createRoute}>{resource.createLabel}</a></div>
+    {/if}
   <SvelteTableRenderer table={{
+    actions: rowActions,
+    actionTransport: {
+      async execute(request, signal) {
+        const action = resource.actions.find(candidate => candidate.id === request.actionId)
+        if (!action) throw new Error('Resource action is unavailable')
+        const response = await transport.execute<JsonObject, JsonObject>({ kind: 'mutation', name: 'action', supportsIdempotency: true }, {
+          endpoint: `${endpoint}/action`,
+          idempotencyKey: globalThis.crypto.randomUUID(),
+          panelId: data.panel.manifest.id,
+          payload: {
+            actionId: request.actionId,
+            idempotencyKey: globalThis.crypto.randomUUID(),
+            intent: action.kind,
+            recordIds: toJsonValue(resourceOperationIdentifiers(records, resource.recordId, resource.routeKey, request.recordId)),
+            resourceId: resource.id,
+          },
+          signal,
+        })
+        await effects.apply(response)
+        if (!response.ok) throw new Error(response.error.message)
+        await refreshTable()
+      },
+    },
     caption: resource.label,
     columns: resource.columns,
+    filterPresentation: {
+      columns: { default: 2 },
+      id: `${resource.id}-filters`,
+      placement: 'dropdown',
+      schema: { components: [], id: `${resource.id}-filters`, kind: 'schema' },
+      slots: {},
+    },
+    filters: resource.filters,
+    getRecordActionUrl: (action, item) => {
+      const manifest = resource.actions.find(candidate => candidate.id === action.id)
+      const kind = manifest?.kind ?? (action.id === `${resource.id}.view` ? 'view' : action.id === `${resource.id}.edit` ? 'edit' : null)
+      return kind === 'view' || kind === 'edit'
+        ? resourceRoute(kind === 'edit' ? resource.routes.edit : resource.routes.view, recordRouteValue(item))
+        : null
+    },
     getRecordId: recordIdentifier,
+    groups: renderedGroups,
     onQueryChange: () => { void refreshTable() },
     store: table,
+    summaries: renderedSummaries,
   }} />
-  <ul aria-label={`${resource.label} record navigation`}>
-    {#each records as item (recordIdentifier(item))}
-      {@const routeValue = recordRouteValue(item)}
-      {@const viewRoute = resourceRoute(resource.routes.view, routeValue)}
-      {@const rowEditRoute = resourceRoute(resource.routes.edit, routeValue)}
-      <li>
-        {#if viewRoute}<a href={viewRoute}>View {displayValue(item[resource.routeKey])}</a>{/if}
-        {#if rowEditRoute}<a href={rowEditRoute}>Edit {displayValue(item[resource.routeKey])}</a>{/if}
-      </li>
-    {/each}
-  </ul>
+  </div>
 {:else if pageType === 'create' || pageType === 'edit'}
-  <form onsubmit={(event) => { event.preventDefault(); void submit() }}>
+  <form class="hp-resource-form" data-slot="card" onsubmit={(event) => { event.preventDefault(); void submit() }}>
     {#each resource.fields as definition (definition.path)}
-      <FieldRenderer {definition} {form} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} />
+      <FieldRenderer {definition} {form} collectionStore={collectionStores.get(definition.path)} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} uploadStore={uploadStores.get(definition.path)} />
     {/each}
-    <button disabled={form.state.submitting} type="submit">{form.state.submitting ? 'Saving…' : resource.saveLabel}</button>
+    <div class="hp-form-actions"><Button class="hp-button hp-button-primary" disabled={form.state.submitting} type="submit">{form.state.submitting ? 'Saving…' : resource.saveLabel}</Button></div>
   </form>
   {#if submitError}<div role="alert">{submitError}</div>{/if}
+  {#if relations.length > 0}<SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation }} />{/if}
 {:else if pageType === 'view' && record}
-  <dl>
-    {#each resource.fields as definition (definition.path)}
-      <dt>{definition.label}</dt><dd>{displayValue(record[definition.path])}</dd>
+  <article class="hp-resource-view"><div class="hp-infolist">
+    {#each resource.entries as definition (String(definition.id ?? definition.path))}
+      <EntryRenderer panelId={data.panel.manifest.id} store={entryStore(definition, record)} />
     {/each}
-  </dl>
+  </div>
   {#if editRoute && data.page.manifest.actions.header.includes(`${resource.id}.edit`)}
-    <a href={editRoute}>Edit {resource.label}</a>
+    <div class="hp-form-actions"><a class="hp-button" href={editRoute}>Edit {resource.label}</a></div>
   {/if}
-  {#each resource.actions.filter(action => action.mount === 'record' && action.visible) as action (action.id)}
-    <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[recordIdentifier(record)]} store={actionStore} />
+  {#each resource.recordActions.filter(action => action.mount === 'record' && action.visible) as action (action.id)}
+    <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} store={actionStore} />
   {/each}
+  {#if relations.length > 0}<SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation }} />{/if}
+  </article>
 {/if}

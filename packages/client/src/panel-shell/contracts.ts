@@ -1,10 +1,10 @@
-import type { JsonObject } from '@holo-js/panels-core'
+import type { JsonObject, PanelManifest } from '@holo-js/panels-core'
 
 export type PanelShellNavigationMode = 'sidebar' | 'topbar'
 export type PanelShellViewport = 'desktop' | 'mobile' | 'tablet'
 export type PanelShellErrorCode = 401 | 403 | 404 | 419 | 422 | 500 | 503
 
-export interface PanelShellNavigationItem extends JsonObject {
+export interface PanelShellNavigationItem {
   badge: string | null
   group: string | null
   icon: string | null
@@ -15,7 +15,7 @@ export interface PanelShellNavigationItem extends JsonObject {
   sort: number
 }
 
-export interface PanelShellMenuItem extends JsonObject {
+export interface PanelShellMenuItem {
   icon: string | null
   id: string
   label: string
@@ -23,31 +23,109 @@ export interface PanelShellMenuItem extends JsonObject {
 }
 
 export interface PanelShellManifest {
-  branding: { favicon: string | null, logo: string | null, name: string }
+  auth?: PanelManifest['auth']
+  assets?: readonly {
+    readonly id: string
+    readonly src: string
+    readonly type: 'css' | 'js'
+  }[]
+  branding: { avatarProvider?: string | null, darkModeLogo?: string | null, favicon: string | null, logo: string | null, logoHeight?: string | null, name: string }
+  components?: {
+    sidebar: string | null
+    topbar: string | null
+  }
   databaseNotifications: {
+    component?: string | null
+    lazy?: boolean
     placement: 'sidebar' | 'topbar'
     polling: false | number
     realtime: boolean
   } | null
   default: boolean
+  globalSearch?: boolean
+  globalSearchConfiguration?: {
+    debounce: number
+    enabled: boolean
+    fieldSuffix: string | null
+    keybindingSuffix: string | null
+    keybindings: readonly string[]
+    resourceOptIn?: boolean
+  }
   id: string
+  icons?: JsonObject
   navigation: readonly PanelShellNavigationItem[]
+  navigationEnabled?: boolean
+  navigationGroups?: readonly {
+    readonly collapsible?: boolean
+    readonly icon?: string | null
+    readonly label: string
+  }[]
   navigationMode: PanelShellNavigationMode
+  layout?: {
+    breadcrumbs: boolean
+    collapsedSidebarWidth: string
+    collapsibleNavigationGroups: boolean
+    maxContentWidth: string
+    sidebarFullyCollapsible: boolean
+    sidebarWidth: string
+    simplePageMaxContentWidth: string
+    subNavigationPosition: 'end' | 'start' | 'top'
+    topbar: boolean
+  }
   path: string
+  routing?: {
+    domain: string | null
+    domains: readonly string[]
+    homeUrl: string | null
+  }
+  runtime?: {
+    databaseTransactions: boolean
+    readOnlyRelationManagersOnResourceViewPagesByDefault: boolean
+    resourceCreatePageRedirect: 'edit' | 'index' | 'view'
+    resourceEditPageRedirect: 'index' | 'view' | null
+    spa: boolean
+    spaPrefetching?: boolean
+    spaUrlExceptions: readonly string[]
+    strictAuthorization: boolean
+    unsavedChangesAlerts: boolean
+  }
   sidebarCollapsible: boolean
   theme: {
     colors: JsonObject
     darkMode: 'dark' | 'light' | 'system'
     density: 'comfortable' | 'compact'
     fontFamily: string | null
+    monoFontFamily?: string | null
+    serifFontFamily?: string | null
+    switcher?: boolean
     width: 'constrained' | 'full'
   }
   tenancy: {
+    billing?: { readonly path: string } | null
     enabled: true
+    menu?: boolean
+    menuItems?: readonly PanelShellMenuItem[]
     profile?: { readonly path: string }
     registration?: { readonly path: string }
+    requiresSubscription?: boolean
+    routeDomain?: string | null
+    routePrefix?: string | null
+    searchableMenu?: boolean | null
+    switcher?: boolean
   } | null
   userMenu: readonly PanelShellMenuItem[]
+  userMenuEnabled?: boolean
+}
+
+export interface PanelChromeComponentProps<TPage = unknown> {
+  readonly actor: JsonObject
+  readonly manifest: PanelShellManifest
+  readonly page: TPage
+}
+
+export interface PanelAvatarComponentProps {
+  readonly actor: JsonObject
+  readonly label: string
 }
 
 export interface PanelShellTenantPresentation extends JsonObject {

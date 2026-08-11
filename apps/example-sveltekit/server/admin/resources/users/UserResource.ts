@@ -1,8 +1,8 @@
-import { column, defineResource, defineSchema, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import User from '../../../models/User'
-import { defineDomainResourcePages } from '../../pages/domain'
 
-export const UserPages = defineDomainResourcePages({ label: 'Users', mutations: false, resourceId: 'users', sort: 70 })
+const form = defineSchema(User).fields(field => [field.text('name').required(), field.text('email').email().required()])
+const table = defineTable(User).columns(column => [column.text('name').searchable(), column.text('email').copyable()])
 
 export default defineResource(User)
   .shared()
@@ -10,7 +10,6 @@ export default defineResource(User)
   .routeKey('id')
   .navigation({ group: 'Access', icon: 'users', label: 'Users', sort: 70 })
   .globalSearch({ attributes: ['name', 'email'], title: 'name' })
-  .pages(UserPages.list, UserPages.view)
-  .form([field.text('name').required(), field.text('email').required()])
-  .infolist(defineSchema(User).fields([column.text('name'), column.text('email')]))
-  .table([column.text('name'), column.text('email')])
+  .discoverPages()
+  .form(form)
+  .table(table)

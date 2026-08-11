@@ -6,6 +6,7 @@ import type { OptionalRuntimeTypeValue, RuntimeTypeSource } from '../inference/t
 import { toJsonValue } from '../protocol/serialization'
 import type { CompiledSchema } from '../schemas/contracts'
 import type { RenderSlotReference } from '../schemas/contracts'
+import type { ResourceCompositionTypes } from '../resources/contracts'
 import { appendScopedRenderSlot, type ScopedRenderSlots } from '../panels/render-slots'
 import type {
   CompiledPageDefinition,
@@ -75,6 +76,7 @@ export class PageBuilder<
   TTenant = unknown,
   TServices = unknown,
 > extends ConstructionBuilder<PageState<TData, TActor, TTenant, TServices>, CompiledPageDefinition<TData, TActor, TTenant, TServices>> implements DiscoverableBuilder<'page'> {
+  declare readonly resourceCompositionTypes: ResourceCompositionTypes<unknown, TActor, TTenant, TServices>
   readonly discoveryMarker = DISCOVERY_MARKER
   readonly kind = 'page' as const
 

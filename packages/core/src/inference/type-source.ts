@@ -2,14 +2,37 @@ export type RuntimeTypeSource =
   | BooleanConstructor
   | NumberConstructor
   | StringConstructor
-  | { readonly prototype: object }
+  | RecordTypeSource
+
+type RuntimeProjection<TValue extends object> =
+  TValue extends { toJSON(): infer TResult }
+    ? Awaited<TResult> extends object ? Awaited<TResult> : TValue
+    : TValue
+
+export type PublicRuntimeType<TValue extends object> = {
+  [TKey in keyof RuntimeProjection<TValue>]: RuntimeProjection<TValue>[TKey]
+}
+
+type HiddenRuntimeKey<TSource> = TSource extends {
+  readonly definition: { readonly hidden?: readonly (infer TKey)[] }
+} ? string extends TKey ? never : Extract<TKey, string> : never
+
+type SafeHiddenRuntimeKey<TSource, TValue extends object> =
+  [keyof PublicRuntimeType<TValue>] extends [HiddenRuntimeKey<TSource>] ? never : HiddenRuntimeKey<TSource>
+
+type RuntimeSourceValue<TSource, TValue extends object> =
+  [SafeHiddenRuntimeKey<TSource, TValue>] extends [never]
+    ? PublicRuntimeType<TValue>
+    : Omit<PublicRuntimeType<TValue>, SafeHiddenRuntimeKey<TSource, TValue>>
 
 export type RuntimeTypeValue<TSource extends RuntimeTypeSource> =
   TSource extends BooleanConstructor ? boolean
     : TSource extends NumberConstructor ? number
       : TSource extends StringConstructor ? string
-        : TSource extends { readonly prototype: infer TValue extends object } ? TValue
-          : never
+        : TSource extends { readonly prototype: infer TValue extends object } ? RuntimeSourceValue<TSource, TValue>
+          : TSource extends { create(...parameters: never[]): infer TResult extends object | Promise<object> }
+            ? RuntimeSourceValue<TSource, Awaited<TResult>>
+            : never
 
 export type OptionalRuntimeTypeValue<TSource extends RuntimeTypeSource | undefined> =
   TSource extends RuntimeTypeSource ? RuntimeTypeValue<TSource> : unknown

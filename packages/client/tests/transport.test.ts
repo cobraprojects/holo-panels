@@ -84,7 +84,7 @@ describe('panels client transport', () => {
     const { recorder, transport: client } = transport([success('00000000-0000-4000-8000-000000000001', { records: ['one'] })])
 
     const response = await client.execute(readOperation, {
-      endpoint: '/_holo/panels/admin',
+      endpoint: '/holo/panels/admin',
       panelId: 'admin',
       payload: { page: 1 },
     })
@@ -94,7 +94,7 @@ describe('panels client transport', () => {
     expect(recorder.requests[0]).toMatchObject({
       credentials: 'same-origin',
       method: 'POST',
-      url: '/_holo/panels/admin',
+      url: '/holo/panels/admin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
     })
     const fields = new URLSearchParams(recorder.requests[0]!.body)

@@ -38,6 +38,23 @@ function emptyStore(): ClientNotificationInboxStore {
 }
 
 describe('P13 Vue notification inbox trigger', () => {
+  it('does not mount or load a lazy inbox until its trigger is opened', async () => {
+    const store = emptyStore()
+    const start = vi.spyOn(store, 'start')
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(() => h(VueNotificationInboxTrigger, { lazy: true, placement: 'topbar', store }))
+    mounted.push({ app, container })
+    app.mount(container)
+    await nextTick()
+    expect(container.querySelector('.hp-notification-inbox')).toBeNull()
+    expect(start).not.toHaveBeenCalled()
+    container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')?.click()
+    await nextTick()
+    expect(container.querySelector('.hp-notification-inbox')).not.toBeNull()
+    expect(start).toHaveBeenCalledOnce()
+  })
+
   it('keeps the inbox mounted while closed and supports accessible topbar interaction', async () => {
     const store = new ClientNotificationInboxStore({
       polling: false,

@@ -3,16 +3,24 @@
   "framework": "nuxt",
   "files": [
     {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "checksum": "3cdf282ccc6db25b3fcf2e108a8e7cfbd5c7ed9b7b310fb5ea7852ba9c78e05c"
+    },
+    {
       "path": "composable.ts",
-      "checksum": "b49ebda103669cb4a2d3e160e9427148b29b562d0ec36dde67edf15da0cabdcd"
+      "checksum": "02b93560a8e89f7ee1b133910a57aa9619d2eaf490c05580a4128f54c57a2f40"
     },
     {
       "path": "contracts.ts",
-      "checksum": "6c95f2a9726a27147da2cd99d3206d6af91765d8e8c9f77334df691292253fa5"
+      "checksum": "f856c8ccd7f69c73b5aba399d6b7eaa6f57cb7d4d52b982418e3faa9181b91db"
+    },
+    {
+      "path": "internal-ui.ts",
+      "checksum": "2503a0c589b60e10ed1906ee5526fbbd17830858071c0e30f59777221518bc07"
     },
     {
       "path": "page.ts",
-      "checksum": "cb294a24da67d5b0b7cc48c7e0becbd3130d0f282a06ff61afacdd96497a86d5"
+      "checksum": "0852c03f3ee66175e455d10c57296b76d42d6b863088317055d851ab77638ffe"
     },
     {
       "path": "validation.ts",

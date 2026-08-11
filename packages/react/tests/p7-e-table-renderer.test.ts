@@ -7,6 +7,8 @@ import { ReactTableRenderer } from '../src/tables/renderer'
 import { createComponentRegistry } from '../src/registry'
 import type { ReactCustomFilterProps, ReactFilterCollectionSlotProps, ReactTableColumn, ReactTableRendererProps } from '../src/tables/types'
 
+Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+
 interface Post {
   readonly active: boolean
   readonly color: string
@@ -134,7 +136,7 @@ afterEach(() => {
 })
 
 describe('P7-E React table renderer', () => {
-  it('renders schema-ordered responsive modal filters with public before and after content', () => {
+  it('renders schema-ordered responsive modal filters with public before and after content', async () => {
     const registry = createComponentRegistry()
       .register('filters.before', ({ placement }: ReactFilterCollectionSlotProps) => createElement('p', { 'data-filter-slot': placement }, 'Before filters'))
       .register('filters.after', ({ placement }: ReactFilterCollectionSlotProps) => createElement('p', { 'data-filter-slot': placement }, 'After filters'))
@@ -150,13 +152,14 @@ describe('P7-E React table renderer', () => {
 
     expect(container.querySelector('form[aria-label="Table filters"]')).toBeNull()
     act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Filters')?.click())
-    const form = container.querySelector('form[aria-label="Table filters"]')
-    expect(container.querySelector('[data-panels-component="modal"]')).not.toBeNull()
+    await vi.waitFor(() => expect(document.querySelector('form[aria-label="Table filters"]')).not.toBeNull())
+    const form = document.querySelector('form[aria-label="Table filters"]')
+    expect(document.querySelector('[data-panels-component="modal"]')).not.toBeNull()
     expect(form?.getAttribute('data-filter-placement')).toBe('modal')
     expect(form?.getAttribute('style')).toContain('--hp-filter-columns-md: 3')
     expect(Array.from(form?.querySelectorAll('label') ?? []).map(label => label.textContent)).toEqual(['Status filter', 'Title filter'])
-    expect(container.querySelector('[data-filter-slot="before"]')?.textContent).toBe('Before filters')
-    expect(container.querySelector('[data-filter-slot="after"]')?.textContent).toBe('After filters')
+    expect(document.querySelector('[data-filter-slot="before"]')?.textContent).toBe('Before filters')
+    expect(document.querySelector('[data-filter-slot="after"]')?.textContent).toBe('After filters')
   })
 
   it('mounts import and export actions with allow-listed inputs, selection, and progress', async () => {
@@ -172,22 +175,24 @@ describe('P7-E React table renderer', () => {
       ],
     })
     act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Export posts')?.click())
-    await act(async () => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click())
+    await vi.waitFor(() => expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent === 'Start export')).toBe(true))
+    await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click())
     expect(startExport).toHaveBeenCalledWith(expect.objectContaining({ columnIds: ['title'], definitionId: 'posts.export', formatId: 'csv', selection: { mode: 'explicit', recordIds: [] } }), expect.any(AbortSignal))
-    expect(container.querySelector('progress[aria-label="Transfer progress"]')).not.toBeNull()
-    act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Close')?.click())
+    expect(document.querySelector('progress[aria-label="Transfer progress"]')).not.toBeNull()
+    act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Close')?.click())
     act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Import posts')?.click())
-    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')
+    await vi.waitFor(() => expect(document.querySelector('input[type="file"]')).not.toBeNull())
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')
     Object.defineProperty(fileInput, 'files', { configurable: true, value: [{ arrayBuffer: async () => new ArrayBuffer(1), name: 'posts.csv', size: 12, type: 'text/csv' }] })
     await act(async () => fileInput?.dispatchEvent(new Event('change', { bubbles: true })))
-    const mapping = Array.from(container.querySelectorAll('select')).find(select => select.options[0]?.textContent === 'Do not import')
+    const mapping = Array.from(document.querySelectorAll('select')).find(select => select.options[0]?.textContent === 'Do not import')
     act(() => {
       if (mapping) {
         mapping.value = 'Title'
         mapping.dispatchEvent(new Event('change', { bubbles: true }))
       }
     })
-    await act(async () => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Start import')?.click())
+    await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Start import')?.click())
     expect(startImport).toHaveBeenCalledWith(expect.objectContaining({ definitionId: 'posts.import', mappings: [{ column: 'title', header: 'Title' }], uploadId: 'upload-1' }), expect.any(AbortSignal))
   })
 
@@ -201,6 +206,7 @@ describe('P7-E React table renderer', () => {
     expect(region?.getAttribute('tabindex')).toBe('0')
     expect(container.querySelector('th[scope="col"]')).not.toBeNull()
     expect(container.querySelector('td[data-label="Title"]')?.textContent).toBe('First')
+    expect(container.querySelector('input[aria-label="Select page"]')).toBeNull()
     expect(container.querySelector('nav[aria-label="Table pagination"]')).not.toBeNull()
   })
 
@@ -351,7 +357,7 @@ describe('P7-E React table renderer', () => {
     const execute = vi.fn(async () => undefined)
     const container = mount({
       ...baseProps(store),
-      actions: [{ id: 'posts.publish', label: 'Publish', scope: 'bulk' }],
+      actions: [{ color: 'success', icon: 'check', id: 'posts.publish', label: 'Publish', scope: 'bulk' }],
       actionTransport: { execute },
     })
 
@@ -363,6 +369,8 @@ describe('P7-E React table renderer', () => {
     expect(store.snapshot.selection.mode).toBe('all-matching')
 
     const publish = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Publish')
+    expect(publish?.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
+    expect(publish?.getAttribute('data-color')).toBe('success')
     await act(async () => publish?.click())
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({
       actionId: 'posts.publish',

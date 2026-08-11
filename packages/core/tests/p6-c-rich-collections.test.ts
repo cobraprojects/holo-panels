@@ -66,6 +66,10 @@ describe('P6-C rich and collection field definitions', () => {
     expect(repeater.properties).toEqual({
       collapsible: true,
       cloneable: true,
+      fields: [
+        { label: 'Heading', path: 'heading', properties: {}, required: false, type: 'text' },
+        { label: 'Body', path: 'body', properties: {}, required: false, type: 'text' },
+      ],
       maximumItems: 8,
       minimumItems: 1,
       reorderable: true,
@@ -88,8 +92,21 @@ describe('P6-C rich and collection field definitions', () => {
       unsafeRawHtml: false,
     })
     expect(builder.properties.blocks).toEqual([
-      { icon: 'sparkles', label: 'Hero', type: 'hero' },
-      { icon: null, label: 'Quote', type: 'quote' },
+      {
+        fields: [
+          { label: 'Heading', path: 'heading', properties: {}, required: true, type: 'text' },
+          { label: 'Body', path: 'body', properties: {}, required: false, type: 'text' },
+        ],
+        icon: 'sparkles',
+        label: 'Hero',
+        type: 'hero',
+      },
+      {
+        fields: [{ label: 'Body', path: 'body', properties: {}, required: true, type: 'text' }],
+        icon: null,
+        label: 'Quote',
+        type: 'quote',
+      },
     ])
     expect(() => fields.richEditor('rich').compile()).toThrow(/explicit sanitizer boundary/)
     expect(() => fields.tags('tags').minimumItems(5).maximumItems(2).compile()).toThrow(/cannot exceed/)

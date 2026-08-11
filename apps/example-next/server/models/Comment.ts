@@ -1,8 +1,8 @@
-import { column, defineGeneratedTable, defineModel } from '@holo-js/db'
+import { column, defineGeneratedTable, defineModel, HasUlids } from '@holo-js/db'
 
 const comments = defineGeneratedTable('comments', {
   id: column.string().primaryKey(),
-  postId: column.string(),
+  postId: column.string().nullable(),
   authorName: column.string(),
   body: column.text(),
   status: column.string(),
@@ -15,4 +15,5 @@ export default defineModel(comments, {
   fillable: ['postId', 'authorName', 'body', 'status'],
   guarded: ['id', 'tenantId', 'createdAt', 'updatedAt'],
   timestamps: false,
+  traits: [HasUlids()],
 })

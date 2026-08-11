@@ -2,6 +2,8 @@ import type {
   ClientTransferManifest,
   ClientTransferTransport,
   FilterCollectionPresentation,
+  FormPath,
+  FormValueAtPath,
   TableRecordId,
   TableSelectionPayload,
   TableState,
@@ -10,6 +12,12 @@ import type {
 import type { SvelteComponentRegistry } from '../registry'
 import type { JsonValue } from '@holo-js/panels-client'
 
+export type SvelteTableColumnPath<TRecord extends object> = [FormPath<TRecord>] extends [never] ? string : FormPath<TRecord>
+
+export type SvelteTableColumnValue<TRecord extends object, TPath extends SvelteTableColumnPath<TRecord>> = TPath extends FormPath<TRecord>
+  ? FormValueAtPath<TRecord, TPath>
+  : unknown
+
 export interface SvelteTableColumnManifest {
   readonly alignment: 'center' | 'end' | 'start'
   readonly copyable: boolean
@@ -17,7 +25,9 @@ export interface SvelteTableColumnManifest {
   readonly hidden: boolean
   readonly inlineEditor: Readonly<Record<string, unknown>> | null
   readonly label: string | null
+  readonly lineClamp?: number | null
   readonly path: string
+  readonly searchable?: boolean
   readonly sortable: boolean
   readonly toggleable: boolean
   readonly type: string
@@ -25,15 +35,22 @@ export interface SvelteTableColumnManifest {
   readonly wrap: boolean
 }
 
-export interface SvelteTableColumn<TRecord extends object> {
+export interface SvelteTableColumn<
+  TRecord extends object,
+  TPath extends SvelteTableColumnPath<TRecord> = SvelteTableColumnPath<TRecord>,
+> {
   readonly manifest: SvelteTableColumnManifest
-  readonly render?: (value: unknown, record: Readonly<TRecord>) => boolean | number | string | null | undefined
+  readonly render?: (value: SvelteTableColumnValue<TRecord, TPath>, record: Readonly<TRecord>) => boolean | number | string | null | undefined
+  readonly url?: (record: Readonly<TRecord>) => string | null
 }
 
-export interface SvelteCustomColumnProps<TRecord extends object> extends Readonly<Record<string, unknown>> {
-  readonly column: SvelteTableColumn<TRecord>
+export interface SvelteCustomColumnProps<
+  TRecord extends object,
+  TPath extends SvelteTableColumnPath<TRecord> = SvelteTableColumnPath<TRecord>,
+> extends Readonly<Record<string, unknown>> {
+  readonly column: SvelteTableColumn<TRecord, TPath>
   readonly record: Readonly<TRecord>
-  readonly value: unknown
+  readonly value: SvelteTableColumnValue<TRecord, TPath>
 }
 
 export interface SvelteTableFilterOption {
@@ -69,7 +86,9 @@ export interface SvelteFilterCollectionSlotProps extends Record<string, unknown>
 }
 
 export interface SvelteTableAction {
+  readonly color?: string | null
   readonly confirmation?: string
+  readonly icon?: string | null
   readonly id: string
   readonly label: string
   readonly scope: 'bulk' | 'header' | 'row'
@@ -140,6 +159,7 @@ export interface SvelteTableRendererProps<TRecord extends object, TRecordId exte
   readonly filters?: readonly SvelteTableFilter[]
   readonly filterPresentation?: FilterCollectionPresentation
   readonly getRecordId: (record: Readonly<TRecord>) => TRecordId
+  readonly getRecordActionUrl?: (action: SvelteTableAction, record: Readonly<TRecord>) => string | null
   readonly getRecordVersion?: (record: Readonly<TRecord>) => string | undefined
   readonly groups?: readonly SvelteTableGroup<TRecord>[]
   readonly inlineEditTransport?: SvelteInlineEditTransport<TRecordId>

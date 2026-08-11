@@ -1,0 +1,322 @@
+import { createSvelteKitHoloHelpers } from '@holo-js/adapter-sveltekit'
+import {
+  PanelRuntime,
+  createNavigationSeed,
+  executeGeneratedGlobalSearch,
+  executeGeneratedResourceOperation,
+  executeGeneratedUploadOperation,
+  executePanelDatabaseNotificationOperation,
+  preparePageRoutes,
+  resolvePageData,
+  resolveWidget,
+  toJsonValue,
+  type CompiledPageDefinition,
+  type CompiledPanelDefinition,
+  type CompiledWidgetDefinition,
+  type HoloAuth,
+  type JsonObject,
+  type JsonValue,
+  type ResolvedWidget,
+  type TableQueryState,
+} from '@holo-js/panels-svelte/server'
+import type {
+  PanelAuthenticatedScope,
+  PanelOperation,
+  PanelOperationInput,
+  PanelPageResolutionInput,
+  PanelResolvedPageData,
+  PanelRuntimeLike,
+  SvelteKitPanelRegistry,
+  SvelteKitPanelServerRegistry,
+} from './contracts'
+import { panelResolver } from './internal-registry'
+
+const IDENTIFIER = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
+const holo = createSvelteKitHoloHelpers()
+
+interface TenantScopedQuery<TQuery> {
+  where(column: string, operator: '=', value: number | string): TQuery & TenantScopedQuery<TQuery>
+}
+
+function compiled(value: object): object {
+  return 'compile' in value && typeof value.compile === 'function' ? value.compile() : value
+}
+
+async function definitions(registry: SvelteKitPanelServerRegistry, panelId: string, kind: 'page'): Promise<readonly CompiledPageDefinition<JsonObject, object, unknown, unknown>[]>
+async function definitions(registry: SvelteKitPanelServerRegistry, panelId: string, kind: 'panel'): Promise<readonly CompiledPanelDefinition<object>[]>
+async function definitions(registry: SvelteKitPanelServerRegistry, panelId: string, kind: 'widget'): Promise<readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[]>
+async function definitions(registry: SvelteKitPanelServerRegistry, panelId: string, kind: 'page' | 'panel' | 'widget'): Promise<readonly object[]> {
+  const prefix = `${panelId}:${kind}:`
+  const keys = Object.keys(registry).filter(key => key.startsWith(prefix) && IDENTIFIER.test(key.slice(prefix.length))).sort()
+  const values = (await Promise.all(keys.map(key => registry[key]!()))).map(compiled)
+  if (kind !== 'widget') return values.filter(value => Reflect.get(value, 'kind') === kind)
+  return Object.freeze(values.filter(value => Reflect.get(value, 'kind') === 'widget') as CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[])
+}
+
+async function resourceWidgets(registry: SvelteKitPanelServerRegistry, panelId: string, resourceId: string | null): Promise<readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[]> {
+  if (!resourceId || !IDENTIFIER.test(resourceId)) return Object.freeze([])
+  const loader = registry[`${panelId}:resource:${resourceId}`]
+  if (!loader) return Object.freeze([])
+  const resource = compiled(await loader())
+  const widgets = Reflect.get(resource, 'widgets')
+  return Object.freeze(Array.isArray(widgets) ? widgets.map(compiled).filter(value => Reflect.get(value, 'kind') === 'widget') as CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[] : [])
+}
+
+async function resolvedPageWidgets(
+  ids: readonly string[],
+  widgets: readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[],
+  context: {
+    readonly actor: object
+    readonly locale: string
+    readonly panelId: string
+    readonly services: unknown
+    readonly signal: AbortSignal
+    readonly tenant: unknown
+  },
+  resource: Readonly<{ readonly pageId: string, readonly record: JsonObject | null, readonly resourceId: string, readonly tableState: Readonly<TableQueryState> | null }> | null,
+  placement: 'footer' | 'header',
+): Promise<readonly ResolvedWidget<JsonValue>[]> {
+  const widgetsById = new Map(widgets.map(widget => [widget.manifest.id, widget]))
+  return Object.freeze(await Promise.all(ids.map(async id => {
+    const widget = widgetsById.get(id)
+    if (!widget) throw new Error(`[Holo Panels] Page references missing widget "${id}".`)
+    return await resolveWidget(widget, context, {}, resource ? { ...context, ...resource, placement } : null)
+  })))
+}
+
+function pageWidgetResource(
+  page: PanelResolvedPageData,
+  tableState: Readonly<TableQueryState> | null,
+): Readonly<{ readonly pageId: string, readonly record: JsonObject | null, readonly resourceId: string, readonly tableState: Readonly<TableQueryState> | null }> | null {
+  const resource = page.manifest.body?.properties.resource
+  if (!resource || typeof resource !== 'object' || Array.isArray(resource) || typeof resource.id !== 'string') return null
+  const record = page.data.record
+  return Object.freeze({ pageId: page.manifest.id, record: record && typeof record === 'object' && !Array.isArray(record) ? record : null, resourceId: resource.id, tableState })
+}
+
+function routeParameters(pattern: string, path: string): Readonly<Record<string, string>> | null {
+  const expected = pattern.split('/').filter(Boolean)
+  const actual = path.split('/').filter(Boolean)
+  if (expected.length !== actual.length) return null
+  const values: Record<string, string> = {}
+  for (let index = 0; index < expected.length; index += 1) {
+    const segment = expected[index]!
+    const value = actual[index]!
+    if (segment.startsWith(':')) values[segment.slice(1)] = decodeURIComponent(value)
+    else if (segment !== value) return null
+  }
+  return Object.freeze(values)
+}
+
+function panelWithNavigation(panel: CompiledPanelDefinition<object>, pages: readonly CompiledPageDefinition<JsonObject, object, unknown, unknown>[]): CompiledPanelDefinition<object> {
+  const items = new Map(createNavigationSeed(pages).map(item => [item.id, item]))
+  for (const item of panel.manifest.navigation) items.set(item.id, item)
+  return Object.freeze({
+    ...panel,
+    manifest: Object.freeze({ ...panel.manifest, navigation: Object.freeze([...items.values()].sort((left, right) => left.sort - right.sort || left.label.localeCompare(right.label))) }),
+  })
+}
+
+function adaptedGuard(guard: object) {
+  const refreshUser = Reflect.get(guard, 'refreshUser')
+  const user = Reflect.get(guard, 'user')
+  const provider = Reflect.get(guard, 'provider')
+  return Object.freeze({
+    provider: async (): Promise<string | null> => typeof provider === 'function' ? await Reflect.apply(provider, guard, []) as string | null : null,
+    user: async (): Promise<object | null> => {
+      const actor = typeof refreshUser === 'function'
+        ? await Reflect.apply(refreshUser, guard, [])
+        : typeof user === 'function' ? await Reflect.apply(user, guard, []) : null
+      return actor && typeof actor === 'object' ? actor : null
+    },
+  })
+}
+
+async function auth(input: { readonly holo: PanelOperationInput['holo'] | PanelPageResolutionInput['holo'] }): Promise<HoloAuth<object>> {
+  const binding = await input.holo.getAuth()
+  if (!binding) throw Object.assign(new Error('Authentication is required'), { code: 'unauthenticated' })
+  return Object.freeze({ guard: (name: string) => adaptedGuard(binding.guard(name)) })
+}
+
+async function discoveredPanel(registry: SvelteKitPanelServerRegistry, panelId: string): Promise<CompiledPanelDefinition<object>> {
+  const pages = preparePageRoutes(await definitions(registry, panelId, 'page'))
+  const panel = (await definitions(registry, panelId, 'panel')).find(item => item.manifest.id === panelId)
+  if (!panel) throw Object.assign(new Error('Panel not found'), { code: 'panel-not-found' })
+  return panelWithNavigation(panel, pages)
+}
+
+async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, registry: SvelteKitPanelServerRegistry) {
+  const pages = preparePageRoutes(await definitions(registry, input.panelId, 'page'))
+  const match = pages.map(definition => ({ definition, parameters: routeParameters(definition.manifest.path, input.path) })).find(item => item.parameters !== null)
+  if (!match?.parameters) throw Object.assign(new Error('Panel page not found'), { code: 'panel-not-found' })
+  const panel = await discoveredPanel(registry, input.panelId)
+  const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+  const page = await resolvePageData(match.definition, {
+    actor: input.scope.actor,
+    locale: input.event.request.headers.get('accept-language')?.split(',')[0]?.trim() || 'en',
+    panelId: input.panelId,
+    parameters: match.parameters,
+    services: await input.holo.getProject(),
+    signal: input.scope.signal,
+    strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
+    tenant: input.tenant ?? tenancy?.tenantId,
+  })
+  const search = input.event.url.searchParams.get('search')?.trim().toLocaleLowerCase() ?? ''
+  if (match.definition.manifest.pageType !== 'list') return page
+  const resourceValue = match.definition.manifest.body?.properties.resource
+  const resourceId = resourceValue && typeof resourceValue === 'object' && !Array.isArray(resourceValue) && typeof resourceValue.id === 'string' ? resourceValue.id : ''
+  const loader = resourceId ? registry[`${input.panelId}:resource:${resourceId}`] : undefined
+  if (!loader) throw Object.assign(new Error('Resource not found'), { status: 404 })
+  const table = await executeGeneratedResourceOperation(await loader(), {
+    context: {
+      actor: input.scope.actor,
+      signal: input.scope.signal,
+      tenant: input.tenant ?? tenancy?.tenantId,
+      ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+      ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+    },
+    operation: 'table-data',
+    panelId: input.panelId,
+    payload: { resourceId, search },
+    strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
+  })
+  return Object.freeze({ ...page, data: Object.freeze({ ...page.data, filters: { search }, records: table.data.records ?? [], total: table.data.total ?? 0 }) })
+}
+
+async function resourceOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
+  if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw Object.assign(new Error('Resource input is invalid'), { status: 422 })
+  const resourceId = input.payload.resourceId
+  if (typeof resourceId !== 'string') throw Object.assign(new Error('Resource ID is required'), { status: 422 })
+  const loader = registry[`${input.panelId}:resource:${resourceId}`]
+  if (!loader) throw Object.assign(new Error('Resource not found'), { status: 404 })
+  const panel = await discoveredPanel(registry, input.panelId)
+  const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+  return await executeGeneratedResourceOperation(await loader(), {
+    context: {
+      actor: input.scope.actor,
+      signal: input.scope.signal,
+      tenant: input.tenant ?? tenancy?.tenantId,
+      ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+      ...(tenancy?.scopeTenantQuery ? {
+        scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>),
+      } : {}),
+    },
+    operation: input.operation === 'action' ? 'action' : input.operation === 'options' ? 'options' : input.operation === 'table-data' ? 'table-data' : 'form-submit',
+    panelId: input.panelId,
+    payload: input.payload,
+    strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
+  })
+}
+
+async function uploadOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
+  if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw Object.assign(new Error('Upload input is invalid'), { status: 422 })
+  const resourceId = input.payload.resourceId
+  if (typeof resourceId !== 'string') throw Object.assign(new Error('Resource ID is required'), { status: 422 })
+  const loader = registry[`${input.panelId}:resource:${resourceId}`]
+  if (!loader) throw Object.assign(new Error('Resource not found'), { status: 404 })
+  const panel = await discoveredPanel(registry, input.panelId)
+  const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+  const form = await input.event.request.formData()
+  const binary = form.get('contents')
+  const contents = binary && typeof binary === 'object' && 'arrayBuffer' in binary && typeof binary.arrayBuffer === 'function'
+    ? new Uint8Array(await binary.arrayBuffer())
+    : undefined
+  return {
+    data: await executeGeneratedUploadOperation(await loader(), {
+      ...(contents ? { contents } : {}),
+      context: {
+        actor: input.scope.actor,
+        signal: input.scope.signal,
+        tenant: input.tenant ?? tenancy?.tenantId,
+        ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+        ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+      },
+      panelId: input.panelId,
+      payload: input.payload,
+      strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
+    }),
+  }
+}
+
+async function globalSearchOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
+  if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload) || typeof input.payload.term !== 'string') {
+    throw Object.assign(new Error('Search term is required'), { status: 422 })
+  }
+  const panel = await discoveredPanel(registry, input.panelId)
+  if (!panel.manifest.globalSearch) throw Object.assign(new Error('Global search is not enabled'), { status: 404 })
+  const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+  const resources = await Promise.all(Object.entries(registry)
+    .filter(([key]) => key.startsWith(`${input.panelId}:resource:`))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, loader]) => loader()))
+  return {
+    data: await executeGeneratedGlobalSearch({
+      actor: input.scope.actor,
+      panelId: input.panelId,
+      panelPath: panel.manifest.path,
+      resources,
+      resourceOptIn: panel.manifest.globalSearchConfiguration?.resourceOptIn,
+      signal: input.scope.signal,
+      strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
+      tenant: input.tenant ?? tenancy?.tenantId,
+      term: input.payload.term,
+      ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+      ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+    }),
+  }
+}
+
+export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKitPanelServerRegistry): SvelteKitPanelRegistry<object> {
+  const runtime: PanelRuntimeLike<object> = {
+    async bootstrap(panelIds: readonly string[], signal: AbortSignal) {
+      const panels = await Promise.all(panelIds.map(panelId => discoveredPanel(serverRegistry, panelId)))
+      return await new PanelRuntime(await auth({ holo }), panels).bootstrap(panelIds, signal)
+    },
+    async execute<TResult>(panelId: string, operation: PanelOperation, signal: AbortSignal, handler: (scope: PanelAuthenticatedScope<object>) => TResult | Promise<TResult>): Promise<TResult> {
+      const panel = await discoveredPanel(serverRegistry, panelId)
+      return await new PanelRuntime(await auth({ holo }), [panel]).execute(panelId, operation, signal, handler)
+    },
+  }
+  return Object.freeze({
+    [panelResolver]: (panelId: string) => discoveredPanel(serverRegistry, panelId),
+    operations: {
+      action: (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
+      'form-submit': (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
+      'global-search': (input: PanelOperationInput<object>) => globalSearchOperation(input, serverRegistry),
+      notification: async (input: PanelOperationInput<object>) => ({ data: toJsonValue(await executePanelDatabaseNotificationOperation({ panel: await discoveredPanel(serverRegistry, input.panelId), payload: input.payload, scope: input.scope })) }),
+      options: (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
+      'table-data': (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
+      upload: (input: PanelOperationInput<object>) => uploadOperation(input, serverRegistry),
+    },
+    async resolvePage(input: PanelPageResolutionInput<object>) {
+      return await resolveGeneratedPage(input, serverRegistry)
+    },
+    async resolveWidgets(input: PanelPageResolutionInput<object> & { readonly page: PanelResolvedPageData }) {
+      const panel = await discoveredPanel(serverRegistry, input.panelId)
+      const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+      const context = {
+        actor: input.scope.actor,
+        locale: input.event.request.headers.get('accept-language')?.split(',')[0]?.trim() || 'en',
+        panelId: input.panelId,
+        services: await input.holo.getProject(),
+        signal: input.scope.signal,
+        tenant: input.tenant ?? tenancy?.tenantId,
+      }
+      const widgets = await definitions(serverRegistry, input.panelId, 'widget')
+      const search = input.event.url.searchParams.get('search')?.trim().toLocaleLowerCase() ?? ''
+      const tableState: Readonly<TableQueryState> | null = input.page.manifest.pageType === 'list'
+        ? Object.freeze({ filters: Object.freeze([]), includeTotal: true, page: 1, pagination: 'page', perPage: 25, search, sort: Object.freeze([]) })
+        : null
+      const resource = pageWidgetResource(input.page, tableState)
+      const embeddedWidgets = await resourceWidgets(serverRegistry, input.panelId, resource?.resourceId ?? null)
+      const resolvedWidgets = new Map(embeddedWidgets.map(widget => [widget.manifest.id, widget]))
+      for (const widget of widgets) resolvedWidgets.set(widget.manifest.id, widget)
+      const [header, footer] = await Promise.all([
+        resolvedPageWidgets(input.page.manifest.widgets.header, [...resolvedWidgets.values()], context, resource, 'header'),
+        resolvedPageWidgets(input.page.manifest.widgets.footer, [...resolvedWidgets.values()], context, resource, 'footer'),
+      ])
+      return Object.freeze({ footer, header })
+    },
+    runtime,
+  })
+}

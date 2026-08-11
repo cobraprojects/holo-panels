@@ -1,3 +1,4 @@
+import { ShadcnButton } from '../internal-ui'
 import { defineComponent, h, onMounted, onUnmounted, shallowRef, useId, type PropType, type VNode } from 'vue'
 import { VueNotificationInbox } from './renderer'
 import type { VueNotificationInboxTriggerProps } from './types'
@@ -7,6 +8,7 @@ export const VueNotificationInboxTrigger = defineComponent({
   props: {
     emptyMessage: String,
     label: { default: 'Notifications', type: String },
+    lazy: { default: false, type: Boolean },
     navigate: Function as PropType<VueNotificationInboxTriggerProps['navigate']>,
     panelId: String,
     placement: { required: true, type: String as PropType<VueNotificationInboxTriggerProps['placement']> },
@@ -15,14 +17,14 @@ export const VueNotificationInboxTrigger = defineComponent({
   },
   setup(props) {
     const open = shallowRef(false)
+    const activated = shallowRef(!props.lazy)
     const container = shallowRef<HTMLDivElement | null>(null)
-    const trigger = shallowRef<HTMLButtonElement | null>(null)
     const state = shallowRef(props.store.state)
     const unsubscribe = props.store.subscribe(next => { state.value = next })
     const inboxId = `hp-notification-inbox-${useId()}`
     const closeAndRestoreFocus = (): void => {
       open.value = false
-      trigger.value?.focus()
+      container.value?.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')?.focus()
     }
     const onDocumentClick = (event: MouseEvent): void => {
       if (!open.value || !(event.target instanceof Node) || container.value?.contains(event.target)) return
@@ -46,26 +48,25 @@ export const VueNotificationInboxTrigger = defineComponent({
       const resolvedLabel = props.label.trim() || 'Notifications'
       const inboxPlacement = props.placement === 'topbar' ? 'dropdown' : 'sidebar'
       return h('div', { class: 'hp-notification-inbox-trigger', 'data-placement': props.placement, ref: container }, [
-        h('button', {
+        h(ShadcnButton, {
           'aria-controls': inboxId,
           'aria-expanded': String(open.value),
           class: 'hp-notification-inbox-trigger-button',
-          onClick: () => { open.value = !open.value },
-          ref: trigger,
+          onClick: () => { activated.value = true; open.value = !open.value },
           type: 'button',
         }, [
           h('span', resolvedLabel),
           h('span', { 'aria-label': `${state.value.unread} unread notifications`, class: 'hp-notification-inbox-trigger-badge' }, state.value.unread),
         ]),
         h('div', { class: 'hp-notification-inbox-trigger-content', hidden: !open.value, id: inboxId }, [
-          h(VueNotificationInbox, {
+          activated.value ? h(VueNotificationInbox, {
             emptyMessage: props.emptyMessage,
             navigate: props.navigate,
             panelId: props.panelId,
             placement: inboxPlacement,
             registry: props.registry,
             store: props.store,
-          }),
+          }) : null,
         ]),
       ])
     }

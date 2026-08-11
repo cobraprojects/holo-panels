@@ -56,32 +56,36 @@ const page: NuxtPanelPage = {
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,
       default: true,
+      globalSearch: true,
       id: 'admin',
       navigation: [],
       navigationMode: 'sidebar',
       path: '/admin',
       sidebarCollapsible: true,
-      theme: { darkMode: 'system' },
+      tenancy: null,
+      theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
       userMenu: [],
     },
     notifications: null,
     provider: 'users',
+    tenancy: null,
   },
   page: {
     breadcrumbs: [],
     data: {},
     heading: 'Dashboard',
-    manifest: { body: null, id: 'dashboard', pageType: 'custom', path: '/admin', schemaId: null },
+    manifest: { body: null, id: 'dashboard', pageType: 'custom', path: '/admin', schemaId: null, widgets: { footer: [], header: [] } },
     schema: null,
     subheading: null,
     title: 'Dashboard',
   },
   path: '/admin',
+  widgets: { footer: [], header: [] },
 }
 
 function formRequest(panelId: string, operation: string, payload: JsonObject = {}): Request {
   const envelope = createRequestEnvelope({ id: 'request-1234567890', operation, panelId, payload })
-  return new Request(`http://localhost/_holo/panels/${panelId}/${operation}`, {
+  return new Request(`http://localhost/holo/panels/${panelId}/${operation}`, {
     body: new URLSearchParams({ request: JSON.stringify(envelope), _token: 'valid' }),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     method: 'POST',
@@ -102,14 +106,14 @@ function webHandler(panelRuntime: NuxtPanelRuntime, panelIds: readonly string[] 
   const app = createH3App()
   const router = createRouter()
   const handler = createPanelOperationHandler({ panelIds, runtime: panelRuntime })
-  router.get('/_holo/panels/:panelId/:operation', handler)
-  router.post('/_holo/panels/:panelId/:operation', handler)
+  router.get('/holo/panels/:panelId/:operation', handler)
+  router.post('/holo/panels/:panelId/:operation', handler)
   app.use(router)
   return toWebHandler(app)
 }
 
 function pageRequest(panelId: string): Request {
-  return new Request(`http://localhost/_holo/panels/${panelId}/page-data?path=%2F${panelId}`)
+  return new Request(`http://localhost/holo/panels/${panelId}/page-data?path=%2F${panelId}`)
 }
 
 beforeEach(() => {

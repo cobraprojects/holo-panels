@@ -99,6 +99,7 @@ describe('internal panel auth controller', () => {
       tenant: { id: 'tenant-1' },
     }), { name: 'Mira' })
     await expect(controller.profileValues(signal)).resolves.toEqual({ name: 'Mira' })
+    await expect(controller.profilePage(signal)).resolves.toEqual({ schema: { components: [], id: 'profile', kind: 'schema' }, values: { name: 'Mira' } })
   })
 
   it('logs out the selected guard when panel access is denied after authentication', async () => {

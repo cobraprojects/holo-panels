@@ -1,5 +1,7 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
   import { onMount, untrack } from 'svelte'
+  import type { Snippet } from 'svelte'
   import type { SchemaComponentManifest } from '@holo-js/panels-client'
   import type { SchemaRendererContext } from './contracts'
   import { componentClass, contentId, layoutAttributes, persistenceKey, resolveRegisteredComponent, safeDomAttributes } from './helpers'
@@ -9,9 +11,11 @@
   let {
     component,
     context,
+    renderNode,
   }: {
     readonly component: SchemaComponentManifest
     readonly context: SchemaRendererContext
+    readonly renderNode: Snippet<[SchemaComponentManifest]>
   } = $props()
 
   const attributes = $derived({ ...safeDomAttributes(component.extraAttributes), ...layoutAttributes(component) })
@@ -81,49 +85,49 @@
   {#if !leaf}{@render context.renderContent?.({ component, panelId: context.panelId, schema: context.schema })}{/if}
   {#if component.kind === 'grid'}
     <div {...attributes} class={className}>
-      <SchemaChildren components={visibleChildren} {context} />
+      <SchemaChildren components={visibleChildren} {context} {renderNode} />
     </div>
   {:else if component.kind === 'section'}
     <section {...attributes} aria-labelledby={component.properties.heading ? headingId : undefined} class={className}>
       {#if component.properties.heading}<h2 id={headingId}>{component.properties.heading}</h2>{/if}
       {#if component.properties.description}<p>{component.properties.description}</p>{/if}
       {#if component.properties.collapse?.collapsible}
-        <button aria-controls={contentRegionId} aria-expanded={!collapsed} onclick={() => setCollapsed(!collapsed)} type="button">
+        <Button aria-controls={contentRegionId} aria-expanded={!collapsed} onclick={() => setCollapsed(!collapsed)} type="button">
           {collapsed ? 'Expand' : 'Collapse'}
-        </button>
+        </Button>
       {/if}
       <div hidden={collapsed} id={contentRegionId}>
-        <SchemaChildren components={visibleChildren} {context} />
+        <SchemaChildren components={visibleChildren} {context} {renderNode} />
       </div>
     </section>
   {:else if component.kind === 'group'}
     <div {...attributes} class={className} role="group">
       {#if component.properties.collapse?.collapsible}
-        <button aria-controls={contentRegionId} aria-expanded={!collapsed} onclick={() => setCollapsed(!collapsed)} type="button">
+        <Button aria-controls={contentRegionId} aria-expanded={!collapsed} onclick={() => setCollapsed(!collapsed)} type="button">
           {collapsed ? 'Expand group' : 'Collapse group'}
-        </button>
+        </Button>
       {/if}
       <div hidden={collapsed} id={contentRegionId}>
-        <SchemaChildren components={visibleChildren} {context} />
+        <SchemaChildren components={visibleChildren} {context} {renderNode} />
       </div>
     </div>
   {:else if component.kind === 'fieldset'}
     <fieldset {...attributes} class={className}>
       {#if component.properties.label}<legend>{component.properties.label}</legend>{/if}
       {#if component.properties.collapse?.collapsible}
-        <button aria-controls={contentRegionId} aria-expanded={!collapsed} onclick={() => setCollapsed(!collapsed)} type="button">
+        <Button aria-controls={contentRegionId} aria-expanded={!collapsed} onclick={() => setCollapsed(!collapsed)} type="button">
           {collapsed ? 'Expand fields' : 'Collapse fields'}
-        </button>
+        </Button>
       {/if}
       <div hidden={collapsed} id={contentRegionId}>
-        <SchemaChildren components={visibleChildren} {context} />
+        <SchemaChildren components={visibleChildren} {context} {renderNode} />
       </div>
     </fieldset>
   {:else if component.kind === 'tabs'}
     <div {...attributes} class={className}>
       <div aria-label={component.properties.label ?? 'Sections'} role="tablist">
         {#each tabs as tab, index (tab.key)}
-          <button
+          <Button
             aria-controls={contentId(context.schemaId, tab.id, 'panel')}
             aria-selected={selectedTab === index}
             id={contentId(context.schemaId, tab.id, 'tab')}
@@ -131,7 +135,7 @@
             role="tab"
             tabindex={selectedTab === index ? 0 : -1}
             type="button"
-          >{tab.properties.label ?? tab.properties.heading ?? `Tab ${index + 1}`}</button>
+          >{tab.properties.label ?? tab.properties.heading ?? `Tab ${index + 1}`}</Button>
         {/each}
       </div>
       {#each tabs as tab, index (tab.key)}
@@ -142,7 +146,7 @@
           role="tabpanel"
           tabindex="0"
         >
-          <SchemaChildren components={[tab]} {context} />
+          <SchemaChildren components={[tab]} {context} {renderNode} />
         </div>
       {/each}
     </div>
@@ -151,23 +155,23 @@
       <ol aria-label={component.properties.label ?? 'Progress'}>
         {#each steps as step, index (step.key)}
           <li aria-current={selectedStep === index ? 'step' : undefined}>
-            <button disabled={index > selectedStep} onclick={() => selectStep(index)} type="button">
+            <Button disabled={index > selectedStep} onclick={() => selectStep(index)} type="button">
               {step.properties.label ?? step.properties.heading ?? `Step ${index + 1}`}
-            </button>
+            </Button>
           </li>
         {/each}
       </ol>
       {#each steps as step, index (step.key)}
         {#if selectedStep === index}
-          <SchemaChildren components={[step]} {context} />
+          <SchemaChildren components={[step]} {context} {renderNode} />
         {/if}
       {/each}
-      <button disabled={selectedStep === 0} onclick={() => selectStep(selectedStep - 1)} type="button">Previous</button>
-      <button disabled={selectedStep >= steps.length - 1} onclick={() => selectStep(selectedStep + 1)} type="button">Next</button>
+      <Button disabled={selectedStep === 0} onclick={() => selectStep(selectedStep - 1)} type="button">Previous</Button>
+      <Button disabled={selectedStep >= steps.length - 1} onclick={() => selectStep(selectedStep + 1)} type="button">Next</Button>
     </div>
   {:else if component.kind === 'split'}
     <div {...attributes} class={className} data-split-from={component.properties.splitFrom}>
-      <SchemaChildren components={visibleChildren} {context} />
+      <SchemaChildren components={visibleChildren} {context} {renderNode} />
     </div>
   {:else if component.kind === 'callout'}
     <aside {...attributes} aria-labelledby={component.properties.heading ? headingId : undefined} class={className} data-color={component.properties.color}>
@@ -191,13 +195,13 @@
     </div>
   {:else if component.kind === 'tab'}
     <div {...attributes} class={className}>
-      <SchemaChildren components={visibleChildren} {context} />
+      <SchemaChildren components={visibleChildren} {context} {renderNode} />
     </div>
   {:else if component.kind === 'step'}
     <section {...attributes} aria-labelledby={headingId} class={className}>
       <h2 id={headingId}>{component.properties.label ?? component.properties.heading ?? 'Step'}</h2>
       {#if component.properties.description}<p>{component.properties.description}</p>{/if}
-      <SchemaChildren components={visibleChildren} {context} />
+      <SchemaChildren components={visibleChildren} {context} {renderNode} />
     </section>
   {:else if leaf}
     <div {...attributes} class={className} data-schema-leaf={component.kind}>

@@ -58,7 +58,7 @@ describe('panel plugin preparation', () => {
     expect(result.rendererModule).toContain("from '@acme/money/react'")
     expect(result.rendererModule).toContain('registerReactExtensionRenderer')
     expect(result.assets).toEqual([
-      expect.objectContaining({ id: 'acme.money.style', publicPath: expect.stringMatching(/^\/_holo\/panels\/plugins\/acme\.money\/[a-f0-9]{16}-style\.css$/u) }),
+      expect.objectContaining({ id: 'acme.money.style', publicPath: expect.stringMatching(/^\/holo\/panels\/plugins\/acme\.money\/[a-f0-9]{16}-style\.css$/u) }),
     ])
     expect(result.managedArtifacts[0]?.path).toBe(`public${result.assets[0]?.publicPath}`)
     expect(result.icons[0]?.definition.name).toBe('acme.money.currency')

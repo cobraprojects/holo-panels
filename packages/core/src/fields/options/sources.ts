@@ -195,6 +195,10 @@ export class StaticOptionSource<TValue extends OptionValue, TContext> implements
     this.#options = normalizeOptions(options, defaultLimits.maxLabelLength)
   }
 
+  manifestOptions(): readonly ChoiceOption<TValue>[] {
+    return this.#options
+  }
+
   async list(request: OptionQueryRequest<TValue>, _context: TContext): Promise<OptionPage<TValue>> {
     const search = request.search.trim().toLocaleLowerCase(request.locale)
     const matching = search ? this.#options.filter(option => option.label.toLocaleLowerCase(request.locale).includes(search)) : this.#options

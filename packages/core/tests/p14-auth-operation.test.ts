@@ -12,6 +12,7 @@ function fixture() {
     logout: vi.fn(async () => ({ cookies: ['panel_session=; Max-Age=0; Secure; HttpOnly'], guard: 'admin' })),
     provider: vi.fn(async () => 'admins'),
     refreshUser: vi.fn(async () => actor),
+    register: vi.fn(async () => actor),
     user: vi.fn(async () => actor),
     multiFactor: {
       beginEnrollment: vi.fn(async () => ({ expiresAt: new Date('2026-08-01T00:00:00Z'), manualKey: 'SECRET', otpauthUri: 'otpauth://totp/Holo' })),
@@ -34,7 +35,7 @@ function fixture() {
   }
   const panel = definePanel('admin', { prototype: actor })
     .guard('admin')
-    .auth({ login: true, logout: true, multiFactor: true, passwordReset: { broker: 'admins' } })
+    .auth({ login: true, logout: true, multiFactor: true, passwordReset: { broker: 'admins' }, registration: true })
     .compile()
   const common = {
     auth,
@@ -75,6 +76,18 @@ describe('panel auth operation dispatcher', () => {
       status: 303,
     })
     expect(guard.login).toHaveBeenCalledWith({ email: 'ava@example.com', password: 'secret' })
+  })
+
+  it('registers through the configured Holo guard and redirects inside the panel', async () => {
+    const { common, guard } = fixture()
+    const result = await executePanelAuthOperation({
+      ...common,
+      operation: 'registration',
+      payload: { credentials: { email: 'new@example.com', password: 'secret', passwordConfirmation: 'secret' } },
+    })
+
+    expect(guard.register).toHaveBeenCalledWith({ email: 'new@example.com', password: 'secret', passwordConfirmation: 'secret' })
+    expect(result).toEqual({ cookies: [], data: { status: 'registered' }, redirectTo: '/admin', status: 303 })
   })
 
   it('rejects client-selected configuration and oversized scalar input before Auth callbacks', async () => {

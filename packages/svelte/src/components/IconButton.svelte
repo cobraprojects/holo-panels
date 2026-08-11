@@ -4,4 +4,4 @@
   let { children, disabled = false, label }: Props = $props()
 </script>
 
-<button aria-label={label} class="hp-icon-button" data-panels-component="icon-button" {disabled} type="button">{@render children?.()}</button>
+<button aria-label={label} class="hp-icon-button" data-panels-component="icon-button" data-size="icon" data-slot="button" data-variant="ghost" {disabled} type="button">{@render children?.()}</button>

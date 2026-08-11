@@ -12,6 +12,7 @@ export { createHoloUploadStorage } from './storage'
 export type {
   CreateTemporaryUploadInput,
   DeleteTemporaryUploadInput,
+  FinalizedUploadResult,
   MediaAttachmentBuilder,
   MediaAttachmentResult,
   MediaAttachmentTarget,

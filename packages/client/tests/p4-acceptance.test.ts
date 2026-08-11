@@ -122,7 +122,7 @@ describe('P4 framework-neutral acceptance', () => {
     })
 
     const query = await transport.execute(tableOperation, {
-      endpoint: '/_holo/panels/admin',
+      endpoint: '/holo/panels/admin',
       panelId: 'admin',
       payload: {
         page: table.query.page,
@@ -136,7 +136,7 @@ describe('P4 framework-neutral acceptance', () => {
 
     form.set('title', 'Published')
     const mutation = await transport.execute(mutationOperation, {
-      endpoint: '/_holo/panels/admin',
+      endpoint: '/holo/panels/admin',
       idempotencyKey: 'post-create-request-0001',
       panelId: 'admin',
       payload: { title: form.get('title') },
@@ -144,7 +144,7 @@ describe('P4 framework-neutral acceptance', () => {
     expect(mutation.effects).toEqual([redirect])
 
     const recovered = await transport.execute(tableOperation, {
-      endpoint: '/_holo/panels/admin',
+      endpoint: '/holo/panels/admin',
       panelId: 'admin',
       payload: {
         page: table.query.page,

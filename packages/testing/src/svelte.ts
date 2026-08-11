@@ -1,3 +1,3 @@
-import '@holo-js/panels-svelte'
+import '@holo-js/panels-svelte/server'
 
 export {}

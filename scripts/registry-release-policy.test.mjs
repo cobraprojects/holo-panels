@@ -7,17 +7,18 @@ import {
   minimumHoloPatch,
 } from './registry-release-policy.mjs'
 
-test('registry release policy accepts the supported Holo patch line', () => {
-  assert.equal(minimumHoloPatch('^0.3.10'), 10)
-  assert.equal(isCompatibleHoloVersion('0.3.10', '^0.3.10'), true)
-  assert.equal(isCompatibleHoloVersion('0.3.27', '^0.3.10'), true)
+test('registry release policy accepts every stable Holo version from the compatibility floor', () => {
+  assert.equal(minimumHoloPatch('>=0.3.9'), 9)
+  assert.equal(isCompatibleHoloVersion('0.3.9', '>=0.3.9'), true)
+  assert.equal(isCompatibleHoloVersion('0.3.27', '>=0.3.9'), true)
+  assert.equal(isCompatibleHoloVersion('0.4.0', '>=0.3.9'), true)
+  assert.equal(isCompatibleHoloVersion('1.0.0', '>=0.3.9'), true)
 })
 
 test('registry release policy rejects unsupported Holo versions and ranges', () => {
-  assert.equal(isCompatibleHoloVersion('0.3.9', '^0.3.10'), false)
-  assert.equal(isCompatibleHoloVersion('0.4.0', '^0.3.10'), false)
-  assert.equal(isCompatibleHoloVersion('0.3.11-next.0', '^0.3.10'), false)
-  assert.throws(() => minimumHoloPatch('>=0.3.10'), /bounded Holo-JS 0\.3\.x/u)
+  assert.equal(isCompatibleHoloVersion('0.3.8', '>=0.3.9'), false)
+  assert.equal(isCompatibleHoloVersion('0.3.11-next.0', '>=0.3.9'), false)
+  assert.throws(() => minimumHoloPatch('^0.3.9'), /unbounded Holo-JS compatibility floor/u)
 })
 
 test('registry release policy rejects overrides and local lockfile references', () => {
@@ -39,20 +40,20 @@ test('registry release policy requires exact Panels versions and compatible Holo
     '@holo-js/panels-core',
     '0.1.0-next.0',
     '0.1.0-next.0',
-    '^0.3.10',
+    '>=0.3.9',
   ))
   assert.doesNotThrow(() => assertRegistryPackageVersion(
     '@holo-js/core',
     '0.3.10',
     '0.1.0-next.0',
-    '^0.3.10',
+    '>=0.3.9',
   ))
   assert.throws(
-    () => assertRegistryPackageVersion('@holo-js/panels-core', '0.1.0-next.1', '0.1.0-next.0', '^0.3.10'),
+    () => assertRegistryPackageVersion('@holo-js/panels-core', '0.1.0-next.1', '0.1.0-next.0', '>=0.3.9'),
     /instead of 0\.1\.0-next\.0/u,
   )
   assert.throws(
-    () => assertRegistryPackageVersion('@holo-js/core', '0.3.9', '0.1.0-next.0', '^0.3.10'),
-    /outside \^0\.3\.10/u,
+    () => assertRegistryPackageVersion('@holo-js/core', '0.3.8', '0.1.0-next.0', '>=0.3.9'),
+    /outside >=0\.3\.9/u,
   )
 })

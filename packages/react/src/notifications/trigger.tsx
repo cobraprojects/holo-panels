@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { ShadcnButton } from '../internal-ui'
 import { ReactNotificationInbox } from './renderer'
 import type { ReactNotificationInboxTriggerProps } from './types'
 
 export function ReactNotificationInboxTrigger({
   emptyMessage,
   label = 'Notifications',
+  lazy = false,
   navigate,
   panelId,
   placement,
@@ -12,6 +14,7 @@ export function ReactNotificationInboxTrigger({
   store,
 }: ReactNotificationInboxTriggerProps): ReactNode {
   const [open, setOpen] = useState(false)
+  const [activated, setActivated] = useState(!lazy)
   const container = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const reactId = useId()
@@ -47,26 +50,29 @@ export function ReactNotificationInboxTrigger({
   const resolvedLabel = label.trim() || 'Notifications'
   const inboxPlacement = placement === 'topbar' ? 'dropdown' : 'sidebar'
   return <div className="hp-notification-inbox-trigger" data-placement={placement} ref={container}>
-    <button
+    <ShadcnButton
       aria-controls={inboxId}
       aria-expanded={open}
       className="hp-notification-inbox-trigger-button"
-      onClick={() => setOpen(current => !current)}
+      onClick={() => {
+        setActivated(true)
+        setOpen(current => !current)
+      }}
       ref={trigger}
       type="button"
     >
       <span>{resolvedLabel}</span>
       <span aria-label={`${state.unread} unread notifications`} className="hp-notification-inbox-trigger-badge">{state.unread}</span>
-    </button>
+    </ShadcnButton>
     <div className="hp-notification-inbox-trigger-content" hidden={!open} id={inboxId}>
-      <ReactNotificationInbox
+      {activated ? <ReactNotificationInbox
         emptyMessage={emptyMessage}
         navigate={navigate}
         panelId={panelId}
         placement={inboxPlacement}
         registry={registry}
         store={store}
-      />
+      /> : null}
     </div>
   </div>
 }

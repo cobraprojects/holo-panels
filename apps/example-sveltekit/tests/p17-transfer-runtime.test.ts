@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { ExampleAdminActor } from '../server/admin/access'
+import type { PanelActor } from '../server/fixtures/access'
 import PostExporter from '../server/admin/exports/PostExporter'
 import PostImporter from '../server/admin/imports/PostImporter'
 
-const actor = Object.assign(new ExampleAdminActor(), {
+const actor = {
+  createdAt: new Date(),
+  email: 'admin@example.test',
   id: 'admin-1',
   name: 'Admin',
+  password: 'hidden',
   roleKey: 'tenant-admin' as const,
   tenantId: 'tenant-acme',
   tenantIds: ['tenant-acme'],
-})
+  updatedAt: new Date(),
+} satisfies PanelActor
 const context = {
   actor,
   guard: 'web',

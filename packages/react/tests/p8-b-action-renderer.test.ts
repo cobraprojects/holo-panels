@@ -6,12 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReactActionRenderer } from '../src/actions/renderer'
 import { createComponentRegistry } from '../src/registry'
 
+Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+
 const manifest: ClientActionManifest = {
   badge: null,
   color: null,
   confirmation: 'Publish this record?',
   disabled: false,
-  icon: null,
+  icon: 'check',
   id: 'posts.publish',
   kind: 'custom',
   label: 'Publish',
@@ -50,7 +52,7 @@ afterEach(() => {
 })
 
 describe('P8-B React action renderer', () => {
-  it('renders grouped triggers and complete slide-over presentation with nested actions and slots', () => {
+  it('renders grouped triggers and complete slide-over presentation with nested actions and slots', async () => {
     const store = createStore()
     const nested = { ...manifest, confirmation: null, id: 'posts.schedule', label: 'Schedule', modal: null }
     const presented = { ...manifest, confirmation: null, modal: { ...manifest.modal!, content: { component: 'action-content', properties: { message: 'Body slot' } }, description: 'Review publishing', footer: { component: 'action-footer' }, heading: 'Publish post', nestedActions: [nested.id], slideOver: true, width: 'large' as const } }
@@ -69,9 +71,15 @@ describe('P8-B React action renderer', () => {
       store,
     })))
 
-    act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Publishing')?.click())
-    act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Publish')?.click())
-    const dialog = container.querySelector('[role="dialog"]')
+    act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Publishing')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })))
+    await vi.waitFor(() => expect(Array.from(document.querySelectorAll('[role="menuitem"]')).some(item => item.textContent === 'Publish')).toBe(true))
+    const publishItem = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === 'Publish')
+    act(() => {
+      publishItem?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      publishItem?.click()
+    })
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+    const dialog = document.querySelector('[role="dialog"]')
     expect(dialog?.getAttribute('data-panels-component')).toBe('slide-over')
     expect(dialog?.getAttribute('data-modal-width')).toBe('large')
     expect(dialog?.textContent).toContain('Publish post')
@@ -89,21 +97,22 @@ describe('P8-B React action renderer', () => {
     const root = createRoot(container)
     roots.push({ container, unmount: () => root.unmount() })
     act(() => root.render(createElement(ReactActionRenderer, { manifest, recordIds: [7], store })))
+    expect(container.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
 
     act(() => container.querySelector<HTMLButtonElement>('button')?.click())
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Publish this record?')
-    act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Confirm')?.click())
-    expect(container.querySelector('[data-schema-id="publish-reason"]')).not.toBeNull()
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Publish this record?'))
+    act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Confirm')?.click())
+    expect(document.querySelector('[data-schema-id="publish-reason"]')).not.toBeNull()
     act(() => store.setInput({ reason: 'Ready' }))
-    await act(async () => container.querySelector<HTMLFormElement>('form')?.requestSubmit())
+    await act(async () => document.querySelector<HTMLFormElement>('form')?.requestSubmit())
     expect(store.activeFrame?.phase).toBe('succeeded')
 
     act(() => store.mount({ ...manifest, confirmation: null, id: 'posts.notify', label: 'Notify', modal: null, mount: 'notification' }))
-    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Notify')
-    act(() => container.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' })))
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Notify')
+    act(() => document.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' })))
     expect(store.activeFrame?.manifest.id).toBe('posts.publish')
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Publish')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Publish')
   })
 
   it('hydrates deterministic modal markup without diagnostics', async () => {

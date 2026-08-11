@@ -30,6 +30,17 @@ export interface PanelPasswordResetPageConfiguration {
 export interface PanelEmailVerificationPageConfiguration {
   readonly path?: string
   readonly redirectTo?: string
+  readonly verificationPath?: string
+}
+
+export interface PanelEmailChangeVerificationPageConfiguration {
+  readonly path?: string
+  readonly redirectTo?: string
+}
+
+export interface PanelRegistrationPageConfiguration {
+  readonly path?: string
+  readonly redirectTo?: string
 }
 
 export interface PanelMultiFactorPageConfiguration {
@@ -65,12 +76,15 @@ export interface PanelAuthPageConfiguration<
   TTenant,
   TServices,
 > {
+  readonly emailChangeVerification?: boolean | PanelEmailChangeVerificationPageConfiguration
   readonly emailVerification?: boolean | PanelEmailVerificationPageConfiguration
   readonly login?: boolean | PanelLoginPageConfiguration
   readonly logout?: boolean | PanelLogoutPageConfiguration
   readonly multiFactor?: boolean | PanelMultiFactorPageConfiguration
   readonly passwordReset?: false | PanelPasswordResetPageConfiguration
-  readonly profile?: false | PanelProfilePageConfiguration<
+  readonly registration?: boolean | PanelRegistrationPageConfiguration
+  readonly revealablePasswords?: boolean
+  readonly profile?: boolean | PanelProfilePageConfiguration<
     TProfileValues,
     TProfileField,
     TActor,
@@ -90,6 +104,10 @@ export interface PanelPasswordResetManifest {
   readonly redirectTo: string
 }
 
+export interface PanelEmailVerificationManifest extends PanelAuthPathManifest {
+  readonly verificationPath: string
+}
+
 export interface PanelMultiFactorManifest {
   readonly challengePath: string
   readonly enrollmentPath: string
@@ -102,12 +120,15 @@ export interface PanelProfileManifest {
 }
 
 export interface PanelAuthManifest {
-  readonly emailVerification: PanelAuthPathManifest | null
+  readonly emailChangeVerification: PanelAuthPathManifest | null
+  readonly emailVerification: PanelEmailVerificationManifest | null
   readonly login: PanelAuthPathManifest | null
   readonly logout: PanelAuthPathManifest | null
   readonly multiFactor: PanelMultiFactorManifest | null
   readonly passwordReset: PanelPasswordResetManifest | null
   readonly profile: PanelProfileManifest | null
+  readonly registration: PanelAuthPathManifest | null
+  readonly revealablePasswords?: boolean
 }
 
 export interface CompiledPanelProfileServer<TActor> {

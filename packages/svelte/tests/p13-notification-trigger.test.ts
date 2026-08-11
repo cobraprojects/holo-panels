@@ -52,6 +52,22 @@ function emptyStore(): ClientNotificationInboxStore {
 }
 
 describe('P13 Svelte notification inbox trigger', () => {
+  it('does not mount or load a lazy inbox until its trigger is opened', () => {
+    const store = emptyStore()
+    const start = vi.spyOn(store, 'start')
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(SvelteNotificationInboxTrigger, { props: { lazy: true, placement: 'topbar', store }, target: container })
+    mounted.push({ component, container })
+    flushClient()
+    expect(container.querySelector('.hp-notification-inbox')).toBeNull()
+    expect(start).not.toHaveBeenCalled()
+    container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')?.click()
+    flushClient()
+    expect(container.querySelector('.hp-notification-inbox')).not.toBeNull()
+    expect(start).toHaveBeenCalledOnce()
+  })
+
   it('keeps the inbox mounted while closed and supports accessible topbar interaction', async () => {
     const store = new ClientNotificationInboxStore({
       polling: false,

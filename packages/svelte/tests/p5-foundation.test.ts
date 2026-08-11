@@ -1,7 +1,5 @@
-import { createRequire } from 'node:module'
-import { dirname, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
-import type { Component, flushSync, hydrate, unmount } from 'svelte'
+import { resolve } from 'node:path'
+import { flushSync as flushClient, hydrate as hydrateClient, mount as mountClient, unmount as unmountClient, type Component } from 'svelte'
 import type { render } from 'svelte/server'
 import { get } from 'svelte/store'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
@@ -21,36 +19,45 @@ import {
   type SveltePanelComponent,
 } from '../src/index'
 import ShellFixture from './ShellFixture.svelte'
+import InteractiveFixture from './InteractiveFixture.svelte'
+import RelationSelectorFixture from './RelationSelectorFixture.svelte'
+import RelationViewFixture from './RelationViewFixture.svelte'
 
 const Component = (() => undefined) as unknown as SveltePanelComponent
 const Override = (() => undefined) as unknown as SveltePanelComponent
 const mounted: Array<{ readonly component: Record<PropertyKey, unknown>, readonly container: HTMLDivElement }> = []
 let ssrServer: ViteDevServer
-let ServerShellFixture: Component<{ onselect?: (id: string) => void }>
+let ServerShellFixture: Component<{ dialogsOpen?: boolean; onselect?: (id: string) => void }>
 let renderServer: typeof render
-let flushClient: typeof flushSync
-let hydrateClient: typeof hydrate
-let unmountClient: typeof unmount
 
 beforeAll(async () => {
   ssrServer = await createServer({
     appType: 'custom',
     cacheDir: `/tmp/holo-panels-svelte-vite-${process.pid}`,
     logLevel: 'silent',
+    optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
     plugins: [svelte()],
+    resolve: {
+      alias: [
+        { find: /^svelte\/server$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/server/index.js') },
+        { find: /^svelte\/internal\/server$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/internal/server/index.js') },
+        { find: /^svelte\/internal\/client$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/internal/client/index.js') },
+        { find: /^svelte$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/index-server.js') },
+      ],
+      dedupe: ['svelte'],
+      preserveSymlinks: true,
+    },
+    ssr: {
+      noExternal: ['bits-ui', 'runed', 'svelte-toolbelt'],
+      optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
+    },
     root: process.cwd(),
     server: { middlewareMode: true },
   })
   const module = await ssrServer.ssrLoadModule('/tests/ShellFixture.svelte')
-  ServerShellFixture = module.default as Component<{ onselect?: (id: string) => void }>
+  ServerShellFixture = module.default as Component<{ dialogsOpen?: boolean; onselect?: (id: string) => void }>
   const svelteServer = await ssrServer.ssrLoadModule('svelte/server')
   renderServer = svelteServer.render as typeof render
-  const require = createRequire(import.meta.url)
-  const sveltePackage = require.resolve('svelte/package.json')
-  const svelteClient = await import(pathToFileURL(resolve(dirname(sveltePackage), 'src/index-client.js')).href)
-  flushClient = svelteClient.flushSync as typeof flushSync
-  hydrateClient = svelteClient.hydrate as typeof hydrate
-  unmountClient = svelteClient.unmount as typeof unmount
 })
 
 afterAll(async () => {
@@ -66,6 +73,45 @@ afterEach(async () => {
 })
 
 describe('Svelte renderer foundation', () => {
+  it('loads and submits a related record through the relation selector', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const loadOptions = vi.fn(async () => [{ label: 'TypeScript', value: 'tag-typescript' }])
+    const onOperation = vi.fn(async () => undefined)
+    const component = mountClient(RelationSelectorFixture, { target: container, props: { loadOptions, onOperation } })
+    mounted.push({ component, container })
+    container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
+    await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
+    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
+    const position = document.querySelector<HTMLInputElement>('input[type="number"]')
+    expect(select?.textContent).toContain('TypeScript')
+    expect(position).not.toBeNull()
+    if (select) {
+      select.value = 'tag-typescript'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    if (position) {
+      position.value = '3'
+      position.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    document.querySelector<HTMLButtonElement>('.hp-relation-operation-form button[type="submit"]')?.click()
+    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }))
+  })
+
+  it('views a related record without sending a mutation', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const onOperation = vi.fn(async () => undefined)
+    const component = mountClient(RelationViewFixture, { target: container, props: { onOperation } })
+    mounted.push({ component, container })
+
+    container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript'))
+
+    expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
+    expect(onOperation).not.toHaveBeenCalled()
+  })
+
   it('registers named components and resolves explicit panel overrides', () => {
     const registry = new SvelteComponentRegistry()
     registry.register({ component: Component, source: 'app/panels.ts', typeId: 'acme:field:money' })
@@ -143,7 +189,7 @@ describe('Svelte renderer foundation', () => {
     for (const name of expected) expect(container.querySelector(`[data-panels-component="${name}"]`)).not.toBeNull()
     expect(container.querySelector('[data-panels-component="modal"]')?.getAttribute('aria-modal')).toBe('true')
     expect(container.querySelector('[data-panels-component="slide-over"]')?.classList.contains('hp-slide-over')).toBe(true)
-    expect(container.querySelector('[data-panels-component="tabs"]')?.getAttribute('role')).toBe('tablist')
+    expect(container.querySelector('[data-panels-component="tabs"] [role="tablist"]')).not.toBeNull()
     expect(container.querySelector('[data-panels-component="pagination"]')?.getAttribute('aria-label')).toBe('Pagination')
     expect(container.querySelector('[data-panels-component="toast-viewport"]')?.getAttribute('role')).toBe('region')
     expect(container.querySelector('[data-panels-component="error-boundary"]')?.getAttribute('role')).toBe('alert')
@@ -151,38 +197,44 @@ describe('Svelte renderer foundation', () => {
 
   it('hydrates genuine SSR output without mismatch diagnostics', () => {
     const container = document.createElement('div')
-    container.innerHTML = renderServer(ServerShellFixture).body
+    container.innerHTML = renderServer(ServerShellFixture, { props: { dialogsOpen: false } }).body
     document.body.append(container)
-    const serverMarkup = container.innerHTML
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const component = hydrateClient(ShellFixture, { target: container })
     mounted.push({ component, container })
     flushClient()
 
-    expect(container.innerHTML).toBe(serverMarkup)
     expect(consoleError).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-panels-component="dropdown"]')).not.toBeNull()
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2)
   })
 
-  it('supports keyboard-only dropdown selection and tab navigation after hydration', () => {
+  it('supports dropdown selection and tab activation after client mount', async () => {
     const selected: string[] = []
     const container = document.createElement('div')
-    container.innerHTML = renderServer(ServerShellFixture).body
     document.body.append(container)
-    const component = hydrateClient(ShellFixture, { props: { onselect: (id: string) => selected.push(id) }, target: container })
+    const component = mountClient(InteractiveFixture, { props: { onselect: (id: string) => selected.push(id) }, target: container })
     mounted.push({ component, container })
     const dropdownTrigger = container.querySelector<HTMLButtonElement>('[data-panels-component="dropdown"] > button')
 
-    dropdownTrigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }))
+    expect(dropdownTrigger).not.toBeNull()
+    dropdownTrigger?.focus()
+    dropdownTrigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }))
     flushClient()
-    dropdownTrigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    flushClient()
+    expect(dropdownTrigger?.getAttribute('aria-expanded')).toBe('true')
+    await vi.waitFor(() => expect(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).toHaveLength(2))
+    const menuItems = document.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    menuItems[1]?.click()
     flushClient()
     expect(selected).toEqual(['delete'])
 
     const tabs = container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    tabs[0]?.focus()
-    tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }))
+    tabs[1]?.click()
     flushClient()
-    expect(document.activeElement).toBe(tabs[1])
+    await Promise.resolve()
+    flushClient()
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
   })
 })

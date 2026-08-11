@@ -30,6 +30,16 @@ class TestScheduler implements WidgetScheduler {
 }
 
 describe('P12 widget client state', () => {
+  it('uses server-resolved widget data without a duplicate client request', () => {
+    const loader = vi.fn(async () => ({ data: null, status: 'ready' as const }))
+    const store = new WidgetStore(manifest, loader, {
+      initialResult: { data: { stats: [{ id: 'posts', value: '3' }] }, status: 'ready' },
+    })
+
+    expect(store.snapshot).toMatchObject({ data: { stats: [{ id: 'posts', value: '3' }] }, loading: false, status: 'ready' })
+    expect(loader).not.toHaveBeenCalled()
+  })
+
   it('loads lazily, exposes unauthorized state without data, and reports errors', async () => {
     const loader = vi.fn(async () => ({ status: 'unauthorized' as const }))
     const store = new WidgetStore(manifest, loader)

@@ -5,18 +5,28 @@ import type {
   FormStore,
   FormState,
   FormStateListener,
+  FormValueAtPath,
   OptionStore,
   UploadStore,
 } from '@holo-js/panels-client'
 import type { VNodeChild } from 'vue'
 import type { ComponentRegistry } from '../registry'
 
-export interface VueCompiledField<TValues extends object> {
+export type VueFieldPath<TValues extends object> = [FormPath<TValues>] extends [never] ? string : FormPath<TValues>
+
+export type VueFieldValue<TValues extends object, TPath extends VueFieldPath<TValues>> = TPath extends FormPath<TValues>
+  ? FormValueAtPath<TValues, TPath>
+  : unknown
+
+export interface VueCompiledField<
+  TValues extends object,
+  TPath extends VueFieldPath<TValues> = VueFieldPath<TValues>,
+> {
   readonly disabled: boolean
   readonly helperText: string | null
   readonly hint: string | null
   readonly label: string | null
-  readonly path: [FormPath<TValues>] extends [never] ? string : FormPath<TValues>
+  readonly path: TPath
   readonly placeholder: string | null
   readonly properties: Readonly<Record<string, unknown>>
   readonly readOnly: boolean
@@ -25,13 +35,16 @@ export interface VueCompiledField<TValues extends object> {
   readonly visible: boolean
 }
 
-export interface VueFieldRenderContext<TValues extends object> {
-  readonly definition: VueCompiledField<TValues>
+export interface VueFieldRenderContext<
+  TValues extends object,
+  TPath extends VueFieldPath<TValues> = VueFieldPath<TValues>,
+> {
+  readonly definition: VueCompiledField<TValues, TPath>
   readonly disabled: boolean
   readonly errors: readonly string[]
   readonly inputId: string
   readonly readOnly: boolean
-  readonly value: unknown
+  readonly value: VueFieldValue<TValues, TPath>
 }
 
 export interface VueFormStore<TValues extends object> {
@@ -40,10 +53,13 @@ export interface VueFormStore<TValues extends object> {
   batch(operations: Parameters<FormStore<TValues>['batch']>[0]): FormState<TValues>
 }
 
-export interface VueFieldRendererProps<TValues extends object> {
+export interface VueFieldRendererProps<
+  TValues extends object,
+  TPath extends VueFieldPath<TValues> = VueFieldPath<TValues>,
+> {
   readonly collectionStore?: CollectionStore<unknown>
-  readonly createCollectionItem?: () => unknown
-  readonly definition: VueCompiledField<TValues>
+  readonly createCollectionItem?: (blockType?: string) => unknown
+  readonly definition: VueCompiledField<TValues, TPath>
   readonly editorAdapters?: EditorAdapterRegistry
   readonly optionStore?: OptionStore<string | number>
   readonly panelId?: string
@@ -54,6 +70,9 @@ export interface VueFieldRendererProps<TValues extends object> {
   readonly uploadStore?: UploadStore
 }
 
-export interface VueFieldControlProps<TValues extends object> extends VueFieldRendererProps<TValues> {
-  readonly context: VueFieldRenderContext<TValues>
+export interface VueFieldControlProps<
+  TValues extends object,
+  TPath extends VueFieldPath<TValues> = VueFieldPath<TValues>,
+> extends VueFieldRendererProps<TValues, TPath> {
+  readonly context: VueFieldRenderContext<TValues, TPath>
 }

@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import type {
   CreateTemporaryUploadInput,
   DeleteTemporaryUploadInput,
+  FinalizedUploadResult,
   MediaAttachmentResult,
   MediaAttachmentTarget,
   ResolveTemporaryUploadInput,
@@ -230,6 +231,31 @@ export class TemporaryUploadService {
         this.#storage.delete(metadata.metadataPath),
       ])
       return Object.freeze({ id: result.data.uuid, ...(url ? { url } : {}), urls })
+    })
+  }
+
+  async finalizeToStorage(input: ResolveTemporaryUploadInput): Promise<FinalizedUploadResult> {
+    this.assertContext(input)
+    await this.authorize({ ...input, operation: 'finalize', uploadId: input.id })
+    return await this.withLock(input.id, async () => {
+      const metadata = await this.requireMetadata(input.id)
+      this.assertAccess(metadata, input)
+      if (metadata.state !== 'stored' || !metadata.detectedMimeType) throw new Error('Temporary upload has not been stored')
+      const contents = await this.#storage.getBytes(metadata.dataPath)
+      if (!contents) throw new Error('Temporary upload contents are missing')
+      const path = `${this.#policy.directory}/${metadata.id}.${metadata.extension}`
+      await this.#storage.put(path, contents)
+      await Promise.all([
+        this.#storage.delete(metadata.dataPath),
+        this.#storage.delete(metadata.metadataPath),
+      ])
+      return Object.freeze({
+        disk: this.#policy.disk,
+        mimeType: metadata.detectedMimeType,
+        name: metadata.name,
+        path,
+        size: metadata.size,
+      })
     })
   }
 

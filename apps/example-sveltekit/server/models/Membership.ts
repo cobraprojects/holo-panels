@@ -1,6 +1,6 @@
 import { column, defineGeneratedTable, defineModel } from '@holo-js/db'
 
-const memberships = defineGeneratedTable('memberships', {
+export const memberships = defineGeneratedTable('memberships', {
   id: column.string().primaryKey(),
   tenantId: column.string(),
   userId: column.string(),

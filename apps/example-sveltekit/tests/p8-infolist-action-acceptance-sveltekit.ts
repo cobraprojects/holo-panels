@@ -63,15 +63,20 @@ function driver(container: HTMLDivElement, update: (operation: () => Promise<voi
 
 async function render(model: InfolistActionAcceptanceModel): Promise<string> {
   if (!ssrServer) {
-    const rendererRoot = fileURLToPath(new URL('../../../packages/svelte', import.meta.url))
+    const rendererRoot = resolve(process.cwd(), '../svelte')
     ssrServer = await createServer({
       appType: 'custom',
       cacheDir: '/tmp/holo-panels-sveltekit-p8-acceptance',
       configFile: false,
       logLevel: 'silent',
+      optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
       plugins: [svelte()],
       root: rendererRoot,
       server: { middlewareMode: true },
+      ssr: {
+        noExternal: ['bits-ui', 'runed', 'svelte-toolbelt'],
+        optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
+      },
     })
     const renderers = await ssrServer.ssrLoadModule('/src/index.ts')
     const svelteServer = await ssrServer.ssrLoadModule('svelte/server')

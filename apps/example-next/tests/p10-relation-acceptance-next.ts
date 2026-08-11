@@ -4,7 +4,7 @@ import { renderToString } from 'react-dom/server'
 import type { ClientRelationManager, RelationAcceptanceFixture, RelationAcceptanceRenderReport } from '../../../packages/testing/src/relation-acceptance'
 
 function render(managers: readonly ClientRelationManager[]): string {
-  return renderToString(createElement(ReactRelationManagerRenderer, { managers }))
+  return renderToString(createElement(ReactRelationManagerRenderer, { managers, onOperation: () => undefined }))
 }
 
 export const nextRelationAcceptanceFixture: RelationAcceptanceFixture = {

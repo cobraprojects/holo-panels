@@ -108,7 +108,7 @@ function record(id: string, tenantId = 'north'): PanelNotificationRecord {
 
 function request(payload: JsonObject): Request {
   const envelope = createRequestEnvelope({ id: 'notification-request-1', operation: 'notification', panelId: 'admin', payload })
-  return new Request('http://localhost/_holo/panels/admin/notification', {
+  return new Request('http://localhost/holo/panels/admin/notification', {
     body: new URLSearchParams({ request: JSON.stringify(envelope), _token: 'valid' }),
     headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': 'valid' },
     method: 'POST',
@@ -131,7 +131,7 @@ function endpoint(store: PanelNotificationStore): (request: Request) => Promise<
   }
   const app = createApp()
   const router = createRouter()
-  router.post('/_holo/panels/:panelId/:operation', createPanelOperationHandler({ panelIds: ['admin'], runtime }))
+  router.post('/holo/panels/:panelId/:operation', createPanelOperationHandler({ panelIds: ['admin'], runtime }))
   app.use(router)
   return toWebHandler(app)
 }

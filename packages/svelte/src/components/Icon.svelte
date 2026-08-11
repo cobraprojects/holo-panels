@@ -1,0 +1,29 @@
+<script lang="ts">
+  import Archive from 'lucide-svelte/icons/archive'
+  import Check from 'lucide-svelte/icons/check'
+  import Circle from 'lucide-svelte/icons/circle'
+  import Download from 'lucide-svelte/icons/download'
+  import Eye from 'lucide-svelte/icons/eye'
+  import Pencil from 'lucide-svelte/icons/pencil'
+  import Play from 'lucide-svelte/icons/play'
+  import Plus from 'lucide-svelte/icons/plus'
+  import RotateCcw from 'lucide-svelte/icons/rotate-ccw'
+  import Trash2 from 'lucide-svelte/icons/trash-2'
+  import Upload from 'lucide-svelte/icons/upload'
+  import X from 'lucide-svelte/icons/x'
+
+  let { name }: { readonly name: string } = $props()
+</script>
+
+{#if name === 'archive'}<Archive aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'check'}<Check aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'close'}<X aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'delete'}<Trash2 aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'download'}<Download aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'edit'}<Pencil aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'play'}<Play aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'plus'}<Plus aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'restore'}<RotateCcw aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'upload'}<Upload aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else if name === 'view'}<Eye aria-hidden="true" data-icon={name} data-slot="icon" />
+{:else}<Circle aria-hidden="true" data-icon={name} data-slot="icon" />{/if}

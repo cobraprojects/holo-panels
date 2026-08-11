@@ -14,7 +14,7 @@ export default function TenantPage() {
   async function switchTenant(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     const routeKey = String(new FormData(event.currentTarget).get('tenant') ?? '')
-    const response = await fetch('/_holo/panels/admin/tenant/switch', {
+    const response = await fetch('/holo/panels/admin/tenant/switch', {
       body: JSON.stringify({ routeKey }),
       headers: { 'content-type': 'application/json', 'x-csrf-token': cookie('XSRF-TOKEN') },
       method: 'POST',

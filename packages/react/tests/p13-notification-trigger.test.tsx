@@ -27,6 +27,30 @@ afterEach(() => {
 })
 
 describe('P13 React notification inbox trigger', () => {
+  it('does not mount or load a lazy inbox until its trigger is opened', async () => {
+    const store = new ClientNotificationInboxStore({
+      polling: false,
+      transport: {
+        delete: async () => 0,
+        list: async (page, pageSize) => ({ items: [], page, pageSize, total: 0, unread: 0 }),
+        markRead: async () => 0,
+        markUnread: async () => 0,
+      },
+    })
+    const start = vi.spyOn(store, 'start')
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ container, root })
+
+    await act(async () => root.render(<ReactNotificationInboxTrigger lazy placement="topbar" store={store} />))
+    expect(container.querySelector('.hp-notification-inbox')).toBeNull()
+    expect(start).not.toHaveBeenCalled()
+    await act(async () => container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')?.click())
+    expect(container.querySelector('.hp-notification-inbox')).not.toBeNull()
+    expect(start).toHaveBeenCalledOnce()
+  })
+
   it('keeps the inbox mounted while closed and supports accessible topbar interaction', async () => {
     const store = new ClientNotificationInboxStore({
       polling: false,

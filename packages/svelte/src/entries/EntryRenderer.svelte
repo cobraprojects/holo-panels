@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
   import type { Component } from 'svelte'
   import { entryRichTextMetadata, entryUsesMarkdown, safeEntryAttributes, safeMarkdownBlocks } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'
@@ -120,9 +121,9 @@
     {/if}
   </div>
   <EntrySlot entry={$entryState} {panelId} placement="after" {registry} />
-  {#if $entryState.copyable}<button type="button" onclick={() => void copy()}>Copy</button>{/if}
+  {#if $entryState.copyable}<Button type="button" onclick={() => void copy()}>Copy</Button>{/if}
   {#each $entryState.actions as entryAction (entryAction)}
-    <button type="button" disabled={$entryState.pending || !action} onclick={() => void runAction(entryAction)}>{entryAction}</button>
+    <Button type="button" disabled={$entryState.pending || !action} onclick={() => void runAction(entryAction)}>{entryAction}</Button>
   {/each}
   <span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span>
   {#if $entryState.pending}<span role="status">Loading entry</span>{/if}

@@ -39,7 +39,7 @@ let unmountClient: typeof unmount
 function stores(): FixtureProps {
   const form = new FormStore<Record<string, unknown>>({
     attachment: null,
-    basic: { text: 'Initial title' },
+    basic: { text: 'Initial title', textarea: 'Initial body' },
     builder: [{ title: 'First' }],
     collection: { 'rich-editor': 'Rich value' },
     option: { select: 1 },
@@ -175,6 +175,40 @@ describe('P6-G Svelte field renderers', () => {
     title.dispatchEvent(new Event('input', { bubbles: true }))
     flushClient()
     expect((props.form.state.values.basic as Record<string, unknown>).text).toBe('Updated title')
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('#hp-field-basic-textarea')
+    if (!textarea) throw new Error('Textarea field was not rendered')
+    expect(textarea.value).toBe('Initial body')
+    textarea.value = 'Updated body'
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    flushClient()
+    expect((props.form.state.values.basic as Record<string, unknown>).textarea).toBe('Updated body')
+    expect(textarea.value).toBe('Updated body')
+
+    const slug = container.querySelector<HTMLInputElement>('#hp-field-basic-slug')
+    if (!slug) throw new Error('Slug field was not rendered')
+    slug.value = 'updated-slug'
+    slug.dispatchEvent(new Event('input', { bubbles: true }))
+    flushClient()
+    expect((props.form.state.values.basic as Record<string, unknown>).slug).toBe('updated-slug')
+    expect(title.value).toBe('Updated title')
+    expect(textarea.value).toBe('Updated body')
+
+    const select = container.querySelector<HTMLSelectElement>('#hp-field-option-select')
+    if (!select) throw new Error('Select field was not rendered')
+    await Promise.resolve()
+    expect(select.value).toBe('1')
+    select.value = '2'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    flushClient()
+    expect((props.form.state.values.option as Record<string, unknown>).select).toBe(2)
+
+    const sectionTitle = container.querySelector<HTMLInputElement>('[data-panels-collection="repeater"] input')
+    if (!sectionTitle) throw new Error('Nested repeater field was not rendered')
+    sectionTitle.value = 'Updated section'
+    sectionTitle.dispatchEvent(new Event('input', { bubbles: true }))
+    flushClient()
+    expect(props.collectionStore.state.items[0]?.value).toEqual({ title: 'Updated section' })
 
     container.querySelector<HTMLButtonElement>('[data-panels-collection="repeater"] button')?.click()
     flushClient()

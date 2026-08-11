@@ -3,7 +3,10 @@ export {
   PageAccessError,
   PanelRuntime,
   PanelRuntimeError,
+  PanelSubscriptionRequiredError,
+  createNavigationSeed,
   preparePageRoutes,
+  resolveWidget,
   resolvePageData,
 } from '@holo-js/panels-core'
 export {
@@ -23,6 +26,7 @@ export {
 export type {
   CompiledPageDefinition,
   CompiledPanelDefinition,
+  CompiledWidgetDefinition,
   Effect,
   ErrorCategory,
   ExecutePanelDatabaseNotificationOperationOptions,
@@ -34,15 +38,22 @@ export type {
   PanelNotificationStore,
   PanelOperation,
   ResolvedPageData,
+  ResolvedWidget,
   ResponseEnvelope,
+  TableQueryState,
 } from '@holo-js/panels-core'
 export {
   AuthControllerError,
   executePanelAuthOperation,
   executePanelTenantOperation,
   executePanelTenantSwitch,
+  executeGeneratedGlobalSearch,
+  executeGeneratedResourceOperation,
+  executeGeneratedUploadOperation,
+  executePanelRoute,
   PanelTenantOperationError,
   panelAuthOperationStatus,
   panelTenantOperationStatus,
+  panelErrorNotificationEffect,
 } from '@holo-js/panels-core/server'
 export type { PanelAuthOperation, PanelAuthRuntime, PanelTenantOperation } from '@holo-js/panels-core/server'

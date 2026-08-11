@@ -7,9 +7,9 @@
   const control = $derived<InputControlAttributes>({ 'aria-describedby': describedBy, 'aria-invalid': error ? true : undefined, id: inputId })
 </script>
 
-<div class="hp-input-wrapper" data-panels-component="input-wrapper">
-  <label for={inputId}>{label}{#if required}<span aria-hidden="true"> *</span>{/if}</label>
-  {#if description}<div id="{inputId}-description">{description}</div>{/if}
+<div class="hp-input-wrapper" data-panels-component="input-wrapper" data-slot="field">
+  <label data-slot="label" for={inputId}>{label}{#if required}<span aria-hidden="true"> *</span>{/if}</label>
+  {#if description}<div data-slot="field-description" id="{inputId}-description">{description}</div>{/if}
   {@render children?.(control)}
-  {#if error}<div id="{inputId}-error" role="alert">{error}</div>{/if}
+  {#if error}<div data-slot="field-error" id="{inputId}-error" role="alert">{error}</div>{/if}
 </div>

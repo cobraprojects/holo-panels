@@ -1,21 +1,20 @@
 import {
   Component,
+  Children,
   cloneElement,
-  createContext,
   createElement,
   isValidElement,
-  useContext,
-  useEffect,
   useId,
-  useRef,
   useState,
   type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
   type ErrorInfo,
   type HTMLAttributes,
-  type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { Dialog, DropdownMenu, Tabs } from 'radix-ui'
+import { ChevronDown, X } from 'lucide-react'
+import { ShadcnIcon } from './internal-ui'
 
 type Tone = 'danger' | 'info' | 'neutral' | 'success' | 'warning'
 
@@ -28,7 +27,7 @@ export interface PanelsButtonProps extends ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export function PanelsButton({ className, tone = 'neutral', type = 'button', ...props }: PanelsButtonProps): ReactNode {
-  return <button {...props} type={type} className={classes('hp-button', `hp-tone-${tone}`, className)} data-panels-component="button" />
+  return <button {...props} type={type} className={classes('hp-button', `hp-tone-${tone}`, className)} data-panels-component="button" data-slot="button" data-variant={tone === 'danger' ? 'destructive' : tone === 'neutral' ? 'outline' : tone} />
 }
 
 export interface PanelsLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
@@ -41,6 +40,8 @@ export function PanelsLink({ className, disabled = false, onClick, ...props }: P
     aria-disabled={disabled || undefined}
     className={classes('hp-link', className)}
     data-panels-component="link"
+    data-slot="button"
+    data-variant="link"
     onClick={event => {
       if (disabled) event.preventDefault()
       else onClick?.(event)
@@ -54,7 +55,7 @@ export interface PanelsBadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 export function PanelsBadge({ className, tone = 'neutral', ...props }: PanelsBadgeProps): ReactNode {
-  return <span {...props} className={classes('hp-badge', `hp-tone-${tone}`, className)} data-panels-component="badge" />
+  return <span {...props} className={classes('hp-badge', `hp-tone-${tone}`, className)} data-panels-component="badge" data-slot="badge" data-variant={tone === 'danger' ? 'destructive' : tone === 'neutral' ? 'secondary' : tone} />
 }
 
 export interface PanelsAvatarProps extends HTMLAttributes<HTMLSpanElement> {
@@ -64,8 +65,8 @@ export interface PanelsAvatarProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 export function PanelsAvatar({ alt, className, fallback, src, ...props }: PanelsAvatarProps): ReactNode {
-  return <span {...props} className={classes('hp-avatar', className)} data-panels-component="avatar">
-    {src ? <img alt={alt} src={src} /> : <span aria-label={alt}>{fallback ?? alt.slice(0, 1).toUpperCase()}</span>}
+  return <span {...props} className={classes('hp-avatar', className)} data-panels-component="avatar" data-slot="avatar">
+    {src ? <img alt={alt} data-slot="avatar-image" src={src} /> : <span aria-label={alt} data-slot="avatar-fallback">{fallback ?? alt.slice(0, 1).toUpperCase()}</span>}
   </span>
 }
 
@@ -74,7 +75,7 @@ export interface PanelsIconButtonProps extends ButtonHTMLAttributes<HTMLButtonEl
 }
 
 export function PanelsIconButton({ className, label, type = 'button', ...props }: PanelsIconButtonProps): ReactNode {
-  return <button {...props} aria-label={label} className={classes('hp-icon-button', className)} data-panels-component="icon-button" type={type} />
+  return <button {...props} aria-label={label} className={classes('hp-icon-button', className)} data-panels-component="icon-button" data-size="icon" data-slot="button" data-variant="ghost" type={type} />
 }
 
 export interface PanelsInputWrapperProps extends HTMLAttributes<HTMLDivElement> {
@@ -92,11 +93,11 @@ export function PanelsInputWrapper({ children, className, description, errors = 
   const input = isValidElement<Record<string, unknown>>(children)
     ? cloneElement(children, { 'aria-describedby': describedBy, 'aria-invalid': errors.length > 0 || undefined, id: inputId })
     : children
-  return <div {...props} className={classes('hp-input-wrapper', className)} data-panels-component="input-wrapper">
-    <label htmlFor={inputId}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label>
-    {description ? <div id={descriptionId}>{description}</div> : null}
+  return <div {...props} className={classes('hp-input-wrapper', className)} data-panels-component="input-wrapper" data-slot="field">
+    <label data-slot="label" htmlFor={inputId}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label>
+    {description ? <div data-slot="field-description" id={descriptionId}>{description}</div> : null}
     {input}
-    {errors.length > 0 ? <ul id={errorsId} role="alert">{errors.map(error => <li key={error}>{error}</li>)}</ul> : null}
+    {errors.length > 0 ? <ul data-slot="field-error" id={errorsId} role="alert">{errors.map(error => <li key={error}>{error}</li>)}</ul> : null}
   </div>
 }
 
@@ -105,62 +106,46 @@ export interface PanelsLoadingIndicatorProps extends HTMLAttributes<HTMLSpanElem
 }
 
 export function PanelsLoadingIndicator({ className, label = 'Loading', ...props }: PanelsLoadingIndicatorProps): ReactNode {
-  return <span {...props} aria-label={label} className={classes('hp-loading', className)} data-panels-component="loading-indicator" role="status" />
+  return <span {...props} aria-label={label} className={classes('hp-loading', className)} data-panels-component="loading-indicator" data-slot="spinner" role="status" />
 }
 
 export interface PanelsDropdownItem {
   readonly disabled?: boolean
+  readonly icon?: string | null
   readonly id: string
   readonly label: ReactNode
   readonly onSelect: () => void
+  readonly textValue?: string
 }
 
 export interface PanelsDropdownProps {
+  readonly ariaLabel?: string
   readonly items: readonly PanelsDropdownItem[]
   readonly label: ReactNode
+  readonly searchable?: boolean
 }
 
-export function PanelsDropdown({ items, label }: PanelsDropdownProps): ReactNode {
-  const [open, setOpen] = useState(false)
-  const enabled = items.map((item, index) => ({ item, index })).filter(({ item }) => !item.disabled)
-  const [activeIndex, setActiveIndex] = useState(enabled[0]?.index ?? 0)
-  const move = (direction: 1 | -1): void => {
-    if (enabled.length === 0) return
-    const current = enabled.findIndex(entry => entry.index === activeIndex)
-    const next = enabled[(current + direction + enabled.length) % enabled.length]
-    if (next) setActiveIndex(next.index)
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      setOpen(true)
-      move(event.key === 'ArrowDown' ? 1 : -1)
-    } else if (event.key === 'Escape') {
-      setOpen(false)
-    } else if ((event.key === 'Enter' || event.key === ' ') && open) {
-      const item = items[activeIndex]
-      if (item && !item.disabled) {
-        event.preventDefault()
-        item.onSelect()
-        setOpen(false)
-      }
-    }
-  }
-  return <div className="hp-dropdown" data-panels-component="dropdown" onKeyDown={onKeyDown}>
-    <button aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)} type="button">{label}</button>
-    {open ? <div role="menu">{items.map((item, index) => <button
-      aria-disabled={item.disabled || undefined}
-      className={index === activeIndex ? 'hp-active' : undefined}
-      key={item.id}
-      onClick={() => {
-        if (!item.disabled) item.onSelect()
-        setOpen(false)
-      }}
-      role="menuitem"
-      tabIndex={index === activeIndex ? 0 : -1}
-      type="button"
-    >{item.label}</button>)}</div> : null}
-  </div>
+export function PanelsDropdown({ ariaLabel, items, label, searchable = false }: PanelsDropdownProps): ReactNode {
+  const [search, setSearch] = useState('')
+  const visibleItems = search
+    ? items.filter(item => (item.textValue ?? (typeof item.label === 'string' ? item.label : '')).toLocaleLowerCase().includes(search.toLocaleLowerCase()))
+    : items
+  return <DropdownMenu.Root>
+    <DropdownMenu.Trigger asChild><button aria-label={ariaLabel} className="hp-dropdown-trigger" data-panels-component="dropdown" data-slot="dropdown-menu-trigger" type="button">{label}<ChevronDown aria-hidden="true" /></button></DropdownMenu.Trigger>
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content className="hp-dropdown" data-holo-panel="" data-panels-component="dropdown" data-slot="dropdown-menu-content" sideOffset={6}>
+        {searchable ? <input aria-label="Search tenants" data-slot="input" onChange={event => setSearch(event.currentTarget.value)} placeholder="Search tenants…" value={search} /> : null}
+        {visibleItems.map(item => <DropdownMenu.Item
+          className="hp-dropdown-item"
+          data-slot="dropdown-menu-item"
+          disabled={item.disabled}
+          key={item.id}
+          onSelect={item.onSelect}
+          textValue={item.textValue}
+        >{item.icon ? <ShadcnIcon name={item.icon} /> : null}{item.label}</DropdownMenu.Item>)}
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
+  </DropdownMenu.Root>
 }
 
 interface DialogProps extends HTMLAttributes<HTMLDivElement> {
@@ -170,35 +155,16 @@ interface DialogProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 function DialogSurface({ children, className, labelledBy, onClose, open, ...props }: DialogProps): ReactNode {
-  const surfaceRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    surfaceRef.current?.querySelector<HTMLElement>('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus()
-  }, [open])
-  if (!open) return null
-  return <div
-    {...props}
-    aria-labelledby={labelledBy}
-    aria-modal="true"
-    className={className}
-    onKeyDown={event => {
-      if (event.key === 'Escape') onClose()
-      if (event.key !== 'Tab') return
-      const focusable = surfaceRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
-      if (!focusable || focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last?.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first?.focus()
-      }
-    }}
-    ref={surfaceRef}
-    role="dialog"
-  >{children}</div>
+  return <Dialog.Root onOpenChange={value => { if (!value) onClose() }} open={open}>
+    <Dialog.Portal>
+      <Dialog.Overlay className="hp-dialog-overlay" data-holo-panel="" data-slot="dialog-overlay" />
+      <Dialog.Content {...props} aria-labelledby={labelledBy} aria-modal="true" className={className} data-holo-panel="" data-slot="dialog-content">
+        <Dialog.Title className="hp-visually-hidden">Dialog</Dialog.Title>
+        {children}
+        <Dialog.Close aria-label="Close" className="hp-dialog-close" data-slot="dialog-close"><X aria-hidden="true" /></Dialog.Close>
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>
 }
 
 export function PanelsModal(props: DialogProps): ReactNode {
@@ -209,13 +175,6 @@ export function PanelsSlideOver(props: DialogProps): ReactNode {
   return <DialogSurface {...props} className={classes('hp-slide-over', props.className)} data-panels-component="slide-over" />
 }
 
-interface TabsContextValue {
-  readonly active: string
-  readonly select: (value: string) => void
-}
-
-const TabsContext = createContext<TabsContextValue | null>(null)
-
 export interface PanelsTabsProps {
   readonly children?: ReactNode
   readonly defaultValue: string
@@ -223,8 +182,13 @@ export interface PanelsTabsProps {
 }
 
 export function PanelsTabs({ children, defaultValue, label }: PanelsTabsProps): ReactNode {
-  const [active, select] = useState(defaultValue)
-  return <TabsContext value={{ active, select }}><div aria-label={label} className="hp-tabs" data-panels-component="tabs" role="tablist">{children}</div></TabsContext>
+  const items = Children.toArray(children)
+  const panels = items.filter(item => isValidElement(item) && item.type === PanelsTabPanel)
+  const triggers = items.filter(item => !isValidElement(item) || item.type !== PanelsTabPanel)
+  return <Tabs.Root className="hp-tabs" data-slot="tabs" defaultValue={defaultValue}>
+    <Tabs.List aria-label={label} data-panels-component="tabs" data-slot="tabs-list">{triggers}</Tabs.List>
+    {panels}
+  </Tabs.Root>
 }
 
 export interface PanelsTabProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -232,30 +196,7 @@ export interface PanelsTabProps extends ButtonHTMLAttributes<HTMLButtonElement> 
 }
 
 export function PanelsTab({ children, value, ...props }: PanelsTabProps): ReactNode {
-  const context = useContext(TabsContext)
-  if (!context) throw new Error('[Holo Panels] PanelsTab must be rendered inside PanelsTabs.')
-  return <button
-    {...props}
-    aria-selected={context.active === value}
-    onClick={() => context.select(value)}
-    onKeyDown={event => {
-      props.onKeyDown?.(event)
-      if (event.defaultPrevented || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-      const tabs = [...(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])]
-      const current = tabs.indexOf(event.currentTarget)
-      const nextIndex = event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? tabs.length - 1
-          : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
-      event.preventDefault()
-      tabs[nextIndex]?.focus()
-      tabs[nextIndex]?.click()
-    }}
-    role="tab"
-    tabIndex={context.active === value ? 0 : -1}
-    type="button"
-  >{children}</button>
+  return <Tabs.Trigger {...props} data-slot="tabs-trigger" value={value}>{children}</Tabs.Trigger>
 }
 
 export interface PanelsTabPanelProps extends HTMLAttributes<HTMLDivElement> {
@@ -263,9 +204,7 @@ export interface PanelsTabPanelProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export function PanelsTabPanel({ children, value, ...props }: PanelsTabPanelProps): ReactNode {
-  const context = useContext(TabsContext)
-  if (!context) throw new Error('[Holo Panels] PanelsTabPanel must be rendered inside PanelsTabs.')
-  return <div {...props} hidden={context.active !== value} role="tabpanel">{children}</div>
+  return <Tabs.Content {...props} data-slot="tabs-content" value={value}>{children}</Tabs.Content>
 }
 
 export interface PanelsSectionProps extends HTMLAttributes<HTMLElement> {
@@ -274,7 +213,7 @@ export interface PanelsSectionProps extends HTMLAttributes<HTMLElement> {
 
 export function PanelsSection({ children, className, heading, ...props }: PanelsSectionProps): ReactNode {
   const headingId = useId()
-  return <section {...props} aria-labelledby={headingId} className={classes('hp-section', className)} data-panels-component="section"><h2 id={headingId}>{heading}</h2>{children}</section>
+  return <section {...props} aria-labelledby={headingId} className={classes('hp-section', className)} data-panels-component="section" data-slot="card"><h2 data-slot="card-title" id={headingId}>{heading}</h2><div data-slot="card-content">{children}</div></section>
 }
 
 export interface PanelsEmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -282,7 +221,7 @@ export interface PanelsEmptyStateProps extends Omit<HTMLAttributes<HTMLDivElemen
 }
 
 export function PanelsEmptyState({ children, className, title, ...props }: PanelsEmptyStateProps): ReactNode {
-  return <div {...props} className={classes('hp-empty-state', className)} data-panels-component="empty-state"><h2>{title}</h2>{children}</div>
+  return <div {...props} className={classes('hp-empty-state', className)} data-panels-component="empty-state" data-slot="empty"><h2 data-slot="empty-title">{title}</h2><div data-slot="empty-description">{children}</div></div>
 }
 
 export interface PanelsPaginationProps extends HTMLAttributes<HTMLElement> {
@@ -295,10 +234,10 @@ export interface PanelsPaginationProps extends HTMLAttributes<HTMLElement> {
 export function PanelsPagination({ label = 'Pagination', onPageChange, page, pages, ...props }: PanelsPaginationProps): ReactNode {
   const validPages = Number.isSafeInteger(pages) && pages > 0 ? pages : 1
   const current = Math.min(Math.max(1, page), validPages)
-  return <nav {...props} aria-label={label} className="hp-pagination" data-panels-component="pagination">
-    <button aria-label="Previous page" disabled={current <= 1} onClick={() => onPageChange(current - 1)} type="button">Previous</button>
-    <span aria-live="polite">Page {current} of {validPages}</span>
-    <button aria-label="Next page" disabled={current >= validPages} onClick={() => onPageChange(current + 1)} type="button">Next</button>
+  return <nav {...props} aria-label={label} className="hp-pagination" data-panels-component="pagination" data-slot="pagination">
+    <button aria-label="Previous page" data-slot="pagination-link" data-variant="outline" disabled={current <= 1} onClick={() => onPageChange(current - 1)} type="button">Previous</button>
+    <span aria-live="polite" data-slot="pagination-status">Page {current} of {validPages}</span>
+    <button aria-label="Next page" data-slot="pagination-link" data-variant="outline" disabled={current >= validPages} onClick={() => onPageChange(current + 1)} type="button">Next</button>
   </nav>
 }
 
@@ -313,8 +252,8 @@ export interface PanelsToastViewportProps extends HTMLAttributes<HTMLDivElement>
 }
 
 export function PanelsToastViewport({ className, toasts, ...props }: PanelsToastViewportProps): ReactNode {
-  return <div {...props} aria-label="Notifications" className={classes('hp-toast-viewport', className)} data-panels-component="toast-viewport" role="region">
-    {toasts.map(toast => <div aria-atomic="true" className={`hp-tone-${toast.tone ?? 'neutral'}`} key={toast.id} role={toast.tone === 'danger' ? 'alert' : 'status'}>{toast.message}</div>)}
+  return <div {...props} aria-label="Notifications" className={classes('hp-toast-viewport', className)} data-panels-component="toast-viewport" data-slot="toast-viewport" role="region">
+    {toasts.map(toast => <div aria-atomic="true" className={`hp-tone-${toast.tone ?? 'neutral'}`} data-slot="toast" data-variant={toast.tone ?? 'neutral'} key={toast.id} role={toast.tone === 'danger' ? 'alert' : 'status'}>{toast.message}</div>)}
   </div>
 }
 

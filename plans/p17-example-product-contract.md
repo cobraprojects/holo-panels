@@ -1,6 +1,6 @@
 # P17 example product contract
 
-Status: frozen framework-neutral example contract. Implementations may use current exported APIs now. Sections marked pending must wait for their approved P14-P16 public APIs.
+Status: completed framework-neutral example contract; all previously pending P14-P16 API slices are approved, implemented, and covered by the P17 acceptance evidence.
 
 Next.js, Nuxt, and SvelteKit must expose the same domain identifiers, seed identities, tenant boundaries, and observable behavior. Framework wiring may differ; product semantics may not.
 
@@ -24,7 +24,7 @@ Next.js, Nuxt, and SvelteKit must expose the same domain identifiers, seed ident
 | `user-globex-editor` | Editor | Globex | Same content capability within Globex only. |
 | `user-denied` | Denied actor | None | Cannot bootstrap the panel or execute operations. |
 
-Authentication pages and persisted role assignment remain pending P14 integration. Current fixtures may inject these identities only through their existing test guard/runtime boundary.
+Authentication pages delegate to Holo Auth, and persisted role assignment uses Shield. The fixtures exercise these identities through the framework-native request and panel runtime boundaries.
 
 ### Domain records
 
@@ -55,16 +55,16 @@ Each framework may implement these immediately:
 
 No framework may create substitute authentication pages, Shield administration, import/export execution, schema transport, renderer registries, or UI publishing APIs.
 
-## Pending approved-API slice
+## Completed approved-API slice
 
-After the exact proposals are approved and implemented, all frameworks must add equivalent journeys for:
+All frameworks include equivalent journeys for:
 
 - panel login, logout, profile, password reset, email verification, and MFA enrollment/challenge/recovery;
 - tenant switching with persisted active membership and revocation revalidation;
 - Role and Permission administration through Shield;
 - queued CSV import with mapping, progress, failures, cancellation, and idempotent retry;
 - queued CSV/XLSX export with selected columns, progress, private storage, expiring authorization, and cleanup;
-- remaining P16 schema transport, slots, defaults, plugin assets, custom registry, and sample money plugin surfaces.
+- P16 schema transport, slots, defaults, plugin assets, custom registries, and sample money plugin surfaces.
 
 ## Observable behavior contract
 

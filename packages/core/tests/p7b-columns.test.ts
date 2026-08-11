@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { serializeManifest } from '../src/protocol/serialization'
+import { entriesFor } from '../src/infolists/entries'
+import { executeGeneratedGlobalSearch, executeGeneratedResourceOperation, generatedResourcePageManifests } from '../src/resources/generated-pages'
 import {
   type BooleanColumn,
   type CheckboxColumn,
@@ -40,6 +42,54 @@ class PostRecord {
 }
 
 describe('P7-B column inference and built-ins', () => {
+  it('includes titled resources in global search by default and honors panel opt-in mode', async () => {
+    const record = { id: 'first', title: 'First post', toJSON: () => ({ id: 'first', title: 'First post' }) }
+    interface SearchQueryStub {
+      get(): Promise<readonly typeof record[]>
+      limit(): SearchQueryStub
+      orWhereLike(): SearchQueryStub
+      orWhereRelation(): SearchQueryStub
+      where(callback: ((value: SearchQueryStub) => SearchQueryStub) | string): SearchQueryStub
+      whereLike(): SearchQueryStub
+      whereRelation(): SearchQueryStub
+      with(): SearchQueryStub
+    }
+    const query: SearchQueryStub = {
+      get: async () => [record],
+      limit: () => query,
+      orWhereLike: () => query,
+      orWhereRelation: () => query,
+      where: (callback: ((value: typeof query) => typeof query) | string) => typeof callback === 'function' ? callback(query) : query,
+      whereLike: () => query,
+      whereRelation: () => query,
+      with: () => query,
+    }
+    const resource = {
+      baseQuery: (value: typeof query) => value,
+      id: 'posts',
+      kind: 'resource',
+      model: { definition: { primaryKey: 'id' }, query: () => query },
+      navigation: {},
+      recordTitle: 'title',
+      routeKey: 'id',
+      shared: true,
+      slug: 'posts',
+    }
+    const input = {
+      actor: { id: 'admin' },
+      panelId: 'admin',
+      panelPath: '/admin',
+      resources: [resource],
+      signal: new AbortController().signal,
+      tenant: null,
+      term: 'First',
+    }
+
+    await expect(executeGeneratedGlobalSearch(input)).resolves.toMatchObject({ results: [{ id: 'first', title: 'First post' }] })
+    await expect(executeGeneratedGlobalSearch({ ...input, resourceOptIn: true })).resolves.toMatchObject({ results: [] })
+    await expect(executeGeneratedGlobalSearch({ ...input, strictAuthorization: true })).rejects.toThrow()
+  })
+
   it('preserves precise record, relation, and value paths', () => {
     expectTypeOf<'author.name'>().toExtend<RecordPath<PostRecord>>()
     expectTypeOf<'comments.0.score'>().toExtend<RecordPath<PostRecord>>()
@@ -132,6 +182,148 @@ describe('P7-B column inference and built-ins', () => {
 })
 
 describe('P7-B text formatting and manifest security', () => {
+  it('places configured resource widgets on every generated resource page', () => {
+    const manifests = generatedResourcePageManifests({
+      panelPath: '/admin',
+      resource: {
+        capabilities: { delete: true, forceDelete: false, restore: false },
+        id: 'posts',
+        kind: 'resource',
+        model: { definition: { primaryKey: 'id' } },
+        recordTitle: 'title',
+        routeKey: 'id',
+        widgets: [
+          { compile: () => ({ kind: 'widget', manifest: { id: 'post-stats' } }) },
+          { compile: () => ({ kind: 'widget', manifest: { id: 'post-stats' } }) },
+          { compile: () => ({ kind: 'widget', manifest: { id: 'recent-comments' } }) },
+        ],
+      },
+    })
+
+    expect(manifests).toHaveLength(4)
+    expect(manifests.every(manifest => manifest.widgets.header.join(',') === 'post-stats,recent-comments')).toBe(true)
+  })
+
+  it('preserves complete column presentation through generated resource pages', () => {
+    const column = columnsFor(PostRecord).text('total')
+      .money('USD')
+      .badge()
+      .lineClamp(2)
+      .searchable()
+      .sortable()
+      .compile().manifest
+    const manifests = generatedResourcePageManifests({
+      panelPath: '/admin',
+      resource: {
+        capabilities: { delete: true, forceDelete: false, restore: false },
+        form: { fields: [] },
+        id: 'posts',
+        kind: 'resource',
+        model: { definition: { primaryKey: 'id' } },
+        recordTitle: 'title',
+        routeKey: 'id',
+        table: { columns: [column] },
+      },
+    })
+    const resource = manifests[0]?.body?.properties.resource
+    const table = resource && typeof resource === 'object' && !Array.isArray(resource) ? resource.table : null
+    const columns = table && typeof table === 'object' && !Array.isArray(table) && Array.isArray(table.columns) ? table.columns : []
+
+    expect(columns[0]).toMatchObject({
+      dataSource: { kind: 'path' },
+      formatters: [{ currency: 'USD', kind: 'money' }, { kind: 'badge', value: true }],
+      lineClamp: 2,
+      path: 'total',
+      searchable: true,
+      sortable: true,
+    })
+  })
+
+  it('publishes configured resource actions on record and table surfaces', () => {
+    const manifests = generatedResourcePageManifests({
+      panelPath: '/admin',
+      resource: {
+        actions: [
+          { authorize: () => true, confirmation: 'Publish this post?', handle: () => ({ published: true }), id: 'publish', kind: 'custom', label: 'Publish now', mount: 'record' },
+          { authorize: () => true, color: 'warning', handle: () => ({ archived: true }), icon: 'archive', id: 'archive-selected', kind: 'custom', label: 'Archive selected', mount: 'bulk' },
+        ],
+        capabilities: { delete: true, forceDelete: false, restore: false },
+        form: { fields: [] },
+        id: 'posts',
+        kind: 'resource',
+        model: { definition: { primaryKey: 'id' } },
+        recordTitle: 'title',
+        routeKey: 'id',
+        table: { columns: [] },
+      },
+    })
+    const properties = manifests[0]?.body?.properties.resource
+    const resource = properties && typeof properties === 'object' && !Array.isArray(properties) ? properties : null
+    const actions = resource && Array.isArray(resource.actions) ? resource.actions : []
+    const table = resource?.table && typeof resource.table === 'object' && !Array.isArray(resource.table) ? resource.table : null
+    const tableActions = table && Array.isArray(table.actions) ? table.actions : []
+
+    expect(actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ confirmation: 'Publish this post?', id: 'publish', label: 'Publish now', mount: 'record' }),
+    ]))
+    expect(tableActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'publish', scope: 'row' }),
+      expect.objectContaining({ color: 'warning', icon: 'archive', id: 'archive-selected', scope: 'bulk' }),
+    ]))
+  })
+
+  it('uses configured infolist entries instead of deriving the view from form fields', () => {
+    const manifests = generatedResourcePageManifests({
+      panelPath: '/admin',
+      resource: {
+        actions: [],
+        capabilities: { delete: true, forceDelete: false, restore: false },
+        form: { fields: [{ label: 'Title', path: 'title', type: 'text' }] },
+        id: 'posts',
+        infolist: [entriesFor(PostRecord).boolean('active').label('Published')],
+        kind: 'resource',
+        model: { definition: { primaryKey: 'id' } },
+        recordTitle: 'title',
+        routeKey: 'id',
+        table: { columns: [] },
+      },
+    })
+    const properties = manifests[0]?.body?.properties.resource
+    const resource = properties && typeof properties === 'object' && !Array.isArray(properties) ? properties : null
+    const infolist = resource?.infolist && typeof resource.infolist === 'object' && !Array.isArray(resource.infolist) ? resource.infolist : null
+
+    expect(infolist?.entries).toEqual([
+      expect.objectContaining({ id: 'posts-active', label: 'Published', path: 'active', type: 'boolean' }),
+    ])
+  })
+
+  it('executes only the configured server action with its submitted input', async () => {
+    const handle = vi.fn((input: Readonly<Record<string, unknown>>) => ({ title: input.title }))
+    const resource = {
+      actions: [{ authorize: () => true, handle, id: 'publish', kind: 'custom', label: 'Publish', mount: 'page', transactional: false }],
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [] },
+      id: 'posts',
+      kind: 'resource',
+      model: {
+        definition: { name: 'Post', primaryKey: 'id', softDeletes: false },
+        getConnectionName: () => undefined,
+      },
+      shared: true,
+      table: { columns: [] },
+    }
+    const result = await executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'publish', idempotencyKey: 'publish-1', input: { title: 'Ready' }, resourceId: 'posts' },
+    })
+
+    expect(handle).toHaveBeenCalledWith({ title: 'Ready' }, expect.objectContaining({ actor: { id: 'admin' }, mount: 'page' }))
+    expect(result.data).toMatchObject({ result: { title: 'Ready' }, status: 'succeeded' })
+    expect(result.effects).toEqual([])
+  })
+
   it('compiles every text formatter as deterministic client state', () => {
     const manifest = columnsFor(PostRecord).text('title')
       .badge()

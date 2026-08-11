@@ -60,7 +60,7 @@ async function basicProject(): Promise<{
   const projectRoot = await createProject()
   const modules = new Map<string, DiscoveryModule>()
   const entries: readonly [string, DiscoveryModule][] = [
-    ['server/admin/AdminPanel.ts', { default: definition({ kind: 'panel', id: 'admin', default: true, route: '/admin', client: { label: 'Admin' } }) }],
+    ['server/admin/AdminPanel.ts', { default: definition({ kind: 'panel', id: 'admin', default: true, route: '/admin', client: { label: 'Admin', path: '/admin' }, server: { routeDomain: null, routePrefix: null, routes: [{ method: 'GET', path: '/health', scope: 'public' }] } }) }],
     ['server/admin/resources/posts/PostResource.mts', { default: definition({ kind: 'resource', id: 'posts', componentKeys: ['posts.form'], permissionKeys: ['admin.posts.viewAny'] }) }],
     ['server/admin/resources/posts/pages/ListPosts.ts', { ListPosts: definition({ kind: 'page', id: 'posts.list', route: '/posts' }) }],
     ['server/admin/resources/posts/relation-managers/CommentsRelationManager.cts', { default: definition({ kind: 'relation-manager', id: 'posts.comments' }) }],
@@ -127,6 +127,76 @@ describe('Holo Panels discovery compiler', () => {
     expect(result.artifacts.find(artifact => artifact.path === 'server-registry.ts')?.contents).toContain("async () => (await import(\"../../../server/admin/AdminPanel\"))[\"default\"]")
     expect(result.artifacts.find(artifact => artifact.path === 'client-manifest.ts')?.contents).not.toContain('projectPath')
     expect(result.artifacts.find(artifact => artifact.path === 'types.d.ts')?.contents).toContain('"admin:posts": true')
+    expect(JSON.parse(result.artifacts.find(artifact => artifact.path === 'panel-routes.json')!.contents)).toEqual({
+      routes: [{ domain: null, method: 'GET', panelId: 'admin', scope: 'public', source: '/admin/health' }],
+      version: 1,
+    })
+  })
+
+  it('includes explicit panel registrations in generated artifacts', async () => {
+    const projectRoot = await createProject()
+    await touch(projectRoot, 'server/admin/AdminPanel.ts')
+    const resource = definition({
+      client: { slug: 'posts' },
+      id: 'posts',
+      kind: 'resource',
+      server: { resolve: () => 'server-only' },
+    })
+    const panel = definition({
+      client: { label: 'Admin' },
+      id: 'admin',
+      kind: 'panel',
+      server: { registered: [{ definition: resource, value: resource }] },
+    })
+    const modules = new Map<string, DiscoveryModule>([
+      ['server/admin/AdminPanel.ts', { default: panel }],
+    ])
+
+    const result = await new DiscoveryCompiler({
+      projectRoot,
+      loadModule: moduleLoader(projectRoot, modules),
+    }).compile()
+
+    expect(result.definitions.map(item => [item.kind, item.id, item.exportName])).toEqual([
+      ['panel', 'admin', 'default'],
+      ['resource', 'posts', 'default.resource.posts'],
+    ])
+    expect(result.artifacts.find(artifact => artifact.path === 'resources.ts')?.contents).toContain('"id": "posts"')
+    expect(result.artifacts.find(artifact => artifact.path === 'server-registry.ts')?.contents).toContain('definition.server.registered[0].value')
+    expect(result.artifacts.find(artifact => artifact.path === 'client-manifest.ts')?.contents).not.toContain('server-only')
+  })
+
+  it('generates complete resource CRUD pages when a resource opts into page discovery', async () => {
+    const projectRoot = await createProject()
+    await touch(projectRoot, 'server/admin/AdminPanel.ts')
+    await touch(projectRoot, 'server/admin/resources/posts/PostResource.ts')
+    const resource = {
+      ...definition({ discover: { pages: 'pages' }, id: 'posts', kind: 'resource' }),
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { dependencies: [], fields: [{ disabled: false, label: 'Title', path: 'title', properties: {}, readOnly: false, required: true, type: 'text', visible: true }] },
+      navigation: { icon: 'document-text', label: 'Posts', sort: 10 },
+      recordTitle: 'title',
+      routeKey: 'id',
+      singular: null,
+      slug: 'posts',
+      table: { columns: [{ alignment: 'start', copyable: false, hidden: false, inlineEditor: null, label: 'Title', path: 'title', sortable: true, toggleable: true, type: 'text', width: null, wrap: true }] },
+    }
+    const modules = new Map<string, DiscoveryModule>([
+      ['server/admin/AdminPanel.ts', { default: definition({ client: { path: '/admin' }, id: 'admin', kind: 'panel', route: '/admin' }) }],
+      ['server/admin/resources/posts/PostResource.ts', { default: resource }],
+    ])
+
+    const result = await new DiscoveryCompiler({ projectRoot, loadModule: moduleLoader(projectRoot, modules) }).compile()
+    const pages = result.definitions.filter(item => item.kind === 'page')
+
+    expect(pages.map(item => [item.id, item.route])).toEqual([
+      ['posts-create', '/admin/posts/create'],
+      ['posts-edit', '/admin/posts/:record/edit'],
+      ['posts', '/admin/posts'],
+      ['posts-view', '/admin/posts/:record'],
+    ])
+    expect(pages.map(item => Reflect.get(Reflect.get(item.client, 'body') as object, 'component'))).toEqual(['resource-page', 'resource-page', 'resource-page', 'resource-page'])
+    expect(result.artifacts.find(artifact => artifact.path === 'server-registry.ts')?.contents).toContain('createGeneratedResourcePage')
   })
 
   it('supports configured panel entries and panel-relative directories', async () => {
@@ -283,6 +353,23 @@ describe('Holo Panels discovery compiler', () => {
 
     await expect(new DiscoveryCompiler({ projectRoot, loadModule: moduleLoader(projectRoot, modules) }).compile())
       .rejects.toThrow('server/admin/pages/Second.ts#default')
+  })
+
+  it('allows a panel landing page to use the panel root route', async () => {
+    const projectRoot = await createProject()
+    await touch(projectRoot, 'server/admin/AdminPanel.ts')
+    await touch(projectRoot, 'server/admin/pages/Dashboard.ts')
+    const modules = new Map<string, DiscoveryModule>([
+      ['server/admin/AdminPanel.ts', { default: definition({ kind: 'panel', id: 'admin', route: '/admin' }) }],
+      ['server/admin/pages/Dashboard.ts', { default: definition({ kind: 'page', id: 'dashboard', route: '/admin' }) }],
+    ])
+
+    const result = await new DiscoveryCompiler({ projectRoot, loadModule: moduleLoader(projectRoot, modules) }).compile()
+
+    expect(result.definitions.map(item => [item.kind, item.route])).toEqual([
+      ['panel', '/admin'],
+      ['page', '/admin'],
+    ])
   })
 
   it('rejects multiple defaults, ambiguous named exports, mismatched panels, and unsafe client state', async () => {

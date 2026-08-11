@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-client",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Framework-neutral Holo Panels client state and transport",
   "type": "module",
   "license": "MIT",

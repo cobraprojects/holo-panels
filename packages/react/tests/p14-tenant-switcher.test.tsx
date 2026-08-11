@@ -35,8 +35,8 @@ describe('React tenant switcher', () => {
   it('renders authorized memberships and the active tenant', () => {
     const html = renderToString(<ReactTenantSwitcher store={store()} transport={{ switch: async routeKey => ({ tenant: { id: routeKey, routeKey } }) }} />)
 
-    expect(html).toContain('aria-label="Tenant"')
-    expect(html).toContain('<option value="acme" selected="">Acme</option>')
-    expect(html).toContain('<option value="globex">Globex</option>')
+    expect(html).toContain('aria-label="Tenant menu"')
+    expect(html).toContain('data-slot="dropdown-menu-trigger"')
+    expect(html).toContain('Acme')
   })
 })

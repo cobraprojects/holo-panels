@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
+  import Input from '../components/Input.svelte'
+  import Table from '../components/Table.svelte'
   import { onMount, type Component } from 'svelte'
   import { toSvelteSnapshot } from '../stores'
   import type { SvelteCustomWidgetProps, SvelteWidgetRendererProps } from './contracts'
@@ -136,16 +139,16 @@
 </script>
 
 {#if $widgetState.status !== 'hidden'}
-  <section bind:this={root} aria-busy={$widgetState.loading} aria-labelledby={`${manifest.id}-heading`} class="hp-widget" data-panels-widget={manifest.id} data-placement={placement} data-widget-family={manifest.family}>
-    <header>
-      <h2 id={`${manifest.id}-heading`}>{widgetLabel(manifest)}</h2>
-      {#if manifest.description}<p>{manifest.description}</p>{/if}
+  <section bind:this={root} aria-busy={$widgetState.loading} aria-labelledby={`${manifest.id}-heading`} class="hp-widget" data-panels-widget={manifest.id} data-placement={placement} data-slot="card" data-widget-family={manifest.family}>
+    <header data-slot="card-header">
+      <h2 data-slot="card-title" id={`${manifest.id}-heading`}>{widgetLabel(manifest)}</h2>
+      {#if manifest.description}<p data-slot="card-description">{manifest.description}</p>{/if}
     </header>
     {#if $widgetState.status === 'unauthorized'}
       <p role="status">Widget unavailable</p>
     {:else if $widgetState.status === 'error'}
       <p role="alert">{$widgetState.error ?? manifest.errorState}</p>
-      <button type="button" onclick={() => void store.load()}>Retry</button>
+      <Button type="button" onclick={() => void store.load()}>Retry</Button>
     {:else if $widgetState.loading || $widgetState.status === 'idle'}
       <p aria-live="polite" role="status">Loading widget</p>
     {:else if manifest.family === 'stats'}
@@ -158,7 +161,7 @@
             {#if stat.description}<dd>{stat.description}</dd>{/if}
             {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`}>{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
             {#if stat.chart.length > 0}<dd><span aria-label={`${stat.label} trend: ${stat.chart.join(', ')}`} class="hp-widget-sparkline" role="img">{stat.chart.join(' · ')}</span></dd>{/if}
-            {#if stat.action}<dd><button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</button></dd>{/if}
+            {#if stat.action}<dd><Button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</Button></dd>{/if}
             {#if safeWidgetUrl(stat.url)}<dd><a href={safeWidgetUrl(stat.url) ?? undefined}>View {stat.label}</a></dd>{/if}
           </div>
         {/each}
@@ -181,7 +184,7 @@
             {/if}
           </svg>
           <p id={`${manifest.id}-chart-description`}>{chart.description}</p>
-          <table aria-describedby={`${manifest.id}-chart-description`}><caption>{chart.summary}</caption><thead><tr><th scope="col">Label</th>{#each chart.series as series (series.id)}<th scope="col">{series.label}</th>{/each}</tr></thead><tbody>{#each chartLabels(chart) as label (label)}<tr><th scope="row">{label}</th>{#each chart.series as series (series.id)}<td>{chartValue(series, label) ?? '—'}</td>{/each}</tr>{/each}</tbody></table>
+          <Table aria-describedby={`${manifest.id}-chart-description`}><caption>{chart.summary}</caption><thead><tr><th scope="col">Label</th>{#each chart.series as series (series.id)}<th scope="col">{series.label}</th>{/each}</tr></thead><tbody>{#each chartLabels(chart) as label (label)}<tr><th scope="row">{label}</th>{#each chart.series as series (series.id)}<td>{chartValue(series, label) ?? '—'}</td>{/each}</tr>{/each}</tbody></Table>
         </figure>
       {:else}<p>{manifest.emptyState}</p>{/if}
     {:else if manifest.family === 'table'}
@@ -190,7 +193,7 @@
       {#if custom && Custom}<Custom properties={custom.properties} widgetId={manifest.id} />{:else}<p>{manifest.emptyState}</p>{/if}
     {/if}
     {#if manifest.filters.length > 0}
-      <form aria-label={`${widgetLabel(manifest)} filters`} onsubmit={(event) => event.preventDefault()}>{#each manifest.filters as filter (filter.id)}<label>{filter.label}<input value={String($widgetState.filters[filter.id] ?? '')} onchange={(event) => void store.setFilter(filter.id, event.currentTarget.value)} /></label>{/each}</form>
+      <form aria-label={`${widgetLabel(manifest)} filters`} onsubmit={(event) => event.preventDefault()}>{#each manifest.filters as filter (filter.id)}<label>{filter.label}<Input value={String($widgetState.filters[filter.id] ?? '')} onchange={(event) => void store.setFilter(filter.id, event.currentTarget.value)} /></label>{/each}</form>
     {/if}
   </section>
 {/if}

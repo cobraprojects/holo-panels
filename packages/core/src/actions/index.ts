@@ -1,5 +1,11 @@
 export { compileActionManifest, resolveActionState } from './action'
 export {
+  ActionBuilder,
+  createResourceActionComposer,
+  defineAction,
+  type ResourceActionComposer,
+} from './builder'
+export {
   actionsFor,
   type ActionPersistence,
   type BuiltinActionOptions,

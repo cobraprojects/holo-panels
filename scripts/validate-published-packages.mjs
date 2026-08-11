@@ -3,7 +3,7 @@ import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'no
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { satisfiesCaretRange, validatePublishedDependencyRanges } from './published-manifest-policy.mjs'
+import { satisfiesVersionRange, validatePublishedDependencyRanges } from './published-manifest-policy.mjs'
 
 const packagesRoot = new URL('../packages/', import.meta.url)
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -14,6 +14,7 @@ const requirePackedSmoke = process.argv.includes('--pack')
 const rootManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const rootLicense = await readFile(new URL('../LICENSE', import.meta.url), 'utf8')
 const catalog = rootManifest.workspaces.catalog
+const minimumPublishedHoloVersion = '0.3.10'
 const manifests = new Map()
 let workspaceVersion
 const packageDirectories = (await readdir(packagesRoot, { withFileTypes: true }))
@@ -23,14 +24,16 @@ const packageDirectories = (await readdir(packagesRoot, { withFileTypes: true })
 
 function catalogRange(packageName) {
   const range = catalog[packageName]
-  if (typeof range !== 'string' || !/^\d/u.test(range.slice(1)) || !range.startsWith('^')) {
-    throw new Error(`Expected ${packageName} to use a caret semver catalog range`)
+  const expectedPattern = packageName.startsWith('@holo-js/') ? /^>=\d+\.\d+\.\d+$/u : /^\^\d+\.\d+\.\d+$/u
+  if (typeof range !== 'string' || !expectedPattern.test(range)) {
+    throw new Error(`Expected ${packageName} to use its approved semver catalog range`)
   }
   return range
 }
 
 function minimumCatalogVersion(packageName) {
-  return catalogRange(packageName).slice(1)
+  if (packageName.startsWith('@holo-js/')) return minimumPublishedHoloVersion
+  return catalogRange(packageName).replace(/^(?:\^|>=)/u, '')
 }
 
 for (const directory of packageDirectories) {
@@ -71,9 +74,12 @@ for (const directory of packageDirectories) {
   await access(new URL('vitest.config.ts', packageRoot))
 
   if (requireBuild) {
-    const entrypoint = new URL(manifest.exports['.'].import, packageRoot)
-    await access(entrypoint)
-    await import(entrypoint)
+    const rootEntrypoint = new URL(manifest.exports['.'].import, packageRoot)
+    const serverTarget = manifest.exports['.']['react-server']?.import ?? manifest.exports['./server']?.import ?? manifest.exports['.'].import
+    const serverEntrypoint = new URL(serverTarget, packageRoot)
+    await access(rootEntrypoint)
+    await access(serverEntrypoint)
+    await import(serverEntrypoint)
   }
 }
 
@@ -83,6 +89,11 @@ function exportTargets(value) {
   if (typeof value === 'string') return [value]
   if (value === null || typeof value !== 'object') return []
   return Object.values(value).flatMap(exportTargets)
+}
+
+function nodeImportSpecifier(packageName) {
+  const manifest = manifests.get(packageName)?.manifest
+  return manifest?.exports?.['./server'] ? `${packageName}/server` : packageName
 }
 
 function validateTarball(packageName, sourceManifest, tarballPath) {
@@ -157,7 +168,7 @@ async function packAdjacentHoloPackages(tarballRoot) {
     const expectedRange = catalog[manifest.name] === undefined
       ? undefined
       : catalogRange(manifest.name)
-    if (expectedRange !== undefined && !satisfiesCaretRange(expectedRange, manifest.version)) {
+    if (expectedRange !== undefined && !satisfiesVersionRange(expectedRange, manifest.version)) {
       throw new Error(`Adjacent ${manifest.name}@${manifest.version} must satisfy catalog range ${expectedRange}`)
     }
 
@@ -199,16 +210,26 @@ async function createPanelsPackingWorkspace(root, holoDependencies) {
 
   const stagedManifest = structuredClone(rootManifest)
   stagedManifest.workspaces.packages = ['packages/*']
+  stagedManifest.devDependencies = {}
   stagedManifest.overrides = {
     ...stagedManifest.overrides,
     ...holoDependencies,
   }
+  for (const { directory, manifest } of manifests.values()) {
+    const installManifest = structuredClone(manifest)
+    installManifest.devDependencies = {}
+    installManifest.peerDependencies = {}
+    await writeFile(join(stagedPackagesRoot, directory, 'package.json'), `${JSON.stringify(installManifest, null, 2)}\n`)
+  }
   await writeFile(join(root, 'package.json'), `${JSON.stringify(stagedManifest, null, 2)}\n`)
   await writeFile(join(root, 'bunfig.toml'), '[install]\nlinker = "isolated"\n')
-  execFileSync('bun', ['install', '--ignore-scripts'], {
+  execFileSync('bun', ['install', '--ignore-scripts', '--omit=dev', '--omit=peer'], {
     cwd: root,
     stdio: 'pipe',
   })
+  for (const { directory } of manifests.values()) {
+    await cp(join(repositoryRoot, 'packages', directory, 'package.json'), join(stagedPackagesRoot, directory, 'package.json'))
+  }
 
   return stagedPackagesRoot
 }
@@ -252,7 +273,7 @@ if (requirePackedSmoke) {
     for (const { manifest } of manifests.values()) {
       for (const [packageName, sourceRange] of Object.entries(manifest.peerDependencies ?? {})) {
         if (manifests.has(packageName)) continue
-        const resolvedRange = sourceRange === 'catalog:' ? catalog[packageName] : sourceRange
+        const resolvedRange = sourceRange === 'catalog:' ? minimumCatalogVersion(packageName) : sourceRange
         if (!resolvedRange) throw new Error(`Missing standalone peer range for ${packageName}`)
         standalonePeers[packageName] = resolvedRange
       }
@@ -262,15 +283,52 @@ if (requirePackedSmoke) {
       private: true,
       type: 'module',
       dependencies: { ...standalonePeers, ...dependencies },
+      devDependencies: { typescript: minimumCatalogVersion('typescript') },
       overrides: { ...holoDependencies, ...dependencies },
     }, null, 2))
     await writeFile(join(standaloneRoot, 'bunfig.toml'), '[install]\nlinker = "isolated"\n')
     await writeFile(join(standaloneRoot, 'index.mjs'), [...manifests.keys()]
       .sort()
-      .map(packageName => `await import('${packageName}')`)
+      .map(packageName => `await import('${nodeImportSpecifier(packageName)}')`)
       .join('\n'))
+    await writeFile(join(standaloneRoot, 'inference.ts'), `import { column as databaseColumn, defineGeneratedTable, defineModel } from '@holo-js/db'
+import { column, defineResource, field } from '@holo-js/panels'
+
+const posts = defineGeneratedTable('posts', {
+  id: databaseColumn.string().primaryKey(),
+  published: databaseColumn.boolean(),
+  title: databaseColumn.string(),
+})
+
+const Post = defineModel(posts, { fillable: ['published', 'title'], guarded: ['id'], timestamps: false })
+
+defineResource(Post)
+  .form([field.text('title').required(), field.boolean('published')])
+  .table([column.text('title').sortable(), column.boolean('published')])
+
+// @ts-expect-error title is not boolean
+defineResource(Post).form([field.boolean('title')])
+// @ts-expect-error missing is not a model attribute
+defineResource(Post).form([field.text('missing')])
+// @ts-expect-error title is not boolean
+defineResource(Post).table([column.boolean('title')])
+// @ts-expect-error missing is not a model attribute
+defineResource(Post).table([column.text('missing')])
+`)
+    await writeFile(join(standaloneRoot, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        noEmit: true,
+        skipLibCheck: true,
+        strict: true,
+        target: 'ES2022',
+      },
+      include: ['inference.ts'],
+    }, null, 2))
     execFileSync('bun', ['install', '--ignore-scripts'], { cwd: standaloneRoot, stdio: 'pipe' })
     execFileSync('node', ['index.mjs'], { cwd: standaloneRoot, stdio: 'pipe' })
+    execFileSync('bun', ['run', 'tsc', '--', '-p', 'tsconfig.json'], { cwd: standaloneRoot, stdio: 'pipe' })
 
     const pluginPackageRoot = join(repositoryRoot, 'examples', 'plugins')
     for (const script of ['typecheck', 'test', 'build']) {
@@ -303,7 +361,7 @@ if (requirePackedSmoke) {
     }, null, 2))
     await writeFile(join(temporaryRoot, 'consumer', 'index.mjs'), [...manifests.keys()]
       .sort()
-      .map(packageName => `await import('${packageName}')`)
+      .map(packageName => `await import('${nodeImportSpecifier(packageName)}')`)
       .join('\n'))
 
     const frameworkFixtures = [
@@ -361,7 +419,7 @@ if (requirePackedSmoke) {
               throw new Error(`${fixture.directory} references missing catalog dependency ${packageName}`)
             }
 
-            fixtureDependencies[packageName] = catalogVersion
+            fixtureDependencies[packageName] = minimumCatalogVersion(packageName)
           }
         }
       }
@@ -369,7 +427,7 @@ if (requirePackedSmoke) {
       await writeFile(fixtureManifestPath, JSON.stringify(fixtureManifest, null, 2))
       await writeFile(join(targetRoot, 'packed-smoke.mjs'), [
         "await import('@holo-js/panels')",
-        `await import('${fixture.adapter}')`,
+        `await import('${fixture.adapter}/server')`,
         ...frameworkFixtures
           .filter(candidate => candidate.adapter !== fixture.adapter)
           .map(candidate => [
@@ -415,7 +473,7 @@ if (requirePackedSmoke) {
         '@holo-js/forms': minimumCatalogVersion('@holo-js/forms'),
         '@holo-js/panels': dependencies['@holo-js/panels'],
         '@holo-js/panels-core': dependencies['@holo-js/panels-core'],
-        typescript: catalog.typescript,
+        typescript: minimumCatalogVersion('typescript'),
       },
     }, null, 2))
     await writeFile(join(pluginExamplesRoot, 'tsconfig.json'), JSON.stringify({
@@ -528,8 +586,8 @@ if (requirePackedSmoke) {
         renderer: '@holo-js/panels-react',
         subpath: '@holo-js/panels-testing/react',
         frameworkPeers: {
-          react: catalog.react,
-          'react-dom': catalog['react-dom'],
+          react: minimumCatalogVersion('react'),
+          'react-dom': minimumCatalogVersion('react-dom'),
         },
       },
       {
@@ -537,7 +595,7 @@ if (requirePackedSmoke) {
         renderer: '@holo-js/panels-vue',
         subpath: '@holo-js/panels-testing/vue',
         frameworkPeers: {
-          vue: catalog.vue,
+          vue: minimumCatalogVersion('vue'),
         },
       },
       {
@@ -545,7 +603,7 @@ if (requirePackedSmoke) {
         renderer: '@holo-js/panels-svelte',
         subpath: '@holo-js/panels-testing/svelte',
         frameworkPeers: {
-          svelte: catalog.svelte,
+          svelte: minimumCatalogVersion('svelte'),
         },
       },
     ]

@@ -15,24 +15,24 @@ type TemplateContext = {
 
 function panelTemplate(context: TemplateContext): string {
   const defaultCall = context.isDefault ? '\n  .default()' : ''
-  return `import { definePanel } from '@holo-js/panels'\n\nexport default definePanel('${context.panel}')${defaultCall}\n  .path('${context.panelPath}')\n  .guard('${context.guard}')\n  .discoverResources()\n  .discoverPages()\n  .discoverWidgets()\n  .discoverClusters()\n`
+  return `import { definePanel } from '@holo-js/panels'\n\nexport default definePanel('${context.panel}')${defaultCall}\n  .path('${context.panelPath}')\n  .authGuard('${context.guard}')\n  .login()\n  .discoverResources()\n  .discoverPages()\n  .discoverWidgets()\n  .discoverClusters()\n`
 }
 
 function fieldExpression(field: ModelMetadata['fields'][number]): string {
   const required = field.nullable ? '' : '.required()'
-  if (field.type === 'boolean') return `field.boolean('${field.name}')${required}`
+  if (field.type === 'boolean') return `field.checkbox('${field.name}')${required}`
   if (field.type === 'date' || field.type === 'datetime') return `field.dateTime('${field.name}')${required}`
   if (field.type === 'number' || field.type === 'integer' || field.type === 'float' || field.type === 'decimal') {
-    return `field.number('${field.name}')${required}`
+    return `field.text('${field.name}').numeric()${required}`
   }
   return `field.text('${field.name}')${required}`
 }
 
 function columnExpression(field: ModelMetadata['fields'][number]): string {
   if (field.type === 'boolean') return `column.boolean('${field.name}')`
-  if (field.type === 'date' || field.type === 'datetime') return `column.dateTime('${field.name}')`
+  if (field.type === 'date' || field.type === 'datetime') return `column.text('${field.name}').dateTime()`
   if (field.type === 'number' || field.type === 'integer' || field.type === 'float' || field.type === 'decimal') {
-    return `column.number('${field.name}')`
+    return `column.text('${field.name}').number()`
   }
   return `column.text('${field.name}')`
 }
@@ -59,21 +59,21 @@ function resourceFiles(context: TemplateContext): readonly GeneratedFile[] {
   if (!context.split) {
     return [{
       path: `${directory}/${name}Resource.ts`,
-      contents: `import { column, defineResource, field } from '@holo-js/panels'\n${modelImportStatement}\n\nexport default defineResource(${name})\n  .shared()\n  .form([\n${formBody}\n  ])\n  .table([\n${tableBody}\n  ])\n`,
+      contents: `import { defineResource, defineSchema, defineTable } from '@holo-js/panels'\n${modelImportStatement}\n\nconst form = defineSchema(${name})\n  .fields(field => [\n${formBody}\n  ])\n\nconst table = defineTable(${name})\n  .columns(column => [\n${tableBody}\n  ])\n\nexport default defineResource(${name})\n  .form(form)\n  .table(table)\n`,
     }, ...relationManagers]
   }
   return [
     {
       path: `${directory}/${name}Resource.ts`,
-      contents: `import { defineResource } from '@holo-js/panels'\n${modelImportStatement}\nimport { ${name}Form } from './schemas/${name}Form'\nimport { ${plural}Table } from './tables/${plural}Table'\n\nexport default defineResource(${name})\n  .shared()\n  .form(${name}Form)\n  .table(${plural}Table)\n`,
+      contents: `import { defineResource } from '@holo-js/panels'\n${modelImportStatement}\nimport { ${name}Form } from './schemas/${name}Form'\nimport { ${plural}Table } from './tables/${plural}Table'\n\nexport default defineResource(${name})\n  .form(${name}Form)\n  .table(${plural}Table)\n`,
     },
     {
       path: `${directory}/schemas/${name}Form.ts`,
-      contents: `import { defineSchema, field } from '@holo-js/panels'\n${modelImportStatement}\n\nexport const ${name}Form = defineSchema(${name})\n  .fields([\n${formBody}\n  ])\n`,
+      contents: `import { defineSchema } from '@holo-js/panels'\n${modelImportStatement}\n\nexport const ${name}Form = defineSchema(${name})\n  .fields(field => [\n${formBody}\n  ])\n`,
     },
     {
       path: `${directory}/tables/${plural}Table.ts`,
-      contents: `import { column, defineTable } from '@holo-js/panels'\n${modelImportStatement}\n\nexport const ${plural}Table = defineTable(${name})\n  .columns([\n${tableBody}\n  ])\n`,
+      contents: `import { defineTable } from '@holo-js/panels'\n${modelImportStatement}\n\nexport const ${plural}Table = defineTable(${name})\n  .columns(column => [\n${tableBody}\n  ])\n`,
     },
     ...relationManagers,
   ]
@@ -108,6 +108,14 @@ function simpleDefinition(kind: SimpleKind, context: TemplateContext): Generated
       contents: `import { ${factory} } from '@holo-js/panels'\nimport ${resourceBuilder} from '~/server/${context.panel}/resources/${kebabCase(pluralPascal(resourceName))}/${resourceBuilder}'\n\nexport default ${factory}('${identifier}', ${resourceBuilder})\n`,
     }
   }
+  if (kind === 'form-field' || kind === 'infolist-entry' || kind === 'table-column' || kind === 'filter') {
+    const extensionKind = kind === 'form-field' ? 'field' : kind === 'infolist-entry' ? 'entry' : kind === 'table-column' ? 'column' : 'filter'
+    const extensionName = kebabCase(context.name.replace(/(?:Column|Entry|Field|Filter)$/u, ''))
+    return {
+      path: `server/${context.panel}/${directory}/${context.name}.ts`,
+      contents: `import { ${factory} } from '@holo-js/panels'\n\nexport default ${factory}('${identifier}', String)\n  .label('${context.name}')\n  .renderer('app:${extensionKind}:${extensionName}')\n`,
+    }
+  }
   return {
     path: `server/${context.panel}/${directory}/${context.name}.ts`,
     contents: `import { ${factory} } from '@holo-js/panels'\n\nexport default ${factory}('${identifier}')\n`,
@@ -135,13 +143,17 @@ function rendererFile(kind: SimpleKind, context: TemplateContext): GeneratedFile
   if (!context.framework || !['form-field', 'infolist-entry', 'table-column'].includes(kind)) return undefined
   const category = SIMPLE_DEFINITIONS[kind][0]
   const base = `resources/panels/renderers/${context.framework}/${category}/${context.name}`
+  const definitionImport = `~/server/${context.panel}/${category}/${context.name}`
+  const rendererKind = kind === 'form-field' ? 'Field' : kind === 'infolist-entry' ? 'Entry' : 'Column'
+  const valueExpression = kind === 'form-field' ? 'context.value' : kind === 'infolist-entry' ? 'entry.state' : 'value'
   if (context.framework === 'nuxt') {
-    return { path: `${base}.vue`, contents: `<script setup lang="ts">\ndefineProps<{ readonly value?: unknown }>()\n</script>\n\n<template>\n  <span>{{ value }}</span>\n</template>\n` }
+    return { path: `${base}.vue`, contents: `<script setup lang="ts">\nimport type { VueDefined${rendererKind}RendererProps } from '@holo-js/panels-vue'\nimport definition from '${definitionImport}'\n\ndefineProps<VueDefined${rendererKind}RendererProps<typeof definition>>()\n</script>\n\n<template>\n  <span>{{ ${valueExpression} }}</span>\n</template>\n` }
   }
   if (context.framework === 'sveltekit') {
-    return { path: `${base}.svelte`, contents: `<script lang="ts">\n  export let value: unknown = undefined\n</script>\n\n<span>{value}</span>\n` }
+    const svelteValue = kind === 'infolist-entry' ? 'entry.state' : 'value'
+    return { path: `${base}.svelte`, contents: `<script lang="ts">\n  import type { SvelteDefined${rendererKind}RendererProps } from '@holo-js/panels-svelte'\n  import definition from '${definitionImport}'\n\n  let { ${kind === 'infolist-entry' ? 'entry' : 'value'} }: SvelteDefined${rendererKind}RendererProps<typeof definition> = $props()\n</script>\n\n<span>{${svelteValue}}</span>\n` }
   }
-  return { path: `${base}.tsx`, contents: `export function ${context.name}(props: { readonly value?: unknown }) {\n  return <span>{String(props.value ?? '')}</span>\n}\n` }
+  return { path: `${base}.tsx`, contents: `import { defineReact${rendererKind}Renderer } from '@holo-js/panels-react'\nimport definition from '${definitionImport}'\n\nexport const ${context.name} = defineReact${rendererKind}Renderer(definition, props => (\n  <span>{String(props.${valueExpression} ?? '')}</span>\n))\n` }
 }
 
 export function renderTemplates(kind: string, context: TemplateContext): readonly GeneratedFile[] {

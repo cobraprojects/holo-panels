@@ -133,6 +133,10 @@ export function compilePanelTenancy<
       return Object.freeze({ id: tenant.id, routeKey: tenant.routeKey })
     },
     resolveQueuedValue: async (payload, scope) => (await runtime.resolveQueued(payload, scope)).tenant,
+    resolveRoute: async (routeKey, scope) => {
+      const tenant = await runtime.resolveRoute(routeKey, scope)
+      return Object.freeze({ id: tenant.id, routeKey: tenant.routeKey })
+    },
     queuedContextValue: async (payload, scope) => executionContext(
       await runtime.resolveQueued(payload, scope),
       scope,

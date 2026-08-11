@@ -95,7 +95,7 @@ The provider string is identity metadata, not client authority. The client may o
 All three adapters use the same fixed operation route shape:
 
 ```text
-/_holo/panels/[panelId]/[operation]
+/holo/panels/[panelId]/[operation]
 ```
 
 The route handler receives an explicit `panelIds` allow-list. It rejects an unknown panel ID or operation and verifies that the decoded request envelope has the same `panelId` and `operation` as the route. Mutations are CSRF-protected and request bodies are bounded before execution.
@@ -106,9 +106,9 @@ For multiple panels, add every served ID to the operation handler and create a s
 
 ## Next.js route setup
 
-Create the shared operation route at `app/%5Fholo/panels/[panelId]/[operation]/route.ts`:
+Create the shared operation route at `app/holo/panels/[panelId]/[operation]/route.ts`:
 
-The encoded filesystem segment is exposed by Next.js at `/_holo`, so clients continue to call `/_holo/panels/[panelId]/[operation]`.
+The clean `holo` filesystem segment is exposed by Next.js at `/holo`, matching the endpoint used by panel clients.
 
 ```ts
 import { createPanelOperationRoute } from '@holo-js/panels-next'
@@ -136,7 +136,7 @@ Repeat that page file under `app/reports/[[...panelsPath]]/page.tsx` and `app/ve
 
 ## Nuxt route setup
 
-Create the shared Nitro handler at `server/api/_holo/panels/[panelId]/[operation].ts`:
+Create the shared Nitro handler at `server/routes/holo/panels/[panelId]/[operation].ts`:
 
 ```ts
 import { createPanelOperationHandler } from '@holo-js/panels-nuxt'
@@ -166,7 +166,7 @@ Repeat the page for each additional panel and change only its fixed `panelId` an
 
 ## SvelteKit route setup
 
-Create the shared endpoint at `src/routes/_holo/panels/[panelId]/[operation]/+server.ts`:
+Create the shared endpoint at `src/routes/holo/panels/[panelId]/[operation]/+server.ts`:
 
 ```ts
 import { createPanelOperationHandler } from '@holo-js/panels-sveltekit'

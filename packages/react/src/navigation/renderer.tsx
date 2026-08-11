@@ -1,5 +1,6 @@
 import type { NavigationKey } from '@holo-js/panels-client'
 import { useEffect, type KeyboardEvent, type ReactNode } from 'react'
+import { ShadcnButton, ShadcnInput, ShadcnSelect } from '../internal-ui'
 import { usePanelsStore } from '../store'
 import type { ReactNavigationSearchRendererProps } from './types'
 
@@ -10,7 +11,7 @@ export function ReactNavigationSearchRenderer(props: ReactNavigationSearchRender
   const search = usePanelsStore({ subscribe: listener => props.search.subscribe(listener), getSnapshot: () => props.search.snapshot })
   useEffect(() => {
     const keydown = (event: globalThis.KeyboardEvent): void => {
-      if (!props.search.shortcut(event.key, { ctrl: event.ctrlKey, meta: event.metaKey })) return
+      if (!props.search.shortcut(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey })) return
       event.preventDefault()
     }
     globalThis.addEventListener?.('keydown', keydown)
@@ -30,15 +31,15 @@ export function ReactNavigationSearchRenderer(props: ReactNavigationSearchRender
     } else if (event.key === 'Escape') props.search.close()
   }
   return <div className={`hp-navigation-search hp-navigation-search--${navigation.manifest.layout}`} data-panels-component="navigation-search">
-    <button aria-expanded={navigation.menuOpen} aria-label="Toggle navigation" onClick={() => props.navigation.toggleMenu()} type="button">Menu</button>
-    {navigation.manifest.panels.length > 1 ? <label>Panel<select aria-label="Panel" onChange={event => props.onNavigate?.(props.navigation.switchPanel(event.currentTarget.value))} value={navigation.manifest.panelId}>{navigation.manifest.panels.map(panel => <option key={panel.id} value={panel.id}>{panel.label}</option>)}</select></label> : null}
+    <ShadcnButton aria-expanded={navigation.menuOpen} aria-label="Toggle navigation" onClick={() => props.navigation.toggleMenu()} type="button">Menu</ShadcnButton>
+    {navigation.manifest.panels.length > 1 ? <label>Panel<ShadcnSelect aria-label="Panel" onChange={event => props.onNavigate?.(props.navigation.switchPanel(event.currentTarget.value))} value={navigation.manifest.panelId}>{navigation.manifest.panels.map(panel => <option key={panel.id} value={panel.id}>{panel.label}</option>)}</ShadcnSelect></label> : null}
     <nav aria-label="Panel navigation" hidden={!navigation.menuOpen && navigation.manifest.layout === 'sidebar'} onKeyDown={keyNavigation}>
-      {navigation.manifest.groups.map(group => <button aria-expanded={!navigation.collapsedGroups.has(group.id)} key={group.id} onClick={() => props.navigation.toggleGroup(group.id)} type="button">{group.label}</button>)}
-      {navigation.manifest.clusters.map(cluster => <button aria-expanded={!navigation.collapsedClusters.has(cluster.id)} key={cluster.id} onClick={() => props.navigation.toggleCluster(cluster.id)} type="button">{cluster.label}</button>)}
+      {navigation.manifest.groups.map(group => <ShadcnButton aria-expanded={!navigation.collapsedGroups.has(group.id)} key={group.id} onClick={() => props.navigation.toggleGroup(group.id)} type="button">{group.label}</ShadcnButton>)}
+      {navigation.manifest.clusters.map(cluster => <ShadcnButton aria-expanded={!navigation.collapsedClusters.has(cluster.id)} key={cluster.id} onClick={() => props.navigation.toggleCluster(cluster.id)} type="button">{cluster.label}</ShadcnButton>)}
       <ul>{props.navigation.visibleItems.map(item => <li data-cluster={item.cluster} data-group={item.group} data-parent={item.parent} key={item.id}><a aria-current={item.id === navigation.focusedItemId || item.active ? 'page' : undefined} href={item.path} onClick={event => { if (props.onNavigate) { event.preventDefault(); props.onNavigate(item.path) } }} tabIndex={item.id === navigation.focusedItemId ? 0 : -1}>{item.icon ? <span aria-hidden="true" data-icon={item.icon} /> : null}{item.label}{item.badge ? <span>{item.badge}</span> : null}{item.variant ? <small>{item.variant}</small> : null}</a></li>)}</ul>
     </nav>
     <div className="hp-global-search" role="search">
-      <label>Global search<input aria-controls="hp-global-search-results" aria-expanded={search.open} onChange={event => props.search.input(event.currentTarget.value)} onFocus={() => props.search.shortcut('k', { ctrl: true, meta: false })} onKeyDown={keySearch} placeholder="Search…" role="combobox" value={search.term} /></label>
+      <label>Global search<ShadcnInput aria-controls="hp-global-search-results" aria-expanded={search.open} onChange={event => props.search.input(event.currentTarget.value)} onFocus={() => props.search.open()} onKeyDown={keySearch} placeholder="Search…" role="combobox" value={search.term} /></label>
       <kbd>⌘/Ctrl K</kbd>
       {search.loading ? <span aria-live="polite" role="status">Searching…</span> : null}
       {search.error ? <span role="alert">{search.error}</span> : null}

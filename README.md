@@ -2,7 +2,7 @@
 
 Holo Panels is the official resource-driven panel plugin for Holo-JS. It is developed in this separate repository, in the same way that Filament is developed separately from Laravel while building on Laravel's services and conventions.
 
-The workspace contains the core runtime, client, UI, framework renderers and adapters, CLI integration, testing helpers, and optional Shield package. The complete `0.1.0-next.0` package family is published on npm with the `next` tag, and Phase P17 is complete.
+The workspace contains the core runtime, client, UI, framework renderers and adapters, CLI integration, testing helpers, and optional Shield package. The complete `0.1.0-next.0` package family is published on npm with the `next` tag. The corrected `0.1.0-next.1` lockstep candidate is validated locally; Phase P17 remains open until that candidate is published and passes the registry lifecycle.
 
 ## Intended integration
 

@@ -31,6 +31,7 @@ export type {
   OptionValue,
 } from './fields/options/contracts'
 export type {
+  FinalizedUploadResult,
   StoredUploadDescriptor,
   TemporaryUploadDescriptor,
   UploadActorContext,

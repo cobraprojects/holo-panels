@@ -23,7 +23,7 @@ async function createFixture() {
     private: true,
     workspaces: {
       catalog: {
-        '@holo-js/kernel': '^0.3.10',
+        '@holo-js/kernel': '>=0.3.9',
         typescript: '^5.7.2',
       },
     },
@@ -67,8 +67,8 @@ test('release manifest resolution materializes catalog and workspace ranges', ()
       typescript: 'catalog:',
     },
   }, {
-    '@holo-js/forms': '^0.3.10',
-    '@holo-js/kernel': '^0.3.10',
+    '@holo-js/forms': '>=0.3.9',
+    '@holo-js/kernel': '>=0.3.9',
     typescript: '^5.7.2',
   }, new Map([
     ['@holo-js/panels', '0.1.0-next.0'],
@@ -78,14 +78,14 @@ test('release manifest resolution materializes catalog and workspace ranges', ()
 
   assert.deepEqual(manifest.dependencies, {
     '@holo-js/panels-core': '0.1.0-next.0',
-    '@holo-js/kernel': '^0.3.10',
+    '@holo-js/kernel': '>=0.3.9',
     external: '^1.2.3',
   })
   assert.deepEqual(manifest.optionalDependencies, {
     '@holo-js/panels-renderer': '0.1.0-next.1',
   })
   assert.deepEqual(manifest.peerDependencies, {
-    '@holo-js/forms': '^0.3.10',
+    '@holo-js/forms': '>=0.3.9',
   })
   assert.deepEqual(manifest.devDependencies, {
     typescript: '^5.7.2',
@@ -102,7 +102,7 @@ test('release manifest transaction restores exact source contents after success'
   const result = await withResolvedReleaseManifests(async () => {
     const core = JSON.parse(await readFile(corePath, 'utf8'))
     const panels = JSON.parse(await readFile(panelsPath, 'utf8'))
-    assert.equal(core.peerDependencies['@holo-js/kernel'], '^0.3.10')
+    assert.equal(core.peerDependencies['@holo-js/kernel'], '>=0.3.9')
     assert.equal(core.devDependencies.typescript, '^5.7.2')
     assert.equal(panels.dependencies['@holo-js/panels-core'], '0.1.0-next.0')
     return 'released'
@@ -124,7 +124,7 @@ test('release manifest transaction restores exact source contents after callback
     withResolvedReleaseManifests(async () => {
       assert.equal(
         JSON.parse(await readFile(corePath, 'utf8')).peerDependencies['@holo-js/kernel'],
-        '^0.3.10',
+        '>=0.3.9',
       )
       throw new Error('publication failed')
     }, { root }),

@@ -2,6 +2,8 @@ import type {
   ClientTransferManifest,
   ClientTransferTransport,
   FilterCollectionPresentation,
+  FormPath,
+  FormValueAtPath,
   TableRecordId,
   TableSelectionPayload,
   TableStateStore,
@@ -10,6 +12,12 @@ import type { ReactNode } from 'react'
 import type { ComponentRegistry } from '../registry'
 import type { JsonValue } from '@holo-js/panels-client'
 
+export type ReactTableColumnPath<TRecord extends object> = [FormPath<TRecord>] extends [never] ? string : FormPath<TRecord>
+
+export type ReactTableColumnValue<TRecord extends object, TPath extends ReactTableColumnPath<TRecord>> = TPath extends FormPath<TRecord>
+  ? FormValueAtPath<TRecord, TPath>
+  : unknown
+
 export interface ReactTableColumnManifest {
   readonly alignment: 'center' | 'end' | 'start'
   readonly copyable: boolean
@@ -17,7 +25,9 @@ export interface ReactTableColumnManifest {
   readonly hidden: boolean
   readonly inlineEditor: Readonly<Record<string, unknown>> | null
   readonly label: string | null
+  readonly lineClamp?: number | null
   readonly path: string
+  readonly searchable?: boolean
   readonly sortable: boolean
   readonly toggleable: boolean
   readonly type: string
@@ -25,15 +35,22 @@ export interface ReactTableColumnManifest {
   readonly wrap: boolean
 }
 
-export interface ReactTableColumn<TRecord extends object> {
+export interface ReactTableColumn<
+  TRecord extends object,
+  TPath extends ReactTableColumnPath<TRecord> = ReactTableColumnPath<TRecord>,
+> {
   readonly manifest: ReactTableColumnManifest
-  readonly render?: (value: unknown, record: Readonly<TRecord>) => ReactNode
+  readonly render?: (value: ReactTableColumnValue<TRecord, TPath>, record: Readonly<TRecord>) => ReactNode
+  readonly url?: (record: Readonly<TRecord>) => string | null
 }
 
-export interface ReactCustomColumnProps<TRecord extends object> extends Readonly<Record<string, unknown>> {
-  readonly column: ReactTableColumn<TRecord>
+export interface ReactCustomColumnProps<
+  TRecord extends object,
+  TPath extends ReactTableColumnPath<TRecord> = ReactTableColumnPath<TRecord>,
+> extends Readonly<Record<string, unknown>> {
+  readonly column: ReactTableColumn<TRecord, TPath>
   readonly record: Readonly<TRecord>
-  readonly value: unknown
+  readonly value: ReactTableColumnValue<TRecord, TPath>
 }
 
 export interface ReactTableFilterOption {
@@ -69,10 +86,13 @@ export interface ReactFilterCollectionSlotProps {
 }
 
 export interface ReactTableAction {
+  readonly color?: string | null
   readonly confirmation?: string
+  readonly icon?: string | null
   readonly id: string
   readonly label: string
   readonly scope: 'bulk' | 'header' | 'row'
+  readonly url?: (recordId: TableRecordId) => string
 }
 
 export interface ReactTableActionRequest<TRecordId extends TableRecordId> {

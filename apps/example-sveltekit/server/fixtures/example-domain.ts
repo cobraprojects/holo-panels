@@ -1,4 +1,4 @@
-import type { ExampleAdminActor, ExampleRoleKey } from '../admin/access'
+import type { ExampleAdminActor, ExampleRoleKey } from './access'
 
 export const exampleTenants = Object.freeze([
   { id: 'tenant-acme', name: 'Acme', routeKey: 'acme' },
@@ -63,14 +63,14 @@ export const examplePosts = Object.freeze([
 ])
 
 export const examplePostTags = Object.freeze([
-  { createdAt, id: 'post-tag-post-acme-panels-tag-acme-holo', postId: 'post-acme-panels', tagId: 'tag-acme-holo', tenantId: 'tenant-acme', updatedAt },
-  { createdAt, id: 'post-tag-post-acme-panels-tag-acme-typescript', postId: 'post-acme-panels', tagId: 'tag-acme-typescript', tenantId: 'tenant-acme', updatedAt },
-  { createdAt, id: 'post-tag-post-acme-release-tag-acme-holo', postId: 'post-acme-release', tagId: 'tag-acme-holo', tenantId: 'tenant-acme', updatedAt },
-  { createdAt, id: 'post-tag-post-acme-draft-tag-acme-tutorial', postId: 'post-acme-draft', tagId: 'tag-acme-tutorial', tenantId: 'tenant-acme', updatedAt },
-  { createdAt, id: 'post-tag-post-globex-platform-tag-globex-holo', postId: 'post-globex-platform', tagId: 'tag-globex-holo', tenantId: 'tenant-globex', updatedAt },
-  { createdAt, id: 'post-tag-post-globex-platform-tag-globex-typescript', postId: 'post-globex-platform', tagId: 'tag-globex-typescript', tenantId: 'tenant-globex', updatedAt },
-  { createdAt, id: 'post-tag-post-globex-roadmap-tag-globex-tutorial', postId: 'post-globex-roadmap', tagId: 'tag-globex-tutorial', tenantId: 'tenant-globex', updatedAt },
-  { createdAt, id: 'post-tag-post-globex-draft-tag-globex-holo', postId: 'post-globex-draft', tagId: 'tag-globex-holo', tenantId: 'tenant-globex', updatedAt },
+  { createdAt, id: 'post-tag-post-acme-panels-tag-acme-holo', position: 1, postId: 'post-acme-panels', tagId: 'tag-acme-holo', tenantId: 'tenant-acme', updatedAt },
+  { createdAt, id: 'post-tag-post-acme-panels-tag-acme-typescript', position: 2, postId: 'post-acme-panels', tagId: 'tag-acme-typescript', tenantId: 'tenant-acme', updatedAt },
+  { createdAt, id: 'post-tag-post-acme-release-tag-acme-holo', position: 1, postId: 'post-acme-release', tagId: 'tag-acme-holo', tenantId: 'tenant-acme', updatedAt },
+  { createdAt, id: 'post-tag-post-acme-draft-tag-acme-tutorial', position: 1, postId: 'post-acme-draft', tagId: 'tag-acme-tutorial', tenantId: 'tenant-acme', updatedAt },
+  { createdAt, id: 'post-tag-post-globex-platform-tag-globex-holo', position: 1, postId: 'post-globex-platform', tagId: 'tag-globex-holo', tenantId: 'tenant-globex', updatedAt },
+  { createdAt, id: 'post-tag-post-globex-platform-tag-globex-typescript', position: 2, postId: 'post-globex-platform', tagId: 'tag-globex-typescript', tenantId: 'tenant-globex', updatedAt },
+  { createdAt, id: 'post-tag-post-globex-roadmap-tag-globex-tutorial', position: 1, postId: 'post-globex-roadmap', tagId: 'tag-globex-tutorial', tenantId: 'tenant-globex', updatedAt },
+  { createdAt, id: 'post-tag-post-globex-draft-tag-globex-holo', position: 1, postId: 'post-globex-draft', tagId: 'tag-globex-holo', tenantId: 'tenant-globex', updatedAt },
 ])
 
 export const exampleComments = Object.freeze([

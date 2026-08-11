@@ -1,9 +1,9 @@
 import type { Component } from 'svelte'
 import { rendererRegistryName, type ExtensionTypeId, type RegistryKind } from '@holo-js/panels-client'
 
-export type SveltePanelComponent<TProperties extends Record<string, unknown> = Record<string, unknown>> = Component<TProperties>
+export type SveltePanelComponent<TProperties extends object = Record<string, unknown>> = Component<TProperties>
 
-export interface SvelteComponentRegistration<TProperties extends Record<string, unknown> = Record<string, unknown>> {
+export interface SvelteComponentRegistration<TProperties extends object = Record<string, unknown>> {
   readonly component: SveltePanelComponent<TProperties>
   readonly source: string
   readonly typeId: string
@@ -31,7 +31,7 @@ export class SvelteComponentRegistry {
   readonly #components = new Map<string, StoredSvelteComponentRegistration>()
   readonly #overrides = new Map<string, Map<string, StoredSvelteComponentRegistration>>()
 
-  register<TProperties extends Record<string, unknown>>(
+  register<TProperties extends object>(
     registration: SvelteComponentRegistration<TProperties>,
   ): () => void {
     assertIdentifier(registration.typeId, 'Svelte component type ID')
@@ -42,7 +42,7 @@ export class SvelteComponentRegistry {
     return () => this.#components.delete(registration.typeId)
   }
 
-  override<TProperties extends Record<string, unknown>>(
+  override<TProperties extends object>(
     panelId: string,
     registration: SvelteComponentRegistration<TProperties>,
   ): () => void {
@@ -64,7 +64,7 @@ export class SvelteComponentRegistry {
     return (panelId ? this.#overrides.get(panelId)?.has(typeId) : false) || this.#components.has(typeId)
   }
 
-  resolve<TProperties extends Record<string, unknown>>(
+  resolve<TProperties extends object>(
     typeId: string,
     panelId?: string,
     requestedFrom = 'compiled panel schema',
@@ -79,7 +79,7 @@ export class SvelteComponentRegistry {
   }
 }
 
-export function registerSvelteExtensionRenderer<TProperties extends Record<string, unknown>>(
+export function registerSvelteExtensionRenderer<TProperties extends object>(
   registry: SvelteComponentRegistry,
   kind: RegistryKind,
   typeId: ExtensionTypeId,

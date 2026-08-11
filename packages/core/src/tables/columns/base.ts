@@ -55,6 +55,7 @@ export abstract class ColumnBuilder<
   TPath extends RecordPath<TRecord>,
   TType extends string,
 > extends ConstructionBuilder<ColumnState<TRecord, TPath>, CompiledColumnDefinition<TRecord, TPath, TType>> {
+  declare readonly resourceRecordType: TRecord
   readonly #type: TType
 
   protected constructor(type: TType, path: TPath) {

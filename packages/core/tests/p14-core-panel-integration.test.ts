@@ -107,7 +107,7 @@ describe('P14 core panel integration', () => {
       routeKey: tenant => tenant.slug,
     }).presentActor(actor => ({ id: actor.id })).compile()
 
-    expect(panel.manifest.tenancy).toEqual({ enabled: true })
+    expect(panel.manifest.tenancy).toMatchObject({ enabled: true, menu: true, switcher: true })
     expect(JSON.stringify(panel.manifest)).not.toContain('model-secret')
     const payload = (await new PanelRuntime(auth({ id: 'actor-1' }), [panel]).bootstrap(['admin'], signal))[0]
     expectTypeOf(payload?.tenancy).toEqualTypeOf<Readonly<PanelTenantBootstrap> | null | undefined>()

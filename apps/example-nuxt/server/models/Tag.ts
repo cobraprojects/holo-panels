@@ -1,4 +1,4 @@
-import { column, defineGeneratedTable, defineModel } from '@holo-js/db'
+import { column, defineGeneratedTable, defineModel, HasUlids } from '@holo-js/db'
 
 const tags = defineGeneratedTable('tags', {
   id: column.string().primaryKey(),
@@ -11,4 +11,5 @@ export default defineModel(tags, {
   fillable: ['name', 'slug'],
   guarded: ['id', 'tenantId'],
   timestamps: true,
+  traits: [HasUlids()],
 })

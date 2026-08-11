@@ -5,9 +5,10 @@ import {
   PROTOCOL_VERSION,
   TransportDecodingError,
   type Effect,
+  type CompiledPanelDefinition,
   type JsonValue,
   type ResponseEnvelope,
-} from '@holo-js/panels-svelte'
+} from '@holo-js/panels-svelte/server'
 import { error, redirect } from '@sveltejs/kit'
 import { csrfProtection } from '@holo-js/security/sveltekit/server'
 import {
@@ -16,9 +17,12 @@ import {
   decodeTransportServerRequest,
   executePanelAuthOperation,
   executePanelTenantOperation,
+  bootPanel,
+  panelErrorNotificationEffect,
   PanelTenantOperationError,
   panelAuthOperationStatus,
   panelTenantOperationStatus,
+  resolvePanelRoute,
   type PanelAuthOperation,
   type PanelAuthRuntime,
   type PanelTenantOperation,
@@ -26,18 +30,24 @@ import {
 import type {
   CreatePanelOperationHandlerOptions,
   CreatePanelPageLoadOptions,
+  CreateSvelteKitPanelRouteOptions,
   PanelOperation,
   PanelOperationResult,
   PanelPageData,
   SvelteKitPanelEvent,
   SvelteKitPanelOperationHandler,
+  SvelteKitPanelRouteHandler,
   SvelteKitPanelRegistry,
 } from './contracts'
+import { type InternalSvelteKitPanelRegistry, panelResolver } from './internal-registry'
+
+export { createGeneratedSvelteKitPanelsRegistry } from './generated-registry'
 
 const PANEL_ID = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
-const OPERATIONS = new Set<PanelOperation>(['action', 'bootstrap', 'form-submit', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload'])
+const OPERATIONS = new Set<PanelOperation>(['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload'])
 const TENANT_OPERATIONS = new Set<PanelTenantOperation>(['profile-read', 'profile-update', 'register', 'switch'])
 const MAX_REQUEST_BYTES = 1024 * 1024
+const MAX_UPLOAD_REQUEST_BYTES = 64 * 1024 * 1024
 const MAX_RESPONSE_BYTES = 4_194_304
 const RESPONSE_HEADERS = Object.freeze({ 'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8' })
 const holo = createSvelteKitHoloHelpers()
@@ -60,7 +70,7 @@ function decodedSessionEffects(value: unknown): readonly Effect[] {
       id: 'session-effects',
       ok: true,
       protocolVersion: PROTOCOL_VERSION,
-    }, 'session-effects').effects.filter(effect => effect.kind === 'toast'))
+    }, 'session-effects').effects.filter((effect: Effect) => effect.kind === 'toast'))
   } catch {
     return Object.freeze([])
   }
@@ -113,8 +123,8 @@ function safeLocalPath(path: string, label: string): string {
   return path
 }
 
-function registryFor<TActor>(event: SvelteKitPanelEvent, configured: SvelteKitPanelRegistry<TActor> | undefined): SvelteKitPanelRegistry<TActor> {
-  const registry = configured ?? event.locals.panels as SvelteKitPanelRegistry<TActor> | undefined
+function registryFor<TActor, TTenant>(event: SvelteKitPanelEvent, configured: SvelteKitPanelRegistry<TActor, TTenant> | undefined): SvelteKitPanelRegistry<TActor, TTenant> {
+  const registry = configured ?? event.locals.panels as SvelteKitPanelRegistry<TActor, TTenant> | undefined
   if (!registry) throw new Error('Holo Panels registry is unavailable. Run `holo prepare` and expose the generated registry through event.locals.panels.')
   return registry
 }
@@ -145,6 +155,9 @@ function errorCode(cause: unknown): string | undefined {
 function translatePageError(cause: unknown, loginPath: string): never {
   const code = errorCode(cause)
   if (code === 'unauthenticated') redirect(303, loginPath)
+  if (code === 'subscription-required' && typeof cause === 'object' && cause !== null && typeof Reflect.get(cause, 'billingPath') === 'string') {
+    redirect(303, String(Reflect.get(cause, 'billingPath')))
+  }
   if (code === 'panel-not-found') error(404, 'Panel not found')
   if (code === 'access-denied' || cause instanceof Error && cause.name === 'PageAccessError') error(403, 'Panel access denied')
   throw cause
@@ -158,12 +171,17 @@ function operationFrom(event: SvelteKitPanelEvent): PanelOperation {
 
 function statusFor(cause: unknown): number {
   const code = errorCode(cause)
+  const name = cause instanceof Error ? cause.name : ''
   if (code === 'unauthenticated') return 401
   if (code === 'panel-not-found') return 404
   if (code === 'access-denied') return 403
+  if (code === 'subscription-required') return 402
   if (cause instanceof TransportDecodingError) return 400
   if (cause instanceof Error && cause.name === 'PanelNotificationAccessError') return 403
   if (cause instanceof Error && cause.name === 'PanelNotificationRequestError') return 400
+  if (name === 'ResourceRecordNotFoundError' || name === 'RelationRecordNotFoundError') return 404
+  if (name === 'ResourceInputError' || name === 'RelationInputError' || name === 'RelationPivotInputError' || name === 'RelationListPaginationError') return 422
+  if (name === 'RelationOperationNotAllowedError') return 403
   if (typeof cause === 'object' && cause !== null) {
     const status = Reflect.get(cause, 'status') ?? Reflect.get(cause, 'statusCode')
     if (typeof status === 'number' && Number.isInteger(status) && status >= 400 && status <= 599) return status
@@ -179,8 +197,10 @@ function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[]
   return decodeResponseEnvelope({ data, effects, id, ok: true, protocolVersion: PROTOCOL_VERSION }, id)
 }
 
-function errorEnvelope(id: string, cause: unknown, status: number): Readonly<ResponseEnvelope> {
-  const effects = cause instanceof ActionExecutionError ? cause.effects : []
+function errorEnvelope(id: string, cause: unknown, status: number, panel?: CompiledPanelDefinition<object>): Readonly<ResponseEnvelope> {
+  const actionEffects = cause instanceof ActionExecutionError ? (cause as { readonly effects: readonly Effect[] }).effects : []
+  const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status) : null
+  const effects = notification ? [...actionEffects, notification] : actionEffects
   return decodeResponseEnvelope({ effects, error: normalizeTransportError(cause, status), id, ok: false, protocolVersion: PROTOCOL_VERSION }, id)
 }
 
@@ -220,15 +240,15 @@ function envelopeResponse(envelope: Readonly<ResponseEnvelope>, status: number):
 class PanelRequestSizeError extends Error {
   readonly status = 413
 
-  constructor() {
-    super('Panel request body exceeds 1 MiB')
+  constructor(maximumBytes = MAX_REQUEST_BYTES) {
+    super(`Panel request body exceeds ${maximumBytes} bytes`)
     this.name = 'PanelRequestSizeError'
   }
 }
 
-async function boundedBody(request: Request): Promise<Uint8Array> {
+async function boundedBody(request: Request, maximumBytes = MAX_REQUEST_BYTES): Promise<Uint8Array> {
   const declaredLength = request.headers.get('content-length')
-  if (declaredLength && /^\d+$/u.test(declaredLength) && Number(declaredLength) > MAX_REQUEST_BYTES) throw new PanelRequestSizeError()
+  if (declaredLength && /^\d+$/u.test(declaredLength) && Number(declaredLength) > maximumBytes) throw new PanelRequestSizeError(maximumBytes)
   if (!request.body) return new Uint8Array()
   const reader = request.body.getReader()
   const chunks: Uint8Array[] = []
@@ -237,9 +257,9 @@ async function boundedBody(request: Request): Promise<Uint8Array> {
     const result = await reader.read()
     if (result.done) break
     length += result.value.byteLength
-    if (length > MAX_REQUEST_BYTES) {
+    if (length > maximumBytes) {
       await reader.cancel()
-      throw new PanelRequestSizeError()
+      throw new PanelRequestSizeError(maximumBytes)
     }
     chunks.push(result.value)
   }
@@ -256,7 +276,7 @@ function requestWithBody(request: Request, body: Uint8Array): Request {
   return new Request(request, { body: body.byteLength > 0 ? body.buffer as ArrayBuffer : undefined })
 }
 
-export function createPanelPageLoad<TActor = unknown>(options: CreatePanelPageLoadOptions<TActor>): (event: SvelteKitPanelEvent) => Promise<PanelPageData> {
+export function createPanelPageLoad<TActor = unknown, TTenant = unknown>(options: CreatePanelPageLoadOptions<TActor, TTenant>): (event: SvelteKitPanelEvent) => Promise<PanelPageData> {
   assertPanelId(options.panelId)
   const loginPath = safeLocalPath(options.loginPath ?? '/login', 'Panel login paths')
   return event => runWithSvelteKitRequestEvent(event, async () => {
@@ -266,18 +286,40 @@ export function createPanelPageLoad<TActor = unknown>(options: CreatePanelPageLo
       const bootstraps = await registry.runtime.bootstrap([options.panelId], signal)
       const panel = bootstraps[0]
       if (!panel || panel.manifest.id !== options.panelId) error(404, 'Panel not found')
+      const routing = panel.manifest.routing
+      const hosts = routing ? [...routing.domains, ...(routing.domain === null ? [] : [routing.domain])] : []
+      if (hosts.length > 0 && !hosts.includes(event.url.hostname.toLowerCase())) error(404, 'Panel not found')
+      const requestedPath = panelPath(event, panel.manifest.path)
+      if (requestedPath === panel.manifest.tenancy?.billing?.path) {
+        const billing = registry.panels?.[options.panelId]?.server.tenancy?.billing
+        if (!billing) error(404, 'Tenant billing provider not found')
+        const response = await registry.runtime.execute(options.panelId, 'bootstrap', signal, scope => {
+          const action = billing.getRouteAction()
+          if (typeof action !== 'function') throw new TypeError('Panel tenant billing providers must return a route action function')
+          return action(event.request, scope)
+        })
+        const location = response.headers.get('location')
+        if (location && response.status >= 300 && response.status < 400) redirect(response.status === 301 || response.status === 308 ? 308 : 303, location)
+        error(response.ok ? 502 : response.status, 'Tenant billing providers must return a redirect response')
+      }
       const resolved = await registry.runtime.execute(options.panelId, 'page-data', signal, async scope => ({
         effects: await takeSessionEffects(scope.guard, options.panelId),
-        page: await registry.resolvePage({
-          event,
-          holo,
-          panelId: options.panelId,
-          parameters: routeParameters(event),
-          path: panelPath(event, panel.manifest.path),
-          scope,
-        }),
+        ...await (async () => {
+          const input = {
+            event,
+            holo,
+            panelId: options.panelId,
+            parameters: routeParameters(event),
+            path: requestedPath,
+            scope,
+            tenant: await registry.resolveTenant?.(event),
+          }
+          const page = await registry.resolvePage(input)
+          const widgets = await registry.resolveWidgets?.({ ...input, page }) ?? { footer: [], header: [] }
+          return { page, widgets }
+        })(),
       }))
-      return Object.freeze({ effects: resolved.effects, panel, page: resolved.page })
+      return Object.freeze({ effects: resolved.effects, panel, page: resolved.page, widgets: resolved.widgets })
     } catch (cause) {
       return translatePageError(cause, loginPath)
     }
@@ -286,10 +328,11 @@ export function createPanelPageLoad<TActor = unknown>(options: CreatePanelPageLo
 
 type DecodedPanelRequest = Awaited<ReturnType<typeof decodeTransportServerRequest<JsonValue>>>
 
-async function executeOperation<TActor>(event: SvelteKitPanelEvent, options: CreatePanelOperationHandlerOptions<TActor>, method: 'GET' | 'POST', decoded: DecodedPanelRequest | undefined, decodingError: unknown): Promise<Response> {
+async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, options: CreatePanelOperationHandlerOptions<TActor, TTenant>, method: 'GET' | 'POST', decoded: DecodedPanelRequest | undefined, decodingError: unknown): Promise<Response> {
   return runWithSvelteKitRequestEvent(event, async () => {
     let guard: SessionEffectGuard | undefined
     let panelId: string | undefined
+    let configuredPanel: CompiledPanelDefinition<object> | undefined
     let id = requestId()
     try {
       if (method !== 'POST') return envelopeResponse(errorEnvelope(id, new Error('Panel transport operations require POST'), 405), 405)
@@ -301,6 +344,11 @@ async function executeOperation<TActor>(event: SvelteKitPanelEvent, options: Cre
       const operation = operationFrom(event)
       if (decoded.envelope.operation !== operation) throw new TransportDecodingError('Request operation does not match its route.')
       const registry = registryFor(event, options.registry)
+      const registeredPanel = registry.panels?.[panelId]
+      configuredPanel = registeredPanel as CompiledPanelDefinition<object> | undefined
+      const routing = registeredPanel?.manifest.routing
+      const hosts = routing ? [...routing.domains, ...(routing.domain === null ? [] : [routing.domain])] : []
+      if (hosts.length > 0 && !hosts.includes(event.url.hostname.toLowerCase())) throw Object.assign(new Error('Panel not found'), { status: 404 })
       const handler = registry.operations?.[operation]
       if (!handler) throw Object.assign(new Error('Panel operation not found'), { status: 404 })
       const result: PanelOperationResult = await registry.runtime.execute(panelId, operation, requestSignal(event.request), async scope => {
@@ -313,6 +361,7 @@ async function executeOperation<TActor>(event: SvelteKitPanelEvent, options: Cre
           panelId: panelId!,
           payload: decoded.envelope.payload,
           scope,
+          tenant: await registry.resolveTenant?.(event),
         })
       })
       const status = result.status ?? 200
@@ -323,14 +372,14 @@ async function executeOperation<TActor>(event: SvelteKitPanelEvent, options: Cre
       return serialized
     } catch (cause) {
       const status = statusFor(cause)
-      const response = errorEnvelope(id, cause, status)
+      const response = errorEnvelope(id, cause, status, configuredPanel)
       if (panelId) await flashRedirectToasts(guard, panelId, response.effects)
       return envelopeResponse(response, status)
     }
   })
 }
 
-export function createPanelOperationHandler<TActor = unknown>(options: CreatePanelOperationHandlerOptions<TActor>): SvelteKitPanelOperationHandler {
+export function createPanelOperationHandler<TActor = unknown, TTenant = unknown>(options: CreatePanelOperationHandlerOptions<TActor, TTenant>): SvelteKitPanelOperationHandler {
   if (options.panelIds.length === 0) throw new Error('Panel operation routes require at least one panel ID')
   for (const panelId of options.panelIds) assertPanelId(panelId)
   if (new Set(options.panelIds).size !== options.panelIds.length) throw new Error('Panel operation route IDs must be unique')
@@ -339,7 +388,7 @@ export function createPanelOperationHandler<TActor = unknown>(options: CreatePan
   const handle = (method: 'GET' | 'POST') => async (event: SvelteKitPanelEvent): Promise<Response> => {
     let body: Uint8Array
     try {
-      body = method === 'POST' ? await boundedBody(event.request) : new Uint8Array()
+      body = method === 'POST' ? await boundedBody(event.request, event.params.operation === 'upload' ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES) : new Uint8Array()
     } catch (cause) {
       const status = statusFor(cause)
       return envelopeResponse(errorEnvelope(requestId(), cause, status), status)
@@ -351,7 +400,7 @@ export function createPanelOperationHandler<TActor = unknown>(options: CreatePan
         if (method !== 'POST') return executeOperation(boundedEvent, fixedOptions, method, undefined, undefined)
         const decodedEvent = { ...boundedEvent, request: requestWithBody(event.request, body) }
         try {
-          const decoded = await decodeTransportServerRequest<JsonValue>(decodedEvent.request)
+          const decoded = await decodeTransportServerRequest<JsonValue>(decodedEvent.request.clone())
           return executeOperation(decodedEvent, fixedOptions, method, decoded, undefined)
         } catch (cause) {
           return executeOperation(decodedEvent, fixedOptions, method, undefined, cause)
@@ -364,10 +413,44 @@ export function createPanelOperationHandler<TActor = unknown>(options: CreatePan
   return Object.freeze({ GET: handle('GET'), POST: handle('POST') })
 }
 
+export function createGeneratedSvelteKitPanelRoute<TActor, TTenant>(options: CreateSvelteKitPanelRouteOptions<TActor, TTenant>): SvelteKitPanelRouteHandler {
+  assertPanelId(options.panelId)
+  const csrf = csrfProtection()
+  const handle = async (event: SvelteKitPanelEvent): Promise<Response> => runWithSvelteKitRequestEvent(event, async () => {
+    try {
+      const registry = registryFor(event, options.registry)
+      const internal = registry as InternalSvelteKitPanelRegistry<TActor, TTenant>
+      const panel = registry.panels?.[options.panelId] ?? await internal[panelResolver]?.(options.panelId)
+      if (!panel) throw Object.assign(new Error('Panel not found'), { status: 404 })
+      const resolved = resolvePanelRoute(panel, event.request)
+      if (!resolved) throw Object.assign(new Error('Panel custom route not found'), { status: 404 })
+      const execute = async (): Promise<Response> => {
+        if (resolved.definition.scope === 'public' || resolved.definition.scope === 'tenant') {
+          await bootPanel(panel)
+          return await resolved.definition.handler(event.request)
+        }
+        return await registry.runtime.execute(options.panelId, 'route', event.request.signal, async scope => {
+          if (resolved.definition.scope === 'authenticated-tenant') {
+            const tenantKey = resolved.parameters.tenant
+            if (!tenantKey || !panel.server.tenancy) throw Object.assign(new Error('Tenant not found'), { status: 404 })
+            await panel.server.tenancy.resolveRoute(tenantKey, scope)
+          }
+          return await resolved.definition.handler(event.request)
+        })
+      }
+      if (event.request.method === 'GET') return await execute()
+      return await csrf({ event, resolve: execute })
+    } catch (cause) {
+      return nativeFailure(cause)
+    }
+  })
+  return Object.freeze({ DELETE: handle, GET: handle, PATCH: handle, POST: handle, PUT: handle })
+}
+
 const AUTH_OPERATIONS = new Set<PanelAuthOperation>([
   'email-verification-resend', 'email-verification-verify', 'login', 'logout', 'mfa-challenge', 'mfa-disable',
   'mfa-enrollment-begin', 'mfa-enrollment-confirm', 'mfa-recovery', 'mfa-recovery-codes-regenerate', 'mfa-status',
-  'password-reset-request', 'password-reset', 'profile-read', 'profile-update',
+  'password-reset-request', 'password-reset', 'profile-read', 'profile-update', 'registration',
 ])
 const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'profile-read'])
 
@@ -385,12 +468,15 @@ function nativeFailure(cause: unknown): Response {
   return nativeResponse({ error: status >= 500 ? 'Panel request failed.' : 'Panel request was rejected.' }, status)
 }
 
-function nativePanel<TActor>(event: SvelteKitPanelEvent, options: CreatePanelOperationHandlerOptions<TActor>) {
+async function nativePanel<TActor, TTenant>(event: SvelteKitPanelEvent, options: CreatePanelOperationHandlerOptions<TActor, TTenant>) {
   const panelId = event.params.panelId
   if (!panelId || !options.panelIds.includes(panelId)) throw Object.assign(new Error('Panel not found'), { status: 404 })
-  const registry = registryFor(event, options.registry)
-  const panel = registry.panels?.[panelId]
+  const registry = registryFor(event, options.registry) as InternalSvelteKitPanelRegistry<TActor, TTenant>
+  const panel = registry.panels?.[panelId] ?? await registry[panelResolver]?.(panelId)
   if (!panel || panel.manifest.id !== panelId) throw Object.assign(new Error('Panel not found'), { status: 404 })
+  const routing = panel.manifest.routing
+  const hosts = routing ? [...routing.domains, ...(routing.domain === null ? [] : [routing.domain])] : []
+  if (hosts.length > 0 && !hosts.includes(event.url.hostname.toLowerCase())) throw Object.assign(new Error('Panel not found'), { status: 404 })
   return { panel: panel as unknown as Parameters<typeof executePanelAuthOperation>[0]['panel'], panelId, registry }
 }
 
@@ -414,13 +500,13 @@ async function nativePayload(request: Request, method: 'GET' | 'POST'): Promise<
   }
 }
 
-function validateNativeOptions<TActor>(options: CreatePanelOperationHandlerOptions<TActor>): void {
+function validateNativeOptions<TActor, TTenant>(options: CreatePanelOperationHandlerOptions<TActor, TTenant>): void {
   if (options.panelIds.length === 0) throw new Error('Panel auth and tenant routes require at least one panel ID')
   for (const panelId of options.panelIds) assertPanelId(panelId)
   if (new Set(options.panelIds).size !== options.panelIds.length) throw new Error('Panel auth and tenant route IDs must be unique')
 }
 
-export function createPanelAuthHandler<TActor = unknown>(options: CreatePanelOperationHandlerOptions<TActor>): SvelteKitPanelOperationHandler {
+export function createPanelAuthHandler<TActor = unknown, TTenant = unknown>(options: CreatePanelOperationHandlerOptions<TActor, TTenant>): SvelteKitPanelOperationHandler {
   validateNativeOptions(options)
   const csrf = csrfProtection()
   const handle = (method: 'GET' | 'POST') => async (event: SvelteKitPanelEvent): Promise<Response> => {
@@ -428,7 +514,7 @@ export function createPanelAuthHandler<TActor = unknown>(options: CreatePanelOpe
       try {
         const operation = nativeAuthOperation(event)
         if (method === 'GET' && !GET_AUTH_OPERATIONS.has(operation)) return nativeResponse({ error: 'Method Not Allowed' }, 405)
-        const { panel, registry } = nativePanel(event, options)
+        const { panel, registry } = await nativePanel(event, options)
         const auth = await holo.getAuth() as unknown as PanelAuthRuntime<object> | undefined
         if (!auth) return nativeResponse({ error: 'Authentication is unavailable' }, 401)
         const outcome = await executePanelAuthOperation({
@@ -438,7 +524,9 @@ export function createPanelAuthHandler<TActor = unknown>(options: CreatePanelOpe
           payload: await nativePayload(event.request, method),
           services: Object.freeze({ event, holo }),
           signal: requestSignal(event.request),
-          tenant: await registry.resolveTenant?.(event),
+          tenant: operation === 'profile-read' || operation === 'profile-update'
+            ? await registry.resolveTenant?.(event)
+            : undefined,
         })
         return nativeResponse(outcome.data, outcome.status, outcome.cookies, outcome.redirectTo)
       } catch (cause) {
@@ -451,7 +539,7 @@ export function createPanelAuthHandler<TActor = unknown>(options: CreatePanelOpe
   return Object.freeze({ GET: handle('GET'), POST: handle('POST') })
 }
 
-export function createPanelTenantHandler<TActor = unknown>(options: CreatePanelOperationHandlerOptions<TActor>): SvelteKitPanelOperationHandler {
+export function createPanelTenantHandler<TActor = unknown, TTenant = unknown>(options: CreatePanelOperationHandlerOptions<TActor, TTenant>): SvelteKitPanelOperationHandler {
   validateNativeOptions(options)
   const csrf = csrfProtection()
   const handle = (method: 'GET' | 'POST') => async (event: SvelteKitPanelEvent): Promise<Response> => {
@@ -460,7 +548,7 @@ export function createPanelTenantHandler<TActor = unknown>(options: CreatePanelO
         const operation = event.params.operation
         if (!TENANT_OPERATIONS.has(operation as PanelTenantOperation)) return nativeResponse({ error: 'Panel tenant operation was not found' }, 404)
         if (method === 'GET' && operation !== 'profile-read') return nativeResponse({ error: 'Method Not Allowed' }, 405)
-        const { panel } = nativePanel(event, options)
+        const { panel } = await nativePanel(event, options)
         const auth = await holo.getAuth() as unknown as PanelAuthRuntime<object> | undefined
         if (!auth) return nativeResponse({ error: 'Panel tenant context is invalid' }, 403)
         const guard = auth.guard(panel.guard)

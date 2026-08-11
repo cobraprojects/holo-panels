@@ -25,6 +25,32 @@ import Tag from '../server/models/Tag'
 import User from '../server/models/User'
 
 const signal = new AbortController().signal
+const widgetQueries = vi.hoisted(() => ({
+  comments: vi.fn(() => ({ count: async () => 2 })),
+  media: vi.fn(() => ({ count: async () => 1 })),
+  posts: vi.fn(() => ({ count: async () => 3 })),
+}))
+
+vi.mock('../server/models/Post', async (importOriginal) => {
+  const module = await importOriginal<{ default: typeof Post }>()
+  const model = Object.create(module.default) as object
+  Object.defineProperty(model, 'where', { value: widgetQueries.posts })
+  return { ...module, default: model }
+})
+
+vi.mock('../server/models/Comment', async (importOriginal) => {
+  const module = await importOriginal<{ default: typeof Comment }>()
+  const model = Object.create(module.default) as object
+  Object.defineProperty(model, 'where', { value: widgetQueries.comments })
+  return { ...module, default: model }
+})
+
+vi.mock('../server/models/Media', async (importOriginal) => {
+  const module = await importOriginal<{ default: typeof Media }>()
+  const model = Object.create(module.default) as object
+  Object.defineProperty(model, 'where', { value: widgetQueries.media })
+  return { ...module, default: model }
+})
 
 describe('Nuxt P17 example domain', () => {
   it('matches the frozen resource, tenant, actor, and minimum-record inventory', () => {
@@ -125,38 +151,34 @@ describe('Nuxt P17 example domain', () => {
 
     expect(await panel.server.access({ actor: allowed, signal })).toBe(true)
     expect(await panel.server.access({ actor: denied, signal })).toBe(false)
-    expect(await panel.server.presentActor(allowed)).toEqual({ email: allowed.email, id: allowed.id, role: allowed.role })
+    expect(await panel.server.presentActor(allowed)).toMatchObject({ email: allowed.email, id: allowed.id, role: allowed.role })
     expect(JSON.stringify(await panel.server.presentActor(allowed))).not.toContain('tenantIds')
   })
 
   it('resolves widget metrics through tenant-bound, allow-listed resource IDs', async () => {
-    const count = vi.fn(async (resourceId: 'comments' | 'media' | 'posts', tenantId: string) => ({ comments: 2, media: 1, posts: 3 })[resourceId] + (tenantId === 'tenant-acme' ? 0 : 10))
+    const queries = [widgetQueries.posts, widgetQueries.comments, widgetQueries.media]
     const actor = { id: 'user-acme-editor', role: 'editor' }
     const result = await resolveWidget(ContentOverview.compile(), {
       actor,
       locale: 'en',
       panelId: 'admin',
-      services: { contentMetrics: { count } },
+      services: {},
       signal,
       tenant: 'tenant-acme',
     })
 
     expect(result.status).toBe('ready')
     expect(result.data?.stats.map(stat => [stat.id, stat.value])).toEqual([['posts', 3], ['comments', 2], ['media', 1]])
-    expect(count.mock.calls).toEqual([
-      ['posts', 'tenant-acme'],
-      ['comments', 'tenant-acme'],
-      ['media', 'tenant-acme'],
-    ])
+    for (const query of queries) expect(query).toHaveBeenCalledWith('tenantId', 'tenant-acme')
     const denied = await resolveWidget(ContentOverview.compile(), {
       actor: { id: 'user-denied', role: 'denied' },
       locale: 'en',
       panelId: 'admin',
-      services: { contentMetrics: { count } },
+      services: {},
       signal,
       tenant: 'tenant-acme',
     })
     expect(denied.status).toBe('unauthorized')
-    expect(count).toHaveBeenCalledTimes(3)
+    for (const query of queries) expect(query).toHaveBeenCalledTimes(1)
   })
 })

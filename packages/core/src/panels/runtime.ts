@@ -1,4 +1,6 @@
+import { DB } from '@holo-js/db'
 import type { JsonObject } from '../protocol/json'
+import type { ToastEffect } from '../protocol/effects'
 import { toJsonValue } from '../protocol/serialization'
 import type {
   CompiledPanelDefinition,
@@ -6,13 +8,21 @@ import type {
   PanelAuthenticatedScope,
   PanelBootstrap,
   PanelNotificationBootstrap,
+  PanelMiddleware,
   PanelOperation,
 } from './contracts'
 
 export class PanelRuntimeError extends Error {
-  constructor(readonly code: 'access-denied' | 'actor-not-serializable' | 'panel-not-found' | 'unauthenticated', message: string) {
+  constructor(readonly code: 'access-denied' | 'actor-not-serializable' | 'panel-not-found' | 'subscription-required' | 'unauthenticated', message: string) {
     super(message)
     this.name = 'PanelRuntimeError'
+  }
+}
+
+export class PanelSubscriptionRequiredError extends PanelRuntimeError {
+  constructor(readonly billingPath: string) {
+    super('subscription-required', 'An active tenant subscription is required')
+    this.name = 'PanelSubscriptionRequiredError'
   }
 }
 
@@ -22,6 +32,71 @@ interface ResolvedGuard<TActor> {
 }
 
 const REALTIME_CHANNEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u
+const TRANSACTIONAL_OPERATIONS: ReadonlySet<PanelOperation> = new Set(['action', 'form-submit', 'notification', 'upload'])
+const BOOTED_PANELS = new WeakMap<object, Promise<void>>()
+
+export function panelErrorNotificationEffect<TActor>(
+  panel: CompiledPanelDefinition<TActor>,
+  statusCode: number,
+): Readonly<ToastEffect> | null {
+  const configuration = panel.manifest.errorNotifications
+  if (!configuration?.enabled) return null
+  if (configuration.disabledStatusCodes.includes(statusCode) || configuration.hiddenStatusCodes.includes(statusCode)) return null
+  const notification = configuration.notifications.find(candidate => candidate.statusCode === statusCode)
+    ?? configuration.notifications.find(candidate => candidate.statusCode === null)
+  return Object.freeze({
+    kind: 'toast',
+    level: 'danger',
+    message: notification?.body ?? 'Please try again later.',
+    title: notification?.title ?? 'An error occurred',
+  })
+}
+
+export async function bootPanel<TActor>(panel: CompiledPanelDefinition<TActor>): Promise<void> {
+  const existing = BOOTED_PANELS.get(panel)
+  if (existing) return existing
+  const pending = Promise.all((panel.server.boot ?? []).map(async callback => {
+    await callback(Object.freeze({ guard: panel.guard, manifest: panel.manifest }))
+  })).then(() => undefined)
+  BOOTED_PANELS.set(panel, pending)
+  try {
+    await pending
+  } catch (error) {
+    BOOTED_PANELS.delete(panel)
+    throw error
+  }
+}
+
+export async function executePanelPipeline<TActor, TResult>(
+  panel: CompiledPanelDefinition<TActor>,
+  scope: PanelAuthenticatedScope<TActor>,
+  operation: PanelOperation,
+  handler: () => TResult | Promise<TResult>,
+  options: { readonly initial?: boolean } = {},
+): Promise<TResult> {
+  await bootPanel(panel)
+  const terminal = async (): Promise<TResult> => {
+    if (panel.manifest.runtime?.databaseTransactions && TRANSACTIONAL_OPERATIONS.has(operation)) {
+      return DB.writeTransaction(async () => await handler())
+    }
+    return handler()
+  }
+  const configured = panel.server.middleware
+  if (!configured) return terminal()
+  const middleware = options.initial ?? operation === 'bootstrap'
+    ? [...configured.panel, ...configured.authenticated, ...(panel.server.tenancy ? configured.tenant : [])]
+    : [
+        ...(configured.persistent?.panel ?? []),
+        ...(configured.persistent?.authenticated ?? []),
+        ...(panel.server.tenancy ? configured.persistent?.tenant ?? [] : []),
+      ]
+  const context = Object.freeze({ ...scope, operation })
+  const invoke = middleware.reduceRight<() => Promise<unknown>>(
+    (next, current: PanelMiddleware<TActor>) => async () => await current(context, next),
+    async () => await terminal(),
+  )
+  return await invoke() as TResult
+}
 
 export class PanelRuntime<TActor> {
   readonly #panels: ReadonlyMap<string, CompiledPanelDefinition<TActor>>
@@ -38,6 +113,7 @@ export class PanelRuntime<TActor> {
     const guards = new Map<string, Promise<ResolvedGuard<TActor>>>()
     return Promise.all(panelIds.map(async panelId => {
       const panel = this.panel(panelId)
+      await bootPanel(panel)
       let resolved = guards.get(panel.guard)
       if (!resolved) {
         resolved = this.resolveGuard(panel.guard)
@@ -45,7 +121,7 @@ export class PanelRuntime<TActor> {
       }
       const guard = await resolved
       const scope = await this.authorize(panel, 'bootstrap', signal, guard)
-      return this.bootstrapPayload(panel, scope)
+      return executePanelPipeline(panel, scope, 'bootstrap', () => this.bootstrapPayload(panel, scope))
     }))
   }
 
@@ -56,9 +132,16 @@ export class PanelRuntime<TActor> {
     handler: (scope: PanelAuthenticatedScope<TActor>) => TResult | Promise<TResult>,
   ): Promise<TResult> {
     const panel = this.panel(panelId)
+    await bootPanel(panel)
     const guard = await this.resolveGuard(panel.guard)
     const scope = await this.authorize(panel, operation, signal, guard)
-    return handler(scope)
+    const billing = panel.server.tenancy?.billing
+    if (operation !== 'bootstrap' && panel.manifest.tenancy?.requiresSubscription && billing) {
+      const subscribed = billing.getSubscribedMiddleware()
+      if (typeof subscribed !== 'function') throw new TypeError('Panel tenant billing providers must return a subscription middleware function')
+      if (!await subscribed(scope)) throw new PanelSubscriptionRequiredError(panel.manifest.tenancy.billing?.path ?? panel.manifest.path)
+    }
+    return executePanelPipeline(panel, scope, operation, () => handler(scope))
   }
 
   private panel(panelId: string): CompiledPanelDefinition<TActor> {
@@ -101,7 +184,7 @@ export class PanelRuntime<TActor> {
   ): Promise<Readonly<PanelNotificationBootstrap> | null> {
     const configuration = panel.manifest.databaseNotifications
     if (configuration === null) return null
-    if (!configuration.realtime) return Object.freeze({ realtimeChannel: null })
+    if (!configuration.realtime || panel.manifest.runtime?.broadcasting === false) return Object.freeze({ realtimeChannel: null })
     const inbox = panel.server.notifications?.inbox
     if (!inbox) return Object.freeze({ realtimeChannel: null })
     if (!await inbox.authorize('list', scope)) return Object.freeze({ realtimeChannel: null })

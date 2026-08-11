@@ -4,7 +4,7 @@ import { renderToString } from 'vue/server-renderer'
 import type { ClientRelationManager, RelationAcceptanceFixture, RelationAcceptanceRenderReport } from '../../../packages/testing/src/relation-acceptance'
 
 async function render(managers: readonly ClientRelationManager[]): Promise<string> {
-  const component = defineComponent(() => () => h(VueRelationManagerRenderer, { relations: { managers } }))
+  const component = defineComponent(() => () => h(VueRelationManagerRenderer, { relations: { managers, onOperation: () => undefined } }))
   return renderToString(createSSRApp(component))
 }
 

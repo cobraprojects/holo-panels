@@ -2,6 +2,8 @@ import type {
   ClientTransferManifest,
   ClientTransferTransport,
   FilterCollectionPresentation,
+  FormPath,
+  FormValueAtPath,
   TableRecordId,
   TableSelectionPayload,
   TableState,
@@ -11,6 +13,12 @@ import type { VNodeChild } from 'vue'
 import type { ComponentRegistry } from '../registry'
 import type { JsonValue } from '@holo-js/panels-client'
 
+export type VueTableColumnPath<TRecord extends object> = [FormPath<TRecord>] extends [never] ? string : FormPath<TRecord>
+
+export type VueTableColumnValue<TRecord extends object, TPath extends VueTableColumnPath<TRecord>> = TPath extends FormPath<TRecord>
+  ? FormValueAtPath<TRecord, TPath>
+  : unknown
+
 export interface VueTableColumnManifest {
   readonly alignment: 'center' | 'end' | 'start'
   readonly copyable: boolean
@@ -18,7 +26,9 @@ export interface VueTableColumnManifest {
   readonly hidden: boolean
   readonly inlineEditor: Readonly<Record<string, unknown>> | null
   readonly label: string | null
+  readonly lineClamp?: number | null
   readonly path: string
+  readonly searchable?: boolean
   readonly sortable: boolean
   readonly toggleable: boolean
   readonly type: string
@@ -26,15 +36,22 @@ export interface VueTableColumnManifest {
   readonly wrap: boolean
 }
 
-export interface VueTableColumn<TRecord extends object> {
+export interface VueTableColumn<
+  TRecord extends object,
+  TPath extends VueTableColumnPath<TRecord> = VueTableColumnPath<TRecord>,
+> {
   readonly manifest: VueTableColumnManifest
-  readonly render?: (value: unknown, record: Readonly<TRecord>) => VNodeChild
+  readonly render?: (value: VueTableColumnValue<TRecord, TPath>, record: Readonly<TRecord>) => VNodeChild
+  readonly url?: (record: Readonly<TRecord>) => string | null
 }
 
-export interface VueCustomColumnProps<TRecord extends object> extends Readonly<Record<string, unknown>> {
-  readonly column: VueTableColumn<TRecord>
+export interface VueCustomColumnProps<
+  TRecord extends object,
+  TPath extends VueTableColumnPath<TRecord> = VueTableColumnPath<TRecord>,
+> extends Readonly<Record<string, unknown>> {
+  readonly column: VueTableColumn<TRecord, TPath>
   readonly record: Readonly<TRecord>
-  readonly value: unknown
+  readonly value: VueTableColumnValue<TRecord, TPath>
 }
 
 export interface VueTableFilterOption {
@@ -70,7 +87,9 @@ export interface VueFilterCollectionSlotProps {
 }
 
 export interface VueTableAction {
+  readonly color?: string | null
   readonly confirmation?: string
+  readonly icon?: string | null
   readonly id: string
   readonly label: string
   readonly scope: 'bulk' | 'header' | 'row'

@@ -1,16 +1,15 @@
-import { column, defineResource, defineSchema, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import PostTag from '../../../models/PostTag'
-import { defineDomainResourcePages } from '../../pages/domain'
 
-export const PostTagPages = defineDomainResourcePages({ label: 'Post tags', resourceId: 'post-tags', sort: 35 })
+const form = defineSchema(PostTag).fields(field => [field.text('postId').required(), field.text('tagId').required()])
+const table = defineTable(PostTag).columns(column => [column.text('postId'), column.text('tagId')])
 
-export default defineResource(PostTag, { tenant: String })
+export default defineResource(PostTag)
   .tenantScope((query, context) => query.where('tenantId', context.tenant))
   .createBindings(context => ({ id: crypto.randomUUID(), tenantId: context.tenant }))
   .recordTitle('id')
   .routeKey('id')
   .navigation({ group: 'Content', icon: 'link', label: 'Post tags', sort: 35 })
-  .pages(PostTagPages.list, PostTagPages.create, PostTagPages.view, PostTagPages.edit)
-  .form([field.text('postId').required(), field.text('tagId').required()])
-  .infolist(defineSchema(PostTag).fields([column.text('postId'), column.text('tagId')]))
-  .table([column.text('postId'), column.text('tagId')])
+  .discoverPages()
+  .form(form)
+  .table(table)

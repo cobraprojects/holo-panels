@@ -8,9 +8,9 @@ const execFileAsync = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const holoRoot = resolve(process.env.HOLO_PANELS_HOLO_JS_ROOT ?? resolve(repositoryRoot, '../holo-js'))
 const expectedRepository = 'cobraprojects/holo-js'
-const expectedRef = '15ac56ba94d19b6735d9bc607ef56087ae11a243'
-const expectedVersion = '0.3.10'
-const expectedCompatibilityRange = '^0.3.10'
+const expectedRef = '0d074287272b769cda83fe4886c2127c96c9c529'
+const expectedVersion = '0.3.11'
+const expectedCompatibilityRange = '>=0.3.9'
 const workflow = await readFile(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release.yml'), 'utf8')
 

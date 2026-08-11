@@ -104,6 +104,7 @@ describe('construction builders', () => {
     expectTypeOf(definition.branded).toEqualTypeOf<typeof branded>()
     expectTypeOf(definition.notify).toBeFunction()
     expectTypeOf(definition.title).toBeFunction()
+    expect(Object.isFrozen(definition.allowed)).toBe(false)
     expect(definition.allowed()).toBe(true)
     expect(definition.title()).toBe('Ready')
   })

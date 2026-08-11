@@ -3,7 +3,7 @@ import { builtinModules } from 'node:module'
 import ts from 'typescript'
 
 const packagesRoot = new URL('../packages/', import.meta.url)
-const sourceExtensions = ['.css', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']
+const sourceExtensions = ['.css', '.js', '.jsx', '.mjs', '.mts', '.svelte', '.ts', '.tsx']
 const builtinPackageNames = new Set([
   ...builtinModules,
   ...builtinModules.map(name => `node:${name}`),
@@ -44,6 +44,7 @@ const allowedWorkspaceDependencies = new Map([
     '@holo-js/panels-cli',
     '@holo-js/panels-client',
     '@holo-js/panels-core',
+    '@holo-js/panels-ui',
   ])],
   ['@holo-js/panels-cli', new Set(['@holo-js/panels-core'])],
   ['@holo-js/panels-client', new Set(['@holo-js/panels-core'])],

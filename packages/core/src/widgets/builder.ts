@@ -2,6 +2,7 @@ import { ConstructionBuilder } from '../builders/construction-builder'
 import { DISCOVERY_MARKER, type DiscoverableBuilder, type DiscoverableDefinition } from '../discovery/types'
 import { toJsonValue } from '../protocol/serialization'
 import type { JsonValue } from '../protocol/json'
+import type { ResourceAttributes, ResourceCompositionTypes } from '../resources/contracts'
 import type { ExtensionTypeId } from '../plugins/type-id'
 import type { ContextTypeSources, OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import type {
@@ -53,6 +54,7 @@ export class WidgetBuilder<
   TServices = unknown,
   TRecord extends object = object,
 > extends ConstructionBuilder<WidgetState<TData, TActor, TTenant, TServices, TRecord>, CompiledWidgetDefinition<TData, TActor, TTenant, TServices, TRecord>> implements DiscoverableBuilder<'widget'> {
+  declare readonly resourceCompositionTypes: ResourceCompositionTypes<TRecord, TActor, TTenant, TServices>
   readonly discoveryMarker = DISCOVERY_MARKER
   readonly kind = 'widget' as const
 
@@ -149,7 +151,7 @@ export class WidgetBuilder<
     const definition = this.compile()
     return Object.freeze({
       client: definition.manifest,
-      componentKeys: [definition.manifest.type],
+      componentKeys: definition.manifest.type.includes(':widget:') ? [definition.manifest.type] : [],
       discoveryMarker: this.discoveryMarker,
       id: this.id,
       kind: this.kind,
@@ -253,7 +255,7 @@ type ResourceWidgetFromSources<
   OptionalRuntimeTypeValue<TActorSource>,
   OptionalRuntimeTypeValue<TTenantSource>,
   OptionalRuntimeTypeValue<TServicesSource>,
-  RecordTypeValue<TRecordSource>
+  Readonly<ResourceAttributes<RecordTypeValue<TRecordSource>>>
 >
 
 type ResourceWidgetFactory<TData extends JsonValue> = <
@@ -275,7 +277,13 @@ function resourceWidgetFactory<TData extends JsonValue>(family: WidgetFamily, ty
   >(
     id: string,
     _sources: ResourceWidgetTypeSources<TRecordSource, TActorSource, TTenantSource, TServicesSource>,
-  ): ResourceWidgetFromSources<TData, TRecordSource, TActorSource, TTenantSource, TServicesSource> => new WidgetBuilder(id, family, type)
+  ): ResourceWidgetFromSources<TData, TRecordSource, TActorSource, TTenantSource, TServicesSource> => new WidgetBuilder<
+    TData,
+    OptionalRuntimeTypeValue<TActorSource>,
+    OptionalRuntimeTypeValue<TTenantSource>,
+    OptionalRuntimeTypeValue<TServicesSource>,
+    Readonly<ResourceAttributes<RecordTypeValue<TRecordSource>>>
+  >(id, family, type)
 }
 
 export const defineResourceStatsWidget = resourceWidgetFactory<StatsWidgetData>('stats', 'panels.widgets.stats')
@@ -292,7 +300,13 @@ export function defineResourceCustomWidget<
   sources: ResourceWidgetTypeSources<TRecordSource, TActorSource, TTenantSource, TServicesSource>,
   type = 'panels.widgets.custom',
 ): ResourceWidgetFromSources<CustomWidgetData, TRecordSource, TActorSource, TTenantSource, TServicesSource> {
-  return new WidgetBuilder(id, 'custom', type)
+  return new WidgetBuilder<
+    CustomWidgetData,
+    OptionalRuntimeTypeValue<TActorSource>,
+    OptionalRuntimeTypeValue<TTenantSource>,
+    OptionalRuntimeTypeValue<TServicesSource>,
+    Readonly<ResourceAttributes<RecordTypeValue<TRecordSource>>>
+  >(id, 'custom', type)
 }
 
 export function widgetContext<TActor, TTenant, TServices>(context: WidgetContext<TActor, TTenant, TServices>): WidgetContext<TActor, TTenant, TServices> {

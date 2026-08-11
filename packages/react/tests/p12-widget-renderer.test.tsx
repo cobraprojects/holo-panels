@@ -69,6 +69,10 @@ describe('P12 React widget renderer', () => {
 
     expect(container.textContent).toContain('Load widget')
     await act(async () => container.querySelector<HTMLButtonElement>('button')?.click())
+    const widgetRegion = container.querySelector<HTMLElement>('[data-panels-component="widget"]')
+    expect(widgetRegion?.classList.contains('hp-widget--stats')).toBe(true)
+    expect(widgetRegion?.classList.contains('hp-widget-stats')).toBe(false)
+    expect(widgetRegion?.querySelector(':scope > .hp-widget-stats')).not.toBeNull()
     expect(container.textContent).toContain('Revenue$42Since last monthup')
     expect(container.querySelector('svg[aria-hidden="true"] polyline')).not.toBeNull()
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Revenue'))?.click())

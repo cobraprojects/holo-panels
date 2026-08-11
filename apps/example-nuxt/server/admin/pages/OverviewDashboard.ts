@@ -1,9 +1,10 @@
 import { defineCustomPage } from '@holo-js/panels'
-import { AdminActor, canManagePosts } from './posts/access'
 
-export default defineCustomPage('overview', { actor: AdminActor, load: () => ({}) })
+export default defineCustomPage('overview')
+  .loader(() => ({}))
   .path('/admin')
-  .authorize(context => canManagePosts(context.actor))
+  .authorize(context => ['admin', 'editor', 'super-admin', 'tenant-admin'].includes(context.actor.role))
   .title('Overview')
   .heading('Holo Panels overview')
+  .headerWidgets('content-overview')
   .navigation({ icon: 'home', label: 'Overview', sort: 1 })

@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import PostExporter from '../server/admin/exports/PostExporter'
 import PostImporter from '../server/admin/imports/PostImporter'
-import { AdminActor } from '../server/admin/pages/posts/access'
 
-const actor = Object.assign(new AdminActor(), { id: 'admin-1', role: 'tenant-admin' })
+const actor = {
+  email: 'admin@example.test',
+  id: 'admin-1',
+  name: 'Admin',
+  password: 'hidden',
+  role: 'tenant-admin',
+  tenantId: 'tenant-acme',
+}
 const context = {
   actor,
   guard: 'web',

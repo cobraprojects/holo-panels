@@ -3,6 +3,19 @@ import type { JsonObject } from '../protocol/json'
 
 export type PanelTenantIdentifier = number | string
 
+export interface PanelModelTenancyOptions<TActor, TTenant> {
+  readonly activeTenantAttribute?: Extract<keyof TActor, string>
+  readonly avatarAttribute?: Extract<keyof TTenant, string>
+  readonly canAccess?: (tenant: TTenant, actor: TActor) => boolean | Promise<boolean>
+  readonly descriptionAttribute?: Extract<keyof TTenant, string>
+  readonly idAttribute?: Extract<keyof TTenant, string>
+  readonly membershipPageSize?: number
+  readonly nameAttribute?: Extract<keyof TTenant, string>
+  readonly persistence?: PanelActiveTenantPersistence<TActor, PanelTenantIdentifier>
+  readonly relationship?: Extract<keyof TActor, string> | string
+  readonly routeKeyAttribute?: Extract<keyof TTenant, string>
+}
+
 export interface PanelActiveTenantPersistence<TActor, TTenantId extends PanelTenantIdentifier> {
   clear(scope: PanelAuthenticatedScope<TActor>): Promise<void>
   load(scope: PanelAuthenticatedScope<TActor>): Promise<TTenantId | null>
@@ -39,6 +52,11 @@ export interface PanelTenantProfileOptions<TActor, TTenant, TValues extends Read
   readonly validate: (payload: unknown, tenant: TTenant, scope: PanelAuthenticatedScope<TActor>) => TValues | Promise<TValues>
 }
 
+export interface PanelTenantBillingProvider<TActor> {
+  getRouteAction(): (request: Request, scope: PanelAuthenticatedScope<TActor>) => Response | Promise<Response>
+  getSubscribedMiddleware(): (scope: PanelAuthenticatedScope<TActor>) => boolean | Promise<boolean>
+}
+
 export interface PanelTenancyOptions<
   TActor,
   TTenant,
@@ -73,6 +91,10 @@ export interface PanelTenancyOptions<
   ) => PanelTenantPresentationInput | Promise<PanelTenantPresentationInput>
   readonly profile?: PanelTenantProfileOptions<TActor, TTenant, TProfileValues>
   readonly registration?: PanelTenantRegistrationOptions<TActor, TTenant, TRegistrationValues>
+  readonly resolveTenantUsing?: (
+    key: string,
+    scope: PanelAuthenticatedScope<TActor>,
+  ) => TTenant | null | Promise<TTenant | null>
   readonly resourceTenantColumn?: string
   readonly routeKey: (tenant: TTenant) => string
 }
@@ -92,9 +114,24 @@ export interface PanelQueuedTenantContext {
 }
 
 export interface PanelTenancyManifest {
+  readonly billing?: { readonly path: string } | null
   readonly enabled: true
+  readonly menu?: boolean
+  readonly menuItems?: readonly PanelTenantMenuItem[]
   readonly profile?: { readonly path: string }
   readonly registration?: { readonly path: string }
+  readonly requiresSubscription?: boolean
+  readonly routeDomain?: string | null
+  readonly routePrefix?: string | null
+  readonly searchableMenu?: boolean | null
+  readonly switcher?: boolean
+}
+
+export interface PanelTenantMenuItem extends JsonObject {
+  icon: string | null
+  id: string
+  label: string
+  path: string
 }
 
 export interface PanelTenantPresentation extends JsonObject {
@@ -146,6 +183,7 @@ export interface CompiledPanelTenancy<
     scope: PanelAuthenticatedScope<TActor>,
   ): Promise<PanelTenantExecutionContext<TTenant, TTenantId>>
   bootstrap(scope: PanelAuthenticatedScope<TActor>): Promise<PanelTenantBootstrap>
+  readonly billing?: PanelTenantBillingProvider<TActor>
   clear(scope: PanelAuthenticatedScope<TActor>): Promise<void>
   memberships(
     request: Partial<PanelTenantMembershipRequest>,
@@ -172,6 +210,10 @@ export interface CompiledPanelTenancy<
     payload: unknown,
     scope: PanelAuthenticatedScope<TActor>,
   ): Promise<PanelTenantExecutionContext<TTenant, TTenantId>>
+  resolveRoute(
+    routeKey: string,
+    scope: PanelAuthenticatedScope<TActor>,
+  ): Promise<PanelTenantIdentity>
   switch(
     routeKey: string,
     scope: PanelAuthenticatedScope<TActor>,

@@ -1,4 +1,6 @@
 export { createNextPanelComponentRegistry, NextPanelClient } from './panel-client'
+export { defineNextPanelsRuntime } from './contracts'
+export { createGeneratedNextPanelsRuntime } from './generated-runtime'
 export { NextPanelResourcePage } from './resource-page'
 export { createPanelOperationRoute, NextPanelHttpError } from './operation'
 export { createPanelPage } from './page'

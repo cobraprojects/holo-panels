@@ -3,7 +3,7 @@ import type { RelationOperation } from './contracts'
 
 const operationMap = Object.freeze({
   belongsTo: ['select', 'associate', 'dissociate', 'create'] as const,
-  belongsToMany: ['list', 'attach', 'detach', 'create', 'edit', 'editPivot'] as const,
+  belongsToMany: ['list', 'view', 'attach', 'detach', 'create', 'edit', 'editPivot'] as const,
   hasMany: ['list', 'view', 'create', 'edit', 'associate', 'dissociate', 'delete'] as const,
   hasManyThrough: ['list', 'view'] as const,
   hasOne: ['view', 'create', 'edit', 'delete'] as const,
@@ -13,8 +13,8 @@ const operationMap = Object.freeze({
   morphOne: ['view', 'create', 'edit', 'delete'] as const,
   morphOneOfMany: ['view'] as const,
   morphTo: ['select', 'associate', 'dissociate', 'create'] as const,
-  morphToMany: ['list', 'attach', 'detach', 'create', 'edit', 'editPivot'] as const,
-  morphedByMany: ['list', 'attach', 'detach', 'create', 'edit', 'editPivot'] as const,
+  morphToMany: ['list', 'view', 'attach', 'detach', 'create', 'edit', 'editPivot'] as const,
+  morphedByMany: ['list', 'view', 'attach', 'detach', 'create', 'edit', 'editPivot'] as const,
 } satisfies Readonly<Record<RelationDefinition['kind'], readonly RelationOperation[]>>)
 
 export function allowedRelationOperations(relation: RelationDefinition): readonly RelationOperation[] {

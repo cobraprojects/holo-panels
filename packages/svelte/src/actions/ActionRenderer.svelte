@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
+  import Icon from '../components/Icon.svelte'
   import type { JsonObject } from '@holo-js/panels-client'
   import Dialog from '../components/Dialog.svelte'
   import Dropdown from '../components/Dropdown.svelte'
@@ -35,7 +37,7 @@
 <div class="hp-action" data-action-mount={action.mount}>
   <div class="hp-action-collection">
     {#each actions.filter(candidate => !groupedActionIds.has(candidate.id)) as candidate (candidate.id)}
-      {#if candidate.visible !== false}<button data-action-id={candidate.id} disabled={candidate.disabled === true || $actionState.frames.some(frame => frame.manifest.id === candidate.id)} onclick={() => store.mount(candidate)} type="button">{candidate.label}</button>{/if}
+      {#if candidate.visible !== false}<Button data-action-id={candidate.id} disabled={candidate.disabled === true || $actionState.frames.some(frame => frame.manifest.id === candidate.id)} onclick={() => store.mount(candidate)} type="button">{#if candidate.icon}<Icon name={candidate.icon} />{/if}<span>{candidate.label}</span></Button>{/if}
     {/each}
     {#each groups as group (group.id)}
       <span data-action-color={group.color ?? undefined} data-action-icon={group.icon ?? undefined}><Dropdown label={group.label ?? 'Actions'} items={group.actions.flatMap(id => { const candidate = findAction(id); return !candidate || candidate.visible === false ? [] : [{ disabled: candidate.disabled, id, label: candidate.label }] })} onselect={(id) => { const candidate = findAction(id); if (candidate) store.mount(candidate) }} /></span>
@@ -55,7 +57,7 @@
       {#if Content}<Content {...frame.manifest.modal?.content?.properties} {frame} />{/if}
       {#if frame.phase === 'confirming'}
         <p>{frame.manifest.confirmation}</p>
-        <button onclick={() => store.confirm()} type="button">Confirm</button>
+        <Button onclick={() => store.confirm()} type="button">Confirm</Button>
       {:else if Custom}
         <Custom {frame} setInput={(input: JsonObject) => store.setInput(input)} {submit} />
       {:else}
@@ -63,17 +65,17 @@
           {#if frame.manifest.modal?.schema}
             <SchemaRenderer panelId={panelId ?? 'default'} registry={schemaRegistry} schema={frame.manifest.modal.schema} />
           {/if}
-          <button disabled={frame.phase === 'submitting'} type="submit">{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</button>
+          <Button disabled={frame.phase === 'submitting'} type="submit">{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</Button>
         </form>
       {/if}
       {#each frame.manifest.modal?.nestedActions ?? [] as id (id)}
         {@const nested = findAction(id)}
-        {#if nested && nested.visible !== false}<button data-action-id={nested.id} disabled={nested.disabled} onclick={() => store.mount(nested)} type="button">{nested.label}</button>{/if}
+        {#if nested && nested.visible !== false}<Button data-action-id={nested.id} disabled={nested.disabled} onclick={() => store.mount(nested)} type="button">{#if nested.icon}<Icon name={nested.icon} />{/if}<span>{nested.label}</span></Button>{/if}
       {/each}
       {#if frame.error}<div role="alert">{frame.error}</div>{/if}
       {#if frame.phase === 'succeeded'}<div aria-live="polite" role="status">Action completed</div>{/if}
       {#if Footer}<Footer {...frame.manifest.modal?.footer?.properties} {frame} />{/if}
-      <button onclick={() => store.close()} type="button">Close</button>
+      <Button onclick={() => store.close()} type="button">Close</Button>
       </div>
     </Surface>
   {/each}

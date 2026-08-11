@@ -18,7 +18,7 @@ Code/
 └── holo-panels/
 ```
 
-The release candidate accepts Holo-JS `^0.3.10` and is validated against published Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`. CI and release workflows pin that immutable host revision; `scripts/validate-ci-bootstrap.mjs` fails if their revision or version drifts from the validated release.
+The release candidate accepts every stable Holo-JS version at or above `0.3.9` through the `>=0.3.9` dependency floor. Holo-JS `0.3.9` was never published, so minimum-version packed compatibility starts with published Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`, while CI, release, and clean registry lifecycle validation use Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529`. The workflows pin an immutable host revision for reproducible validation, not as an installation ceiling.
 
 ## Test layers
 

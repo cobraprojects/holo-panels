@@ -24,6 +24,7 @@ export {
   type PanelsTabItem,
   type PanelsToast,
 } from './primitives'
+export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
 export {
   ComponentRegistry,
   createComponentRegistry,
@@ -46,9 +47,11 @@ export * from './relations'
 export * from './navigation'
 export * from './widgets'
 export * from './notifications'
+export * from './extensions'
 export { VueSchemaRenderer } from './schemas/renderer'
 export type * from './schemas/types'
 export { createExtensionTypeId } from '@holo-js/panels-core'
+export type { PanelClientAuthOperation } from '@holo-js/panels-client'
 export {
   ClientEffectSession,
   ClientNotificationInboxStore,
@@ -59,11 +62,21 @@ export {
   TransportDecodingError,
   PanelsTransport,
   ClientActionStore,
+  CollectionStore,
+  createBrowserUploadAdapter,
+  createUploadStore,
   FormStore,
+  GlobalSearchStore,
+  installPanelSpaNavigation,
   OptionStore,
   TableStateStore,
+  UploadStore,
+  WidgetStore,
   createRequestEnvelope,
+  executePanelAuthRequest,
+  executePanelLogin,
   createPanelNotificationTransport,
+  createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
   toJsonValue,
@@ -72,6 +85,8 @@ export type {
   ClientEffectSessionOptions,
   ClientNotificationInboxOptions,
   ClientNotificationRealtime,
+  ClientSearchResponse,
+  ClientSearchState,
   PanelNotificationTransportOptions,
   CompiledPageDefinition,
   CompiledPanelDefinition,
@@ -85,6 +100,8 @@ export type {
   PanelDatabaseNotificationOperationResult,
   PanelNotificationStore,
   PanelOperation,
+  PanelAvatarComponentProps,
+  PanelChromeComponentProps,
   PanelShellBootstrap,
   PanelShellTenancyBootstrap,
   PanelShellTenantPresentation,
@@ -96,4 +113,5 @@ export type {
   FormStoreOptions,
   OptionStoreOptions,
   TableStateOptions,
+  UploadPolicy,
 } from '@holo-js/panels-client'

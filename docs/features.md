@@ -30,7 +30,7 @@ For package and subpath details, see the [package reference](package-reference.m
 | Styling and icons | Available | Styles, tokens, namespaced icons, plugin asset publication, global defaults, and conflict-safe `panels:publish-ui` synchronization | Published UI is application-owned after uninstall and synchronization refuses local conflicts. |
 | Plugins and custom components | Available extension system | All custom definition families, public framework registries, compatibility checks, assets/icons/translations/permissions/defaults/slots, the packed money plugin, and an independently packed all-family plugin example | Plugins and custom renderers are trusted executable code and are not sandboxed. |
 | Testing | Available | `@holo-js/panels-testing` root helpers and repository contract/acceptance suites | Framework-specific testing subpaths currently export no utilities. |
-| Deployment and upgrades | Documented process | Prepare/build/install/validation guidance | Published prerelease installation and migration upgrade proof remain P17 work. |
+| Deployment and upgrades | Validated prerelease process | Prepare/build/install/validation guidance, migration and upgrade procedures, and clean registry lifecycle coverage | Production deployments remain responsible for their configured infrastructure and application policies. |
 
 ## Panels
 
@@ -68,7 +68,7 @@ The page builders exported from `@holo-js/panels` are:
 
 Pages support access, visibility, routes, labels, navigation, breadcrumbs, layout slots, data resolution, and actions through [`PageBuilder`](../packages/core/src/pages/page.ts). `preparePageRoutes` checks deterministic route conflicts.
 
-The examples currently prove the Post list/create/view/edit resource journey for [Next](../apps/example-next/server/admin/resources/posts/PostResource.ts), [Nuxt](../apps/example-nuxt/server/admin/resources/posts/PostResource.ts), and [SvelteKit](../apps/example-sveltekit/server/admin/resources/posts/PostResource.ts). They are repository fixtures, not proof that the complete P17 blog/admin acceptance inventory is finished.
+The [Next](../apps/example-next/server/admin/resources/posts/PostResource.ts), [Nuxt](../apps/example-nuxt/server/admin/resources/posts/PostResource.ts), and [SvelteKit](../apps/example-sveltekit/server/admin/resources/posts/PostResource.ts) examples exercise the same completed P17 product contract, including tenant-scoped resources, authentication and MFA, relations, widgets, notifications, imports, exports, and public blog behavior.
 
 Singular resources reject list/create behavior and resolve one scoped authorized record. Nested resources resolve and authorize the parent before applying mandatory child scope. Immutable configured page/resource variants can be registered repeatedly without mutating their base definitions.
 
@@ -90,14 +90,14 @@ React, Vue, and Svelte export their general schema renderers from package roots.
 
 ### Field families
 
-Public form builders in [`fields`](../packages/core/src/fields) are exported by `@holo-js/panels-core` and cover:
+Public form builders in [`fields`](../packages/core/src/fields) are exported by `@holo-js/panels` and cover:
 
 - text input, textarea, checkbox, toggle, radio, date/time, hidden, slider, color, and slug;
 - select, multiselect, checkbox list, and toggle buttons;
 - key-value, tags, repeater, rich editor, Markdown editor, and builder blocks;
 - temporary upload and media field definitions.
 
-Use the typed factories exported from `@holo-js/panels-core`, including `fields(schema)`, `choiceFields(schema)`, `collectionFields(schema)`, and `uploadFields(schema)`. The exact classes and options are discoverable from the generated [`@holo-js/panels-core` declarations](../packages/core/dist/index.d.ts). The umbrella package currently exposes only its simpler `field` descriptor factory, so do not import the advanced factories from `@holo-js/panels`.
+Use the inference-first factories exported from `@holo-js/panels`, including `fields(schema)`, `choiceFields(schema)`, `collectionFields(schema)`, and `uploadFields(schema)`. They derive paths and values from the supplied schema without generic arguments. The lower-level package remains available to plugin authors, but application definitions normally import these factories from the umbrella package.
 
 ### Client state
 
@@ -134,13 +134,13 @@ Renderer packages expose their framework table renderers and extension registrie
 
 ## Infolists
 
-Infolist entry builders exported from `@holo-js/panels-core` include `TextEntry`, `IconEntry`, `BooleanEntry`, `ImageEntry`, `ColorEntry`, `CodeEntry`, `KeyValueInfolistEntry`, and `RepeatableEntry`. `entriesFor(recordSource)` derives the record type and creates built-in or custom entries through the same registry model without manual generic arguments.
+Infolist entry builders exported from `@holo-js/panels` include `TextEntry`, `IconEntry`, `BooleanEntry`, `ImageEntry`, `ColorEntry`, `CodeEntry`, `KeyValueInfolistEntry`, and `RepeatableEntry`. `entriesFor(recordSource)` derives the record type and creates built-in or custom entries through the same registry model without manual generic arguments.
 
 Entry resolution supports direct record paths, relation paths, formatted scalar/JSON presentation, copying, actions, safe URL handling, responsive layout, attributes, ordered slots, visibility, safe Markdown, and sanitizer-bound rich content. Entry, filter, and widget leaves compose through the shared schema tree, and every renderer resolves custom entries through the same generated registry contract.
 
 ## Actions
 
-`defineAction` is the umbrella definition marker. `@holo-js/panels-core` exports `actionsFor(sources)`, `compileActionManifest`, `resolveActionState`, and `ActionEngine`. The source factory derives record, input, actor, tenant, and service types for built-in, view, and custom actions without user-supplied generic arguments or callback annotations. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
+`defineAction` is a customizable fluent action builder. The umbrella package also exports `actionsFor(sources)`, while resource definitions expose `.actions(actions => [...])` so record, input, actor, tenant, and service callback types flow from the resource without generic arguments or callback annotations. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
 
 Server execution validates the mounted action, bounds bulk record IDs, reauthorizes, validates modal data, checks record versions, uses configured transactions, and returns a bounded effect set. A hidden or disabled action is not an authorization decision.
 
@@ -251,7 +251,7 @@ export default createPanelPage({ panelId: 'admin', runtime: panelsRuntime })
 ```
 
 ```ts
-// app/%5Fholo/panels/[panelId]/[operation]/route.ts
+// app/holo/panels/[panelId]/[operation]/route.ts
 import { createPanelOperationRoute } from '@holo-js/panels-next'
 import { panelsRuntime } from '~/server/panels/runtime'
 
@@ -261,7 +261,7 @@ export const GET = route.GET
 export const POST = route.POST
 ```
 
-The exact repository fixtures are the [Next page](../apps/example-next/app/admin/[[...panelsPath]]/page.tsx) and [Next operation route](../apps/example-next/app/%5Fholo/panels/[panelId]/[operation]/route.ts). Browser-only code may import `NextPanelClient` and `NextPanelResourcePage` from `@holo-js/panels-next/client`.
+The exact repository fixtures are the [Next page](../apps/example-next/app/admin/[[...panelsPath]]/page.tsx) and [Next operation route](../apps/example-next/app/holo/panels/[panelId]/[operation]/route.ts). Browser-only code may import `NextPanelClient` and `NextPanelResourcePage` from `@holo-js/panels-next/client`.
 
 ### Nuxt
 
@@ -281,14 +281,14 @@ const panelPage = await usePanelPage({ panelId: 'admin' })
 ```
 
 ```ts
-// server/api/_holo/panels/[panelId]/[operation].ts
+// server/routes/holo/panels/[panelId]/[operation].ts
 import { createPanelOperationHandler } from '@holo-js/panels-nuxt'
 import { panelsRuntime } from '../../../../panels/runtime'
 
 export default createPanelOperationHandler({ panelIds: ['admin'], runtime: panelsRuntime })
 ```
 
-The exact fixtures are the [Nuxt page](../apps/example-nuxt/app/pages/admin/[[...panelsPath]].vue) and [Nuxt operation handler](../apps/example-nuxt/server/api/_holo/panels/[panelId]/[operation].ts).
+The exact fixtures are the [Nuxt page](../apps/example-nuxt/app/pages/admin/[[...panelsPath]].vue) and [Nuxt operation handler](../apps/example-nuxt/server/routes/holo/panels/[panelId]/[operation].ts).
 
 ### SvelteKit
 
@@ -314,7 +314,7 @@ export const load = createPanelPageLoad({ panelId: 'admin', registry: panelsRegi
 ```
 
 ```ts
-// src/routes/_holo/panels/[panelId]/[operation]/+server.ts
+// src/routes/holo/panels/[panelId]/[operation]/+server.ts
 import { createPanelOperationHandler } from '@holo-js/panels-sveltekit'
 import { panelsRegistry } from '$lib/server/panels/registry'
 
@@ -324,7 +324,7 @@ export const GET = handler.GET
 export const POST = handler.POST
 ```
 
-The exact fixtures are the [SvelteKit load](../apps/example-sveltekit/src/routes/admin/[...path]/+page.server.ts), [SvelteKit page](../apps/example-sveltekit/src/routes/admin/[...path]/+page.svelte), and [SvelteKit endpoint](../apps/example-sveltekit/src/routes/_holo/panels/[panelId]/[operation]/+server.ts).
+The exact fixtures are the [SvelteKit load](../apps/example-sveltekit/src/routes/admin/[...path]/+page.server.ts), [SvelteKit page](../apps/example-sveltekit/src/routes/admin/[...path]/+page.svelte), and [SvelteKit endpoint](../apps/example-sveltekit/src/routes/holo/panels/[panelId]/[operation]/+server.ts).
 
 ### Shared framework rules
 

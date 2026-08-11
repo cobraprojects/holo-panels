@@ -1,11 +1,32 @@
 export type FrameworkId = 'next' | 'nuxt' | 'sveltekit'
 
 export type DiscoveredPanelPath = {
+  readonly brandingName?: string
+  readonly darkMode?: 'dark' | 'light' | 'system'
+  readonly emailChangeVerificationPath?: string
+  readonly emailVerificationPath?: string
+  readonly emailVerificationVerifyPath?: string
+  readonly forgotPasswordPath?: string
   readonly id: string
+  readonly loginPath?: string
+  readonly mfaChallengePath?: string
+  readonly mfaEnrollmentPath?: string
+  readonly mfaRecoveryCodesPath?: string
   readonly path: string
+  readonly passwordResetPath?: string
+  readonly profilePath?: string
+  readonly routes?: readonly {
+    readonly domain: string | null
+    readonly method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT'
+    readonly scope: 'authenticated' | 'authenticated-tenant' | 'public' | 'tenant'
+    readonly source: string
+  }[]
+  readonly registrationPath?: string
+  readonly simplePageMaxContentWidth?: string
+  readonly themeColors?: Readonly<Record<string, string>>
 }
 
-export type FrameworkArtifactKind = 'panel-page' | 'operation-endpoint'
+export type FrameworkArtifactKind = 'auth-page' | 'panel-page' | 'operation-endpoint'
 
 export type FrameworkArtifactOwnership = {
   readonly path: string
@@ -18,6 +39,11 @@ export type FrameworkArtifactOwnership = {
 export type FrameworkArtifactManifest = {
   readonly version: 1
   readonly artifacts: readonly FrameworkArtifactOwnership[]
+}
+
+export type FrameworkArtifactDirectories = {
+  readonly pages: string
+  readonly server: string
 }
 
 export type ExistingFrameworkArtifact = {
@@ -44,6 +70,7 @@ export type FrameworkArtifactPlan = {
 }
 
 export type PlanFrameworkArtifactsInput = {
+  readonly directories?: FrameworkArtifactDirectories
   readonly framework: FrameworkId
   readonly panels: readonly DiscoveredPanelPath[]
   readonly existingArtifacts?: readonly ExistingFrameworkArtifact[]

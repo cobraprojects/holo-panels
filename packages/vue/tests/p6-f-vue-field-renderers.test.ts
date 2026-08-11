@@ -187,15 +187,14 @@ describe('P6-F Vue field renderer contracts', () => {
     const container = mountField({
       collectionStore,
       createCollectionItem: () => ({ title: '' }),
-      definition: definition('sections', 'repeater', { maximumItems: 3 }),
+      definition: definition('sections', 'repeater', { fields: [{ label: 'Title', path: 'title', required: true, type: 'text' }], maximumItems: 3 }),
       registry: createComponentRegistry(),
-      renderRepeaterItem: (_value, index) => h('strong', `Section ${index + 1}`),
       store: formStore,
     })
 
     container.querySelector<HTMLButtonElement>('button[aria-label="Clone item 1"]')?.click()
     await nextTick()
-    expect(container.textContent).toContain('Section 2')
+    expect(container.querySelectorAll('input[required]')).toHaveLength(2)
     expect(formStore.state.values.sections).toHaveLength(2)
     expect(container.querySelector('button[aria-label="Move item 2 up"]')).not.toBeNull()
 

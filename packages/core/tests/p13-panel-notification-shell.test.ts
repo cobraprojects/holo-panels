@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { DISCOVERY_MARKER, type DiscoverableDefinition } from '../src/discovery/types'
 import type { HoloAuth } from '../src/panels/contracts'
-import { definePanel, type PanelBuilder } from '../src/panels/panel'
+import { definePanel, PanelBuilder } from '../src/panels/panel'
 import { PanelRuntime } from '../src/panels/runtime'
 
 class Actor {
@@ -20,6 +21,57 @@ function auth(actor: Actor): HoloAuth<Actor> {
 }
 
 describe('P13 panel database notification shell configuration', () => {
+  it('infers panel actors from Holo model-shaped sources', async () => {
+    const User = {
+      create: async (_values: { readonly name: string }) => ({ id: 'user-1', name: 'Admin', role: 'admin' as const }),
+      definition: { hidden: ['name'] as const },
+    }
+    const panel = definePanel('admin', User)
+      .access(({ actor }) => {
+        expectTypeOf(actor.id).toEqualTypeOf<string>()
+        expectTypeOf(actor.role).toEqualTypeOf<'admin'>()
+        expectTypeOf<'name' extends keyof typeof actor ? true : false>().toEqualTypeOf<false>()
+        return actor.role === 'admin'
+      })
+      .presentActor(actor => ({ id: actor.id, name: 'must-not-leak', role: actor.role }))
+
+    expect(panel).toBeInstanceOf(PanelBuilder)
+    await expect(panel.compile().server.presentActor({ id: 'user-1', role: 'admin' })).resolves.toEqual({ id: 'user-1', role: 'admin' })
+  })
+
+  it('supports planned panel features and explicit registration', () => {
+    const resource: DiscoverableDefinition<'resource'> = {
+      client: { slug: 'posts' },
+      discoveryMarker: DISCOVERY_MARKER,
+      id: 'posts',
+      kind: 'resource',
+      server: { resolve: () => 'server-only' },
+    }
+    const page: DiscoverableDefinition<'page'> = {
+      client: { path: '/admin/reports' },
+      discoveryMarker: DISCOVERY_MARKER,
+      id: 'reports',
+      kind: 'page',
+    }
+    const panel = definePanel('admin')
+      .globalSearch()
+      .databaseNotifications()
+      .databaseNotificationsPolling('30s')
+      .resources([resource])
+      .pages([page])
+      .compile()
+
+    expect(panel.manifest.globalSearch).toBe(true)
+    expect(panel.manifest.databaseNotifications?.polling).toBe(30_000)
+    expect(panel.server.registered.map(registration => `${registration.definition.kind}:${registration.definition.id}`)).toEqual([
+      'resource:posts',
+      'page:reports',
+    ])
+    expect(JSON.stringify(panel.manifest)).not.toContain('server-only')
+    expect(() => definePanel('admin').databaseNotificationsPolling('500ms')).toThrow('between 1s and 1h')
+    expect(() => definePanel('admin').resources([resource, resource])).toThrow('already registered')
+  })
+
   it('compiles deterministic frozen defaults and preserves the concrete builder type', () => {
     const disabled = definePanel('disabled', Actor).compile()
     const builder = definePanel('admin', Actor).databaseNotifications()

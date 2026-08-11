@@ -19,14 +19,14 @@ function view(model: InfolistActionAcceptanceModel) {
 
 function driver(container: HTMLDivElement, destroy: () => Promise<void>): InfolistActionAcceptanceDriver {
   const required = <TElement extends Element>(selector: string): TElement => {
-    const element = container.querySelector<TElement>(selector)
+    const element = document.body.querySelector<TElement>(selector)
     if (!element) throw new Error(`Acceptance element "${selector}" was not rendered`)
     return element
   }
   const update = async (operation: () => Promise<void> | void): Promise<void> => act(async () => operation())
   return {
     clickText: text => update(() => {
-      const element = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.trim() === text)
+      const element = Array.from(document.body.querySelectorAll('button')).find(button => button.textContent?.trim() === text)
       if (!element) throw new Error(`Acceptance button "${text}" was not rendered`)
       element.click()
     }),
@@ -41,7 +41,7 @@ function driver(container: HTMLDivElement, destroy: () => Promise<void>): Infoli
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }),
     keydown: (selector, key) => update(() => { required<HTMLElement>(selector).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key })) }),
-    markup: () => container.innerHTML,
+    markup: () => document.body.innerHTML,
     sync: update,
   }
 }

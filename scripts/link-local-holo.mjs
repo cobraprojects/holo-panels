@@ -1,6 +1,7 @@
 import { access, lstat, mkdir, readFile, readdir, realpath, rm, symlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { satisfiesVersionRange } from './published-manifest-policy.mjs'
 
 const defaultRepositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -160,7 +161,7 @@ export async function createLocalHoloLinkPlan(options = {}) {
     const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'))
     if (manifest.name !== packageName) throw new Error(`Expected ${packageName} at ${packageRoot}`)
     const catalogVersion = panelsManifest.workspaces?.catalog?.[packageName]
-    if (catalogVersion !== `^${manifest.version}`) throw new Error(`${packageName} ${manifest.version} does not match Panels catalog ${catalogVersion ?? '(missing)'}`)
+    if (!satisfiesVersionRange(catalogVersion, manifest.version)) throw new Error(`${packageName} ${manifest.version} does not match Panels catalog ${catalogVersion ?? '(missing)'}`)
     const bins = []
     for (const [name, executable] of Object.entries(manifest.bin ?? {})) {
       validateBinName(name, packageName)

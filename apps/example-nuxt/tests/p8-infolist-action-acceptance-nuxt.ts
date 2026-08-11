@@ -9,10 +9,10 @@ import type {
 } from '../../../packages/testing/src/infolist-action-acceptance/index'
 
 function component(model: InfolistActionAcceptanceModel) {
-  return defineComponent(() => () => [
+  return defineComponent(() => () => h('div', [
     ...model.entries.map(store => h(VueEntryRenderer, { entry: { action: model.entryAction, store }, key: store.snapshot.id })),
     h(VueActionRenderer, { action: model.actions.publish, recordIds: [42], store: model.actionStore }),
-  ])
+  ]))
 }
 
 function driver(container: HTMLDivElement, destroy: () => void): InfolistActionAcceptanceDriver {

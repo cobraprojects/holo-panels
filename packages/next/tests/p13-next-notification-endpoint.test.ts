@@ -84,7 +84,7 @@ function runtime(panelDefinition = panel): NextPanelsRuntime {
 
 function operationRequest(payload: JsonObject): Request {
   const envelope = createRequestEnvelope({ id: 'request-p13-endpoint', operation: 'notification', panelId: 'admin', payload })
-  return new Request('https://example.test/_holo/panels/admin/notification', {
+  return new Request('https://example.test/holo/panels/admin/notification', {
     body: new URLSearchParams({ [TRANSPORT_REQUEST_FIELD]: JSON.stringify(envelope), _token: 'valid' }),
     headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': 'valid' },
     method: 'POST',

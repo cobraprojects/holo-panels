@@ -1,14 +1,18 @@
 import type { H3Event } from 'h3'
 import type { Component } from 'vue'
-import type { ClientNotificationRealtime, ComponentRegistry, Effect, JsonObject, JsonValue } from '@holo-js/panels-vue'
+import type { ClientNotificationRealtime, ComponentRegistry, Effect, JsonObject, JsonValue, PanelShellBootstrap } from '@holo-js/panels-vue'
 import type { holo as nuxtHolo } from '@holo-js/adapter-nuxt/runtime'
 import type { CompiledPanelDefinition } from '@holo-js/panels-vue'
+import type { ResolvedWidget } from '@holo-js/panels-vue/server'
+
+export type NuxtPanelRegistryValue = object | { readonly compile: () => object }
+export type NuxtPanelServerRegistry = Readonly<Record<string, () => Promise<NuxtPanelRegistryValue>>>
 
 export type NuxtPanelJsonPrimitive = boolean | number | string | null
 export type NuxtPanelJsonValue = JsonValue
 export type NuxtPanelJsonObject = JsonObject
 
-export type NuxtPanelOperation = 'action' | 'bootstrap' | 'form-submit' | 'notification' | 'options' | 'page-data' | 'resolver' | 'table-data' | 'upload'
+export type NuxtPanelOperation = 'action' | 'bootstrap' | 'form-submit' | 'global-search' | 'notification' | 'options' | 'page-data' | 'resolver' | 'table-data' | 'upload'
 
 export interface NuxtPanelNavigationItem {
   readonly badge: string | null
@@ -21,22 +25,7 @@ export interface NuxtPanelNavigationItem {
   readonly sort: number
 }
 
-export interface NuxtPanelManifest {
-  readonly branding: { readonly favicon: string | null, readonly logo: string | null, readonly name: string }
-  readonly databaseNotifications: {
-    readonly placement: 'sidebar' | 'topbar'
-    readonly polling: false | number
-    readonly realtime: boolean
-  } | null
-  readonly default: boolean
-  readonly id: string
-  readonly navigation: readonly NuxtPanelNavigationItem[]
-  readonly navigationMode: 'sidebar' | 'topbar'
-  readonly path: string
-  readonly sidebarCollapsible: boolean
-  readonly theme: NuxtPanelJsonObject
-  readonly userMenu: readonly { readonly id: string, readonly label: string, readonly path: string }[]
-}
+export type NuxtPanelManifest = PanelShellBootstrap['manifest']
 
 export interface NuxtPanelPageManifest {
   readonly body: { readonly component: string, readonly properties: NuxtPanelJsonObject } | null
@@ -44,6 +33,7 @@ export interface NuxtPanelPageManifest {
   readonly pageType: 'create' | 'custom' | 'edit' | 'list' | 'related-record' | 'singular' | 'view'
   readonly path: string
   readonly schemaId: string | null
+  readonly widgets: { readonly footer: readonly string[], readonly header: readonly string[] }
 }
 
 export interface NuxtPanelPageData {
@@ -56,18 +46,17 @@ export interface NuxtPanelPageData {
   readonly title: string
 }
 
-export interface NuxtPanelBootstrap {
-  readonly actor: NuxtPanelJsonObject
-  readonly manifest: NuxtPanelManifest
-  readonly notifications: { readonly realtimeChannel: string | null } | null
-  readonly provider: string | null
-}
+export type NuxtPanelBootstrap = PanelShellBootstrap
 
 export interface NuxtPanelPage {
   readonly bootstrap: NuxtPanelBootstrap
   readonly effects?: readonly Effect[]
   readonly page: NuxtPanelPageData
   readonly path: string
+  readonly widgets: {
+    readonly footer: readonly ResolvedWidget<JsonValue>[]
+    readonly header: readonly ResolvedWidget<JsonValue>[]
+  }
 }
 
 export interface UsePanelPageOptions {
@@ -76,8 +65,11 @@ export interface UsePanelPageOptions {
   readonly path?: string
 }
 
-export interface NuxtPanelOperationContext {
-  readonly actor: unknown
+export interface NuxtPanelOperationContext<
+  TActor = unknown,
+  TTenant = unknown,
+> {
+  readonly actor: TActor
   readonly event: H3Event
   readonly getApp: () => ReturnType<typeof nuxtHolo.getApp>
   readonly getAuth: () => ReturnType<typeof nuxtHolo.getAuth>
@@ -88,29 +80,54 @@ export interface NuxtPanelOperationContext {
   readonly provider: string | null
   readonly requestId: string
   readonly signal: AbortSignal
+  readonly tenant: TTenant | undefined
 }
 
-export interface NuxtPanelOperationResult {
-  readonly data: unknown
+export interface NuxtPanelOperationResult<TResult = unknown> {
+  readonly data: TResult
   readonly effects?: readonly Effect[]
   readonly status?: number
 }
 
-export interface CreatePanelOperationHandlerOptions {
+export interface CreatePanelOperationHandlerOptions<
+  TActor = unknown,
+  TTenant = unknown,
+  TResult = unknown,
+> {
   readonly panelIds: readonly string[]
-  readonly runtime: NuxtPanelRuntime
+  readonly runtime: NuxtPanelRuntime<TActor, TTenant, TResult>
 }
 
-export interface NuxtPanelRuntimePanel {
-  readonly access: (context: { readonly actor: unknown, readonly operation: NuxtPanelOperation, readonly panelId: string, readonly signal: AbortSignal }) => boolean | Promise<boolean>
-  readonly definition?: CompiledPanelDefinition<never>
+export interface CreateNuxtPanelRouteHandlerOptions<
+  TActor = unknown,
+  TTenant = unknown,
+  TResult = unknown,
+> {
+  readonly panelId: string
+  readonly runtime: NuxtPanelRuntime<TActor, TTenant, TResult>
+}
+
+export interface NuxtPanelRuntimePanel<TActor = unknown> {
+  readonly access: (context: { readonly actor: TActor, readonly operation: NuxtPanelOperation, readonly panelId: string, readonly signal: AbortSignal }) => boolean | Promise<boolean>
+  readonly definition?: CompiledPanelDefinition<TActor>
   readonly guard: string
 }
 
-export interface NuxtPanelRuntime {
-  readonly execute: (context: NuxtPanelOperationContext) => NuxtPanelOperationResult | Promise<NuxtPanelOperationResult>
-  readonly panels: Readonly<Record<string, NuxtPanelRuntimePanel>>
-  readonly resolveTenant?: (event: H3Event) => unknown | Promise<unknown>
+export interface NuxtPanelRuntime<
+  TActor = unknown,
+  TTenant = unknown,
+  TResult = unknown,
+> {
+  readonly execute: (context: NuxtPanelOperationContext<TActor, TTenant>) => NuxtPanelOperationResult<TResult> | Promise<NuxtPanelOperationResult<TResult>>
+  readonly panels: Readonly<Record<string, NuxtPanelRuntimePanel<TActor>>>
+  readonly registry?: NuxtPanelServerRegistry
+  readonly resolveTenant?: (event: H3Event) => Promise<TTenant> | TTenant
+}
+
+export function defineNuxtPanelRuntime<TActor, TTenant, TResult = unknown>(
+  runtime: NuxtPanelRuntime<TActor, TTenant, TResult>,
+): NuxtPanelRuntime<TActor, TTenant, TResult> {
+  return runtime
 }
 
 export interface PanelPageProps {

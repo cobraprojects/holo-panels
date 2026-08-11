@@ -54,6 +54,7 @@ const panel = definePanel('admin', { prototype: { id: '' } })
 const registry: SvelteKitPanelRegistry<{ readonly id: string }> = {
   panels: { admin: panel },
   resolvePage: async () => { throw new Error('not used') },
+  resolveTenant: async () => { throw new Error('Tenant could not be resolved') },
   runtime: {
     bootstrap: async () => [],
     execute: async (_panelId, _operation, _signal, handler) => handler({ actor: { id: 'user-7' }, guard: 'admin', panelId: 'admin', provider: 'admins', signal: new AbortController().signal }),

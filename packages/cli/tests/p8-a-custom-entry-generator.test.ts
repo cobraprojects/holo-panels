@@ -19,7 +19,7 @@ afterEach(async () => {
 
 describe('P8-A custom infolist entry generator', () => {
   it.each([
-    ['next', '.tsx', 'export function RatingEntry'],
+    ['next', '.tsx', 'defineReactEntryRenderer'],
     ['nuxt', '.vue', '<template>'],
     ['sveltekit', '.svelte', '<script lang="ts">'],
   ] as const)('generates one definition and only the detected %s renderer', async (framework, extension, marker) => {
@@ -36,7 +36,9 @@ describe('P8-A custom infolist entry generator', () => {
       'server/admin/entries/RatingEntry.ts',
       `resources/panels/renderers/${framework}/entries/RatingEntry${extension}`,
     ])
-    expect(await readFile(join(root, files[0]!), 'utf8')).toBe("import { defineEntry } from '@holo-js/panels'\n\nexport default defineEntry('app:entry:rating')\n")
-    expect(await readFile(join(root, files[1]!), 'utf8')).toContain(marker)
+    expect(await readFile(join(root, files[0]!), 'utf8')).toBe("import { defineEntry } from '@holo-js/panels'\n\nexport default defineEntry('app:entry:rating', String)\n  .label('RatingEntry')\n  .renderer('app:entry:rating')\n")
+    const renderer = await readFile(join(root, files[1]!), 'utf8')
+    expect(renderer).toContain(marker)
+    expect(renderer).not.toContain('unknown')
   })
 })

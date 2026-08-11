@@ -6,6 +6,7 @@ import {
   toJsonValue,
   type Effect,
   type ErrorCategory,
+  type CompiledPanelDefinition,
   type JsonObject,
   type JsonValue,
   type ResponseEnvelope,
@@ -15,6 +16,9 @@ import {
   ActionExecutionError,
   AuthControllerError,
   decodeTransportServerRequest,
+  executePanelPipeline,
+  executePanelRoute,
+  panelErrorNotificationEffect,
   executePanelAuthOperation,
   executePanelTenantOperation,
   PanelTenantOperationError,
@@ -23,6 +27,7 @@ import {
   type PanelAuthOperation,
   type PanelAuthRuntime,
   type PanelTenantOperation,
+  type HoloAuth,
 } from '@holo-js/panels-vue/server'
 import {
   createError,
@@ -30,17 +35,22 @@ import {
   getMethod,
   getQuery,
   getRequestHeader,
+  getRequestHeaders,
+  getRequestURL,
   getRouterParam,
   type EventHandler,
   type H3Event,
 } from 'h3'
-import type { CreatePanelOperationHandlerOptions, NuxtPanelOperation, NuxtPanelOperationContext } from './contracts'
+import type { CreateNuxtPanelRouteHandlerOptions, CreatePanelOperationHandlerOptions, NuxtPanelOperation, NuxtPanelOperationContext, NuxtPanelRuntime, NuxtPanelRuntimePanel } from './contracts'
+
+export { createGeneratedNuxtPanelsRuntime } from './generated-runtime'
 import { assertPanelId, normalizePanelLocation, toJsonObject } from './validation'
 
-const OPERATIONS = new Set<NuxtPanelOperation>(['action', 'bootstrap', 'form-submit', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload'])
+const OPERATIONS = new Set<NuxtPanelOperation>(['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload'])
 const GET_OPERATIONS = new Set<NuxtPanelOperation>(['bootstrap', 'page-data'])
 const TENANT_OPERATIONS = new Set<PanelTenantOperation>(['profile-read', 'profile-update', 'register', 'switch'])
 const MAX_REQUEST_BYTES = 1_048_576
+const MAX_UPLOAD_REQUEST_BYTES = 67_108_864
 const MAX_RESPONSE_BYTES = 4_194_304
 const RESPONSE_HEADERS = Object.freeze({ 'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8' })
 const RAW_BODY = Symbol.for('h3RawBody')
@@ -134,17 +144,21 @@ function errorDetails(cause: unknown): { readonly category: ErrorCategory, reado
     const code = (cause as Error & { readonly code?: string }).code
     if (code === 'unauthenticated') return { category: 'authentication', code, message: 'Authentication is required.', retryable: false, status: 401 }
     if (code === 'panel-not-found') return { category: 'not-found', code, message: 'Panel not found.', retryable: false, status: 404 }
+    if (code === 'subscription-required') return { category: 'authorization', code, message: 'An active tenant subscription is required.', retryable: false, status: 402 }
     return { category: 'authorization', code: code ?? 'access-denied', message: 'Panel access was denied.', retryable: false, status: 403 }
   }
   if (name === 'PageAccessError') return { category: 'authorization', code: 'page_access_denied', message: 'Page access was denied.', retryable: false, status: 403 }
   if (name === 'ResourceRecordNotFoundError') return { category: 'not-found', code: 'record_not_found', message: 'Record not found.', retryable: false, status: 404 }
   if (name === 'ResourceInputError') return { category: 'validation', code: 'invalid_resource_input', message: cause instanceof Error ? cause.message : 'Resource input is invalid.', retryable: false, status: 422 }
+  if (name === 'RelationRecordNotFoundError') return { category: 'not-found', code: 'relation_record_not_found', message: 'Related record not found.', retryable: false, status: 404 }
+  if (name === 'RelationInputError' || name === 'RelationPivotInputError' || name === 'RelationListPaginationError') return { category: 'validation', code: 'invalid_relation_input', message: 'Relation input is invalid.', retryable: false, status: 422 }
+  if (name === 'RelationOperationNotAllowedError') return { category: 'authorization', code: 'relation_operation_denied', message: 'Relation operation is not allowed.', retryable: false, status: 403 }
   if (name === 'PanelNotificationAccessError') return { category: 'authorization', code: 'notification_access_denied', message: 'Notification access was denied.', retryable: false, status: 403 }
   if (name === 'PanelNotificationRequestError') return { category: 'validation', code: 'invalid_notification_request', message: 'Notification input is invalid.', retryable: false, status: 400 }
   return { category: 'internal', code: 'operation_failed', message: 'Panel operation failed.', retryable: true, status: 500 }
 }
 
-function errorEnvelope(id: string, cause: unknown): { readonly response: Readonly<ResponseEnvelope>, readonly status: number } {
+function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefinition<object>): { readonly response: Readonly<ResponseEnvelope>, readonly status: number } {
   const error = errorDetails(cause)
   let effects: readonly Effect[] = Object.freeze([])
   if (cause instanceof ActionExecutionError) {
@@ -161,6 +175,8 @@ function errorEnvelope(id: string, cause: unknown): { readonly response: Readonl
       effects = Object.freeze([])
     }
   }
+  const notification = panel && effects.length === 0 ? panelErrorNotificationEffect(panel, error.status) : null
+  if (notification) effects = Object.freeze([...effects, notification])
   return {
     response: Object.freeze({
       effects: [...effects],
@@ -228,15 +244,15 @@ async function transportRequest(event: H3Event, body: Uint8Array): ReturnType<ty
   })
 }
 
-async function boundedRequestBody(event: H3Event): Promise<Uint8Array> {
+async function boundedRequestBody(event: H3Event, maximumBytes = MAX_REQUEST_BYTES): Promise<Uint8Array> {
   const declared = requestHeader(event, 'content-length')
   if (declared !== undefined) {
     const length = Number(declared)
-    if (!Number.isSafeInteger(length) || length < 0 || length > MAX_REQUEST_BYTES) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
+    if (!Number.isSafeInteger(length) || length < 0 || length > maximumBytes) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
   }
   const cachedBody = Reflect.get(event, '_requestBody') as unknown
   if (cachedBody instanceof Uint8Array) {
-    if (cachedBody.byteLength > MAX_REQUEST_BYTES) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
+    if (cachedBody.byteLength > maximumBytes) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
     return cachedBody
   }
   const chunks: Uint8Array[] = []
@@ -250,7 +266,7 @@ async function boundedRequestBody(event: H3Event): Promise<Uint8Array> {
       const item = await reader.read()
       if (item.done) break
       size += item.value.byteLength
-      if (size > MAX_REQUEST_BYTES) {
+      if (size > maximumBytes) {
         await reader.cancel()
         throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
       }
@@ -261,14 +277,14 @@ async function boundedRequestBody(event: H3Event): Promise<Uint8Array> {
     const existing = requestWithBody[RAW_BODY] ?? requestWithBody.rawBody ?? requestWithBody.body
     if (existing !== undefined && (Buffer.isBuffer(existing) || typeof existing === 'string' || existing instanceof URLSearchParams)) {
       const body = Buffer.isBuffer(existing) ? existing : Buffer.from(existing.toString())
-      if (body.byteLength > MAX_REQUEST_BYTES) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
+      if (body.byteLength > maximumBytes) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
       Reflect.set(event, '_requestBody', body)
       return body
     }
     for await (const value of event.node.req) {
       const chunk = typeof value === 'string' ? Buffer.from(value) : value as Uint8Array
       size += chunk.byteLength
-      if (size > MAX_REQUEST_BYTES) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
+      if (size > maximumBytes) throw createError({ statusCode: 413, statusMessage: 'Panel operation payload is too large' })
       chunks.push(chunk)
     }
   }
@@ -277,36 +293,58 @@ async function boundedRequestBody(event: H3Event): Promise<Uint8Array> {
   return body
 }
 
-async function authorizedContext(
+async function authorizedContext<TActor, TTenant, TResult>(
   event: H3Event,
   operation: NuxtPanelOperation,
   panelId: string,
-  options: CreatePanelOperationHandlerOptions,
-): Promise<{ readonly actor: unknown, readonly guard: AuthenticatedGuard, readonly provider: string | null, readonly signal: AbortSignal }> {
-  const panel = options.runtime.panels[panelId]
+  options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>,
+): Promise<{ readonly actor: TActor, readonly definition?: CompiledPanelDefinition<TActor>, readonly guard: AuthenticatedGuard, readonly provider: string | null, readonly signal: AbortSignal }> {
+  const panel = await runtimePanel(options.runtime, panelId)
   if (!panel) throw Object.assign(new Error('Panel not found'), { code: 'panel-not-found', name: 'PanelRuntimeError' })
+  const routing = panel.definition?.manifest.routing
+  const hosts = routing ? [...routing.domains, ...(routing.domain === null ? [] : [routing.domain])] : []
+  if (hosts.length > 0 && !hosts.includes(getRequestURL(event).hostname.toLowerCase())) {
+    throw Object.assign(new Error('Panel not found'), { code: 'panel-not-found', name: 'PanelRuntimeError' })
+  }
   const auth = await holo.getAuth()
   if (!auth) throw Object.assign(new Error('Authentication is required'), { code: 'unauthenticated', name: 'PanelRuntimeError' })
   const guard = auth.guard(panel.guard) as AuthenticatedGuard
   const [actor, provider] = await Promise.all([guard.refreshUser?.() ?? guard.user(), guard.provider?.() ?? null])
   if (actor === null) throw Object.assign(new Error('Authentication is required'), { code: 'unauthenticated', name: 'PanelRuntimeError' })
   const signal = requestSignal(event)
-  if (!await panel.access({ actor, operation, panelId, signal })) throw Object.assign(new Error('Panel access was denied'), { code: 'access-denied', name: 'PanelRuntimeError' })
-  return { actor, guard, provider, signal }
+  if (!await panel.access({ actor: actor as TActor, operation, panelId, signal })) throw Object.assign(new Error('Panel access was denied'), { code: 'access-denied', name: 'PanelRuntimeError' })
+  return { actor: actor as TActor, ...(panel.definition ? { definition: panel.definition } : {}), guard, provider, signal }
 }
 
-async function executeGet(
+async function executeGet<TActor, TTenant, TResult>(
   event: H3Event,
   operation: NuxtPanelOperation,
   panelId: string,
-  options: CreatePanelOperationHandlerOptions,
-): Promise<JsonValue> {
+  options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>,
+): Promise<JsonValue | Response> {
   const input = toJsonObject(getQuery(event))
   const normalizedInput = operation === 'page-data' && typeof input.path === 'string'
     ? Object.freeze({ ...input, path: normalizePanelLocation(input.path) })
     : input
   const scope = await authorizedContext(event, operation, panelId, options)
-  const result = await options.runtime.execute({
+  const configuredPanel = await runtimePanel(options.runtime, panelId)
+  const billing = configuredPanel?.definition?.server.tenancy?.billing
+  const billingPath = configuredPanel?.definition?.manifest.tenancy?.billing?.path
+  if (operation === 'page-data' && typeof normalizedInput.path === 'string' && normalizedInput.path === billingPath && billing) {
+    const action = billing.getRouteAction()
+    if (typeof action !== 'function') throw new TypeError('Panel tenant billing providers must return a route action function')
+    const headers = new Headers(Object.entries(getRequestHeaders(event)).flatMap(([name, value]) => value === undefined ? [] : [[name, value] as [string, string]]))
+    const request = (event as H3Event & { readonly web?: { readonly request?: Request } }).web?.request
+      ?? new Request(getRequestURL(event), { headers })
+    return action(request, {
+      actor: scope.actor,
+      guard: configuredPanel.guard,
+      panelId,
+      provider: scope.provider,
+      signal: scope.signal,
+    })
+  }
+  const execute = async () => options.runtime.execute({
     actor: scope.actor,
     event,
     getApp: () => holo.getApp(),
@@ -317,19 +355,29 @@ async function executeGet(
     provider: scope.provider,
     requestId: requestId(event),
     signal: scope.signal,
+    tenant: await options.runtime.resolveTenant?.(event),
   })
+  const result = scope.definition
+    ? await executePanelPipeline(scope.definition, { actor: scope.actor, guard: scope.definition.guard, panelId, provider: scope.provider, signal: scope.signal }, operation, execute, { initial: true })
+    : await execute()
   const data = toJsonValue(result.data)
   if (operation !== 'page-data' || !data || typeof data !== 'object' || Array.isArray(data)) return data
   const effects = await takeSessionEffects(scope.guard, panelId)
   return Object.freeze({ ...data, effects: toJsonValue(effects) })
 }
 
-export function createPanelOperationHandler(options: CreatePanelOperationHandlerOptions): EventHandler {
+export function createPanelOperationHandler<TActor, TTenant, TResult>(options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>): EventHandler {
   if (!options.panelIds.length) throw new Error('Nuxt panel operation handlers require at least one panel ID')
   const allowed = new Set(options.panelIds)
   if (allowed.size !== options.panelIds.length) throw new Error('Nuxt panel operation handler IDs must be unique')
   for (const panelId of allowed) assertPanelId(panelId)
-  if (Object.keys(options.runtime.panels).some(panelId => !allowed.has(panelId)) || [...allowed].some(panelId => !options.runtime.panels[panelId])) {
+  const runtimePanelIds = options.runtime.registry
+    ? Object.keys(options.runtime.registry).flatMap(key => {
+        const match = /^([^:]+):panel:[^:]+$/u.exec(key)
+        return match?.[1] ? [match[1]] : []
+      })
+    : Object.keys(options.runtime.panels)
+  if (runtimePanelIds.some(panelId => !allowed.has(panelId)) || [...allowed].some(panelId => !runtimePanelIds.includes(panelId))) {
     throw new Error('Nuxt panel runtime IDs must exactly match the generated panel allow-list')
   }
   const protect = csrfProtection()
@@ -342,18 +390,22 @@ export function createPanelOperationHandler(options: CreatePanelOperationHandler
       if (!GET_OPERATIONS.has(operation)) throw createError({ statusCode: 405, statusMessage: 'Method Not Allowed' })
       await protect(event)
       const id = requestId(event)
+      let configuredPanel: CompiledPanelDefinition<object> | undefined
       try {
-        return dataResponse(id, await executeGet(event, operation, panelId, options))
+        configuredPanel = (await runtimePanel(options.runtime, panelId))?.definition as CompiledPanelDefinition<object> | undefined
+        const result = await executeGet(event, operation, panelId, options)
+        return result instanceof Response ? result : dataResponse(id, result)
       } catch (cause) {
-        const failure = errorEnvelope(id, cause)
+        const failure = errorEnvelope(id, cause, configuredPanel)
         return envelopeResponse(failure.response, failure.status)
       }
     }
 
     let guard: AuthenticatedGuard | undefined
+    let configuredPanel: CompiledPanelDefinition<object> | undefined
     let id = requestId(event)
     try {
-      const body = await boundedRequestBody(event)
+      const body = await boundedRequestBody(event, operation === 'upload' ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES)
       await protect(event)
       const decoded = await transportRequest(event, body)
       id = decoded.envelope.id
@@ -362,7 +414,8 @@ export function createPanelOperationHandler(options: CreatePanelOperationHandler
       }
       const scope = await authorizedContext(event, operation, panelId, options)
       guard = scope.guard
-      const context: NuxtPanelOperationContext = {
+      configuredPanel = scope.definition as CompiledPanelDefinition<object> | undefined
+      const context: NuxtPanelOperationContext<TActor, TTenant> = {
         actor: scope.actor,
         event,
         getApp: () => holo.getApp(),
@@ -374,15 +427,18 @@ export function createPanelOperationHandler(options: CreatePanelOperationHandler
         provider: scope.provider,
         requestId: id,
         signal: scope.signal,
+        tenant: await options.runtime.resolveTenant?.(event),
       }
-      const result = await options.runtime.execute(context)
+      const result = scope.definition
+        ? await executePanelPipeline(scope.definition, { actor: scope.actor, guard: scope.definition.guard, panelId, provider: scope.provider, signal: scope.signal }, operation, () => options.runtime.execute(context))
+        : await options.runtime.execute(context)
       const data = toJsonValue(result.data)
       const response = successEnvelope(id, data, result.effects ?? [])
       const serialized = envelopeResponse(response, result.status ?? 200)
       if (serialized.status < 300) await flashRedirectToasts(scope.guard, panelId, response.effects)
       return serialized
     } catch (cause) {
-      const failure = errorEnvelope(id, cause)
+      const failure = errorEnvelope(id, cause, configuredPanel)
       const serialized = envelopeResponse(failure.response, failure.status)
       if (guard && serialized.status === failure.status) await flashRedirectToasts(guard, panelId, failure.response.effects)
       return serialized
@@ -395,7 +451,7 @@ export const nuxtPanelServerInternals = Object.freeze({ authorizedContext, bound
 const AUTH_OPERATIONS = new Set<PanelAuthOperation>([
   'email-verification-resend', 'email-verification-verify', 'login', 'logout', 'mfa-challenge', 'mfa-disable',
   'mfa-enrollment-begin', 'mfa-enrollment-confirm', 'mfa-recovery', 'mfa-recovery-codes-regenerate', 'mfa-status',
-  'password-reset-request', 'password-reset', 'profile-read', 'profile-update',
+  'password-reset-request', 'password-reset', 'profile-read', 'profile-update', 'registration',
 ])
 const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'profile-read'])
 
@@ -419,9 +475,28 @@ function authOperationFromEvent(event: H3Event): PanelAuthOperation {
   return operation as PanelAuthOperation
 }
 
-function compiledPanel(options: CreatePanelOperationHandlerOptions, panelId: string) {
-  const definition = options.runtime.panels[panelId]?.definition
+async function runtimePanel<TActor, TTenant, TResult>(runtime: NuxtPanelRuntime<TActor, TTenant, TResult>, panelId: string): Promise<NuxtPanelRuntimePanel<TActor> | undefined> {
+  const configured = runtime.panels[panelId]
+  if (configured) return configured
+  const loader = runtime.registry?.[`${panelId}:panel:${panelId}`]
+  if (!loader) return undefined
+  const loaded = await loader()
+  const definition = 'compile' in loaded && typeof loaded.compile === 'function' ? loaded.compile() : loaded
+  if (!definition || typeof definition !== 'object' || Reflect.get(definition, 'kind') !== 'panel') return undefined
+  const compiled = definition as CompiledPanelDefinition<TActor>
+  return Object.freeze({
+    access: (context: { readonly actor: TActor, readonly operation: NuxtPanelOperation, readonly panelId: string, readonly signal: AbortSignal }) => compiled.server.access({ actor: context.actor, guard: compiled.guard, operation: context.operation, panelId, provider: null, signal: context.signal }),
+    definition: compiled,
+    guard: compiled.guard,
+  })
+}
+
+async function compiledPanel<TActor, TTenant, TResult>(event: H3Event, options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>, panelId: string) {
+  const definition = (await runtimePanel(options.runtime, panelId))?.definition
   if (!definition || definition.manifest.id !== panelId) throw createError({ statusCode: 404, statusMessage: 'Panel not found' })
+  const routing = definition.manifest.routing
+  const hosts = routing ? [...routing.domains, ...(routing.domain === null ? [] : [routing.domain])] : []
+  if (hosts.length > 0 && !hosts.includes(getRequestURL(event).hostname.toLowerCase())) throw createError({ statusCode: 404, statusMessage: 'Panel not found' })
   return definition as unknown as Parameters<typeof executePanelAuthOperation>[0]['panel']
 }
 
@@ -437,7 +512,7 @@ async function nativePayload(event: H3Event, method: string): Promise<unknown> {
   }
 }
 
-function validateNativeOptions(options: CreatePanelOperationHandlerOptions): ReadonlySet<string> {
+function validateNativeOptions<TActor, TTenant, TResult>(options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>): ReadonlySet<string> {
   if (!options.panelIds.length) throw new Error('Nuxt panel auth and tenant handlers require at least one panel ID')
   const allowed = new Set(options.panelIds)
   if (allowed.size !== options.panelIds.length) throw new Error('Nuxt panel auth and tenant handler IDs must be unique')
@@ -445,7 +520,7 @@ function validateNativeOptions(options: CreatePanelOperationHandlerOptions): Rea
   return allowed
 }
 
-export function createPanelAuthHandler(options: CreatePanelOperationHandlerOptions): EventHandler {
+export function createPanelAuthHandler<TActor, TTenant, TResult>(options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>): EventHandler {
   const allowed = validateNativeOptions(options)
   const protect = csrfProtection()
   return defineEventHandler(event => runWithNuxtRequest(event, async () => {
@@ -462,11 +537,13 @@ export function createPanelAuthHandler(options: CreatePanelOperationHandlerOptio
       const outcome = await executePanelAuthOperation({
         auth,
         operation,
-        panel: compiledPanel(options, panelId),
+        panel: await compiledPanel(event, options, panelId),
         payload: input,
         services: Object.freeze({ event, getApp: () => holo.getApp(), getAuth: () => holo.getAuth() }),
         signal: requestSignal(event),
-        tenant: await options.runtime.resolveTenant?.(event),
+        tenant: operation === 'profile-read' || operation === 'profile-update'
+          ? await options.runtime.resolveTenant?.(event)
+          : undefined,
       })
       return nativeResponse(outcome.data, outcome.status, outcome.cookies, outcome.redirectTo)
     } catch (cause) {
@@ -475,7 +552,7 @@ export function createPanelAuthHandler(options: CreatePanelOperationHandlerOptio
   }))
 }
 
-export function createPanelTenantHandler(options: CreatePanelOperationHandlerOptions): EventHandler {
+export function createPanelTenantHandler<TActor, TTenant, TResult>(options: CreatePanelOperationHandlerOptions<TActor, TTenant, TResult>): EventHandler {
   const allowed = validateNativeOptions(options)
   const protect = csrfProtection()
   return defineEventHandler(event => runWithNuxtRequest(event, async () => {
@@ -488,7 +565,7 @@ export function createPanelTenantHandler(options: CreatePanelOperationHandlerOpt
       const panelId = panelFromEvent(event, allowed)
       const input = await nativePayload(event, method)
       if (method === 'POST') await protect(event)
-      const panel = compiledPanel(options, panelId)
+      const panel = await compiledPanel(event, options, panelId)
       const auth = await holo.getAuth() as unknown as PanelAuthRuntime<object> | undefined
       if (!auth) throw createError({ statusCode: 403, statusMessage: 'Panel tenant context is invalid' })
       const guard = auth.guard(panel.guard)
@@ -498,6 +575,35 @@ export function createPanelTenantHandler(options: CreatePanelOperationHandlerOpt
       if (!await panel.server.access({ ...scope, operation: 'bootstrap' })) throw new PanelTenantOperationError('not-found')
       const result = await executePanelTenantOperation({ operation: operation as PanelTenantOperation, panel, payload: input, scope })
       return nativeResponse(result.data, result.status)
+    } catch (cause) {
+      return nativeFailure(cause)
+    }
+  }))
+}
+
+export function createGeneratedNuxtPanelRouteHandler<TActor, TTenant, TResult>(options: CreateNuxtPanelRouteHandlerOptions<TActor, TTenant, TResult>): EventHandler {
+  assertPanelId(options.panelId)
+  const protect = csrfProtection()
+  return defineEventHandler(event => runWithNuxtRequest(event, async () => {
+    try {
+      const method = getMethod(event).toUpperCase()
+      if (!['DELETE', 'GET', 'PATCH', 'POST', 'PUT'].includes(method)) throw createError({ statusCode: 405, statusMessage: 'Method Not Allowed' })
+      if (method !== 'GET') await protect(event)
+      const webRequest = (event as H3Event & { readonly web?: { readonly request?: Request } }).web?.request
+      const headers = new Headers()
+      for (const [name, value] of Object.entries(getRequestHeaders(event))) {
+        if (typeof value === 'string') headers.set(name, value)
+      }
+      const body = method === 'GET' ? undefined : await boundedRequestBody(event)
+      const requestBody = body ? new Uint8Array(body.byteLength) : undefined
+      if (requestBody && body) requestBody.set(body)
+      const request = webRequest ?? new Request(getRequestURL(event), { ...(requestBody ? { body: requestBody.buffer } : {}), headers, method })
+      const panel = await compiledPanel(event, { panelIds: [options.panelId], runtime: options.runtime }, options.panelId)
+      const auth = await holo.getAuth() as unknown as HoloAuth<TActor> | undefined
+      if (!auth) throw createError({ statusCode: 401, statusMessage: 'Authentication is unavailable' })
+      const response = await executePanelRoute(panel as CompiledPanelDefinition<TActor>, auth, request)
+      if (!response) throw createError({ statusCode: 404, statusMessage: 'Panel custom route not found' })
+      return response
     } catch (cause) {
       return nativeFailure(cause)
     }

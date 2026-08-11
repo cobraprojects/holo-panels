@@ -19,6 +19,7 @@ export type PanelAuthOperation =
   | 'password-reset'
   | 'profile-read'
   | 'profile-update'
+  | 'registration'
 
 export interface ExecutePanelAuthOperationOptions<TActor, TTenant, TServices> {
   readonly auth: PanelAuthRuntime<TActor>
@@ -114,9 +115,14 @@ export async function executePanelAuthOperation<TActor, TTenant, TServices>(
       const result = await controller.logout()
       return redirectOutcome(result.cookies, { guard: result.guard }, result.redirectTo)
     }
+    case 'registration': {
+      const exact = exactInput(input, ['credentials'])
+      await controller.register(credentials(exact.credentials))
+      return redirectOutcome([], { status: 'registered' }, options.panel.manifest.auth?.registration?.redirectTo ?? options.panel.manifest.path)
+    }
     case 'profile-read':
       exactInput(input, [])
-      return outcome(await controller.profileValues(options.signal))
+      return outcome(await controller.profilePage(options.signal))
     case 'profile-update': {
       const exact = exactInput(input, ['values'])
       await controller.updateProfile(inputObject(exact.values), options.signal)
@@ -182,6 +188,6 @@ export async function executePanelAuthOperation<TActor, TTenant, TServices>(
 export function panelAuthOperationStatus(error: AuthControllerError): 401 | 403 | 404 | 422 {
   if (error.code === 'unauthenticated') return 401
   if (error.code === 'access-denied') return 403
-  if (error.code === 'auth-unavailable' || error.code === 'multi-factor-unavailable' || error.code === 'password-reset-unavailable' || error.code === 'profile-unavailable') return 404
+  if (error.code === 'auth-unavailable' || error.code === 'multi-factor-unavailable' || error.code === 'password-reset-unavailable' || error.code === 'profile-unavailable' || error.code === 'registration-unavailable') return 404
   return 422
 }

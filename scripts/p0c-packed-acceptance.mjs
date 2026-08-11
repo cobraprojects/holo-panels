@@ -140,7 +140,7 @@ function installPackage(packageName) {
   }
 }
 
-for (const dependencyName of Object.keys(manifest.dependencies ?? {})) {
+for (const dependencyName of Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })) {
   installPackage(dependencyName)
 }
 
@@ -237,7 +237,15 @@ async function collectRequiredPackageRoots() {
     '@holo-js/kernel',
     '@holo-js/security',
     '@holo-js/validation',
+    { packageName: '@sveltejs/adapter-node', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: '@sveltejs/kit', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: '@sveltejs/vite-plugin-svelte', parentRoot: repositoryRoot, includeDependencies: true },
     'bindings',
+    { packageName: 'svelte', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: 'svelte-check', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: 'typescript', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: 'vite', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: 'nuxt', parentRoot: holoRoot, includeDependencies: true },
   ]
   const required = new Map()
 
@@ -259,9 +267,16 @@ async function collectRequiredPackageRoots() {
       'node_modules/.bun/node_modules',
       ...packageName.split('/'),
     )
+    const workspaceDependencyRoot = join(
+      repositoryRoot,
+      'node_modules',
+      ...packageName.split('/'),
+    )
     const packageRoot = holoEntry?.packageRoot
       ?? await realpath(localDependencyRoot).catch(async () => {
-        return await realpath(hoistedDependencyRoot).catch(() => undefined)
+        return await realpath(hoistedDependencyRoot).catch(async () => {
+          return await realpath(workspaceDependencyRoot).catch(() => undefined)
+        })
       })
 
     if (!packageRoot) {
@@ -363,6 +378,10 @@ async function installPackedPanels(projectRoot, packedPackages, controlledPackag
     '@holo-js/panels-plugin-money': packedPackages['@holo-js/panels-plugin-money'],
     '@holo-js/panels-shield': packedPackages['@holo-js/panels-shield'],
   }
+  manifest.devDependencies = {
+    ...manifest.devDependencies,
+    typescript: packedPackages.typescript,
+  }
   manifest.overrides = {
     ...manifest.overrides,
     ...packedPackages,
@@ -442,7 +461,7 @@ async function validateGeneratedPanelArtifacts(projectRoot, packageManagerEnviro
       'server/models/Post.ts',
     ],
   }, null, 2)}\n`)
-  await run(bunExecutable, ['run', 'tsc', '--', '-p', 'tsconfig.panels.json'], projectRoot, packageManagerEnvironment)
+  await run(bunExecutable, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.panels.json'], projectRoot, packageManagerEnvironment)
 
   const registry = JSON.parse(await readFile(
     join(projectRoot, '.holo-js/generated/panels/registry.json'),
@@ -471,7 +490,7 @@ async function validateGeneratedPanelArtifacts(projectRoot, packageManagerEnviro
     'utf8',
   ))
   const moneyAsset = pluginManifest.assets?.find(asset => asset.id === 'holo.money.money-style')
-  if (!moneyAsset?.publicPath || !/^\/_holo\/panels\/plugins\/holo\.money\/[a-f0-9]{16}-money\.css$/u.test(moneyAsset.publicPath)) {
+  if (!moneyAsset?.publicPath || !/^\/holo\/panels\/plugins\/holo\.money\/[a-f0-9]{16}-money\.css$/u.test(moneyAsset.publicPath)) {
     throw new Error('Packed money plugin did not generate a fingerprinted stylesheet asset')
   }
   if (!pluginManifest.translations?.some(translation => translation.namespace === 'holo.money')) {

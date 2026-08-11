@@ -85,4 +85,14 @@ describe('P11-B client global search', () => {
     expect(observed).toContain('second')
     vi.useRealTimers()
   })
+
+  it('uses the panel-defined keyboard bindings instead of hardcoded shortcuts', () => {
+    const store = new GlobalSearchStore({ search: async term => ({ panelId: 'admin', results: [], term }) }, {
+      keybindings: ['shift+ctrl+p'],
+    })
+
+    expect(store.shortcut('k', { ctrl: true, meta: false })).toBe(false)
+    expect(store.shortcut('p', { ctrl: true, meta: false, shift: true })).toBe(true)
+    expect(store.snapshot.open).toBe(true)
+  })
 })

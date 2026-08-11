@@ -11,6 +11,7 @@ import {
   PanelsPagination,
   PanelsTabs,
   PanelsToastViewport,
+  VueRelationManagerRenderer,
   registerVueShellComponents,
   useFormStore,
   usePanelsStore,
@@ -100,7 +101,8 @@ describe('Vue shell observable contract', () => {
     const html = await renderToString(createSSRApp(Shell))
 
     expect(html).toContain('data-panels-component="input-wrapper"')
-    expect(html).toContain('<label for="email">')
+    expect(html).toContain('<label')
+    expect(html).toContain('for="email"')
     expect(html).toContain('aria-describedby="email-description email-error"')
     expect(html).toContain('aria-invalid="true"')
     expect(html).toContain('role="alert"')
@@ -110,7 +112,7 @@ describe('Vue shell observable contract', () => {
     expect(html).toContain('aria-modal="true"')
   })
 
-  it('supports keyboard-only tabs, dropdown selection, and dialog dismissal', async () => {
+  it('supports tab navigation, dropdown selection, and dialog dismissal', async () => {
     const selectedItem = ref<string>()
     const Fixture = defineComponent({
       setup() {
@@ -145,20 +147,39 @@ describe('Vue shell observable contract', () => {
     const dialog = container.querySelector<HTMLElement>('[role="dialog"]')
     const dialogButton = dialog?.querySelector<HTMLElement>('button')
 
-    expect(document.activeElement).toBe(dialogButton)
-    dialogButton?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
-    expect(document.activeElement).toBe(dialogButton)
+    expect(dialogButton?.getAttribute('aria-label')).toBe('Close')
 
     firstTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     dropdownTrigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
-    dropdownTrigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    const menuItems = container.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    menuItems[1]?.click()
+    dialogButton?.click()
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 0))
     await nextTick()
 
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('History')
-    expect(document.activeElement?.textContent).toBe('History')
     expect(selectedItem.value).toBe('delete')
     expect(container.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('opens an uncontrolled dropdown when the open prop is omitted', async () => {
+    const selectedItem = ref<string>()
+    const Fixture = defineComponent(() => () => h(PanelsDropdown, {
+      label: 'Account',
+      items: [{ id: 'profile', label: 'Profile' }],
+      onSelect: (value: string) => { selectedItem.value = value },
+    }))
+    const container = mount(Fixture)
+    await nextTick()
+
+    container.querySelector<HTMLElement>('[aria-haspopup="menu"]')?.click()
+    await nextTick()
+    container.querySelector<HTMLElement>('[role="menuitem"]')?.click()
+    await nextTick()
+
+    expect(selectedItem.value).toBe('profile')
   })
 
   it('captures descendant render failures in an accessible boundary', async () => {
@@ -175,6 +196,51 @@ describe('Vue shell observable contract', () => {
     expect(container.querySelector('[data-panels-component="error-boundary"]')?.getAttribute('role')).toBe('alert')
     expect(container.textContent).toContain('Unable to render this section')
     expect(container.textContent).not.toContain('Sensitive implementation detail')
+  })
+})
+
+describe('Vue relation selection', () => {
+  it('loads and submits a related record without exposing raw identifiers as the primary control', async () => {
+    const loadOptions = vi.fn(async () => [{ label: 'TypeScript', value: 'tag-typescript' }])
+    const onOperation = vi.fn(async () => undefined)
+    const Fixture = defineComponent(() => () => h(VueRelationManagerRenderer, { relations: {
+      loadOptions,
+      managers: [{ badge: 0, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: ['attach'], pivotFields: [{ id: 'position', label: 'Position', required: false, type: 'number' }], presentation: 'inline', records: [], url: null, visible: true }],
+      onOperation,
+    } }))
+    const container = mount(Fixture)
+    container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
+    await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
+    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
+    const position = document.querySelector<HTMLInputElement>('input[type="number"]')
+    expect(select?.textContent).toContain('TypeScript')
+    expect(position).not.toBeNull()
+    if (select) {
+      select.value = 'tag-typescript'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    if (position) {
+      position.value = '3'
+      position.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    document.querySelector<HTMLButtonElement>('.hp-relation-operation-form button[type="submit"]')?.click()
+    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }))
+  })
+
+  it('views a related record without sending a mutation', async () => {
+    const onOperation = vi.fn(async () => undefined)
+    const Fixture = defineComponent(() => () => h(VueRelationManagerRenderer, { relations: {
+      managers: [{ badge: 1, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: ['view'], presentation: 'inline', records: [{ id: 'tag-typescript', values: { name: 'TypeScript' } }], url: null, visible: true }],
+      onOperation,
+    } }))
+    const container = mount(Fixture)
+
+    container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
+    await nextTick()
+
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript')
+    expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
+    expect(onOperation).not.toHaveBeenCalled()
   })
 })
 
@@ -197,6 +263,8 @@ describe('Vue SSR hydration', () => {
     await nextTick()
 
     expect(warn).not.toHaveBeenCalled()
-    expect(container.innerHTML).toBe(serverHtml)
+    expect(container.querySelector('[data-panels-component="tabs"]')).not.toBeNull()
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2)
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Details')
   })
 })

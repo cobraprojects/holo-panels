@@ -9,7 +9,7 @@ function cookie(name: string): string {
 }
 
 async function switchTenant(): Promise<void> {
-  const response = await fetch('/_holo/panels/admin/tenant/switch', {
+  const response = await fetch('/holo/panels/admin/tenant/switch', {
     body: JSON.stringify({ routeKey: tenant.value }),
     headers: { 'content-type': 'application/json', 'x-csrf-token': cookie('XSRF-TOKEN') },
     method: 'POST',

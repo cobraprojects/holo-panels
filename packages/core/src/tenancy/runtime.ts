@@ -203,18 +203,25 @@ export class PanelTenancyRuntime<
   }
 
   async switch(routeKey: string, scope: PanelAuthenticatedScope<TActor>): Promise<PanelResolvedTenant<TTenant, TTenantId>> {
+    const resolved = await this.resolveRoute(routeKey, scope)
+    await this.options.persistence.save(scope, resolved.id)
+    return resolved
+  }
+
+  async resolveRoute(routeKey: string, scope: PanelAuthenticatedScope<TActor>): Promise<PanelResolvedTenant<TTenant, TTenantId>> {
     let candidate: string
     try {
       candidate = validateRouteKey(routeKey)
     } catch {
       throw new PanelTenantResolutionError('not-found')
     }
-    const tenant = await this.options.findMembershipByRouteKey(candidate, scope)
+    const tenant = this.options.resolveTenantUsing
+      ? await this.options.resolveTenantUsing(candidate, scope)
+      : await this.options.findMembershipByRouteKey(candidate, scope)
     const resolved = tenant === null ? null : await this.resolveTenant(tenant, scope)
     if (resolved === null || resolved.routeKey !== candidate || !await this.options.authorize(resolved.tenant, scope)) {
       throw new PanelTenantResolutionError('not-found')
     }
-    await this.options.persistence.save(scope, resolved.id)
     return resolved
   }
 

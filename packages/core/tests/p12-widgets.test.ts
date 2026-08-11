@@ -55,7 +55,7 @@ describe('P12 widget definitions and resolution', () => {
     expect(defineTableWidget('latest-orders').compile().manifest.family).toBe('table')
     expect(defineCustomWidget('weather', createExtensionTypeId('app.weather', 'widget', 'forecast')).compile().manifest.type).toBe('app.weather:widget:forecast')
     expect(stats.compileDiscoveryDefinition()).toMatchObject({
-      componentKeys: ['panels.widgets.stats'],
+      componentKeys: [],
       id: 'sales',
       kind: 'widget',
       permissionKeys: ['widgets.sales.view'],

@@ -15,12 +15,12 @@ function compareVersions(left, right) {
   return 0
 }
 
-export function satisfiesCaretRange(range, version) {
-  const minimum = typeof range === 'string' && range.startsWith('^')
-    ? parseStableVersion(range.slice(1))
-    : undefined
+export function satisfiesVersionRange(range, version) {
+  const operator = typeof range === 'string' ? /^(\^|>=)/u.exec(range)?.[1] : undefined
+  const minimum = operator ? parseStableVersion(range.slice(operator.length)) : undefined
   const candidate = parseStableVersion(version)
   if (!minimum || !candidate || compareVersions(candidate, minimum) < 0) return false
+  if (operator === '>=') return true
 
   const [major, minor, patch] = minimum
   const maximum = major > 0

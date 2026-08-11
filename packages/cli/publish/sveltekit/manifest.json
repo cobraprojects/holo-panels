@@ -3,20 +3,36 @@
   "framework": "sveltekit",
   "files": [
     {
+      "path": "Button.svelte",
+      "checksum": "14fe56d4d49ee12c38e42a6fe320548a667cb280fc51602cea339a5e4aba5a6f"
+    },
+    {
+      "path": "Icon.svelte",
+      "checksum": "480065bdea070ea2e26d8e228e1a339b9c5d98605f09d11dedd71939b68f5595"
+    },
+    {
+      "path": "Input.svelte",
+      "checksum": "c81fe120dbb73106e706718b32aa9b5f4b21cf912846ae34046442181d9c7719"
+    },
+    {
       "path": "PanelPage.svelte",
-      "checksum": "73483259c5780191090befc3fc846ee409230c9c7f30b764e9a5ff76628c6358"
+      "checksum": "07d15f1d6a2efbfc375ec7e2dff47caf73d4a5d48d8e558d9f3fd52127f1ccc5"
     },
     {
       "path": "ResourcePage.svelte",
-      "checksum": "21413913748908d2de61701286ee7c48f8f2678e6fccb15972f1c86ee9c863e6"
+      "checksum": "863e3683e23b84521915007cebdfb1d4e1d132d32e4266af50861d044ed40c73"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "checksum": "3cdf282ccc6db25b3fcf2e108a8e7cfbd5c7ed9b7b310fb5ea7852ba9c78e05c"
     },
     {
       "path": "contracts.ts",
-      "checksum": "2541514f1d6d1b03b0392514aad3a5361ff5b622325ee400a31da513b74797dd"
+      "checksum": "9f263898f4bd40f36c07af0aa4927ce7467aeba29d3db5cc8f3c62b3048d949d"
     },
     {
       "path": "resource-page.ts",
-      "checksum": "9f9c773ad0aa96cb7de907b02586b249cd085531de4228d648892a05fd7ee980"
+      "checksum": "5bc733287a317f3ab7fa5d201a58120fa21ee50cc486cb6d5dfa6f0ccce9ed0a"
     }
   ]
 }

@@ -122,6 +122,12 @@ describe('discovery definition validation', () => {
       kind: 'resource',
     })).toBe(true)
     expect(isDiscoverableBuilder({ ...definition, compileDiscoveryDefinition: 'not-a-function' })).toBe(false)
+    expect(isDiscoverableBuilder({
+      compileDiscoveryDefinition: () => definition,
+      discoveryMarker: DISCOVERY_MARKER,
+      id: () => undefined,
+      kind: 'panel',
+    })).toBe(true)
 
     expect(isPanelDefinition({ ...definition, kind: 'panel' })).toBe(true)
     expect(isResourceDefinition({ ...definition, kind: 'resource' })).toBe(true)

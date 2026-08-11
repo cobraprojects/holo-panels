@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
+  import Input from '../components/Input.svelte'
+  import Select from '../components/Select.svelte'
   import type { Component } from 'svelte'
   import type { JsonValue } from '@holo-js/panels-client'
   import type { SvelteComponentRegistry } from '../registry'
@@ -91,19 +94,19 @@
   {#if filter.manifest.type === 'date-range'}
     <fieldset>
       <legend>{filter.manifest.label ?? filter.manifest.id}</legend>
-      <label for={`${id}-from`}>From<input id={`${id}-from`} type="date" value={range.from} oninput={(event) => update({ from: event.currentTarget.value || null, to: range.to || null })} /></label>
-      <label for={`${id}-to`}>To<input id={`${id}-to`} type="date" value={range.to} oninput={(event) => update({ from: range.from || null, to: event.currentTarget.value || null })} /></label>
+      <label for={`${id}-from`}>From<Input id={`${id}-from`} type="date" value={range.from} oninput={(event) => update({ from: event.currentTarget.value || null, to: range.to || null })} /></label>
+      <label for={`${id}-to`}>To<Input id={`${id}-to`} type="date" value={range.to} oninput={(event) => update({ from: range.from || null, to: event.currentTarget.value || null })} /></label>
     </fieldset>
   {:else if filter.manifest.type === 'ternary'}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
-    <select {id} value={typeof value === 'string' ? value : 'all'} onchange={(event) => update(event.currentTarget.value)}>
+    <Select {id} value={typeof value === 'string' ? value : 'all'} onchange={(event) => update(event.currentTarget.value)}>
       <option value="all">All</option><option value="true">Yes</option><option value="false">No</option>
-    </select>
+    </Select>
   {:else if filter.manifest.type === 'trashed'}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
-    <select {id} value={typeof value === 'string' ? value : 'without'} onchange={(event) => update(event.currentTarget.value)}>
+    <Select {id} value={typeof value === 'string' ? value : 'without'} onchange={(event) => update(event.currentTarget.value)}>
       <option value="without">Without trashed</option><option value="with">With trashed</option><option value="only">Only trashed</option>
-    </select>
+    </Select>
   {:else if filter.manifest.type === 'advanced-query'}
     <fieldset>
       <legend>{filter.manifest.label ?? filter.manifest.id}</legend>
@@ -116,27 +119,28 @@
           {@const scalarType = typeof column?.scalarType === 'string' ? column.scalarType : 'string'}
           {@const inputValue = Array.isArray(condition.value) ? condition.value.join(', ') : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''}
           <div data-advanced-condition>
-            <select aria-label="Column" value={columnId} onchange={(event) => changeCondition(index, 'column', event.currentTarget.value)}>{#each columns as item (String(item.id))}<option value={String(item.id)}>{String(item.id)}</option>{/each}</select>
-            <select aria-label="Operator" value={operator} onchange={(event) => changeCondition(index, 'operator', event.currentTarget.value)}>{#each operators as item (item)}<option value={item}>{item}</option>{/each}</select>
-            {#if !['null', 'not-null'].includes(operator)}<input aria-label="Value" type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} oninput={(event) => changeCondition(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} />{/if}
-            <button type="button" onclick={() => removeCondition(index)}>Remove condition</button>
+            <Select aria-label="Column" value={columnId} onchange={(event) => changeCondition(index, 'column', event.currentTarget.value)}>{#each columns as item (String(item.id))}<option value={String(item.id)}>{String(item.id)}</option>{/each}</Select>
+            <Select aria-label="Operator" value={operator} onchange={(event) => changeCondition(index, 'operator', event.currentTarget.value)}>{#each operators as item (item)}<option value={item}>{item}</option>{/each}</Select>
+            {#if !['null', 'not-null'].includes(operator)}<Input aria-label="Value" type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} oninput={(event) => changeCondition(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} />{/if}
+            <Button type="button" onclick={() => removeCondition(index)}>Remove condition</Button>
           </div>
         {/if}
       {/each}
-      <button type="button" disabled={columns.length === 0} onclick={addCondition}>Add condition</button>
+      <Button type="button" disabled={columns.length === 0} onclick={addCondition}>Add condition</Button>
     </fieldset>
   {:else if CustomFilter}
     <CustomFilter {filter} {update} {value} />
   {:else if filter.options}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
-    <select {id} {multiple} value={multiple ? selectedValues : selectedValues[0]} onchange={(event) => updateSelect(event.currentTarget)}>
+    <Select {id} {multiple} value={multiple ? selectedValues : selectedValues[0]} onchange={(event) => updateSelect(event.currentTarget)}>
+      {#if !multiple}<option value="">All</option>{/if}
       {#each filter.options as option (String(option.value))}<option value={String(option.value ?? '')} disabled={option.disabled}>{option.label}</option>{/each}
-    </select>
+    </Select>
   {:else if filter.manifest.type.includes('boolean') || typeof value === 'boolean'}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
-    <input {id} type="checkbox" checked={value === true} onchange={(event) => update(event.currentTarget.checked)} />
+    <Input {id} type="checkbox" checked={value === true} onchange={(event) => update(event.currentTarget.checked)} />
   {:else}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
-    <input {id} type="search" value={typeof value === 'number' || typeof value === 'string' ? String(value) : ''} oninput={(event) => update(event.currentTarget.value)} />
+    <Input {id} type="search" value={typeof value === 'number' || typeof value === 'string' ? String(value) : ''} oninput={(event) => update(event.currentTarget.value)} />
   {/if}
 </div>

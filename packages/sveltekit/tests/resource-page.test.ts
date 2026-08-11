@@ -1,8 +1,12 @@
 import { ClientActionStore, ClientToastStore, FormStore, TableStateStore, toJsonValue, type ClientActionManifest, type JsonObject } from '@holo-js/panels-svelte'
 import { render } from 'svelte/server'
 import { describe, expect, it, vi } from 'vitest'
-import { PanelPage, type PanelPageData } from '../src'
-import { resourceOperationIdentifier, resourceOperationIdentifiers } from '../src/resource-page'
+import { createSvelteKitPanelComponentRegistry, PanelPage, type PanelPageData } from '../src'
+import { resourceOperationIdentifier, resourceOperationIdentifiers, resourcePageMetadata } from '../src/resource-page'
+import CustomAvatar from './fixtures/CustomAvatar.svelte'
+import CustomNotification from './fixtures/CustomNotification.svelte'
+import CustomSidebar from './fixtures/CustomSidebar.svelte'
+import CustomTopbar from './fixtures/CustomTopbar.svelte'
 
 const posts = [
   { category: 'engineering', city: 'Cairo', id: 'first-post', slug: 'first-post', title: 'First post' },
@@ -37,7 +41,7 @@ const postResource = {
   actions: [actionPayload({ confirmation: 'Delete this post?', id: 'posts.delete', kind: 'delete', label: 'Delete', type: 'core:action:delete' })],
   basePath: '/admin/posts',
   columns: ['title', 'slug', 'category', 'city'].map(path => ({
-    manifest: { alignment: 'start', copyable: path === 'slug', hidden: false, inlineEditor: null, label: `${path[0]?.toUpperCase() ?? ''}${path.slice(1)}`, path, sortable: true, toggleable: true, type: 'text', width: null, wrap: true },
+    manifest: { alignment: 'start', copyable: path === 'slug', formatters: path === 'title' ? [{ kind: 'prefix', value: 'Post: ' }] : [], hidden: false, inlineEditor: null, label: `${path[0]?.toUpperCase() ?? ''}${path.slice(1)}`, lineClamp: path === 'title' ? 2 : null, path, searchable: path === 'title', sortable: true, toggleable: true, type: 'text', width: null, wrap: true },
   })),
   createLabel: 'Create post',
   dependencies: [
@@ -80,6 +84,7 @@ function pageData(pageType: 'create' | 'edit' | 'list' | 'view'): PanelPageData 
         branding: { favicon: null, logo: null, name: 'Admin' },
         databaseNotifications: null,
         default: true,
+        globalSearch: true,
         id: 'admin',
         navigation: [{ badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 10 }],
         navigationMode: 'sidebar',
@@ -121,6 +126,7 @@ function pageData(pageType: 'create' | 'edit' | 'list' | 'view'): PanelPageData 
       subheading: null,
       title: 'Posts',
     },
+    widgets: { footer: [], header: [] },
   }
 }
 
@@ -129,6 +135,73 @@ function slug(value: string): string {
 }
 
 describe('SvelteKit resource page acceptance', () => {
+  it('uses the configured panel home URL for the brand link', () => {
+    const data = pageData('list')
+    const configured: PanelPageData = {
+      ...data,
+      panel: {
+        ...data.panel,
+        manifest: {
+          ...data.panel.manifest,
+          icons: { posts: 'home' },
+          navigation: data.panel.manifest.navigation.map(item => ({ ...item, icon: 'posts' })),
+          routing: { domain: null, domains: [], homeUrl: '/admin/overview' },
+        },
+      },
+    }
+
+    const markup = render(PanelPage, { props: { data: configured } }).body
+    expect(markup).toContain('href="/admin/overview"')
+    expect(markup).toContain('data-icon="home"')
+  })
+
+  it('makes relation managers interactive on view pages only when the panel enables it', () => {
+    const current = pageData('view')
+    const relations = [{ badge: null, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'author', label: 'Author', operations: ['select', 'associate'], presentation: 'inline', records: [{ id: 'author-1', values: { name: 'Ada' } }], url: null, visible: true }]
+    const configured = (readOnly: boolean): PanelPageData => ({
+      ...current,
+      panel: {
+        ...current.panel,
+        manifest: {
+          ...current.panel.manifest,
+          runtime: {
+            databaseTransactions: false,
+            readOnlyRelationManagersOnResourceViewPagesByDefault: readOnly,
+            resourceCreatePageRedirect: 'edit',
+            resourceEditPageRedirect: null,
+            spa: false,
+            spaUrlExceptions: [],
+            strictAuthorization: false,
+            unsavedChangesAlerts: false,
+          },
+        },
+      },
+      page: { ...current.page, data: { ...current.page.data, relations } },
+    })
+
+    const interactive = render(PanelPage, { props: { data: configured(false) } }).body
+    const readOnly = render(PanelPage, { props: { data: configured(true) } }).body
+    expect(interactive).toContain('data-operation="associate"')
+    expect(readOnly).not.toContain('data-operation="associate"')
+    expect(readOnly).toContain('Ada')
+  })
+
+  it('keeps generated edit routes stable when a mutable route key changes', () => {
+    const metadata = resourcePageMetadata({
+      form: { fields: [] },
+      id: 'posts',
+      infolist: { entries: [] },
+      labels: { plural: 'Posts' },
+      recordId: 'id',
+      routeKey: 'slug',
+      table: { actions: [], columns: [], filters: [] },
+    }, '/admin/posts/old-slug/edit', 'edit')
+
+    expect(metadata?.basePath).toBe('/admin/posts')
+    expect(metadata?.routes.edit).toBe('/admin/posts/:record/edit')
+    expect(metadata?.routes.view).toBe('/admin/posts/:record')
+  })
+
   it('uses route-key identifiers for update and row-delete operations', () => {
     const record = { id: 'post-primary-id', slug: 'post-route-key', title: 'Post' }
 
@@ -145,6 +218,7 @@ describe('SvelteKit resource page acceptance', () => {
 
     expect(list).toContain('data-panels-component="table"')
     expect(list).toContain('First post')
+    expect(list).toContain('Post: First post')
     expect(list).toContain('href="/admin/posts/create"')
     expect(list).toContain('href="/admin/posts/first-post"')
     expect(list).toContain('href="/admin/posts/first-post/edit"')
@@ -155,6 +229,130 @@ describe('SvelteKit resource page acceptance', () => {
     expect(view).toContain('href="/admin/posts/first-post/edit"')
     expect(edit).toContain('value="First post"')
     expect(render(PanelPage, { props: { data: pageData('list') } }).body).toBe(list)
+  })
+
+  it('renders top navigation without a sidebar when the panel selects topbar mode', () => {
+    const data = pageData('list')
+    const topbar = render(PanelPage, {
+      props: { data: { ...data, panel: { ...data.panel, manifest: { ...data.panel.manifest, navigationMode: 'topbar' } } } },
+    }).body
+
+    expect(topbar).toContain('hp-panel-navigation--topbar')
+    expect(topbar).not.toContain('hp-panel-sidebar')
+  })
+
+  it('omits the panel header when the provider disables the topbar', () => {
+    const data = pageData('list')
+    const withoutTopbar = render(PanelPage, {
+      props: { data: { ...data, panel: { ...data.panel, manifest: { ...data.panel.manifest, layout: { ...data.panel.manifest.layout!, topbar: false } } } } },
+    }).body
+
+    expect(withoutTopbar).not.toContain('hp-panel-header')
+  })
+
+  it('omits the account dropdown when the provider disables the user menu', () => {
+    const data = pageData('list')
+    const withoutUserMenu = render(PanelPage, {
+      props: { data: { ...data, panel: { ...data.panel, manifest: { ...data.panel.manifest, userMenuEnabled: false } } } },
+    }).body
+
+    expect(withoutUserMenu).not.toContain('hp-panel-user-trigger')
+  })
+
+  it('omits navigation chrome when the provider disables navigation', () => {
+    const data = pageData('list')
+    const withoutNavigation = render(PanelPage, {
+      props: { data: { ...data, panel: { ...data.panel, manifest: { ...data.panel.manifest, navigationEnabled: false } } } },
+    }).body
+
+    expect(withoutNavigation).not.toContain('data-slot="sidebar"')
+    expect(withoutNavigation).not.toContain('hp-panel-navigation-toggle')
+  })
+
+  it('renders provider-configured topbar, sidebar, and avatar components', () => {
+    const data = pageData('list')
+    const registry = createSvelteKitPanelComponentRegistry()
+    registry.register({ component: CustomTopbar, source: 'acceptance', typeId: 'custom-topbar' })
+    registry.register({ component: CustomSidebar, source: 'acceptance', typeId: 'custom-sidebar' })
+    registry.register({ component: CustomAvatar, source: 'acceptance', typeId: 'custom-avatar' })
+    registry.register({ component: CustomNotification, source: 'acceptance', typeId: 'custom-notification' })
+    const configured = (components: { readonly sidebar: string | null, readonly topbar: string | null }, avatarProvider: string | null): PanelPageData => ({
+      ...data,
+      panel: {
+        ...data.panel,
+        manifest: { ...data.panel.manifest, assets: [{ id: 'admin-theme', src: '/admin/theme.css', type: 'css' }], branding: { ...data.panel.manifest.branding, avatarProvider }, components },
+      },
+    })
+
+    const chromeRender = render(PanelPage, { props: { data: configured({ sidebar: 'custom-sidebar', topbar: 'custom-topbar' }, null), registry } })
+    const chrome = chromeRender.body
+    const configuredAvatar = configured({ sidebar: null, topbar: null }, 'custom-avatar')
+    const avatarData: PanelPageData = {
+      ...configuredAvatar,
+      panel: {
+        ...configuredAvatar.panel,
+        manifest: { ...configuredAvatar.panel.manifest, databaseNotifications: { component: 'custom-notification', lazy: true, placement: 'topbar', polling: false, realtime: false } },
+      },
+    }
+    const avatar = render(PanelPage, { props: { data: avatarData, registry } }).body
+    expect(chrome).toContain('data-custom-topbar="admin"')
+    expect(chrome).toContain('data-custom-sidebar="7"')
+    expect(chrome).not.toContain('hp-panel-header')
+    expect(chromeRender.head).toContain('data-panel-asset="admin-theme"')
+    expect(chromeRender.head).toContain('href="/admin/theme.css"')
+    expect(avatar).toContain('data-custom-avatar="7"')
+    expect(avatar).toContain('data-custom-notification="topbar"')
+  })
+
+  it('renders the built-in tenant switcher without application transport helpers', () => {
+    const data = pageData('list')
+    const html = render(PanelPage, {
+      props: {
+        data: {
+          ...data,
+          panel: {
+            ...data.panel,
+            manifest: { ...data.panel.manifest, tenancy: { enabled: true } },
+            tenancy: {
+              active: { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+              memberships: {
+                memberships: [
+                  { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+                  { avatarUrl: null, description: null, label: 'Globex', routeKey: 'globex' },
+                ],
+                nextCursor: null,
+              },
+            },
+          },
+        },
+      },
+    }).body
+
+    expect(html).toContain('aria-label="Tenant menu"')
+    expect(html).toContain('data-slot="dropdown-menu-trigger"')
+    expect(html).toContain('Acme')
+    const hidden = render(PanelPage, {
+      props: {
+        data: {
+          ...data,
+          panel: {
+            ...data.panel,
+            manifest: { ...data.panel.manifest, tenancy: { enabled: true, switcher: false } },
+            tenancy: {
+              active: { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+              memberships: {
+                memberships: [
+                  { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+                  { avatarUrl: null, description: null, label: 'Globex', routeKey: 'globex' },
+                ],
+                nextCursor: null,
+              },
+            },
+          },
+        },
+      },
+    }).body
+    expect(hidden).not.toContain('aria-label="Tenant menu"')
   })
 
   it('places the configured notification trigger without opening realtime during SSR', () => {
@@ -244,6 +442,24 @@ describe('SvelteKit resource page acceptance', () => {
       props: { data: { ...inventory, page: { ...inventory.page, manifest: { ...inventory.page.manifest, actions: { footer: [], header: [] } } } } },
     }).body
     expect(withoutEditAction).not.toContain('href="/control/inventory/widget-1/edit"')
+  })
+
+  it('renders accessible field labels when generated metadata omits them', () => {
+    const data = pageData('create')
+    const resource = data.page.data.resource
+    if (!resource || typeof resource !== 'object' || Array.isArray(resource) || !Array.isArray(resource.fields)) throw new Error('Create page is missing its resource fields')
+    const unlabeledFields = resource.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, label: null } : field)
+    const html = render(PanelPage, {
+      props: {
+        data: {
+          ...data,
+          page: { ...data.page, data: { ...data.page.data, resource: { ...resource, fields: unlabeledFields } } },
+        },
+      },
+    }).body
+
+    expect(html).toContain('Title')
+    expect(html).toContain('Category')
   })
 
   it('applies filter, slug, and dependent-city state through shared client stores', () => {

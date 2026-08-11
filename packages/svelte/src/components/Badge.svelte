@@ -4,4 +4,4 @@
   let { children, tone = 'neutral' }: Props = $props()
 </script>
 
-<span class="hp-badge hp-tone-{tone}" data-panels-component="badge">{@render children?.()}</span>
+<span class="hp-badge hp-tone-{tone}" data-panels-component="badge" data-slot="badge" data-variant={tone === 'danger' ? 'destructive' : tone === 'neutral' ? 'secondary' : tone}>{@render children?.()}</span>

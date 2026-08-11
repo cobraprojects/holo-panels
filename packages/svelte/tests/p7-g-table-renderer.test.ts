@@ -236,6 +236,7 @@ describe('P7-G Svelte table renderer', () => {
     expect(region?.getAttribute('tabindex')).toBe('0')
     expect(container.querySelector('th[scope="col"]')).not.toBeNull()
     expect(container.querySelector('td[data-label="Title"]')?.textContent).toBe('First')
+    expect(container.querySelector('input[aria-label="Select page"]')).toBeNull()
     expect(container.querySelector('nav[aria-label="Table pagination"]')).not.toBeNull()
   })
 
@@ -292,7 +293,7 @@ describe('P7-G Svelte table renderer', () => {
     const execute = vi.fn(async () => undefined)
     const container = mountTable({
       ...baseTable(store),
-      actions: [{ id: 'posts.publish', label: 'Publish', scope: 'bulk' }],
+      actions: [{ color: 'success', icon: 'check', id: 'posts.publish', label: 'Publish', scope: 'bulk' }],
       actionTransport: { execute },
     })
 
@@ -304,6 +305,8 @@ describe('P7-G Svelte table renderer', () => {
     flushClient()
     expect(store.snapshot.selection.mode).toBe('all-matching')
     const publish = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Publish')
+    expect(publish?.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
+    expect(publish?.getAttribute('data-color')).toBe('success')
     publish?.click()
     await Promise.resolve()
     flushClient()
@@ -364,6 +367,14 @@ describe('P7-G Svelte table renderer', () => {
     flushClient()
     expect(group?.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelector('td[data-label="Title"]')).toBeNull()
+  })
+
+  it('renders ungrouped records when the resolved group collection is empty', () => {
+    const table = { ...baseTable(createStore()), groups: [] }
+    const markup = renderServer(ServerFixture, { props: { table } }).body
+
+    expect(markup).toContain('First')
+    expect(markup).toContain('Second')
   })
 
   it('renders empty, loading, and sanitized error states', () => {

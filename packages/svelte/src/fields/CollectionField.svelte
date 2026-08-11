@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
+  import Input from '../components/Input.svelte'
   import type { JsonValue } from '@holo-js/panels-client'
   import type { Component } from 'svelte'
   import { toSvelteState } from '../stores'
@@ -19,13 +21,23 @@
     ? registry.resolve<SvelteEditorProps>(`panels:editor:${adapter}`, panelId, requestedFrom ?? definition.path)
     : DefaultEditor)
 
+  interface NestedField {
+    readonly label: string
+    readonly path: string
+    readonly required: boolean
+    readonly type: string
+  }
+
+  const blocks = $derived(Array.isArray(definition.properties?.blocks) ? definition.properties.blocks : [])
+  const repeaterFields = $derived(nestedFields(definition.properties?.fields))
+
   function syncCollection(): void {
     if (collectionStore) writeFieldValue(form, definition.path, collectionStore.values)
   }
 
-  function add(): void {
+  function add(blockType?: string): void {
     if (!collectionStore) return
-    collectionStore.add(kind === 'builder' ? { type: 'block' } : '')
+    collectionStore.add(kind === 'builder' ? { data: {}, type: blockType ?? '' } : kind === 'key-value' ? { key: '', value: '' } : {})
     syncCollection()
   }
 
@@ -48,6 +60,69 @@
     collectionStore?.replace(index, next)
     syncCollection()
   }
+
+  function entryPart(value: JsonValue, part: 'key' | 'value'): string {
+    return value && typeof value === 'object' && !Array.isArray(value) && typeof value[part] === 'string' ? value[part] : ''
+  }
+
+  function nestedFields(value: unknown): readonly NestedField[] {
+    if (!Array.isArray(value)) return []
+    return value.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+      const label = Reflect.get(item, 'label')
+      const path = Reflect.get(item, 'path')
+      const type = Reflect.get(item, 'type')
+      return typeof label === 'string' && typeof path === 'string' && typeof type === 'string'
+        ? [{ label, path, required: Reflect.get(item, 'required') === true, type }]
+        : []
+    })
+  }
+
+  function nestedValue(value: JsonValue, path: string): JsonValue | undefined {
+    let current: JsonValue | undefined = value
+    for (const segment of path.split('.')) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined
+      current = current[segment]
+    }
+    return current
+  }
+
+  function withNestedValue(value: JsonValue, path: string, next: JsonValue): JsonValue {
+    const result = value && typeof value === 'object' && !Array.isArray(value) ? structuredClone(value) : {}
+    const segments = path.split('.')
+    let target = result
+    for (const segment of segments.slice(0, -1)) {
+      const child = target[segment]
+      const object = child && typeof child === 'object' && !Array.isArray(child) ? child : {}
+      target[segment] = object
+      target = object
+    }
+    const final = segments.at(-1)
+    if (final) target[final] = next
+    return result
+  }
+
+  function itemFields(value: JsonValue): readonly NestedField[] {
+    if (kind !== 'builder') return repeaterFields
+    const type = value && typeof value === 'object' && !Array.isArray(value) && typeof value.type === 'string' ? value.type : ''
+    const block = blocks.find(item => item && typeof item === 'object' && !Array.isArray(item) && item.type === type)
+    return block && typeof block === 'object' && !Array.isArray(block) ? nestedFields(block.fields) : []
+  }
+
+  function itemData(value: JsonValue): JsonValue {
+    if (kind !== 'builder') return value
+    return value && typeof value === 'object' && !Array.isArray(value) && value.data && typeof value.data === 'object' && !Array.isArray(value.data) ? value.data : {}
+  }
+
+  function replaceItemField(index: number, item: JsonValue, field: NestedField, next: JsonValue): void {
+    const data = withNestedValue(itemData(item), field.path, next)
+    if (kind === 'builder') {
+      const type = item && typeof item === 'object' && !Array.isArray(item) && typeof item.type === 'string' ? item.type : ''
+      replace(index, { data, type })
+      return
+    }
+    replace(index, data)
+  }
 </script>
 
 {#if presentation.visible}
@@ -58,16 +133,32 @@
           {#each $collectionState?.items ?? [] as item, index (item.key)}
             <article data-collection-key={item.key}>
               {#if !item.collapsed}
-                <Editor value={jsonValue(item.value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={`${definition.label} item ${index + 1}`} inputId={`${inputId}-${index}`} invalid={Boolean($collectionState?.errors[String(index)]?.length)} setValue={(next) => replace(index, next)} />
+                {#if kind === 'key-value'}
+                  <span class="hp-key-value-entry"><Input aria-label="Key {index + 1}" disabled={presentation.disabled || presentation.readOnly} value={entryPart(item.value, 'key')} oninput={(event) => replace(index, { key: event.currentTarget.value, value: entryPart(item.value, 'value') })} /><Input aria-label="Value {index + 1}" disabled={presentation.disabled || presentation.readOnly} value={entryPart(item.value, 'value')} oninput={(event) => replace(index, { key: entryPart(item.value, 'key'), value: event.currentTarget.value })} /></span>
+                {:else if itemFields(item.value).length > 0}
+                  <div class="hp-collection-fields">{#each itemFields(item.value) as field (field.path)}
+                    {@const current = nestedValue(itemData(item.value), field.path)}
+                    {@const checkbox = field.type === 'toggle' || field.type === 'checkbox'}
+                    <label>{field.label}<Input type={checkbox ? 'checkbox' : 'text'} checked={checkbox ? current === true : undefined} value={checkbox ? undefined : typeof current === 'string' || typeof current === 'number' ? current : ''} required={field.required} disabled={presentation.disabled || presentation.readOnly} oninput={(event) => replaceItemField(index, item.value, field, checkbox ? event.currentTarget.checked : event.currentTarget.value)} /></label>
+                  {/each}</div>
+                {:else}
+                  <Editor value={jsonValue(item.value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={`${definition.label} item ${index + 1}`} inputId={`${inputId}-${index}`} invalid={Boolean($collectionState?.errors[String(index)]?.length)} setValue={(next) => replace(index, next)} />
+                {/if}
               {/if}
-              {#if Boolean(definition.properties?.collapsible)}<button type="button" disabled={presentation.disabled} onclick={() => collectionStore?.toggleCollapsed(index)}>{item.collapsed ? 'Expand' : 'Collapse'}</button>{/if}
-              {#if Boolean(definition.properties?.cloneable)}<button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => clone(index)}>Clone</button>{/if}
-              <button type="button" disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => move(index, index - 1)}>Move up</button>
-              <button type="button" disabled={presentation.disabled || presentation.readOnly || index === ($collectionState?.items.length ?? 0) - 1} onclick={() => move(index, index + 1)}>Move down</button>
-              <button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => remove(index)}>Remove</button>
+              {#if Boolean(definition.properties?.collapsible)}<Button type="button" disabled={presentation.disabled} onclick={() => collectionStore?.toggleCollapsed(index)}>{item.collapsed ? 'Expand' : 'Collapse'}</Button>{/if}
+              {#if Boolean(definition.properties?.cloneable)}<Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => clone(index)}>Clone</Button>{/if}
+              <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => move(index, index - 1)}>Move up</Button>
+              <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === ($collectionState?.items.length ?? 0) - 1} onclick={() => move(index, index + 1)}>Move down</Button>
+              <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => remove(index)}>Remove</Button>
             </article>
           {/each}
-          <button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={add}>Add {kind === 'builder' ? 'block' : 'item'}</button>
+          {#if kind === 'builder'}
+            {#each blocks as block}
+              {#if block && typeof block === 'object' && !Array.isArray(block) && typeof block.type === 'string'}<Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => add(String(block.type))}>Add {typeof block.label === 'string' ? block.label : String(block.type)}</Button>{/if}
+            {/each}
+          {:else}
+            <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => add()}>Add item</Button>
+          {/if}
         </div>
       {:else}
         <Editor value={jsonValue(value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={definition.label} {inputId} describedBy={attributes['aria-describedby']} errorMessageId={attributes['aria-errormessage']} invalid={Boolean(attributes['aria-invalid'])} setValue={(next) => writeFieldValue(form, definition.path, next)} />

@@ -1,6 +1,6 @@
 import { hashPassword } from '@holo-js/auth'
 import { defineSeeder } from '@holo-js/db'
-import { exampleActors, exampleDomainRecords } from '../../admin/domain/fixtures'
+import { exampleActors, exampleDomainRecords, exampleTenants } from '../../admin/domain/fixtures'
 import Category from '../../models/Category'
 import Comment from '../../models/Comment'
 import Media from '../../models/Media'
@@ -8,12 +8,16 @@ import Membership from '../../models/Membership'
 import Post from '../../models/Post'
 import PostTag from '../../models/PostTag'
 import Tag from '../../models/Tag'
+import Tenant from '../../models/Tenant'
 import User from '../../models/User'
 
 export default defineSeeder({
   name: 'AuthExampleSeeder',
   async run() {
     const password = await hashPassword('panel-secret')
+    await Tenant.unguarded(async () => {
+      for (const tenant of exampleTenants) await Tenant.updateOrCreate({ id: tenant.id }, { name: tenant.name, slug: tenant.key })
+    })
     await User.unguarded(async () => {
       for (const actor of exampleActors) {
         await User.updateOrCreate({ id: actor.id }, {
@@ -56,7 +60,7 @@ export default defineSeeder({
       for (const record of exampleDomainRecords.comments) await Comment.updateOrCreate({ id: record.id }, { authorName: record.authorName, body: record.body, postId: record.postId, status: record.status, tenantId: record.tenantId })
     })
     await PostTag.unguarded(async () => {
-      for (const record of exampleDomainRecords.postTags) await PostTag.updateOrCreate({ id: record.id }, { postId: record.postId, tagId: record.tagId, tenantId: record.tenantId })
+      for (const record of exampleDomainRecords.postTags) await PostTag.updateOrCreate({ id: record.id }, { position: record.position, postId: record.postId, tagId: record.tagId, tenantId: record.tenantId })
     })
   },
 })

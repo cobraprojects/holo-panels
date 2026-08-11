@@ -29,28 +29,32 @@ function panelPage(options: {
               realtime: options.realtime ?? false,
             }
           : null,
-        default: true,
+  default: true,
+  globalSearch: true,
         id: 'admin',
         navigation: [],
         navigationMode: 'sidebar',
         path: '/admin',
         sidebarCollapsible: true,
-        theme: { darkMode: 'system' },
+        tenancy: null,
+        theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
         userMenu: [],
       },
       notifications: configured ? { realtimeChannel: options.channel ?? null } : null,
       provider: 'users',
+      tenancy: null,
     },
     page: {
       breadcrumbs: [],
       data: {},
       heading: 'Dashboard',
-      manifest: { body: null, id: 'dashboard', pageType: 'custom', path: '/admin', schemaId: null },
+      manifest: { body: null, id: 'dashboard', pageType: 'custom', path: '/admin', schemaId: null, widgets: { footer: [], header: [] } },
       schema: null,
       subheading: null,
       title: 'Dashboard',
     },
     path: '/admin',
+    widgets: { footer: [], header: [] },
   }
 }
 
@@ -76,7 +80,7 @@ function resourcePage(): NuxtPanelPage {
   }
 }
 
-function installFetch(effects: readonly Record<string, unknown>[] = [], mutationSucceeds = true) {
+function installFetch(effects: readonly Record<string, unknown>[] = [], mutationSucceeds = true, mutationRecord?: Readonly<Record<string, unknown>>) {
   const requests: RecordedRequest[] = []
   const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const fields = new URLSearchParams(String(init?.body ?? ''))
@@ -84,7 +88,7 @@ function installFetch(effects: readonly Record<string, unknown>[] = [], mutation
     requests.push(envelope)
     const data = envelope.operation === 'notification'
       ? { items: [], page: 1, pageSize: 20, total: 0, unread: 0 }
-      : { saved: true }
+      : { ...(mutationRecord ? { record: mutationRecord } : {}), saved: true }
     const mutation = envelope.operation === 'form-submit'
     const body = mutation && !mutationSucceeds
       ? {
@@ -115,6 +119,13 @@ afterEach(() => {
   document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/'
 })
 
+async function openNotifications(container: HTMLElement): Promise<void> {
+  const button = container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')
+  if (!button) throw new Error('Missing notification inbox trigger')
+  button.click()
+  await nextTick()
+}
+
 describe('Nuxt P13 notification integration', () => {
   it('coalesces duplicate realtime invalidation while configured polling remains active', async () => {
     vi.useFakeTimers()
@@ -135,6 +146,7 @@ describe('Nuxt P13 notification integration', () => {
     })
 
     app.mount(container)
+    await openNotifications(container)
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
     expect(notificationRealtime).toHaveBeenCalledWith('panels.notifications.admin-7')
     expect(subscribe).toHaveBeenCalledTimes(1)
@@ -170,6 +182,7 @@ describe('Nuxt P13 notification integration', () => {
     })
 
     app.mount(container)
+    await openNotifications(container)
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
     expect(notificationRealtime).not.toHaveBeenCalled()
     expect(container.querySelector('[data-placement="sidebar"]')).not.toBeNull()
@@ -217,6 +230,41 @@ describe('Nuxt P13 notification integration', () => {
     expect(container.querySelector('[data-icon="check"]')).not.toBeNull()
     expect(requests.at(-1)).toMatchObject({ operation: 'form-submit', panelId: 'admin' })
     await nextTick()
+    app.unmount()
+  })
+
+  it('redirects successful resource creates using the configured Filament destination', async () => {
+    document.cookie = 'XSRF-TOKEN=signed; path=/'
+    const page = resourcePage()
+    const configured: NuxtPanelPage = {
+      ...page,
+      bootstrap: {
+        ...page.bootstrap,
+        manifest: {
+          ...page.bootstrap.manifest,
+          runtime: {
+            databaseTransactions: false,
+            readOnlyRelationManagersOnResourceViewPagesByDefault: true,
+            resourceCreatePageRedirect: 'view',
+            resourceEditPageRedirect: null,
+            spa: false,
+            spaUrlExceptions: [],
+            strictAuthorization: false,
+            unsavedChangesAlerts: false,
+          },
+        },
+      },
+    }
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined)
+    installFetch([], true, { id: 'article-1' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(PanelPage, { page: configured })
+
+    app.mount(container)
+    container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/admin/articles/article-1'))
     app.unmount()
   })
 })

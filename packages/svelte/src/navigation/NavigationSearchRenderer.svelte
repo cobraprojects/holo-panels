@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
+  import Input from '../components/Input.svelte'
+  import Select from '../components/Select.svelte'
   import type { NavigationKey } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'
   import type { SvelteNavigationSearchRendererProps } from './contracts'
@@ -9,7 +12,7 @@
   const navigationKeys: readonly NavigationKey[] = ['ArrowDown', 'ArrowUp', 'End', 'Enter', 'Escape', 'Home']
 
   function shortcut(event: KeyboardEvent): void {
-    if (!shell.search.shortcut(event.key, { ctrl: event.ctrlKey, meta: event.metaKey })) return
+    if (!shell.search.shortcut(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey })) return
     event.preventDefault()
   }
 
@@ -32,13 +35,13 @@
 <svelte:window onkeydown={shortcut} />
 
 <div class={`hp-navigation-search hp-navigation-search--${$navigation.manifest.layout}`} data-panels-component="navigation-search">
-  <button aria-expanded={$navigation.menuOpen} aria-label="Toggle navigation" type="button" onclick={() => shell.navigation.toggleMenu()}>Menu</button>
+  <Button aria-expanded={$navigation.menuOpen} aria-label="Toggle navigation" type="button" onclick={() => shell.navigation.toggleMenu()}>Menu</Button>
   {#if $navigation.manifest.panels.length > 1}
-    <label>Panel<select aria-label="Panel" value={$navigation.manifest.panelId} onchange={(event) => shell.onNavigate?.(shell.navigation.switchPanel(event.currentTarget.value))}>{#each $navigation.manifest.panels as panel (panel.id)}<option value={panel.id}>{panel.label}</option>{/each}</select></label>
+    <label>Panel<Select aria-label="Panel" value={$navigation.manifest.panelId} onchange={(event) => shell.onNavigate?.(shell.navigation.switchPanel(event.currentTarget.value))}>{#each $navigation.manifest.panels as panel (panel.id)}<option value={panel.id}>{panel.label}</option>{/each}</Select></label>
   {/if}
   <nav aria-label="Panel navigation" hidden={!$navigation.menuOpen && $navigation.manifest.layout === 'sidebar'}>
-    {#each $navigation.manifest.groups as group (group.id)}<button aria-expanded={!$navigation.collapsedGroups.has(group.id)} type="button" onclick={() => shell.navigation.toggleGroup(group.id)}>{group.label}</button>{/each}
-    {#each $navigation.manifest.clusters as cluster (cluster.id)}<button aria-expanded={!$navigation.collapsedClusters.has(cluster.id)} type="button" onclick={() => shell.navigation.toggleCluster(cluster.id)}>{cluster.label}</button>{/each}
+    {#each $navigation.manifest.groups as group (group.id)}<Button aria-expanded={!$navigation.collapsedGroups.has(group.id)} type="button" onclick={() => shell.navigation.toggleGroup(group.id)}>{group.label}</Button>{/each}
+    {#each $navigation.manifest.clusters as cluster (cluster.id)}<Button aria-expanded={!$navigation.collapsedClusters.has(cluster.id)} type="button" onclick={() => shell.navigation.toggleCluster(cluster.id)}>{cluster.label}</Button>{/each}
     <ul>
       {#each shell.navigation.visibleItems as item (item.id)}
         <li data-cluster={item.cluster} data-group={item.group} data-parent={item.parent}>
@@ -50,7 +53,7 @@
     </ul>
   </nav>
   <div class="hp-global-search" role="search">
-    <label>Global search<input aria-controls="hp-global-search-results" aria-expanded={$search.open} placeholder="Search…" role="combobox" value={$search.term} onfocus={() => shell.search.shortcut('k', { ctrl: true, meta: false })} oninput={(event) => shell.search.input(event.currentTarget.value)} onkeydown={searchKey} /></label>
+    <label>Global search<Input aria-controls="hp-global-search-results" aria-expanded={$search.open} placeholder="Search…" role="combobox" value={$search.term} onfocus={() => shell.search.open()} oninput={(event) => shell.search.input(event.currentTarget.value)} onkeydown={searchKey} /></label>
     <kbd>⌘/Ctrl K</kbd>
     {#if $search.loading}<span aria-live="polite" role="status">Searching…</span>{/if}
     {#if $search.error}<span role="alert">{$search.error}</span>{/if}

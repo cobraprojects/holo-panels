@@ -49,7 +49,8 @@ describe('panel auth page compilation', () => {
 
     expectTypeOf(panel).toEqualTypeOf<PanelBuilder<Actor>>()
     expect(definition.manifest.auth).toEqual({
-      emailVerification: { path: '/control/verify-email', redirectTo: '/control' },
+      emailChangeVerification: null,
+      emailVerification: { path: '/control/verify-email', redirectTo: '/control', verificationPath: '/control/email/verify' },
       login: { path: '/control/login', redirectTo: '/control' },
       logout: { path: '/control/logout', redirectTo: '/control/login' },
       multiFactor: {
@@ -64,6 +65,8 @@ describe('panel auth page compilation', () => {
         redirectTo: '/control',
       },
       profile: null,
+      registration: null,
+      revealablePasswords: true,
     })
     expect(definition.server.auth?.passwordBroker).toBe('users')
     expect(JSON.stringify(definition.manifest)).not.toContain('users')
@@ -110,8 +113,8 @@ describe('panel auth page compilation', () => {
     expect(definition.manifest.auth?.profile).toEqual({ path: '/admin/profile' })
     expect(definition.server.auth?.profile?.fields).toEqual(['name'])
     expect(definition.server.auth?.profile?.schema).toBe(schema)
-    expect(JSON.stringify(definition.manifest)).not.toContain('components')
-    expect(JSON.stringify(definition.manifest)).not.toContain('fields')
+    expect(JSON.stringify(definition.manifest.auth)).not.toContain('components')
+    expect(JSON.stringify(definition.manifest.auth)).not.toContain('fields')
     expect(() => definePanel('duplicate', Actor).auth({ login: true }).auth({ logout: true })).toThrow('already configured')
   })
 

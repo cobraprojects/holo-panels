@@ -1,30 +1,29 @@
-import { column, defineResource, defineSchema, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import Comment from '../../../models/Comment'
-import { defineDomainResourcePages } from '../../pages/domain'
 
-export const CommentPages = defineDomainResourcePages({ label: 'Comments', resourceId: 'comments', sort: 40 })
+const form = defineSchema(Comment).fields(field => [
+  field.text('postId').required(),
+  field.text('authorName').required(),
+  field.textarea('body').required(),
+  field.select('status').options([
+    { label: 'Approved', value: 'approved' },
+    { label: 'Pending', value: 'pending' },
+    { label: 'Spam', value: 'spam' },
+  ]).required(),
+])
+const table = defineTable(Comment).columns(column => [
+  column.text('authorName').searchable(),
+  column.text('body').limit(80).wrap(),
+  column.text('status').badge(),
+])
 
-export default defineResource(Comment, { tenant: String })
+export default defineResource(Comment)
   .tenantScope((query, context) => query.where('tenantId', context.tenant))
-  .createBindings(context => ({ id: crypto.randomUUID(), tenantId: context.tenant }))
+  .createBindings(context => ({ tenantId: context.tenant }))
   .recordTitle('authorName')
   .routeKey('id')
   .navigation({ group: 'Content', icon: 'chat', label: 'Comments', sort: 40 })
   .globalSearch({ attributes: ['authorName', 'body'], details: ['status'], title: 'authorName' })
-  .pages(CommentPages.list, CommentPages.create, CommentPages.view, CommentPages.edit)
-  .form([
-    field.text('postId').required(),
-    field.text('authorName').required(),
-    field.text('body').required(),
-    field.text('status').required(),
-  ])
-  .infolist(defineSchema(Comment).fields([
-    column.text('authorName'),
-    column.text('body'),
-    column.text('status'),
-  ]))
-  .table([
-    column.text('authorName'),
-    column.text('postId'),
-    column.text('status'),
-  ])
+  .discoverPages()
+  .form(form)
+  .table(table)

@@ -2,4 +2,8 @@
 
 export { createNextPanelComponentRegistry, NextPanelClient } from './panel-client'
 export { NextPanelResourcePage } from './resource-page'
+export { NextPanelLoginPage, type NextPanelLoginPageProps } from './login-page'
+export { NextPanelAuthPage, type NextPanelAuthPageProps, type NextPanelAuthPageType } from './auth-page'
+export { NextPanelMultiFactorPage, type NextPanelMultiFactorPageProps } from './multi-factor-page'
+export { NextPanelProfilePage, type NextPanelProfilePageProps } from './profile-page'
 export type { NextPanelClientProps } from './contracts'

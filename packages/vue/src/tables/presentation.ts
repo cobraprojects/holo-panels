@@ -1,4 +1,6 @@
+import { ShadcnButton, ShadcnInput } from '../internal-ui'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
+import type { FormPath, FormValueAtPath } from '@holo-js/panels-client'
 import { defineComponent, h, ref, type PropType, type VNode, type VNodeChild } from 'vue'
 import type { ComponentRegistry } from '../registry'
 import type { VueCustomColumnProps, VueTableColumn } from './types'
@@ -135,12 +137,13 @@ export const VueTableColumnPresentation = defineComponent({
     const copyStatus = ref('')
     return (): VNode => {
       const { column, panelId, record, registry, value } = componentProps.presentation
-      if (column.render) return h('span', [column.render(value, record)])
+      const inferredValue = value as FormValueAtPath<RuntimeRecord, FormPath<RuntimeRecord>>
+      if (column.render) return h('span', [column.render(inferredValue, record)])
       const formatters = formatterList(column.manifest)
       const formatted = formattedValue(value, formatters)
       const type = column.manifest.type
       const tooltip = formatters.find(formatter => formatter.kind === 'tooltip')?.value
-      const url = safeUrl(formatters.find(formatter => formatter.kind === 'url')?.value)
+      const url = safeUrl(column.url?.(record)) ?? safeUrl(formatters.find(formatter => formatter.kind === 'url')?.value)
       const badge = type === 'badge' || formatters.some(formatter => formatter.kind === 'badge' && formatter.value !== false)
       const lineClamp = Reflect.get(column.manifest, 'lineClamp')
       const contentStyle = Number.isSafeInteger(lineClamp) && Number(lineClamp) > 0
@@ -156,7 +159,7 @@ export const VueTableColumnPresentation = defineComponent({
         )
         const configuration = formatters.find(formatter => formatter.kind === 'custom')?.configuration
         const properties = configuration !== null && typeof configuration === 'object' && !Array.isArray(configuration) ? configuration : {}
-        content = h(renderer, { ...properties, column, record, value } satisfies VueCustomColumnProps<RuntimeRecord>)
+        content = h(renderer, { ...properties, column, record, value: inferredValue } satisfies VueCustomColumnProps<RuntimeRecord>)
       } else if (type === 'boolean' || type === 'icon') {
         const active = Boolean(value)
         content = h('span', { 'aria-label': active ? 'Yes' : 'No', 'data-icon': iconName(formatters, active), role: 'img' }, active ? '✓' : '✕')
@@ -172,7 +175,7 @@ export const VueTableColumnPresentation = defineComponent({
         const color = safeColor(value)
         content = color ? h('span', [h('span', { 'aria-hidden': 'true', class: 'hp-table-color', style: { backgroundColor: color } }), color]) : formatted
       } else if ((type === 'checkbox' || type === 'toggle') && !column.manifest.inlineEditor) {
-        content = h('input', { 'aria-label': column.manifest.label ?? column.manifest.path, checked: value === true, disabled: true, readonly: true, type: 'checkbox' })
+        content = h(ShadcnInput, { 'aria-label': column.manifest.label ?? column.manifest.path, checked: value === true, disabled: true, readonly: true, type: 'checkbox' })
       } else {
         const text = h('span', { style: contentStyle }, formatted)
         content = badge ? h('span', { class: 'hp-table-badge' }, [text]) : text
@@ -189,7 +192,7 @@ export const VueTableColumnPresentation = defineComponent({
       return h('span', { title: typeof tooltip === 'string' ? tooltip : undefined }, [
         linked,
         column.manifest.copyable && !column.manifest.inlineEditor
-          ? h('button', { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: () => void copy() }, 'Copy')
+          ? h(ShadcnButton, { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: () => void copy() }, 'Copy')
           : null,
         h('span', { 'aria-live': 'polite', class: 'hp-visually-hidden' }, copyStatus.value),
       ])

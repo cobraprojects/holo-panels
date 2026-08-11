@@ -3,11 +3,12 @@ import { hydrateRoot } from 'react-dom/client'
 import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createRequestEnvelope, definePage, definePanel, TRANSPORT_REQUEST_FIELD, type HoloAuth, type JsonObject } from '@holo-js/panels-core'
-import { NextPanelClient } from '../src/panel-client'
+import { createRequestEnvelope, definePage, definePanel, defineStatsWidget, TRANSPORT_REQUEST_FIELD, type HoloAuth, type JsonObject } from '@holo-js/panels-core'
+import type { PanelAvatarComponentProps, PanelChromeComponentProps, ReactNotificationInboxTriggerProps } from '@holo-js/panels-react'
+import { createNextPanelComponentRegistry, NextPanelClient } from '../src/panel-client'
 import { NextPanelResourcePage } from '../src/resource-page'
 import { createPanelOperationRoute } from '../src/operation'
-import { nextPanelsRuntimeInternals, resolveNextPanelPage, resolveNextPanelPath } from '../src/runtime'
+import { nextPanelsRuntimeInternals, resolveNextPanelBillingResponse, resolveNextPanelPage, resolveNextPanelPath } from '../src/runtime'
 import type { NextPanelsRuntime } from '../src/contracts'
 import { createNextPanelsAcceptanceRuntime, nextPanelAcceptanceFixture } from '../../../apps/example-next/tests/p9-panel-acceptance-next'
 
@@ -26,7 +27,6 @@ class Actor {
 const panel = definePanel('admin', Actor)
   .path('/admin')
   .presentActor(actor => ({ id: actor.id }))
-  .navigation([{ badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: 'posts', sort: 1 }])
   .compile()
 
 const reportsPanel = definePanel('reports', Actor)
@@ -38,6 +38,7 @@ const posts = definePage('posts', { actor: Actor, load: () => ({ records: [{ id:
   .path('/admin/posts')
   .title('Posts')
   .heading('Manage posts')
+  .navigation({ label: 'Posts', sort: 1 })
   .compile()
 
 const actor = { id: 7 }
@@ -60,7 +61,7 @@ function runtime(overrides: Partial<NextPanelsRuntime> = {}): NextPanelsRuntime 
 function operationRequest(panelId: string, operation: string, payload: JsonObject = {}, csrf = 'valid'): Request {
   const envelope = createRequestEnvelope({ id: 'request-123', operation, panelId, payload })
   const body = new URLSearchParams({ [TRANSPORT_REQUEST_FIELD]: JSON.stringify(envelope), _token: csrf })
-  return new Request(`https://example.test/_holo/panels/${panelId}/${operation}`, {
+  return new Request(`https://example.test/holo/panels/${panelId}/${operation}`, {
     body,
     headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': csrf },
     method: 'POST',
@@ -76,6 +77,7 @@ describe('Next panel adapter', () => {
     const configured = runtime()
     const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), configured)
     expect(payload.bootstrap.actor).toEqual({ id: 7 })
+    expect(payload.bootstrap.manifest.navigation).toEqual([expect.objectContaining({ id: 'posts', label: 'Posts', path: '/admin/posts' })])
     expect(payload.page.data).toEqual({ records: [{ id: 1, title: 'First post' }] })
     expect(configured.registry['admin:resource:posts']).not.toHaveBeenCalled()
     await expect(resolveNextPanelPage('admin', ['..'], new Request('https://example.test/admin'), configured)).rejects.toThrow('unsafe segment')
@@ -88,6 +90,107 @@ describe('Next panel adapter', () => {
     expect(await resolveNextPanelPath('backoffice', configured)).toBe('/control')
     const payload = await resolveNextPanelPage('backoffice', ['posts'], new Request('https://example.test/control/posts'), configured)
     expect(payload.path).toBe('/control/posts')
+  })
+
+  it('serves a domain-bound panel only on its configured hosts', async () => {
+    const domainPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .domains(['admin.example.test', 'staff.example.test'])
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const configured = runtime({ registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => domainPanel } })
+
+    await expect(resolveNextPanelPage('admin', ['posts'], new Request('https://admin.example.test/admin/posts'), configured)).resolves.toMatchObject({ path: '/admin/posts' })
+    await expect(resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), configured)).rejects.toMatchObject({ name: 'NextPanelPageNotFoundError' })
+  })
+
+  it('uses the configured panel home URL for the brand link', async () => {
+    const homePanel = definePanel('admin', Actor)
+      .path('/admin')
+      .homeUrl('/admin/overview')
+      .icons({ posts: 'home' })
+      .navigationItems([{ badge: null, group: null, icon: 'posts', id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 1 }])
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => homePanel },
+    }))
+
+    const markup = renderToString(<NextPanelClient payload={payload} />)
+    expect(markup).toContain('href="/admin/overview"')
+    expect(markup).toContain('data-icon="home"')
+  })
+
+  it('navigates same-origin panel links in SPA mode, honors exceptions, and prefetches on hover', async () => {
+    const spaPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .spa({ hasPrefetching: true })
+      .spaUrlExceptions(['/admin/external*'])
+      .navigationItems([
+        { badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 1 },
+        { badge: null, group: null, icon: null, id: 'external', label: 'External', parent: null, path: '/admin/external-report', sort: 2 },
+      ])
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => spaPanel },
+    }))
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const pushState = vi.spyOn(globalThis.history, 'pushState')
+    await act(async () => root.render(<NextPanelClient payload={payload} />))
+    const postsLink = [...container.querySelectorAll('a')].find(anchor => anchor.textContent === 'Posts')
+    const externalLink = [...container.querySelectorAll('a')].find(anchor => anchor.textContent === 'External')
+    if (!postsLink || !externalLink) throw new Error('SPA navigation links did not render')
+
+    postsLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    expect(document.head.querySelector('link[data-holo-panel-prefetch][href="/admin/posts"]')).not.toBeNull()
+    const internalClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
+    postsLink.dispatchEvent(internalClick)
+    expect(internalClick.defaultPrevented).toBe(true)
+    expect(pushState).toHaveBeenCalledWith({}, '', '/admin/posts')
+    const excludedClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
+    externalLink.dispatchEvent(excludedClick)
+    expect(excludedClick.defaultPrevented).toBe(false)
+    await act(async () => root.unmount())
+  })
+
+  it('passes the active tenant identifier to generated page contexts', async () => {
+    const tenant: Readonly<{ id: string, slug: string }> = Object.freeze({ id: 'tenant-acme', slug: 'acme' })
+    const tenantModel = Object.freeze({ prototype: { id: '', slug: '' } })
+    const tenantPanel = definePanel('tenant-admin', Actor)
+      .path('/tenant-admin')
+      .tenancy({
+        authorize: () => true,
+        findMembershipById: id => id === tenant.id ? tenant : null,
+        findMembershipByRouteKey: routeKey => routeKey === tenant.slug ? tenant : null,
+        identify: value => value.id,
+        memberships: () => ({ nextCursor: null, tenants: [tenant] }),
+        model: tenantModel,
+        persistence: {
+          clear: async () => undefined,
+          load: async () => tenant.id,
+          save: async () => undefined,
+        },
+        present: value => ({ label: value.slug }),
+        routeKey: value => value.slug,
+      })
+      .compile()
+    const tenantPage = definePage('tenant-dashboard', {
+      load: context => ({ tenantId: context.tenant }),
+      tenant: String,
+    }).path('/tenant-admin').compile()
+    const configured = runtime({
+      registry: {
+        'tenant-admin:page:tenant-dashboard': async () => tenantPage,
+        'tenant-admin:panel:tenant-admin': async () => tenantPanel,
+      },
+    })
+
+    const payload = await resolveNextPanelPage('tenant-admin', [], new Request('https://example.test/tenant-admin'), configured)
+
+    expect(payload.page.data).toEqual({ tenantId: 'tenant-acme' })
   })
 
   it('renders deterministic SSR and hydrates the JSON-only client boundary', async () => {
@@ -108,6 +211,236 @@ describe('Next panel adapter', () => {
     await act(async () => root?.unmount())
   })
 
+  it('renders the built-in tenant switcher without application transport helpers', async () => {
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
+    const tenantPayload = {
+      ...payload,
+      bootstrap: {
+        ...payload.bootstrap,
+        manifest: { ...payload.bootstrap.manifest, tenancy: { enabled: true as const } },
+        tenancy: {
+          active: { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+          memberships: {
+            memberships: [
+              { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+              { avatarUrl: null, description: null, label: 'Globex', routeKey: 'globex' },
+            ],
+            nextCursor: null,
+          },
+        },
+      },
+    }
+
+    const markup = renderToString(<NextPanelClient payload={tenantPayload} />)
+
+    expect(markup).toContain('aria-label="Tenant menu"')
+    expect(markup).toContain('data-slot="dropdown-menu-trigger"')
+    expect(markup).toContain('Acme')
+    const hidden = renderToString(<NextPanelClient payload={{
+      ...tenantPayload,
+      bootstrap: { ...tenantPayload.bootstrap, manifest: { ...tenantPayload.bootstrap.manifest, tenancy: { enabled: true, switcher: false } } },
+    }} />)
+    expect(hidden).not.toContain('aria-label="Tenant menu"')
+  })
+
+  it('restores an isolated light, dark, or system preference for the panel', async () => {
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
+    globalThis.localStorage.clear()
+    globalThis.localStorage.setItem('holo-panels:admin:color-mode', 'dark')
+    document.body.innerHTML = '<div id="root"></div>'
+    const container = document.querySelector('#root')!
+    const root = createRoot(container)
+    await act(async () => root.render(<NextPanelClient payload={payload} />))
+    const panelRoot = container.querySelector<HTMLElement>('[data-holo-panel]')
+    expect(panelRoot?.dataset.theme).toBe('dark')
+    await act(async () => root.unmount())
+  })
+
+  it('renders top navigation without a sidebar when the panel selects topbar mode', async () => {
+    const topbarPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .navigationMode('topbar')
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: {
+        'admin:page:posts': async () => posts,
+        'admin:panel:admin': async () => topbarPanel,
+      },
+    }))
+    const markup = renderToString(<NextPanelClient payload={payload} />)
+
+    expect(markup).toContain('hp-panel-navigation--topbar')
+    expect(markup).not.toContain('hp-panel-sidebar')
+  })
+
+  it('omits the panel header when the provider disables the topbar', async () => {
+    const panel = definePanel('admin', Actor)
+      .path('/admin')
+      .topbar(false)
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: {
+        'admin:page:posts': async () => posts,
+        'admin:panel:admin': async () => panel,
+      },
+    }))
+
+    expect(renderToString(<NextPanelClient payload={payload} />)).not.toContain('hp-panel-header')
+  })
+
+  it('omits the account dropdown when the provider disables the user menu', async () => {
+    const configuredPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .userMenu(false)
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => configuredPanel },
+    }))
+
+    expect(renderToString(<NextPanelClient payload={payload} />)).not.toContain('hp-panel-user-trigger')
+  })
+
+  it('omits navigation chrome when the provider disables navigation', async () => {
+    const configuredPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .navigation(false)
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => configuredPanel },
+    }))
+    const markup = renderToString(<NextPanelClient payload={payload} />)
+
+    expect(markup).not.toContain('hp-panel-sidebar')
+    expect(markup).not.toContain('hp-panel-navigation-toggle')
+  })
+
+  it('renders provider-configured topbar, sidebar, and avatar components', async () => {
+    const chromePanel = definePanel('admin', Actor)
+      .path('/admin')
+      .topbarComponent('custom-topbar')
+      .sidebarComponent('custom-sidebar')
+      .assets([{ id: 'admin-theme', src: '/admin/theme.css', type: 'css' }])
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const avatarPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .defaultAvatarProvider('custom-avatar')
+      .databaseNotifications({ component: 'custom-notification' })
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .compile()
+    const registry = createNextPanelComponentRegistry()
+      .register('custom-topbar', (props: PanelChromeComponentProps) => <header data-custom-topbar={props.manifest.id}>{props.page ? 'Custom topbar' : null}</header>)
+      .register('custom-sidebar', (props: PanelChromeComponentProps) => <aside data-custom-sidebar={props.actor.id}>Custom sidebar</aside>)
+      .register('custom-avatar', (props: PanelAvatarComponentProps) => <span data-custom-avatar={props.actor.id}>{props.label}</span>)
+      .register('custom-notification', (props: ReactNotificationInboxTriggerProps) => <span data-custom-notification={props.placement}>Custom notifications</span>)
+    const resolve = async (configuredPanel: typeof chromePanel) => resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: {
+        'admin:page:posts': async () => posts,
+        'admin:panel:admin': async () => configuredPanel,
+      },
+    }))
+
+    const chrome = renderToString(<NextPanelClient payload={await resolve(chromePanel)} registry={registry} />)
+    const avatar = renderToString(<NextPanelClient payload={await resolve(avatarPanel)} registry={registry} />)
+    expect(chrome).toContain('data-custom-topbar="admin"')
+    expect(chrome).toContain('data-custom-sidebar="7"')
+    expect(chrome).not.toContain('hp-panel-header')
+    expect(chrome).toContain('data-panel-asset="admin-theme"')
+    expect(chrome).toContain('href="/admin/theme.css"')
+    expect(avatar).toContain('data-custom-avatar="7"')
+    expect(avatar).toContain('data-custom-notification="topbar"')
+  })
+
+  it('serves the configured tenant billing route and enforces required subscriptions elsewhere', async () => {
+    const routeAction = vi.fn(() => new Response(null, { headers: { location: 'https://billing.example.test/session' }, status: 303 }))
+    const billing = {
+      getRouteAction: () => routeAction,
+      getSubscribedMiddleware: () => () => false,
+    }
+    class BillingTenant {
+      declare readonly id: string
+      declare readonly slug: string
+    }
+    const BillingTenantModel = { prototype: new BillingTenant() }
+    const tenant = Object.assign(new BillingTenant(), { id: 'tenant-1', slug: 'acme' })
+    const billingPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .tenancy({
+        authorize: () => true,
+        findMembershipById: tenantId => tenantId === tenant.id ? tenant : null,
+        findMembershipByRouteKey: routeKey => routeKey === tenant.slug ? tenant : null,
+        identify: currentTenant => currentTenant.id,
+        memberships: () => ({ nextCursor: null, tenants: [tenant] }),
+        model: BillingTenantModel,
+        persistence: { clear: async () => undefined, load: async () => tenant.id, save: async () => undefined },
+        present: currentTenant => ({ label: currentTenant.slug }),
+        routeKey: currentTenant => currentTenant.slug,
+      })
+      .tenantBillingProvider(billing)
+      .tenantBillingRouteSlug('subscription')
+      .requiresTenantSubscription()
+      .compile()
+    const configuredRuntime = runtime({
+      registry: {
+        'admin:page:posts': async () => posts,
+        'admin:panel:admin': async () => billingPanel,
+      },
+    })
+    const request = new Request('https://example.test/admin/subscription')
+
+    const response = await resolveNextPanelBillingResponse('admin', ['subscription'], request, configuredRuntime)
+    expect(response?.status).toBe(303)
+    expect(response?.headers.get('location')).toBe('https://billing.example.test/session')
+    expect(routeAction).toHaveBeenCalledOnce()
+    await expect(resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), configuredRuntime)).rejects.toMatchObject({
+      billingPath: '/admin/subscription',
+      code: 'subscription-required',
+    })
+  })
+
+  it('resolves declared page widgets and renders their data as dashboard cards', async () => {
+    const dashboard = definePage('dashboard', { actor: Actor, load: () => ({}) })
+      .path('/admin')
+      .headerWidgets('content-overview')
+      .compile()
+    const overview = defineStatsWidget('content-overview')
+      .data(() => ({
+        stats: [{
+          action: null,
+          chart: [],
+          color: 'primary',
+          description: 'All posts',
+          icon: null,
+          id: 'posts',
+          label: 'Posts',
+          trend: null,
+          url: '/admin/posts',
+          value: '3',
+        }],
+      }))
+      .compile()
+    const configured = runtime({
+      registry: {
+        'admin:page:dashboard': async () => dashboard,
+        'admin:panel:admin': async () => panel,
+        'admin:widget:content-overview': async () => overview,
+      },
+    })
+
+    const payload = await resolveNextPanelPage('admin', [], new Request('https://example.test/admin'), configured)
+    const markup = renderToString(<NextPanelClient payload={payload} />)
+
+    expect(payload.widgets.header).toEqual([expect.objectContaining({ status: 'ready' })])
+    expect(markup).toContain('hp-widget-stats')
+    expect(markup).toContain('All posts')
+    expect(markup).not.toContain('<dt>stats</dt>')
+  })
+
   it('enforces panel allow-lists, CSRF, authorization, and safe mutation responses', async () => {
     const execute = vi.fn(async (input: { readonly request: Request }) => {
       const replayed = await input.request.clone().formData()
@@ -126,6 +459,80 @@ describe('Next panel adapter', () => {
     expect(unknown.status).toBe(404)
   })
 
+  it('serves generated custom panel routes at rewritten public and authenticated URLs', async () => {
+    const publicHandler = vi.fn(() => new Response('healthy'))
+    const authenticatedHandler = vi.fn(() => new Response('private'))
+    const routedPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .routes(routes => routes.get('/health', publicHandler))
+      .authenticatedRoutes(routes => routes.get('/private', authenticatedHandler))
+      .compile()
+    const route = createPanelOperationRoute({
+      panelIds: ['admin'],
+      runtime: runtime({ registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => routedPanel } }),
+    })
+
+    const publicResponse = await route.GET(new Request('https://example.test/holo/panels/admin/custom-route?panelRoute=/admin/health'), {
+      params: Promise.resolve({ operation: 'custom-route', panelId: 'admin' }),
+    })
+    const authenticatedResponse = await route.GET(new Request('https://example.test/holo/panels/admin/custom-route?panelRoute=/admin/private'), {
+      params: Promise.resolve({ operation: 'custom-route', panelId: 'admin' }),
+    })
+
+    await expect(publicResponse.text()).resolves.toBe('healthy')
+    await expect(authenticatedResponse.text()).resolves.toBe('private')
+    expect(publicHandler).toHaveBeenCalledOnce()
+    expect(authenticatedHandler).toHaveBeenCalledOnce()
+  })
+
+  it('returns configured panel error notifications as client toast effects', async () => {
+    const errorPanel = definePanel('admin', Actor)
+      .path('/admin')
+      .presentActor(currentActor => ({ id: currentActor.id }))
+      .registerErrorNotification('Save failed', 'The post could not be saved.', 500)
+      .compile()
+    const route = createPanelOperationRoute({
+      panelIds: ['admin'],
+      runtime: runtime({
+        execute: async () => { throw new Error('database unavailable') },
+        registry: { 'admin:page:posts': async () => posts, 'admin:panel:admin': async () => errorPanel },
+      }),
+    })
+    const response = await route.POST(operationRequest('admin', 'form-submit'), { params: Promise.resolve({ operation: 'form-submit', panelId: 'admin' }) })
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      ok: false,
+    })
+  })
+
+  it('accepts bounded multipart upload bodies beyond the ordinary transport limit', async () => {
+    const execute = vi.fn(async (input: { readonly request: Request }) => {
+      const form = await input.request.formData()
+      const contents = form.get('contents')
+      expect(contents).toBeInstanceOf(Blob)
+      expect((contents as Blob).size).toBe(2_097_152)
+      return { data: { stored: true } }
+    })
+    const route = createPanelOperationRoute({ panelIds: ['admin'], runtime: runtime({ execute }) })
+    const envelope = createRequestEnvelope({ id: 'upload-request-123', operation: 'upload', panelId: 'admin', payload: { action: 'write', fieldId: 'avatar', resourceId: 'posts' } })
+    const body = new FormData()
+    body.set(TRANSPORT_REQUEST_FIELD, JSON.stringify(envelope))
+    body.set('_token', 'valid')
+    body.set('contents', new Blob([new Uint8Array(2_097_152)]))
+    const response = await route.POST(new Request('https://example.test/holo/panels/admin/upload', {
+      body,
+      headers: { 'x-csrf-token': 'valid' },
+      method: 'POST',
+    }), { params: Promise.resolve({ operation: 'upload', panelId: 'admin' }) })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ data: { stored: true }, ok: true })
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
   it('loads only exact generated registry keys and rejects ambiguous route setup', async () => {
     const configured = runtime()
     expect(nextPanelsRuntimeInternals.registryKeys(configured, 'admin', 'page')).toEqual(['admin:page:posts'])
@@ -133,7 +540,7 @@ describe('Next panel adapter', () => {
     const route = createPanelOperationRoute({ panelIds: ['admin'], runtime: configured })
     const bootstrap = await route.POST(operationRequest('admin', 'bootstrap'), { params: Promise.resolve({ operation: 'bootstrap', panelId: 'admin' }) })
     expect(bootstrap.status).toBe(200)
-    await expect(bootstrap.json()).resolves.toMatchObject({ data: { actor: { id: 7 }, manifest: { id: 'admin' } }, id: 'request-123', ok: true })
+    await expect(bootstrap.json()).resolves.toMatchObject({ data: { actor: { id: 7 }, manifest: { id: 'admin', navigation: [{ id: 'posts', path: '/admin/posts' }] } }, id: 'request-123', ok: true })
   })
 
   it('isolates multiple panels behind the generated route allow-list', async () => {
@@ -203,10 +610,12 @@ describe('Next panel adapter', () => {
       ['view', '/admin/posts/:record'],
       ['edit', '/admin/posts/:record/edit'],
     ])
-    expect(pages[2]?.manifest.actions.footer).toContain('delete-post')
-    const context = { actor: { id: 2, role: 'viewer' }, locale: 'en', panelId: 'admin', parameters: {}, services: {}, signal: new AbortController().signal, tenant: 'tenant-acme' }
-    expect(await pages[0]?.server.authorize(context)).toBe(false)
-    expect(await pages[0]?.server.authorize({ ...context, actor: { id: 1, role: 'admin' } })).toBe(true)
+    const body = pages[2]?.manifest.body
+    expect(body?.component).toBe('resource-page')
+    const resource = body?.properties.resource
+    expect(resource && typeof resource === 'object' && !Array.isArray(resource) ? resource.actions : null).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'delete-record', kind: 'delete' }),
+    ]))
   })
 
   it('runs the Post List/Create/Edit/View/Delete UI journey with filters, reactivity, dependencies, and safe errors', async () => {
@@ -215,7 +624,7 @@ describe('Next panel adapter', () => {
     const mutations: { readonly intent: string, readonly recordId: number | string | null, readonly values: Readonly<Record<string, string>> }[] = []
     let fail = false
     const adminAuth: HoloAuth<object> = {
-      guard: () => ({ provider: async () => 'session', user: async () => ({ id: 7, role: 'admin' }) }),
+      guard: () => ({ provider: async () => 'session', user: async () => ({ id: '7', role: 'admin' }) }),
     }
     const exampleRuntime = await createNextPanelsAcceptanceRuntime({
       auth: adminAuth,
@@ -229,7 +638,7 @@ describe('Next panel adapter', () => {
     const route = createPanelOperationRoute({ panelIds: ['admin'], runtime: exampleRuntime })
     const deniedMutation = vi.fn(async () => undefined)
     const deniedRuntime = await createNextPanelsAcceptanceRuntime({
-      auth: { guard: () => ({ provider: async () => 'session', user: async () => ({ id: 8, role: 'viewer' }) }) },
+      auth: { guard: () => ({ provider: async () => 'session', user: async () => ({ id: '8', role: 'viewer' }) }) },
       mutatePost: deniedMutation,
       resolveServices: async () => ({}),
       resolveTenant: async () => 'tenant-a',
@@ -241,7 +650,7 @@ describe('Next panel adapter', () => {
     document.cookie = 'XSRF-TOKEN=valid; Path=/'
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      const match = /\/_holo\/panels\/([^/]+)\/([^/]+)$/u.exec(url)
+      const match = /\/holo\/panels\/([^/]+)\/([^/]+)$/u.exec(url)
       if (!match?.[1] || !match[2]) return new Response(null, { status: 404 })
       const headers = new Headers(init?.headers)
       headers.set('x-csrf-token', 'valid')
@@ -257,7 +666,7 @@ describe('Next panel adapter', () => {
     const input = (selector: string): HTMLInputElement => container.querySelector(selector) as unknown as HTMLInputElement
     const select = (selector: string): HTMLSelectElement => container.querySelector(selector) as unknown as HTMLSelectElement
     const click = async (label: string): Promise<void> => act(async () => {
-      const button = [...container.querySelectorAll('button')].find(candidate => candidate.textContent === label)
+      const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent === label)
       if (!button) throw new Error(`Missing ${label} button`)
       ;(button as unknown as HTMLButtonElement).click()
       await Promise.resolve()
@@ -277,22 +686,58 @@ describe('Next panel adapter', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    await act(async () => root.render(<NextPanelResourcePage data={{ records: [{ category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' }, { category: 'Guides', city: 'Giza', id: 2, slug: 'city-guide', title: 'City guide' }] }} panelId="admin" panelPath="/admin" properties={properties(0)} />))
+    const listProperties = structuredClone(properties(0))
+    const listResource = listProperties.resource
+    if (!listResource || typeof listResource !== 'object' || Array.isArray(listResource)) throw new Error('List page is missing its resource definition.')
+    const listTable = listResource.table
+    if (!listTable || typeof listTable !== 'object' || Array.isArray(listTable) || !Array.isArray(listTable.columns)) throw new Error('List page is missing its table definition.')
+    listTable.columns = listTable.columns.map((column, index) => column && typeof column === 'object' && !Array.isArray(column) && index === 0 ? { ...column, formatters: [{ kind: 'prefix', value: 'Post: ' }], lineClamp: 2, searchable: true } : column)
+    const firstPost = { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' }
+    const cityGuide = { category: 'Guides', city: 'Giza', id: 2, slug: 'city-guide', title: 'City guide' }
+    const listRecords = [firstPost, cityGuide]
+    await act(async () => root.render(<NextPanelResourcePage data={{
+      groups: [
+        { key: 'News', records: [firstPost], title: 'News' },
+        { key: 'Guides', records: [cityGuide], title: 'Guides' },
+      ],
+      records: listRecords,
+    }} panelId="admin" panelPath="/admin" properties={listProperties} />))
+    expect(container.textContent).toContain('Post: First post')
     await change(input('input[type="search"]'), 'guide')
-    expect(container.textContent).toContain('City guide')
-    expect(container.textContent).not.toContain('First post')
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('City guide')
+      expect(container.textContent).not.toContain('First post')
+    })
     await click('Delete')
     expect(container.textContent).not.toContain('City guide')
-    await act(async () => root.render(<NextPanelResourcePage data={{}} panelId="admin" panelPath="/admin" properties={properties(1)} />))
+    const createProperties = structuredClone(properties(1))
+    const createResource = createProperties.resource
+    if (!createResource || typeof createResource !== 'object' || Array.isArray(createResource)) throw new Error('Create page is missing its resource definition.')
+    const createForm = createResource.form
+    if (!createForm || typeof createForm !== 'object' || Array.isArray(createForm) || !Array.isArray(createForm.fields)) throw new Error('Create page is missing its form definition.')
+    createForm.fields = createForm.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, label: null } : field)
+    await act(async () => root.render(<NextPanelResourcePage data={{}} panelId="admin" panelPath="/admin" properties={createProperties} unsavedChangesAlerts />))
+    const renderedLabels = [...container.querySelectorAll('label')].map(label => label.textContent ?? '')
+    expect(renderedLabels.some(label => label.startsWith('Title'))).toBe(true)
+    expect(renderedLabels.some(label => label.startsWith('Slug'))).toBe(true)
     await click('Save post')
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('required')
     await change(input('[data-field-path="title"] input'), 'My New Post')
+    const beforeUnload = new Event('beforeunload', { cancelable: true })
+    globalThis.dispatchEvent(beforeUnload)
+    expect(beforeUnload.defaultPrevented).toBe(true)
     expect(input('[data-field-path="slug"] input').value).toBe('my-new-post')
     await choose('Guides')
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    })
     expect([...select('[data-field-path="city"] select').options].map(option => option.value)).toContain('Giza')
     await change(select('[data-field-path="city"] select'), 'Giza')
     await click('Save post')
     expect(container.querySelector('[role="status"]')?.textContent).toBe('Post saved.')
+    const savedBeforeUnload = new Event('beforeunload', { cancelable: true })
+    globalThis.dispatchEvent(savedBeforeUnload)
+    expect(savedBeforeUnload.defaultPrevented).toBe(false)
     await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Alexandria', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))
     expect(input('[data-field-path="title"] input').value).toBe('First post')
     await change(input('[data-field-path="title"] input'), 'Edited post')
@@ -303,8 +748,53 @@ describe('Next panel adapter', () => {
     await click('Delete post')
     await click('Confirm')
     await click('Run action')
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')
     expect(mutations.map(mutation => mutation.intent)).toEqual(['delete', 'create', 'edit'])
+    await act(async () => root.unmount())
+  })
+
+  it('redirects successful resource creates using the configured Filament destination', async () => {
+    const body = nextPanelAcceptanceFixture.pages[1]?.manifest.body
+    if (body?.component !== 'resource-page') throw new Error('Create page is missing its resource manifest.')
+    const properties = structuredClone(body.properties)
+    const resource = properties.resource
+    if (!resource || typeof resource !== 'object' || Array.isArray(resource)) throw new Error('Create page is missing its resource definition.')
+    const form = resource.form
+    if (!form || typeof form !== 'object' || Array.isArray(form) || !Array.isArray(form.fields)) throw new Error('Create page is missing its fields.')
+    form.fields = form.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, required: false } : field)
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined)
+    const operation = { execute: vi.fn(async () => ({ data: { record: { id: 'new-post' } }, ok: true as const })) }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => root.render(<NextPanelResourcePage createRedirect="view" data={{}} operation={operation} panelId="admin" panelPath="/admin" properties={properties} />))
+    await act(async () => {
+      container.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(operation.execute).toHaveBeenCalled())
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/admin/posts/new-post'))
+    await act(async () => root.unmount())
+  })
+
+  it('makes relation managers interactive on view pages only when the panel enables it', async () => {
+    const body = nextPanelAcceptanceFixture.pages[2]?.manifest.body
+    if (body?.component !== 'resource-page') throw new Error('View page is missing its resource manifest.')
+    const data: JsonObject = {
+      record: { id: 'post-1', title: 'First post' },
+      relations: [{ badge: null, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'author', label: 'Author', operations: ['select', 'associate'], presentation: 'inline', records: [{ id: 'author-1', values: { name: 'Ada' } }], url: null, visible: true }],
+    }
+    const operation = { execute: vi.fn(async () => ({ data: {}, ok: true as const })) }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => root.render(<NextPanelResourcePage data={data} operation={operation} panelId="admin" panelPath="/admin" properties={body.properties} readOnlyRelations={false} />))
+    expect(container.querySelector('[data-operation="associate"]')).not.toBeNull()
+    await act(async () => root.render(<NextPanelResourcePage data={data} operation={operation} panelId="admin" panelPath="/admin" properties={body.properties} readOnlyRelations />))
+    expect(container.querySelector('[data-operation="associate"]')).toBeNull()
     await act(async () => root.unmount())
   })
 })

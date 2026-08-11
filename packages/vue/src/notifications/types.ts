@@ -36,6 +36,7 @@ export interface VueNotificationInboxProps {
 
 export interface VueNotificationInboxTriggerProps extends Omit<VueNotificationInboxProps, 'placement'> {
   readonly label?: string
+  readonly lazy?: boolean
   readonly placement: 'sidebar' | 'topbar'
 }
 

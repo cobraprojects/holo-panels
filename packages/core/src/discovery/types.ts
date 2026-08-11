@@ -48,6 +48,5 @@ export interface DiscoverableDefinition<TKind extends DiscoverableKind = Discove
 export interface DiscoverableBuilder<TKind extends DiscoverableKind = DiscoverableKind> {
   readonly discoveryMarker: typeof DISCOVERY_MARKER
   readonly kind: TKind
-  readonly id: string
   compileDiscoveryDefinition(): DiscoverableDefinition<TKind>
 }

@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import type { Component } from 'svelte'
 import type { render as RenderComponent } from 'svelte/server'
@@ -10,7 +11,7 @@ let renderComponent: typeof RenderComponent | undefined
 
 async function render(model: WidgetAcceptanceModel): Promise<string> {
   if (!server) {
-    server = await createServer({ appType: 'custom', cacheDir: '/tmp/holo-panels-sveltekit-p12-acceptance', configFile: false, logLevel: 'silent', plugins: [svelte()], root: new URL('..', import.meta.url).pathname, server: { middlewareMode: true } })
+    server = await createServer({ appType: 'custom', cacheDir: '/tmp/holo-panels-sveltekit-p12-acceptance', configFile: false, logLevel: 'silent', plugins: [svelte()], root: resolve(process.cwd(), '../../apps/example-sveltekit'), server: { middlewareMode: true } })
     const fixture = await server.ssrLoadModule('/tests/P12WidgetFixture.svelte')
     const svelteServer = await server.ssrLoadModule('svelte/server')
     component = fixture.default as Component<{ model: WidgetAcceptanceModel }>

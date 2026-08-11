@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Textarea from '../components/Textarea.svelte'
   import type { SvelteEditorProps } from './contracts'
 
   let { value, disabled, readOnly, label, inputId, describedBy, errorMessageId, invalid, setValue }: SvelteEditorProps = $props()
@@ -8,7 +9,7 @@
   }
 </script>
 
-<textarea
+<Textarea
   id={inputId}
   aria-label={label}
   aria-describedby={describedBy}
@@ -18,4 +19,4 @@
   readonly={readOnly}
   value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
   oninput={update}
-></textarea>
+></Textarea>

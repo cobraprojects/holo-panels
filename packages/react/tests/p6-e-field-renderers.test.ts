@@ -158,16 +158,48 @@ describe('P6-E React field renderers', () => {
 
     act(() => root.render(createElement(FormField, {
       collectionStore,
-      definition: definition('sections', 'repeater', { maximumItems: 3 }),
+      definition: definition('sections', 'repeater', { fields: [{ label: 'Title', path: 'title', required: true, type: 'text' }], maximumItems: 3 }),
       registry,
-      renderRepeaterItem: (_value: unknown, index: number) => createElement('strong', null, `Section ${index + 1}`),
       store,
     })))
     act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Clone item 1"]')?.click())
 
-    expect(container.textContent).toContain('Section 2')
+    expect(container.querySelectorAll('input[required]')).toHaveLength(2)
     expect(store.state.values.sections).toHaveLength(2)
     expect(container.querySelector('button[aria-label="Move item 2 up"]')).not.toBeNull()
+  })
+
+  it('edits key-value entries instead of rendering collection placeholders', () => {
+    const store = new FormStore<FormValues>({ attachment: null, sections: [{ key: 'color', value: 'blue' }], title: '' })
+    const collectionStore = new CollectionStore<unknown>([{ key: 'color', value: 'blue' }], 'metadata')
+    const registry = createComponentRegistry()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+
+    act(() => root.render(createElement(FormField, {
+      collectionStore,
+      definition: definition('sections', 'key-value'),
+      registry,
+      store,
+    })))
+    const key = container.querySelector<HTMLInputElement>('input[aria-label="Key 1"]')
+    const value = container.querySelector<HTMLInputElement>('input[aria-label="Value 1"]')
+    act(() => {
+      if (!key) return
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(key, 'theme')
+      key.dispatchEvent(new Event('input', { bubbles: true }))
+      key.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    act(() => {
+      if (!value) return
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(value, 'dark')
+      value.dispatchEvent(new Event('input', { bubbles: true }))
+      value.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(store.state.values.sections).toEqual([{ key: 'theme', value: 'dark' }])
   })
 
   it('renders cached option state and respects dependent option disabling', async () => {
@@ -220,6 +252,82 @@ describe('P6-E React field renderers', () => {
       await optionStore.updateDependencies({}, 21)
     })
     expect(select?.disabled).toBe(true)
+  })
+
+  it('searches, paginates, creates, and edits options through the option store', async () => {
+    const list = vi.fn(async request => ({
+      hasMore: request.page === 1,
+      options: request.search === 'gi' ? [{ label: 'Giza', value: 21 }] : [{ label: 'Cairo', value: 20 }],
+      page: request.page,
+      perPage: request.perPage,
+    }))
+    const create = vi.fn(async (_request, label: string) => ({ label, value: 22 }))
+    const edit = vi.fn(async (_request, value: number, label: string) => ({ label, value }))
+    const optionStore = new OptionStore<number>({
+      fieldId: 'title',
+      locale: 'en',
+      panelId: 'admin',
+      resourceId: 'posts',
+      tenantKey: 'tenant',
+      transport: { create, edit, hydrateSelected: async () => [], list, validateSelection: async () => true },
+    })
+    const store = new FormStore<FormValues>({ attachment: null, sections: [], title: 20 as never })
+    const registry = createComponentRegistry()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    await act(async () => {
+      root.render(createElement(FormField, {
+        definition: definition('title', 'select', { canCreateOption: true, canEditOption: true, paginated: true, preload: true, searchable: true }),
+        optionStore,
+        registry,
+        store,
+      }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')
+    await act(async () => {
+      if (!search) return
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(search, 'gi')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      search.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ page: 1, search: 'gi' }), expect.any(AbortSignal))
+
+    const createInput = container.querySelector<HTMLInputElement>('input[aria-label="Create Title label"]')
+    await act(async () => {
+      if (!createInput) return
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(createInput, 'Alexandria')
+      createInput.dispatchEvent(new Event('input', { bubbles: true }))
+      createInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      const button = [...container.querySelectorAll('button')].find(candidate => candidate.textContent === 'Create option')
+      button?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(create).toHaveBeenCalledWith(expect.anything(), 'Alexandria', expect.any(AbortSignal))
+    expect(store.state.values.title).toBe(22)
+
+    const editInput = container.querySelector<HTMLInputElement>('input[aria-label="Edit Title label"]')
+    await act(async () => {
+      if (!editInput) return
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(editInput, 'Alexandria updated')
+      editInput.dispatchEvent(new Event('input', { bubbles: true }))
+      editInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      const button = [...container.querySelectorAll('button')].find(candidate => candidate.textContent === 'Edit option')
+      button?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(edit).toHaveBeenCalledWith(expect.anything(), 22, 'Alexandria updated', expect.any(AbortSignal))
   })
 
   it('mounts rich editor adapters only at the client boundary and destroys them on unmount', () => {

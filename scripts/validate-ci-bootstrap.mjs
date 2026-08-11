@@ -13,6 +13,7 @@ const expectedVersion = '0.3.12'
 const expectedCompatibilityRange = '>=0.3.9'
 const workflow = await readFile(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release.yml'), 'utf8')
+const hostReleaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release-holo.yml'), 'utf8')
 
 const requiredWorkflowText = [
   `HOLO_JS_REPOSITORY: ${expectedRepository}`,
@@ -57,6 +58,31 @@ for (const requiredText of requiredReleaseWorkflowText) {
 
 if (releaseWorkflow.includes('pull_request:') || releaseWorkflow.includes('push:')) {
   throw new Error('Release CI must only publish through explicit workflow dispatch')
+}
+
+const requiredHostReleaseWorkflowText = [
+  'workflow_dispatch:',
+  'environment: npm-release',
+  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
+  `HOLO_JS_REF: ${expectedRef}`,
+  `HOLO_JS_VERSION: ${expectedVersion}`,
+  'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
+  'bun install --frozen-lockfile --ignore-scripts',
+  'npm rebuild better-sqlite3',
+  'bun run typecheck',
+  'bun run lint',
+  'bun run test',
+  'run: bun run release',
+]
+
+for (const requiredText of requiredHostReleaseWorkflowText) {
+  if (!hostReleaseWorkflow.includes(requiredText)) {
+    throw new Error(`Holo release CI is missing required publication text: ${requiredText}`)
+  }
+}
+
+if (hostReleaseWorkflow.includes('pull_request:') || hostReleaseWorkflow.includes('push:')) {
+  throw new Error('Holo release CI must only publish through explicit workflow dispatch')
 }
 
 const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {

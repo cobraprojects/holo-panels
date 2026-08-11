@@ -1,0 +1,47 @@
+name: Release compatible Holo-JS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HOLO_JS_REPOSITORY: cobraprojects/holo-js
+  HOLO_JS_REF: 9abcce12588feeb22353fd57869719df43d3ac39
+  HOLO_JS_VERSION: 0.3.12
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: npm-release
+    steps:
+      - name: Check out compatible Holo-JS
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.HOLO_JS_REPOSITORY }}
+          ref: ${{ env.HOLO_JS_REF }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install Holo-JS
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          npm rebuild better-sqlite3
+      - name: Validate Holo-JS
+        run: |
+          test "$(node -p "require('./packages/kernel/package.json').version")" = "${HOLO_JS_VERSION}"
+          bun run typecheck
+          bun run lint
+          bun run test
+      - name: Publish Holo-JS
+        env:
+          CI: 'true'
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bun run release

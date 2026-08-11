@@ -86,7 +86,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "link:holo": "node scripts/link-local-holo.mjs",
-    "test": "bun run test:architecture && bun run test:example-parity && node scripts/run-workspace-tests.mjs",
+    "test": "node scripts/run-workspace-tests.mjs && bun run test:architecture && bun run test:example-parity",
     "test:coverage": "node scripts/run-coverage.mjs",
     "test:e2e": "bun run test:e2e:build && playwright test",
     "test:e2e:build": "node tests/e2e/build-examples.mjs",

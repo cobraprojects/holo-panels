@@ -97,7 +97,8 @@ describe('Holo Panels generators', () => {
       export default definePanel('admin')
         .default()
         .path('/control')
-        .guard('backoffice')
+        .authGuard('backoffice')
+        .login()
         .discoverResources()
         .discoverPages()
         .discoverWidgets()
@@ -137,21 +138,26 @@ describe('Holo Panels generators', () => {
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
     expect(await readFile(join(projectRoot, files[0]!), 'utf8')).toMatchInlineSnapshot(`
-      "import { column, defineResource, field } from '@holo-js/panels'
+      "import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
       import Post from '~/models/Post'
 
-      export default defineResource(Post)
-        .shared()
-        .form([
+      const form = defineSchema(Post)
+        .fields(field => [
           field.text('title').required(),
-          field.boolean('published').required(),
+          field.checkbox('published').required(),
           field.dateTime('publishedAt'),
         ])
-        .table([
+
+      const table = defineTable(Post)
+        .columns(column => [
           column.text('title'),
           column.boolean('published'),
-          column.dateTime('publishedAt'),
+          column.text('publishedAt').dateTime(),
         ])
+
+      export default defineResource(Post)
+        .form(form)
+        .table(table)
       "
     `)
     expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toMatchInlineSnapshot(`
@@ -179,7 +185,7 @@ describe('Holo Panels generators', () => {
     const contents = await readFile(join(projectRoot, files[0]!), 'utf8')
 
     expect(contents).toContain("import Post from '~/server/models/Post'")
-    expect(contents).toContain("field.number('id').required()")
+    expect(contents).toContain("field.text('id').numeric().required()")
     expect(contents).toContain("field.dateTime('published_at')")
     expect(files).toEqual([
       'server/admin/resources/posts/PostResource.ts',
@@ -211,7 +217,7 @@ describe('Holo Panels generators', () => {
   })
 
   it.each([
-    ['next', '.tsx', 'return <span>'],
+    ['next', '.tsx', 'defineReactFieldRenderer'],
     ['nuxt', '.vue', '<template>'],
     ['sveltekit', '.svelte', '<script lang="ts">'],
   ] as const)('generates only the detected %s custom renderer', async (framework, extension, marker) => {
@@ -221,7 +227,9 @@ describe('Holo Panels generators', () => {
 
     expect(files).toHaveLength(2)
     expect(files[1]).toBe(`resources/panels/renderers/${framework}/fields/MoneyField${extension}`)
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain(marker)
+    const renderer = await readFile(join(projectRoot, files[1]!), 'utf8')
+    expect(renderer).toContain(marker)
+    expect(renderer).not.toContain('unknown')
   })
 
   it.each([

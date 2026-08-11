@@ -21,7 +21,7 @@ export function deepFreeze<TValue>(value: TValue): DeepReadonly<TValue> {
     visited.add(current)
 
     for (const child of Reflect.ownKeys(current).map(key => Reflect.get(current, key))) {
-      if ((typeof child === 'object' && child !== null) || typeof child === 'function') {
+      if (typeof child === 'object' && child !== null) {
         freeze(child)
       }
     }
@@ -29,7 +29,7 @@ export function deepFreeze<TValue>(value: TValue): DeepReadonly<TValue> {
     Object.freeze(current)
   }
 
-  if ((typeof value === 'object' && value !== null) || typeof value === 'function') {
+  if (typeof value === 'object' && value !== null) {
     freeze(value)
   }
 

@@ -1,4 +1,7 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
+  import Button from '../components/Button.svelte'
+  import Input from '../components/Input.svelte'
+  import Select from '../components/Select.svelte'
   import type { TableRecordId } from '@holo-js/panels-client'
   import ColumnPresentation from './ColumnPresentation.svelte'
   import { displayValue, optionValue, recordValue } from './helpers'
@@ -73,27 +76,27 @@
 {#if !validEditor}
   <ColumnPresentation {column} panelId={table.panelId} {record} registry={table.registry} value={original} />
 {:else if !editing}
-  <button type="button" aria-label="Edit {column.manifest.label ?? column.manifest.path}" onclick={begin}><ColumnPresentation {column} panelId={table.panelId} {record} registry={table.registry} value={original} /></button>
+  <Button type="button" aria-label="Edit {column.manifest.label ?? column.manifest.path}" onclick={begin}><ColumnPresentation {column} panelId={table.panelId} {record} registry={table.registry} value={original} /></Button>
 {:else if kind === 'checkbox' || kind === 'toggle'}
   <span>
-    <input type="checkbox" aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onchange={(event) => { value = (event.currentTarget as HTMLInputElement).checked; void save(value) }} />
+    <Input type="checkbox" aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onchange={(event) => { value = (event.currentTarget as HTMLInputElement).checked; void save(value) }} />
     {#if error}<span role="alert">{error}</span>{/if}
   </span>
 {:else if kind === 'select'}
   <span>
-    <select aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} value={String(value ?? '')} onchange={select}>
+    <Select aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} value={String(value ?? '')} onchange={select}>
       {#each options as option, index}
         {@const next = optionValue(option)}
         {#if typeof next !== 'undefined'}
           <option value={String(next ?? '')} disabled={typeof option === 'object' && option !== null && Reflect.get(option, 'disabled') === true}>{typeof option === 'object' && option !== null && typeof Reflect.get(option, 'label') === 'string' ? Reflect.get(option, 'label') : `Option ${index + 1}`}</option>
         {/if}
       {/each}
-    </select>
+    </Select>
     {#if error}<span role="alert">{error}</span>{/if}
   </span>
 {:else}
   <span>
-    <input aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} value={String(value ?? '')} oninput={(event) => { value = (event.currentTarget as HTMLInputElement).value }} onkeydown={keydown} />
+    <Input aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} value={String(value ?? '')} oninput={(event) => { value = (event.currentTarget as HTMLInputElement).value }} onkeydown={keydown} />
     {#if error}<span role="alert">{error}</span>{/if}
   </span>
 {/if}

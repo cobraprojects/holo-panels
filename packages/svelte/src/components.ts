@@ -1,4 +1,5 @@
 import type { Component, Snippet } from 'svelte'
+import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements'
 import RawAvatar from './components/Avatar.svelte'
 import RawBadge from './components/Badge.svelte'
 import RawButton from './components/Button.svelte'
@@ -16,15 +17,15 @@ import RawSection from './components/Section.svelte'
 import RawTabs from './components/Tabs.svelte'
 import RawToastViewport from './components/ToastViewport.svelte'
 
-export interface PanelsButtonProps { readonly children?: Snippet; readonly disabled?: boolean; readonly type?: 'button' | 'reset' | 'submit' }
-export interface PanelsLinkProps { readonly children?: Snippet; readonly current?: boolean; readonly href: string }
+export interface PanelsButtonProps extends HTMLButtonAttributes { readonly children?: Snippet; readonly ref?: HTMLButtonElement }
+export interface PanelsLinkProps extends HTMLAnchorAttributes { readonly children?: Snippet; readonly current?: boolean; readonly disabled?: boolean; readonly href: string }
 export interface PanelsBadgeProps { readonly children?: Snippet; readonly tone?: 'danger' | 'info' | 'neutral' | 'success' | 'warning' }
 export interface PanelsAvatarProps { readonly alt: string; readonly fallback?: string; readonly src?: string }
 export interface PanelsIconButtonProps { readonly children?: Snippet; readonly disabled?: boolean; readonly label: string }
 export interface PanelsInputControlAttributes { readonly 'aria-describedby'?: string; readonly 'aria-invalid'?: true; readonly id: string }
 export interface PanelsInputWrapperProps { readonly children?: Snippet<[PanelsInputControlAttributes]>; readonly description?: string; readonly error?: string; readonly inputId: string; readonly label: string; readonly required?: boolean }
 export interface PanelsLoadingIndicatorProps { readonly label?: string }
-export interface PanelsDropdownItem { readonly disabled?: boolean; readonly id: string; readonly label: string }
+export interface PanelsDropdownItem { readonly disabled?: boolean; readonly icon?: string | null; readonly id: string; readonly label: string }
 export interface PanelsDropdownProps { readonly items: readonly PanelsDropdownItem[]; readonly label: string; readonly onselect?: (id: string) => void }
 export interface PanelsDialogProps { readonly children?: Snippet; readonly labelledBy: string; readonly onclose: () => void; readonly open: boolean }
 export interface PanelsTab { readonly disabled?: boolean; readonly id: string; readonly label: string }
@@ -36,7 +37,7 @@ export interface PanelsToast { readonly id: string; readonly message: string; re
 export interface PanelsToastViewportProps { readonly toasts?: readonly PanelsToast[] }
 export interface PanelsErrorBoundaryProps { readonly children?: Snippet; readonly error?: string; readonly fallback?: string; readonly onerror?: (error: unknown) => void }
 
-export const PanelsButton: Component<PanelsButtonProps> = RawButton
+export const PanelsButton: Component<PanelsButtonProps, Record<string, unknown>, 'ref'> = RawButton
 export const PanelsLink: Component<PanelsLinkProps> = RawLink
 export const PanelsBadge: Component<PanelsBadgeProps> = RawBadge
 export const PanelsAvatar: Component<PanelsAvatarProps> = RawAvatar

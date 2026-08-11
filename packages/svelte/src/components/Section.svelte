@@ -4,4 +4,4 @@
   let { children, heading }: Props = $props()
 </script>
 
-<section class="hp-section" data-panels-component="section"><h2>{heading}</h2>{@render children?.()}</section>
+<section class="hp-section" data-panels-component="section" data-slot="card"><h2 data-slot="card-title">{heading}</h2><div data-slot="card-content">{@render children?.()}</div></section>

@@ -1,15 +1,18 @@
-import { F as FieldClientHints, a as FormFieldPath, b as FormFieldValue, B as BoundFormField, c as FieldResolvable, d as FieldResolver, C as CompiledFieldDefinition, e as FieldResolverContext, f as FieldPresentationState, R as RecordPath, g as RelationPath, h as RelatedRecord, i as RecordPathValue, j as FilterIndicatorResolver, k as CompiledFilterDefinition, l as FilterServerHandles, m as FilterEncoder, n as FilterManifest, o as FormFieldPathFor, O as OptionValue, p as ChoiceOption, q as OptionSource, r as OptionQueryRequest, s as OptionPage, t as OptionServiceLimits, H as HoloOptionQuery, u as RelationshipOptionAdapter, v as RelationshipOptionQueryModifier, U as UploadMimeInspector, w as UploadPolicy, T as TemporaryUploadServiceOptions, x as CreateTemporaryUploadInput, y as TemporaryUploadDescriptor, W as WriteTemporaryUploadInput, S as StoredUploadDescriptor, z as ResolveTemporaryUploadInput, D as DeleteTemporaryUploadInput, M as MediaAttachmentTarget, A as MediaAttachmentResult, E as UploadEndpointRequest, G as UploadEndpointResponse, I as UploadStorageAdapter, J as ActionDefinition, K as ActionContext, L as ActionResolvedState, N as ActionManifest, P as ActionMount, Q as ActionKind, V as ActionEngineOptions, X as ActionExecutionRequest, Y as ActionExecutionResult, Z as Effect, _ as ActionGroupItem, $ as ActionGroupManifest, a0 as RelationOperation, a1 as NormalizedRelationListRequest, a2 as RelationRecordPage, a3 as RelationPresentation, a4 as RelationListRequest, a5 as RecordPathFor, a6 as ColumnResolver, a7 as ColumnAlignment, a8 as ColumnDataSource, a9 as TextFormatter, aa as InlineEditorManifest, ab as CompiledColumnDefinition, ac as ColumnAggregate, ad as AdvancedOperatorFor, ae as AdvancedScalarType, af as AdvancedFilterColumn, ag as AdvancedColumnMap, ah as AdvancedFilterValue, ai as AdvancedFilterCondition, aj as DateRangeFilterValue, ak as SelectFilterOption, al as FilterExecutionContext, am as TernaryFilterValue, an as TrashedFilterValue, ao as FilterResponsiveColumns, ap as FilterCollectionPlacement, aq as FilterCollectionPresentation, ar as FilterIndicator, as as P7AFilterCompatibility, at as TranslationReference, au as TranslationCatalog, av as RegisteredTranslations, aw as TranslationArguments, ax as TranslationMessage } from './browser-D5Nbg1CR.js';
-export { ay as ActionFailureNotification, az as ActionItemResult, aA as ActionItemStatus, aB as ActionModalManifest, aC as ActionModalOptions, aD as ActionModalWidth, aE as ActionNotificationSender, aF as ActionPresentationDefinition, aG as ActionPresentationManifest, aH as ActionRateLimit, aI as ActionRecordResolver, aJ as ActionResolvable, aK as ActionSize, aL as ActionSuccessNotification, aM as ActionTransaction, aN as AnyAdvancedFilterColumn, aO as CloseModalEffect, aP as ColumnManifest, aQ as ColumnServerHandles, aR as DownloadEffect, aS as ErrorCategory, aT as ErrorEnvelope, aU as FieldLayout, aV as FieldOperation, aW as FieldStateCodec, aX as FilterLayout, aY as FilterMode, aZ as FocusEffect, a_ as FormValues, a$ as HoloOptionPage, b0 as IDEMPOTENCY_HEADER, b1 as InlineEditorKind, b2 as InvalidateTableEffect, b3 as LocaleDirection, b4 as ManifestSerializationError, b5 as MediaAttachmentBuilder, b6 as OptionDependencies, b7 as PROTOCOL_VERSION, b8 as PanelNotification, b9 as PanelNotificationAccessError, ba as PanelNotificationInbox, bb as PanelsError, bc as PanelsTransportError, bd as PluralCategory, be as PluralTranslation, bf as ProtocolCompatibilityError, bg as ProtocolVersion, bh as RedirectEffect, bi as RefreshEffect, bj as RelationshipOptionContext, bk as RequestEnvelope, bl as ResponseEnvelope, bm as SchemaTraversalContext, bn as SuccessEnvelope, bo as SupportedFilterOperator, bp as TRANSLATION_REFERENCE_KIND, bq as TRANSPORT_REQUEST_FIELD, br as TableWidgetExecutor, bs as ToastEffect, bt as TranslationCatalogRegistry, bu as TranslationCatalogSet, bv as TranslationCatalogSource, bw as TranslationLookup, bx as TranslationReplacementMap, by as TranslationReplacementNames, bz as TranslationReplacementValue, bA as TranslationReplacements, bB as TransportDecodedRequest, bC as TransportDecodingError, bD as TransportOperation, bE as TransportOperationKind, bF as TransportRequestOptions, bG as TransportServerRequestLike, bH as TransportServerResult, bI as UploadActorContext, bJ as UploadAuthorizationRequest, bK as UploadAuthorizer, bL as UploadEndpointBody, bM as UploadOperation, bN as UploadStorageListPage, bO as UploadStorageListRequest, bP as WidgetAccessError, bQ as applySchemaManifestPatches, bR as applySchemaNodePatches, bS as assertJsonSafe, bT as assertProtocolCompatible, bU as assertUntranslatedStableKey, bV as canonicalLocale, bW as createAccessibleChartModel, bX as createRequestEnvelope, bY as createTranslationReference, bZ as databaseNotificationPayload, b_ as decodeRequestEnvelope, b$ as decodeResponseEnvelope, c0 as decodeTransportServerRequest, c1 as defineTranslationCatalog, c2 as defineTransportOperation, c3 as evaluateSchemaVisibility, c4 as findSchemaComponent, c5 as isPanelDatabaseNotificationPayload, c6 as isProtocolCompatible, c7 as isTranslationReference, c8 as normalizeTransportError, c9 as panelNotification, ca as parseProtocolVersion, cb as patchSchemaManifestNode, cc as patchSchemaNode, cd as renderAccessibleChart, ce as requireResolvedWidget, cf as resolveTableWidgetData, cg as resolveWidget, ch as serializeManifest, ci as toJsonValue, cj as traverseSchema, ck as traverseSchemaManifest } from './browser-D5Nbg1CR.js';
-import { S as SchemaComponentKind, a as SchemaVisibilityResolver, R as ResponsiveValue, b as SchemaColumnSpan, C as CompiledSchemaComponent, c as SchemaComponentProperties, d as SchemaLayoutProperties, e as CustomComponentProperties, f as SchemaCollapseProperties, g as SchemaPath, h as CompiledSchema, i as SchemaBreakpoint, j as SchemaRenderSlots, W as WidgetServerHandles, k as WidgetColumnSpan, l as WidgetFilterDefinition, m as CompiledWidgetDefinition, n as WidgetFamily, o as WidgetDataContext, p as ChartWidgetData, E as ExtensionTypeId, q as CustomWidgetData, r as StatsWidgetData, T as TableWidgetData, s as WidgetContext, t as WidgetManifest, P as PluginCompatibility, u as PanelNotificationStore, D as DashboardContext, v as DashboardNavigation, w as CompiledDashboardDefinition, x as WidgetResourcePlacement, y as ResourceWidgetContext, z as PanelNotificationScope } from './contracts-WEhwEL_y.js';
-export { A as AccessibleChartModel, B as AccessibleChartRenderer, F as AccessibleChartRow, G as ActionNode, H as ActionProperties, I as ChartPoint, J as ChartSeries, K as ClientRegistryReference, L as ColumnNode, M as ColumnProperties, N as CompiledNode, O as DashboardManifest, Q as DuplicateRegistrationError, U as EntryNode, V as EntryProperties, X as ExportNode, Y as ExportProperties, Z as ExtensionRegistration, _ as ExtensionRegistry, $ as FieldNode, a0 as FieldProperties, a1 as FilterNode, a2 as FilterProperties, a3 as ImportNode, a4 as ImportProperties, a5 as LayoutNode, a6 as LayoutProperties, a7 as MissingRendererError, a8 as NavigationNode, a9 as NavigationProperties, aa as NodeKind, ab as NotificationNode, ac as NotificationProperties, ad as PageNode, ae as PageProperties, af as PanelDatabaseNotificationItem, ag as PanelDatabaseNotificationPage, ah as PanelDatabaseNotificationPayload, ai as PanelNode, aj as PanelNotificationAction, ak as PanelNotificationActionKind, al as PanelNotificationAuthorization, am as PanelNotificationOperation, an as PanelNotificationPresentation, ao as PanelNotificationRecipient, ap as PanelNotificationRecipientResolver, aq as PanelNotificationRecord, ar as PanelNotificationStatus, as as PanelNotificationStorePage, at as PanelNotificationStorePagination, au as PanelNotificationStoreQuery, av as PanelProperties, aw as PluginCompatibilityError, ax as PublicNode, ay as PublicSourceLocation, az as RegistryKind, aA as ResolvedWidget, aB as ResourceNode, aC as ResourceProperties, aD as SCHEMA_BREAKPOINTS, aE as SchemaComponentManifest, aF as SchemaComponentPatch, aG as SchemaJsonValue, aH as SchemaLeafKind, aI as SchemaLeafManifest, aJ as SchemaManifest, aK as SchemaNode, aL as SchemaProperties, aM as SchemaValueAtPath, aN as ServerHandles, aO as SourceLocation, aP as SummaryNode, aQ as SummaryProperties, aR as TableNode, aS as TableProperties, aT as TargetedSchemaPatch, aU as VersionRange, aV as WidgetFilterState, aW as WidgetLayout, aX as WidgetNode, aY as WidgetPolling, aZ as WidgetProperties, a_ as WidgetStat, a$ as assertPluginCompatible, b0 as createExtensionTypeId, b1 as createSourceLocation, b2 as exposeSourceLocation, b3 as rendererRegistryName } from './contracts-WEhwEL_y.js';
-import { C as ComponentDefault, D as DefaultableComponentKind, P as PageServerHandles, a as PageComponentBody, b as PageResolvable, c as PageContext, d as PageBreadcrumb, e as PageNavigation, f as PageRendererManifest, g as PageLayoutSlot, h as CompiledPageDefinition, i as PageType, j as PageNavigationInput, k as PanelNavigationSeed, l as PanelAccessContext, m as PanelActorPresenter, n as CompiledPanelAuth, o as PanelBranding, p as PanelDatabaseNotificationConfiguration, q as PanelDatabaseNotificationInboxOptions, r as PanelNavigationMode, s as PanelPlugin, t as PanelTheme, u as CompiledPanelTenancy, v as PanelUserMenuItem, w as CompiledPanelDefinition, x as PanelAuthPageConfiguration, y as PanelTenantIdentifier, z as PanelTenancyOptions, A as PanelPluginInstallation, B as PanelAuthenticatedScope, E as PanelTenantExecutionContext } from './server-mwynKWAM.js';
-export { F as ExecutePanelAuthOperationOptions, G as ExecutePanelDatabaseNotificationOperationOptions, H as ExecutePanelTenantOperationOptions, I as ExecutePanelTenantSwitchOptions, J as HoloAuth, K as HoloAuthGuard, L as PageAccessError, M as PageManifest, N as PanelActiveTenantPersistence, O as PanelAssetKind, Q as PanelAssetManifest, R as PanelAuthContext, S as PanelAuthOperation, T as PanelAuthOperationOutcome, U as PanelAuthorizationLayer, V as PanelAuthorizationRequest, W as PanelBootstrap, X as PanelDarkMode, Y as PanelDatabaseNotificationIdentity, Z as PanelDatabaseNotificationOperationResult, _ as PanelDatabaseNotificationPlacement, $ as PanelEmailVerificationPageConfiguration, a0 as PanelGeneratorTemplate, a1 as PanelIconDefinition, a2 as PanelIconPath, a3 as PanelLoginPageConfiguration, a4 as PanelLogoutPageConfiguration, a5 as PanelManifest, a6 as PanelMultiFactorPageConfiguration, a7 as PanelNotificationBootstrap, a8 as PanelNotificationRequestError, a9 as PanelOperation, aa as PanelPackageModuleContribution, ab as PanelPasswordResetPageConfiguration, ac as PanelPermissionSubject, ad as PanelPluginAsset, ae as PanelPluginBuilder, af as PanelPluginContribution, ag as PanelPluginContributionDefinition, ah as PanelPluginIcon, ai as PanelProfilePageConfiguration, aj as PanelQueuedTenantContext, ak as PanelRendererFramework, al as PanelRendererRegistration, am as PanelRuntime, an as PanelRuntimeError, ao as PanelTenancyManifest, ap as PanelTenantBootstrap, aq as PanelTenantIdentity, ar as PanelTenantOperation, as as PanelTenantOperationError, at as PanelTenantOperationFailure, au as PanelTenantOperationResult, av as PanelTenantPresentation, aw as PanelTenantPresentationInput, ax as PanelTenantScopedQuery, ay as PanelTenantSwitchResult, az as PanelTranslationContribution, aA as PanelsConfiguration, aB as ResolvedPageData, aC as ResourceExecutor, aD as ResourceExecutorOptions, aE as ResourceInputError, aF as ResourceMutationResult, aG as ResourceNestedExecution, aH as ResourceRecordNotFoundError, aI as componentDefault, aJ as definePanelPlugin, aK as definePanelsConfig, aL as executePanelAuthOperation, aM as executePanelDatabaseNotificationOperation, aN as executePanelTenantOperation, aO as executePanelTenantSwitch, aP as panelAuthOperationStatus, aQ as panelTenantOperationStatus, aR as preparePageRoutes, aS as resolvePageData, aT as toSchemaManifest } from './server-mwynKWAM.js';
-import { D as DiscoverableDefinition, a as DiscoverableBuilder, b as DiscoverableKind, c as DiscoveryDirectories } from './contracts-BXaz6MmY.js';
-export { C as ClientManifestValue, d as CompiledNestedResource, e as DISCOVERABLE_KINDS, f as DISCOVERY_MARKER, N as NestedResourceOptions, R as ResourceAttribute, g as ResourceAttributes, h as ResourceAuthorization, i as ResourceCapabilities, j as ResourceClientManifest, k as ResourceDefinition, l as ResourceExecutionContext, m as ResourceGlobalSearch, n as ResourceIdentifier, o as ResourceInput, p as ResourceLifecycle, q as ResourceModel, r as ResourceModelDefinition, s as ResourceNavigation, t as ResourceOperation, u as ResourceParentReference, v as ResourceParentRegistry, w as ResourcePersistence, x as ResourceQuery, y as ResourceRecord, z as ResourceRecordFor, A as ResourceTransaction, B as ResourceValidation, S as SingularResourceOptions } from './contracts-BXaz6MmY.js';
-export { C as CompiledExportColumn, a as CompiledExportFormat, b as CompiledImportColumn, c as CompiledImportFormat, d as CsvExportOptions, e as CsvImportLimits, f as CsvImportOptions, E as ExecuteTransferExportRequest, g as ExportAggregateKind, h as ExportAggregatePlan, i as ExportCell, j as ExportColumnBatchContext, k as ExportColumnBatchValueContext, l as ExportColumnBuilder, m as ExportColumnManifest, n as ExportColumnOption, o as ExportEngineError, p as ExportEngineErrorCode, q as ExportFormatAdapter, r as ExportFormatArtifact, s as ExportFormatInput, t as ExportPathValue, u as ExportQueryAdapter, v as ExportRecordPath, w as ExportRelationPath, x as ExporterBuilder, y as ExporterDefinition, z as ExporterManifest, A as ExporterServerDefinition, F as FinalizeTransferExportPartsOptions, H as HoloTransferCompletionNotifier, B as HoloTransferNotificationDefinitions, D as HoloTransferStorageOptions, G as HoloTransferStoreOptions, I as ImportColumnBuilder, J as ImportColumnManifest, K as ImportFormatAdapter, L as ImportFormatInspection, M as ImportLimits, N as ImportMutationAdapter, O as ImportMutationDecision, P as ImportRowExecutionContext, Q as ImporterBuilder, R as ImporterDefinition, S as ImporterManifest, T as ImporterServerDefinition, U as InferredResourceBuilder, V as PersistTransferExportPartOptions, W as ResourceBuilder, X as ResourceContextTypeSources, Y as StartExportRequest, Z as StartImportRequest, _ as TransferArtifactDigest, $ as TransferArtifactWriter, a0 as TransferCompletionNotifier, a1 as TransferExecutionContext, a2 as TransferExecutionInput, a3 as TransferExportChunk, a4 as TransferExportExecutionInput, a5 as TransferExportResult, a6 as TransferFailureRows, a7 as TransferIdentity, a8 as TransferIdentityValue, a9 as TransferImportExecutionInput, aa as TransferInputSource, ab as TransferNextChunk, ac as TransferOperationIdentity, ad as TransferOperationKind, ae as TransferOperationProgress, af as TransferOperationRecord, ag as TransferOperationRequest, ah as TransferOperationStatus, ai as TransferOperationStore, aj as TransferOutboxDispatchResult, ak as TransferOutboxDispatcher, al as TransferOutboxDispatcherOptions, am as TransferOutboxEvent, an as TransferOutboxFailure, ao as TransferOutboxLease, ap as TransferOutboxRecord, aq as TransferPartsError, ar as TransferPartsErrorCode, as as TransferPolicy, at as TransferProgressTransition, au as TransferQueueAdapter, av as TransferQueueConfiguration, aw as TransferQueueEnvelope, ax as TransferResultPart, ay as TransferRetentionConfiguration, az as TransferSanitizedError, aA as TransferSnapshotError, aB as TransferStorageAdapter, aC as TransferStorageConfiguration, aD as TransferStorageError, aE as TransferStoredArtifact, aF as TransferUploadResolver, aG as WriteTransferResultPartOptions, aH as XlsxExportOptions, aI as createHoloTransferOperationStore, aJ as createHoloTransferStorage, aK as createPanelTransferTables, aL as csvExportFormat, aM as csvImportFormat, aN as defineExporter, aO as defineImporter, aP as defineResource, aQ as executeTransferExport, aR as finalizeTransferExportParts, aS as holoTransferCompletionNotifier, aT as persistTransferExportPart, aU as readTransferResultParts, aV as snapshotTransferUpload, aW as transferDefinitionRevision, aX as writeTransferResultPart, aY as xlsxExportFormat } from './transfers-BD_3nfbz.js';
-import { J as JsonObject, b as RenderSlotReference, c as RecordTypeSource, d as RecordTypeValue, e as RuntimeTypeSource, f as RuntimeTypeValue, a as JsonValue, g as TableQueryFilterDefinition, C as ContextTypeSources, O as OptionalRuntimeTypeValue, S as ScopedRenderSlots, P as PanelRenderSlot, T as TableQueryState, h as JsonPrimitive, i as TableFilterOperator, j as TableQueryFilter, H as HoloTableQuery, k as TableQueryDefinition, l as TableQueryResult, m as TableRecordIdentifier, n as TableSelection } from './contracts-BHzklEOG.js';
-export { A as AllTableQueryResult, o as CursorTableQueryResult, p as HoloCursorPaginatedResult, q as HoloPaginatedResult, r as HoloPaginationMeta, s as HoloSimplePaginatedResult, t as HoloSimplePaginationMeta, u as JsonArray, v as PageTableQueryResult, w as RenderSlotSource, R as ResourceRenderSlot, x as ScopedRenderSlotManifest, y as SimpleTableQueryResult, z as TableAggregateKind, B as TablePaginationMode, D as TableQueryAggregateDefinition, E as TableQueryColumnDefinition, F as TableQueryScalar, G as TableQuerySort, I as TableSortDirection } from './contracts-BHzklEOG.js';
-import { FieldDefinition, FormSchema, InferFormData, StandardSchemaV1Issue, WebFileLike } from '@holo-js/forms';
+import { F as FieldClientHints, a as FormFieldPath, b as FormFieldValue, B as BoundFormField, c as FieldResolvable, d as FieldResolver, C as CompiledFieldDefinition, e as FieldResolverContext, f as FieldPresentationState, g as FormFieldPathFor, R as RecordPath, h as RelationPath, i as RelatedRecord, j as RecordPathValue, k as FilterIndicatorResolver, l as CompiledFilterDefinition, m as FilterServerHandles, n as FilterEncoder, o as FilterManifest, O as OptionValue, p as ChoiceOption, q as OptionSource, r as OptionQueryRequest, s as OptionPage, t as OptionServiceLimits, H as HoloOptionQuery, u as RelationshipOptionAdapter, v as RelationshipOptionQueryModifier, w as RelationOperation, N as NormalizedRelationListRequest, x as RelationRecordPage, y as RelationPresentation, z as RelationListRequest, A as RecordPathFor, D as ColumnResolver, E as ColumnAlignment, G as ColumnDataSource, T as TextFormatter, I as InlineEditorManifest, J as CompiledColumnDefinition, K as ColumnAggregate, L as AdvancedOperatorFor, M as AdvancedScalarType, P as AdvancedFilterColumn, Q as AdvancedColumnMap, S as AdvancedFilterValue, U as AdvancedFilterCondition, V as DateRangeFilterValue, W as SelectFilterOption, X as FilterExecutionContext, Y as TernaryFilterValue, Z as TrashedFilterValue, _ as FilterResponsiveColumns, $ as FilterCollectionPlacement, a0 as FilterCollectionPresentation, a1 as FilterIndicator, a2 as P7AFilterCompatibility, a3 as TranslationReference, a4 as TranslationCatalog, a5 as RegisteredTranslations, a6 as TranslationArguments, a7 as TranslationMessage } from './browser-C_kLvBkA.js';
+export { a8 as AnyAdvancedFilterColumn, a9 as ColumnManifest, aa as ColumnServerHandles, ab as ErrorCategory, ac as ErrorEnvelope, ad as FieldLayout, ae as FieldOperation, af as FieldStateCodec, ag as FilterLayout, ah as FilterMode, ai as FormValues, aj as HoloOptionPage, ak as IDEMPOTENCY_HEADER, al as InlineEditorKind, am as LocaleDirection, an as ManifestSerializationError, ao as OptionDependencies, ap as PROTOCOL_VERSION, aq as PanelNotification, ar as PanelNotificationAccessError, as as PanelNotificationInbox, at as PanelsError, au as PanelsTransportError, av as PluralCategory, aw as PluralTranslation, ax as ProtocolCompatibilityError, ay as ProtocolVersion, az as RelationshipOptionContext, aA as RequestEnvelope, aB as ResponseEnvelope, aC as SchemaTraversalContext, aD as SuccessEnvelope, aE as SupportedFilterOperator, aF as TRANSLATION_REFERENCE_KIND, aG as TRANSPORT_REQUEST_FIELD, aH as TableWidgetExecutor, aI as TranslationCatalogRegistry, aJ as TranslationCatalogSet, aK as TranslationCatalogSource, aL as TranslationLookup, aM as TranslationReplacementMap, aN as TranslationReplacementNames, aO as TranslationReplacementValue, aP as TranslationReplacements, aQ as TransportDecodedRequest, aR as TransportDecodingError, aS as TransportOperation, aT as TransportOperationKind, aU as TransportRequestOptions, aV as TransportServerRequestLike, aW as TransportServerResult, aX as WidgetAccessError, aY as applySchemaManifestPatches, aZ as applySchemaNodePatches, a_ as assertJsonSafe, a$ as assertProtocolCompatible, b0 as assertUntranslatedStableKey, b1 as canonicalLocale, b2 as createAccessibleChartModel, b3 as createRequestEnvelope, b4 as createTranslationReference, b5 as databaseNotificationPayload, b6 as decodeRequestEnvelope, b7 as decodeResponseEnvelope, b8 as decodeTransportServerRequest, b9 as defineTranslationCatalog, ba as defineTransportOperation, bb as evaluateSchemaVisibility, bc as findSchemaComponent, bd as isPanelDatabaseNotificationPayload, be as isProtocolCompatible, bf as isTranslationReference, bg as normalizeTransportError, bh as panelNotification, bi as parseProtocolVersion, bj as patchSchemaManifestNode, bk as patchSchemaNode, bl as renderAccessibleChart, bm as requireResolvedWidget, bn as resolveTableWidgetData, bo as resolveWidget, bp as serializeManifest, bq as toJsonValue, br as traverseSchema, bs as traverseSchemaManifest } from './browser-C_kLvBkA.js';
+import { U as UploadMimeInspector, a as UploadPolicy, W as WidgetServerHandles, b as WidgetColumnSpan, c as WidgetFilterDefinition, C as CompiledWidgetDefinition, d as WidgetFamily, e as WidgetDataContext, f as ChartWidgetData, g as CustomWidgetData, S as StatsWidgetData, T as TableWidgetData, h as WidgetContext, i as WidgetManifest, P as PluginCompatibility, D as DashboardContext, j as DashboardNavigation, k as CompiledDashboardDefinition, l as WidgetResourcePlacement, R as ResourceWidgetContext } from './contracts-CvFea4wh.js';
+export { A as AccessibleChartModel, m as AccessibleChartRenderer, n as AccessibleChartRow, o as ActionNode, p as ActionProperties, q as ChartPoint, r as ChartSeries, s as ClientRegistryReference, t as ColumnNode, u as ColumnProperties, v as CompiledNode, w as CreateTemporaryUploadInput, x as DashboardManifest, y as DeleteTemporaryUploadInput, z as DuplicateRegistrationError, E as EntryNode, B as EntryProperties, F as ExportNode, G as ExportProperties, H as ExtensionRegistration, I as ExtensionRegistry, J as FieldNode, K as FieldProperties, L as FilterNode, M as FilterProperties, N as FinalizedUploadResult, O as ImportNode, Q as ImportProperties, V as LayoutNode, X as LayoutProperties, Y as MediaAttachmentBuilder, Z as MediaAttachmentResult, _ as MediaAttachmentTarget, $ as MissingRendererError, a0 as NavigationNode, a1 as NavigationProperties, a2 as NodeKind, a3 as NotificationNode, a4 as NotificationProperties, a5 as PageNode, a6 as PageProperties, a7 as PanelNode, a8 as PanelProperties, a9 as PluginCompatibilityError, aa as PublicNode, ab as PublicSourceLocation, ac as ResolveTemporaryUploadInput, ad as ResolvedWidget, ae as ResourceNode, af as ResourceProperties, ag as SchemaNode, ah as SchemaProperties, ai as ServerHandles, aj as SourceLocation, ak as StoredUploadDescriptor, al as SummaryNode, am as SummaryProperties, an as TableNode, ao as TableProperties, ap as TemporaryUploadDescriptor, aq as TemporaryUploadServiceOptions, ar as UploadActorContext, as as UploadAuthorizationRequest, at as UploadAuthorizer, au as UploadEndpointBody, av as UploadEndpointRequest, aw as UploadEndpointResponse, ax as UploadOperation, ay as UploadStorageAdapter, az as UploadStorageListPage, aA as UploadStorageListRequest, aB as VersionRange, aC as WidgetFilterState, aD as WidgetLayout, aE as WidgetNode, aF as WidgetPolling, aG as WidgetProperties, aH as WidgetStat, aI as WriteTemporaryUploadInput, aJ as assertPluginCompatible, aK as createSourceLocation, aL as exposeSourceLocation, aM as rendererRegistryName } from './contracts-CvFea4wh.js';
+import { J as JsonObject, f as RecordTypeSource, g as RuntimeTypeSource, h as ContextTypeSources, i as RecordTypeValue, j as RuntimeTypeValue, O as OptionalRuntimeTypeValue, a as ExtensionTypeId, E as Effect, k as SchemaComponentKind, l as SchemaVisibilityResolver, m as ResponsiveValue, n as SchemaColumnSpan, R as RenderSlotReference, o as CompiledSchemaComponent, p as SchemaComponentProperties, q as SchemaLayoutProperties, r as CustomComponentProperties, s as SchemaCollapseProperties, t as SchemaPath, C as CompiledSchema, u as SchemaBreakpoint, e as JsonValue, v as SchemaRenderSlots, w as TableQueryFilterDefinition, b as ScopedRenderSlots, x as PanelRenderSlot, H as HoloTableQuery, y as TableQueryDefinition, T as TableQueryState, z as TableQueryResult, A as TableRecordIdentifier, B as TableSelection, D as PanelNotificationStore, F as PanelNotificationScope, G as JsonPrimitive, I as TableFilterOperator, K as TableQueryFilter } from './contracts-x575mcni.js';
+export { L as AllTableQueryResult, M as CloseModalEffect, N as CursorTableQueryResult, Q as DownloadEffect, U as FocusEffect, V as HoloCursorPaginatedResult, W as HoloPaginatedResult, X as HoloPaginationMeta, Y as HoloSimplePaginatedResult, Z as HoloSimplePaginationMeta, _ as InvalidateTableEffect, $ as JsonArray, a0 as PageTableQueryResult, a1 as PanelDatabaseNotificationItem, a2 as PanelDatabaseNotificationPage, a3 as PanelDatabaseNotificationPayload, a4 as PanelNotificationAction, a5 as PanelNotificationActionKind, a6 as PanelNotificationAuthorization, a7 as PanelNotificationOperation, P as PanelNotificationPresentation, a8 as PanelNotificationRecipient, a9 as PanelNotificationRecipientResolver, aa as PanelNotificationRecord, ab as PanelNotificationStatus, ac as PanelNotificationStorePage, ad as PanelNotificationStorePagination, ae as PanelNotificationStoreQuery, af as RedirectEffect, ag as RefreshEffect, d as RegistryKind, ah as RenderSlotSource, c as ResourceRenderSlot, ai as SCHEMA_BREAKPOINTS, aj as SchemaComponentManifest, ak as SchemaComponentPatch, al as SchemaJsonValue, am as SchemaLeafKind, an as SchemaLeafManifest, S as SchemaManifest, ao as SchemaValueAtPath, ap as ScopedRenderSlotManifest, aq as SimpleTableQueryResult, ar as TableAggregateKind, as as TablePaginationMode, at as TableQueryAggregateDefinition, au as TableQueryColumnDefinition, av as TableQueryScalar, aw as TableQuerySort, ax as TableSortDirection, ay as TargetedSchemaPatch, az as ToastEffect, aA as createExtensionTypeId } from './contracts-x575mcni.js';
+import { C as ComponentDefault, D as DefaultableComponentKind, P as PageServerHandles, a as PageComponentBody, b as PageResolvable, c as PageContext, d as PageBreadcrumb, e as PageNavigation, f as PageRendererManifest, g as PageLayoutSlot, h as CompiledPageDefinition, i as PageType, j as PageNavigationInput, k as PanelNavigationSeed, l as PanelAccessContext, m as PanelActorPresenter, n as CompiledPanelAuth, o as PanelAuthPageConfiguration, p as PanelAsset, q as PanelBootContext, r as PanelBranding, s as PanelComponentConfiguration, t as PanelDatabaseNotificationConfiguration, u as PanelDatabaseNotificationInboxOptions, v as PanelContentWidth, w as PanelSubNavigationPosition, x as PanelMiddleware, y as PanelNavigationGroup, z as PanelNavigationMode, A as PanelRouteScope, B as PanelRouteRegistrar, E as PanelPlugin, F as PanelRegisteredDefinition, G as PanelTheme, H as PanelAuthenticatedScope, I as CompiledPanelTenancy, J as PanelTenantBillingProvider, K as PanelTenantMenuItem, L as PanelUserMenuItem, M as CompiledPanelDefinition, N as PanelLoginPageConfiguration, O as PanelRegistrationPageConfiguration, Q as PanelPasswordResetPageConfiguration, R as PanelEmailVerificationPageConfiguration, S as PanelEmailChangeVerificationPageConfiguration, T as PanelMultiFactorPageConfiguration, U as PanelTenantIdentifier, V as PanelTenancyOptions, W as PanelModelTenancyOptions, X as PanelTokenTheme, Y as PanelPluginInstallation, Z as PanelRouteMethod, _ as PanelTenantExecutionContext } from './server-CxnHWgSc.js';
+export { $ as CompiledPanelRoute, a0 as ExecutePanelAuthOperationOptions, a1 as ExecutePanelDatabaseNotificationOperationOptions, a2 as ExecutePanelTenantOperationOptions, a3 as ExecutePanelTenantSwitchOptions, a4 as GeneratedGlobalSearchInput, a5 as GeneratedResourceOperationInput, a6 as GeneratedResourceOperationResult, a7 as GeneratedUploadOperationInput, a8 as HoloAuth, a9 as HoloAuthGuard, aa as PANELS_CLEAN_TEMPORARY_UPLOADS_JOB, ab as PageAccessError, ac as PageManifest, ad as PanelActiveTenantPersistence, ae as PanelAssetKind, af as PanelAssetManifest, ag as PanelAuthContext, ah as PanelAuthOperation, ai as PanelAuthOperationOutcome, aj as PanelAuthorizationLayer, ak as PanelAuthorizationRequest, al as PanelBootstrap, am as PanelDarkMode, an as PanelDatabaseNotificationIdentity, ao as PanelDatabaseNotificationOperationResult, ap as PanelDatabaseNotificationPlacement, aq as PanelErrorNotification, ar as PanelErrorNotificationConfiguration, as as PanelGeneratorTemplate, at as PanelGlobalSearchConfiguration, au as PanelIconDefinition, av as PanelIconPath, aw as PanelLayoutConfiguration, ax as PanelLogoutPageConfiguration, ay as PanelManifest, az as PanelMiddlewareContext, aA as PanelNotificationBootstrap, aB as PanelNotificationRequestError, aC as PanelOperation, aD as PanelPackageModuleContribution, aE as PanelPermissionSubject, aF as PanelPluginAsset, aG as PanelPluginBuilder, aH as PanelPluginContribution, aI as PanelPluginContributionDefinition, aJ as PanelPluginIcon, aK as PanelProfilePageConfiguration, aL as PanelQueuedTenantContext, aM as PanelRendererFramework, aN as PanelRendererRegistration, aO as PanelResolvedTenant, aP as PanelRouteHandler, aQ as PanelRouteRegistry, aR as PanelRoutingConfiguration, aS as PanelRuntime, aT as PanelRuntimeConfiguration, aU as PanelRuntimeError, aV as PanelSubscriptionRequiredError, aW as PanelTenancyManifest, aX as PanelTenantBootstrap, aY as PanelTenantIdentity, aZ as PanelTenantMembershipPage, a_ as PanelTenantMembershipRequest, a$ as PanelTenantOperation, b0 as PanelTenantOperationError, b1 as PanelTenantOperationFailure, b2 as PanelTenantOperationResult, b3 as PanelTenantPresentation, b4 as PanelTenantPresentationInput, b5 as PanelTenantPresentationPage, b6 as PanelTenantProfileOptions, b7 as PanelTenantRegistrationOptions, b8 as PanelTenantScopedQuery, b9 as PanelTenantSwitchResult, ba as PanelThemeMode, bb as PanelTranslationContribution, bc as PanelsConfiguration, bd as ResolvedPageData, be as ResolvedPanelRoute, bf as ResourceExecutor, bg as ResourceExecutorOptions, bh as ResourceInputError, bi as ResourceMutationResult, bj as ResourceNestedExecution, bk as ResourceRecordNotFoundError, bl as ResourceTableResult, bm as TemporaryUploadService, bn as UploadStoragePaginationError, bo as bootPanel, bp as compilePanelRoutes, bq as compiledPanelRoutePath, br as componentDefault, bs as createGeneratedResourcePage, bt as createHoloUploadStorage, bu as createTemporaryUploadService, bv as definePanelPlugin, bw as definePanelsConfig, bx as executeGeneratedGlobalSearch, by as executeGeneratedResourceOperation, bz as executeGeneratedUploadOperation, bA as executePanelAuthOperation, bB as executePanelDatabaseNotificationOperation, bC as executePanelPipeline, bD as executePanelRoute, bE as executePanelTenantOperation, bF as executePanelTenantSwitch, bG as generatedResourcePageManifests, bH as handleUploadEndpoint, bI as panelAuthOperationStatus, bJ as panelErrorNotificationEffect, bK as panelTenantOperationStatus, bL as preparePageRoutes, bM as resolvePageData, bN as resolvePanelRoute, bO as runTemporaryUploadCleanupJob, bP as toSchemaManifest } from './server-CxnHWgSc.js';
+import { D as DiscoverableDefinition, a as DiscoverableBuilder, b as DiscoverableKind, R as ResourceCompositionTypes, c as ResourceAttributes, d as DiscoveryDirectories } from './contracts-CIqqKo_p.js';
+export { C as ClientManifestValue, e as CompiledNestedResource, f as DISCOVERABLE_KINDS, g as DISCOVERY_MARKER, N as NestedResourceOptions, h as ResourceAttribute, i as ResourceAuthorization, j as ResourceCapabilities, k as ResourceClientManifest, l as ResourceDefinition, m as ResourceExecutionContext, n as ResourceGlobalSearch, o as ResourceIdentifier, p as ResourceInput, q as ResourceLifecycle, r as ResourceModel, s as ResourceModelDefinition, t as ResourceNavigation, u as ResourceOperation, v as ResourceParentReference, w as ResourceParentRegistry, x as ResourcePersistence, y as ResourceQuery, z as ResourceRecord, A as ResourceRecordFor, B as ResourceTransaction, E as ResourceValidation, S as SingularResourceOptions } from './contracts-CIqqKo_p.js';
+export { A as ActionBuilder, C as CompiledExportColumn, a as CompiledExportFormat, b as CompiledImportColumn, c as CompiledImportFormat, d as CsvExportOptions, e as CsvImportLimits, f as CsvImportOptions, E as ExecuteTransferExportRequest, g as ExportAggregateKind, h as ExportAggregatePlan, i as ExportCell, j as ExportColumnBatchContext, k as ExportColumnBatchValueContext, l as ExportColumnBuilder, m as ExportColumnManifest, n as ExportColumnOption, o as ExportEngineError, p as ExportEngineErrorCode, q as ExportFormatAdapter, r as ExportFormatArtifact, s as ExportFormatInput, t as ExportPathValue, u as ExportQueryAdapter, v as ExportRecordPath, w as ExportRelationPath, x as ExporterBuilder, y as ExporterDefinition, z as ExporterManifest, B as ExporterServerDefinition, F as FinalizeTransferExportPartsOptions, H as HoloTransferCompletionNotifier, D as HoloTransferNotificationDefinitions, G as HoloTransferStorageOptions, I as HoloTransferStoreOptions, J as ImportColumnBuilder, K as ImportColumnManifest, L as ImportFormatAdapter, M as ImportFormatInspection, N as ImportLimits, O as ImportMutationAdapter, P as ImportMutationDecision, Q as ImportRowExecutionContext, R as ImporterBuilder, S as ImporterDefinition, T as ImporterManifest, U as ImporterServerDefinition, V as InferredResourceBuilder, W as PersistTransferExportPartOptions, X as ResourceActionComposer, Y as ResourceBuilder, Z as ResourceContextTypeSources, _ as StartExportRequest, $ as StartImportRequest, a0 as TransferArtifactDigest, a1 as TransferArtifactWriter, a2 as TransferCompletionNotifier, a3 as TransferExecutionContext, a4 as TransferExecutionInput, a5 as TransferExportChunk, a6 as TransferExportExecutionInput, a7 as TransferExportResult, a8 as TransferFailureRows, a9 as TransferIdentity, aa as TransferIdentityValue, ab as TransferImportExecutionInput, ac as TransferInputSource, ad as TransferNextChunk, ae as TransferOperationIdentity, af as TransferOperationKind, ag as TransferOperationProgress, ah as TransferOperationRecord, ai as TransferOperationRequest, aj as TransferOperationStatus, ak as TransferOperationStore, al as TransferOutboxDispatchResult, am as TransferOutboxDispatcher, an as TransferOutboxDispatcherOptions, ao as TransferOutboxEvent, ap as TransferOutboxFailure, aq as TransferOutboxLease, ar as TransferOutboxRecord, as as TransferPartsError, at as TransferPartsErrorCode, au as TransferPolicy, av as TransferProgressTransition, aw as TransferQueueAdapter, ax as TransferQueueConfiguration, ay as TransferQueueEnvelope, az as TransferResultPart, aA as TransferRetentionConfiguration, aB as TransferSanitizedError, aC as TransferSnapshotError, aD as TransferStorageAdapter, aE as TransferStorageConfiguration, aF as TransferStorageError, aG as TransferStoredArtifact, aH as TransferUploadResolver, aI as WriteTransferResultPartOptions, aJ as XlsxExportOptions, aK as createHoloTransferOperationStore, aL as createHoloTransferStorage, aM as createPanelTransferTables, aN as createResourceActionComposer, aO as csvExportFormat, aP as csvImportFormat, aQ as defineAction, aR as defineExporter, aS as defineImporter, aT as defineResource, aU as executeTransferExport, aV as finalizeTransferExportParts, aW as holoTransferCompletionNotifier, aX as persistTransferExportPart, aY as readTransferResultParts, aZ as snapshotTransferUpload, a_ as transferDefinitionRevision, a$ as writeTransferResultPart, b0 as xlsxExportFormat } from './transfers-ByXDyKjA.js';
+import { FieldDefinition, FormSchema, InferFormData, WebFileLike, StandardSchemaV1Issue } from '@holo-js/forms';
+import { AuthUser } from '@holo-js/auth';
+import { A as ActionDefinition, a as ActionContext, b as ActionResolvedState, c as ActionManifest, d as ActionMount, e as ActionKind, f as ActionEngineOptions, g as ActionExecutionRequest, h as ActionExecutionResult, i as ActionGroupItem, j as ActionGroupManifest } from './contracts-Dm3bOlAS.js';
+export { k as ActionFailureNotification, l as ActionItemResult, m as ActionItemStatus, n as ActionModalManifest, o as ActionModalOptions, p as ActionModalWidth, q as ActionNotificationSender, r as ActionPresentationDefinition, s as ActionPresentationManifest, t as ActionRateLimit, u as ActionRecordResolver, v as ActionResolvable, w as ActionSize, x as ActionSuccessNotification, y as ActionTransaction } from './contracts-Dm3bOlAS.js';
 import { RelationDefinition } from '@holo-js/db';
 import '@holo-js/notifications';
 
@@ -18,6 +21,7 @@ declare function deriveSchemaDefault<TValue>(definition: FieldDefinition): TValu
 
 declare abstract class FieldBuilder<TValues, TPath extends FormFieldPath<TValues>, TValue = FormFieldValue<TValues, TPath>, TType extends string = string, TRecord = unknown> {
     #private;
+    readonly resourceRecordType: TValues;
     readonly path: TPath;
     readonly type: TType;
     readonly schema: FieldDefinition;
@@ -94,6 +98,94 @@ declare abstract class ConstructionBuilder<TState extends object, TDefinition ex
     private applyDefaults;
 }
 
+declare function resolveActionState<TRecord, TActor, TTenant, TServices>(definition: Pick<ActionDefinition<TRecord, JsonObject, unknown, TActor, TTenant, TServices>, 'disabled' | 'label' | 'visible'>, context: ActionContext<TRecord, TActor, TTenant, TServices>): Promise<ActionResolvedState>;
+declare function compileActionManifest<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices>(definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>, label: string, context: ActionContext<TRecord, TActor, TTenant, TServices>, state?: Pick<ActionResolvedState, 'disabled' | 'visible'>): Promise<Readonly<ActionManifest>>;
+
+interface ActionPersistence<TRecord, TInput extends JsonObject, TResult> {
+    create?(input: TInput): Promise<TResult>;
+    delete?(record: TRecord): Promise<TResult>;
+    forceDelete?(record: TRecord): Promise<TResult>;
+    replicate?(record: TRecord, input: TInput): Promise<TResult>;
+    restore?(record: TRecord): Promise<TResult>;
+    update?(record: TRecord, input: TInput): Promise<TResult>;
+}
+interface BuiltinActionOptions<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> {
+    readonly authorize: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>['authorize'];
+    readonly id?: string;
+    readonly label?: string;
+    readonly mount?: ActionMount;
+}
+declare function actionsFor<TRecordSource extends RecordTypeSource, TInputSource extends RecordTypeSource, TActorSource extends RuntimeTypeSource, TTenantSource extends RuntimeTypeSource | undefined = undefined, TServicesSource extends RuntimeTypeSource | undefined = undefined>(_sources: ContextTypeSources<TActorSource, TTenantSource, TServicesSource> & {
+    readonly input: TInputSource;
+    readonly record: TRecordSource;
+}): {
+    builtin<TResult>(kind: Exclude<ActionKind, 'custom' | 'view'>, persistence: ActionPersistence<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult>, options: BuiltinActionOptions<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>): ActionDefinition<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>;
+    custom<TResult>(definition: ActionDefinition<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>> & {
+        readonly type?: ExtensionTypeId<'action'>;
+    }): ActionDefinition<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>;
+    view(options: {
+        readonly authorize: ActionDefinition<RecordTypeValue<TRecordSource>, JsonObject, RecordTypeValue<TRecordSource>, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>['authorize'];
+        readonly id?: string;
+        readonly label?: string;
+    }): ActionDefinition<RecordTypeValue<TRecordSource>, JsonObject, RecordTypeValue<TRecordSource>, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>;
+};
+
+declare class ActionExecutionError extends Error {
+    readonly code: 'denied' | 'failed' | 'idempotency-conflict' | 'rate-limited' | 'record-not-found' | 'stale';
+    readonly effects: readonly Effect[];
+    constructor(code: 'denied' | 'failed' | 'idempotency-conflict' | 'rate-limited' | 'record-not-found' | 'stale', message: string, effects?: readonly Effect[]);
+}
+declare class ActionEngine<TRecord, TRecordId extends number | string, TActor, TTenant, TServices> {
+    #private;
+    readonly options: ActionEngineOptions<TRecord, TRecordId, TActor, TTenant>;
+    constructor(options: ActionEngineOptions<TRecord, TRecordId, TActor, TTenant>);
+    execute<TInput extends JsonObject, TResult>(definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>, request: ActionExecutionRequest<TInput, TRecordId>, scope: {
+        readonly actor: TActor;
+        readonly services: TServices;
+        readonly signal: AbortSignal;
+        readonly tenant: TTenant;
+    }): Promise<ActionExecutionResult<TRecordId, TResult>>;
+    private run;
+    private executeRecord;
+    private context;
+    private executeWithContext;
+    private enforceRateLimit;
+    private successEffects;
+    private failureEffects;
+    private notificationEffects;
+    private pruneExecutions;
+    private removeExecution;
+}
+
+declare class ActionGroupBuilder {
+    #private;
+    constructor(id: string, actions: readonly ActionGroupItem[]);
+    label(value: string | null): this;
+    icon(value: string | null): this;
+    color(value: string | null): this;
+    compile(): ActionGroupManifest;
+    private assertMutable;
+}
+declare function actionGroup(id: string, ...actions: readonly ActionGroupItem[]): ActionGroupBuilder;
+
+declare function defineUploadPolicy(policy: UploadPolicy): UploadPolicy;
+declare const defaultUploadMimeInspector: UploadMimeInspector;
+declare function uploadExtension(fileName: string): string;
+
+declare class UploadFieldBuilder<TValues, TPath extends FormFieldPath<TValues>, TRecord = unknown> extends FieldBuilder<TValues, TPath, FormFieldValue<TValues, TPath>, 'panels:field:upload', TRecord> {
+    readonly policy: UploadPolicy;
+    constructor(binding: BoundFormField<TValues, TPath>, policy: UploadPolicy);
+    protected assertSchemaKind(definition: FieldDefinition): void;
+    protected fieldProperties(): JsonObject;
+}
+type UploadFieldValue = WebFileLike | readonly WebFileLike[];
+declare class UploadFieldFactory<TSchema extends FormSchema> {
+    #private;
+    constructor(schema: TSchema);
+    file<TPath extends FormFieldPathFor<InferFormData<TSchema>, UploadFieldValue>>(path: TPath, policy: UploadPolicy): UploadFieldBuilder<InferFormData<TSchema>, TPath>;
+}
+declare function uploadFields<TSchema extends FormSchema>(schema: TSchema): UploadFieldFactory<TSchema>;
+
 interface CapabilityHost<TState extends object> {
     addInvariant(name: string, invariant: (state: Readonly<TState>) => void): void;
     change<TKey extends keyof TState>(key: TKey, value: TState[TKey]): void;
@@ -118,6 +210,10 @@ declare class VisibilityCapability<THost, TState extends VisibilityState> {
 
 declare function assignStableKey(kind: string, explicitKey: string | undefined, position: readonly (number | string)[]): string;
 declare function assignStableId(namespace: string, kind: string, key: string): string;
+
+type DefaultPanelActor = AuthUser;
+type DefaultPanelTenant = string;
+type DefaultPanelServices = unknown;
 
 interface ComponentCompileContext {
     readonly schemaId: string;
@@ -245,6 +341,7 @@ declare class CustomComponentBuilder<TValues = Readonly<Record<string, unknown>>
 }
 declare class SchemaBuilder<TValues = Readonly<Record<string, unknown>>, TContext = unknown> {
     #private;
+    readonly resourceRecordType: TValues;
     constructor(id: string);
     statePath<TPath extends SchemaPath<TValues>>(value: TPath): this;
     components(components: readonly SchemaComponentBuilder<TValues, TContext>[]): this;
@@ -357,6 +454,7 @@ interface EntryState<TRecord, TValue> {
 }
 declare abstract class EntryBuilder<TRecord, TValue, TType extends string> extends ConstructionBuilder<EntryState<TRecord, TValue>, CompiledEntryDefinition<TRecord, TValue, TType>> {
     #private;
+    readonly resourceRecordType: TRecord;
     protected constructor(type: TType, source: EntryStateSource);
     label(value: string | null): this;
     inlineLabel(value?: boolean): this;
@@ -424,6 +522,7 @@ declare class WidgetBuilder<TData extends JsonValue, TActor = unknown, TTenant =
     readonly id: string;
     readonly family: WidgetFamily;
     readonly type: string;
+    readonly resourceCompositionTypes: ResourceCompositionTypes<TRecord, TActor, TTenant, TServices>;
     readonly discoveryMarker: "@holo-js/panels/discovery/v1";
     readonly kind: "widget";
     constructor(id: string, family: WidgetFamily, type: string);
@@ -459,7 +558,7 @@ interface ResourceWidgetTypeSources<TRecordSource extends RecordTypeSource, TAct
     readonly services?: TServicesSource;
     readonly tenant?: TTenantSource;
 }
-type ResourceWidgetFromSources<TData extends JsonValue, TRecordSource extends RecordTypeSource, TActorSource extends RuntimeTypeSource | undefined, TTenantSource extends RuntimeTypeSource | undefined, TServicesSource extends RuntimeTypeSource | undefined> = WidgetBuilder<TData, OptionalRuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>, RecordTypeValue<TRecordSource>>;
+type ResourceWidgetFromSources<TData extends JsonValue, TRecordSource extends RecordTypeSource, TActorSource extends RuntimeTypeSource | undefined, TTenantSource extends RuntimeTypeSource | undefined, TServicesSource extends RuntimeTypeSource | undefined> = WidgetBuilder<TData, OptionalRuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>, Readonly<ResourceAttributes<RecordTypeValue<TRecordSource>>>>;
 type ResourceWidgetFactory<TData extends JsonValue> = <TRecordSource extends RecordTypeSource, TActorSource extends RuntimeTypeSource | undefined = undefined, TTenantSource extends RuntimeTypeSource | undefined = undefined, TServicesSource extends RuntimeTypeSource | undefined = undefined>(id: string, sources: ResourceWidgetTypeSources<TRecordSource, TActorSource, TTenantSource, TServicesSource>) => ResourceWidgetFromSources<TData, TRecordSource, TActorSource, TTenantSource, TServicesSource>;
 declare const defineResourceStatsWidget: ResourceWidgetFactory<StatsWidgetData>;
 declare const defineResourceChartWidget: ResourceWidgetFactory<ChartWidgetData>;
@@ -876,6 +975,7 @@ declare class StaticOptionSource<TValue extends OptionValue, TContext> implement
     #private;
     readonly kind = "static";
     constructor(options: readonly ChoiceOption<TValue>[]);
+    manifestOptions(): readonly ChoiceOption<TValue>[];
     list(request: OptionQueryRequest<TValue>, _context: TContext): Promise<OptionPage<TValue>>;
     hydrateSelected(_request: OptionQueryRequest<TValue>, selectedValues: readonly TValue[], _context: TContext): Promise<readonly ChoiceOption<TValue>[]>;
 }
@@ -921,127 +1021,6 @@ declare class RelationshipOptionSource<TValues, TPath extends FormFieldPath<TVal
     private option;
 }
 
-declare function defineUploadPolicy(policy: UploadPolicy): UploadPolicy;
-declare const defaultUploadMimeInspector: UploadMimeInspector;
-declare function uploadExtension(fileName: string): string;
-
-declare class UploadFieldBuilder<TValues, TPath extends FormFieldPath<TValues>, TRecord = unknown> extends FieldBuilder<TValues, TPath, FormFieldValue<TValues, TPath>, 'panels:field:upload', TRecord> {
-    readonly policy: UploadPolicy;
-    constructor(binding: BoundFormField<TValues, TPath>, policy: UploadPolicy);
-    protected assertSchemaKind(definition: FieldDefinition): void;
-    protected fieldProperties(): JsonObject;
-}
-type UploadFieldValue = WebFileLike | readonly WebFileLike[];
-declare class UploadFieldFactory<TSchema extends FormSchema> {
-    #private;
-    constructor(schema: TSchema);
-    file<TPath extends FormFieldPathFor<InferFormData<TSchema>, UploadFieldValue>>(path: TPath, policy: UploadPolicy): UploadFieldBuilder<InferFormData<TSchema>, TPath>;
-}
-declare function uploadFields<TSchema extends FormSchema>(schema: TSchema): UploadFieldFactory<TSchema>;
-
-declare class TemporaryUploadService {
-    #private;
-    constructor(options: TemporaryUploadServiceOptions);
-    create(input: CreateTemporaryUploadInput): Promise<TemporaryUploadDescriptor>;
-    write(input: WriteTemporaryUploadInput): Promise<StoredUploadDescriptor>;
-    resolve(input: ResolveTemporaryUploadInput): Promise<StoredUploadDescriptor>;
-    delete(input: DeleteTemporaryUploadInput): Promise<void>;
-    attachToMedia(input: ResolveTemporaryUploadInput, target: MediaAttachmentTarget, collection?: string): Promise<MediaAttachmentResult>;
-    cleanupExpired(): Promise<number>;
-    private activeUploads;
-    private storagePages;
-    private assertAccess;
-    private assertContext;
-    private authorize;
-    private metadataDirectory;
-    private paths;
-    private requireMetadata;
-    private storedDescriptor;
-    private withLock;
-}
-declare class UploadStoragePaginationError extends Error {
-    constructor();
-}
-declare function createTemporaryUploadService(options: TemporaryUploadServiceOptions): TemporaryUploadService;
-declare const PANELS_CLEAN_TEMPORARY_UPLOADS_JOB = "panels:uploads:cleanup";
-declare function runTemporaryUploadCleanupJob(service: TemporaryUploadService): Promise<{
-    readonly removed: number;
-}>;
-
-declare function handleUploadEndpoint(service: TemporaryUploadService, request: UploadEndpointRequest): Promise<UploadEndpointResponse>;
-
-declare function createHoloUploadStorage(diskName: string): UploadStorageAdapter;
-
-declare function resolveActionState<TRecord, TActor, TTenant, TServices>(definition: Pick<ActionDefinition<TRecord, JsonObject, unknown, TActor, TTenant, TServices>, 'disabled' | 'label' | 'visible'>, context: ActionContext<TRecord, TActor, TTenant, TServices>): Promise<ActionResolvedState>;
-declare function compileActionManifest<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices>(definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>, label: string, context: ActionContext<TRecord, TActor, TTenant, TServices>, state?: Pick<ActionResolvedState, 'disabled' | 'visible'>): Promise<Readonly<ActionManifest>>;
-
-interface ActionPersistence<TRecord, TInput extends JsonObject, TResult> {
-    create?(input: TInput): Promise<TResult>;
-    delete?(record: TRecord): Promise<TResult>;
-    forceDelete?(record: TRecord): Promise<TResult>;
-    replicate?(record: TRecord, input: TInput): Promise<TResult>;
-    restore?(record: TRecord): Promise<TResult>;
-    update?(record: TRecord, input: TInput): Promise<TResult>;
-}
-interface BuiltinActionOptions<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> {
-    readonly authorize: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>['authorize'];
-    readonly id?: string;
-    readonly label?: string;
-    readonly mount?: ActionMount;
-}
-declare function actionsFor<TRecordSource extends RecordTypeSource, TInputSource extends RecordTypeSource, TActorSource extends RuntimeTypeSource, TTenantSource extends RuntimeTypeSource | undefined = undefined, TServicesSource extends RuntimeTypeSource | undefined = undefined>(_sources: ContextTypeSources<TActorSource, TTenantSource, TServicesSource> & {
-    readonly input: TInputSource;
-    readonly record: TRecordSource;
-}): {
-    builtin<TResult>(kind: Exclude<ActionKind, 'custom' | 'view'>, persistence: ActionPersistence<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult>, options: BuiltinActionOptions<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>): ActionDefinition<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>;
-    custom<TResult>(definition: ActionDefinition<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>> & {
-        readonly type?: ExtensionTypeId<'action'>;
-    }): ActionDefinition<RecordTypeValue<TRecordSource>, RecordTypeValue<TInputSource> & JsonObject, TResult, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>;
-    view(options: {
-        readonly authorize: ActionDefinition<RecordTypeValue<TRecordSource>, JsonObject, RecordTypeValue<TRecordSource>, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>['authorize'];
-        readonly id?: string;
-        readonly label?: string;
-    }): ActionDefinition<RecordTypeValue<TRecordSource>, JsonObject, RecordTypeValue<TRecordSource>, RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>;
-};
-
-declare class ActionExecutionError extends Error {
-    readonly code: 'denied' | 'failed' | 'idempotency-conflict' | 'rate-limited' | 'record-not-found' | 'stale';
-    readonly effects: readonly Effect[];
-    constructor(code: 'denied' | 'failed' | 'idempotency-conflict' | 'rate-limited' | 'record-not-found' | 'stale', message: string, effects?: readonly Effect[]);
-}
-declare class ActionEngine<TRecord, TRecordId extends number | string, TActor, TTenant, TServices> {
-    #private;
-    readonly options: ActionEngineOptions<TRecord, TRecordId, TActor, TTenant>;
-    constructor(options: ActionEngineOptions<TRecord, TRecordId, TActor, TTenant>);
-    execute<TInput extends JsonObject, TResult>(definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>, request: ActionExecutionRequest<TInput, TRecordId>, scope: {
-        readonly actor: TActor;
-        readonly services: TServices;
-        readonly signal: AbortSignal;
-        readonly tenant: TTenant;
-    }): Promise<ActionExecutionResult<TRecordId, TResult>>;
-    private run;
-    private executeRecord;
-    private context;
-    private executeWithContext;
-    private enforceRateLimit;
-    private successEffects;
-    private failureEffects;
-    private notificationEffects;
-    private pruneExecutions;
-    private removeExecution;
-}
-
-declare class ActionGroupBuilder {
-    #private;
-    constructor(id: string, actions: readonly ActionGroupItem[]);
-    label(value: string | null): this;
-    icon(value: string | null): this;
-    color(value: string | null): this;
-    compile(): ActionGroupManifest;
-    private assertMutable;
-}
-declare function actionGroup(id: string, ...actions: readonly ActionGroupItem[]): ActionGroupBuilder;
-
 interface PageState<TData extends JsonObject, TActor, TTenant, TServices> {
     authorize: PageServerHandles<TData, TActor, TTenant, TServices>['authorize'];
     body: PageComponentBody | null;
@@ -1064,6 +1043,7 @@ interface PageState<TData extends JsonObject, TActor, TTenant, TServices> {
 declare class PageBuilder<TData extends JsonObject = JsonObject, TActor = unknown, TTenant = unknown, TServices = unknown> extends ConstructionBuilder<PageState<TData, TActor, TTenant, TServices>, CompiledPageDefinition<TData, TActor, TTenant, TServices>> implements DiscoverableBuilder<'page'> {
     readonly id: string;
     readonly pageType: PageType;
+    readonly resourceCompositionTypes: ResourceCompositionTypes<unknown, TActor, TTenant, TServices>;
     readonly discoveryMarker: "@holo-js/panels/discovery/v1";
     readonly kind: "page";
     constructor(id: string, pageType: PageType, state?: PageState<TData, TActor, TTenant, TServices>);
@@ -1108,29 +1088,126 @@ declare const defineCustomPage: PageFactory;
 declare const defineSingularPage: PageFactory;
 declare const defineRelatedRecordPage: PageFactory;
 
-declare function createNavigationSeed(pages: readonly CompiledPageDefinition<JsonObject, unknown, unknown, unknown>[]): readonly PanelNavigationSeed[];
+declare function createNavigationSeed<TData extends JsonObject, TActor, TTenant, TServices>(pages: readonly CompiledPageDefinition<TData, TActor, TTenant, TServices>[]): readonly PanelNavigationSeed[];
 
 interface PanelState<TActor> {
     access: (context: PanelAccessContext<TActor>) => boolean | Promise<boolean>;
+    actorHidden: readonly string[];
     actorPresenter: PanelActorPresenter<TActor>;
+    actorRecipientType: string;
     auth: ((path: string) => CompiledPanelAuth<TActor>) | null;
+    authFeatures: PanelAuthPageConfiguration<Readonly<Record<string, unknown>>, string, TActor, unknown, unknown>;
+    authPasswordBroker: string;
+    authRoutes: {
+        emailChangeVerificationPrefix: string | null;
+        emailChangeVerificationSlug: string | null;
+        emailVerificationPrefix: string | null;
+        emailVerificationPromptSlug: string | null;
+        emailVerificationSlug: string | null;
+        loginSlug: string | null;
+        passwordResetPrefix: string | null;
+        passwordResetRequestSlug: string | null;
+        passwordResetSlug: string | null;
+        registrationSlug: string | null;
+    };
+    assets: readonly PanelAsset[];
+    boot: readonly ((panel: PanelBootContext) => void | Promise<void>)[];
     branding: PanelBranding;
+    components: PanelComponentConfiguration;
     databaseNotifications: PanelDatabaseNotificationConfiguration | null;
     databaseNotificationInbox: PanelDatabaseNotificationInboxOptions<TActor> | null;
     defaults: readonly ComponentDefault[];
     defaultPanel: boolean;
     discover: DiscoveryDirectories;
     guard: string;
+    globalSearch: boolean;
+    globalSearchDebounce: number;
+    globalSearchFieldSuffix: string | null;
+    globalSearchKeybindingSuffix: string | null;
+    globalSearchKeybindings: readonly string[];
+    globalSearchResourceOptIn: boolean;
+    icons: JsonObject;
+    id: string;
+    layout: {
+        breadcrumbs: boolean;
+        collapsedSidebarWidth: string;
+        collapsibleNavigationGroups: boolean;
+        maxContentWidth: PanelContentWidth;
+        sidebarFullyCollapsible: boolean;
+        sidebarWidth: string;
+        simplePageMaxContentWidth: PanelContentWidth;
+        subNavigationPosition: PanelSubNavigationPosition;
+        topbar: boolean;
+    };
+    middleware: {
+        authenticated: readonly PanelMiddleware<TActor>[];
+        panel: readonly PanelMiddleware<TActor>[];
+        persistent: {
+            authenticated: readonly PanelMiddleware<TActor>[];
+            panel: readonly PanelMiddleware<TActor>[];
+            tenant: readonly PanelMiddleware<TActor>[];
+        };
+        tenant: readonly PanelMiddleware<TActor>[];
+    };
     navigation: PanelNavigationSeed[];
+    navigationEnabled: boolean;
+    navigationGroups: readonly PanelNavigationGroup[];
     navigationMode: PanelNavigationMode;
     path: string;
+    routing: {
+        domain: string | null;
+        domains: readonly string[];
+        homeUrl: string | null;
+    };
+    runtime: {
+        broadcasting: boolean;
+        databaseTransactions: boolean;
+        readOnlyRelationManagersOnResourceViewPagesByDefault: boolean;
+        resourceCreatePageRedirect: 'edit' | 'index' | 'view';
+        resourceEditPageRedirect: 'index' | 'view' | null;
+        spa: boolean;
+        spaPrefetching: boolean;
+        spaUrlExceptions: readonly string[];
+        strictAuthorization: boolean;
+        unsavedChangesAlerts: boolean;
+    };
+    routes: Record<PanelRouteScope, readonly PanelRouteRegistrar[]>;
     plugins: readonly PanelPlugin<TActor>[];
+    registered: readonly PanelRegisteredDefinition[];
     sidebarCollapsible: boolean;
     slots: ScopedRenderSlots<PanelRenderSlot>;
     theme: PanelTheme;
-    tenancy: CompiledPanelTenancy<TActor> | null;
+    tenancy: {
+        compile: (resolver: PanelTenantResolver<TActor> | null) => CompiledPanelTenancy<TActor>;
+    } | null;
+    tenancyConfiguration: {
+        billingProvider: PanelTenantBillingProvider<TActor> | null;
+        billingRouteSlug: string;
+        menu: boolean;
+        menuItems: readonly PanelTenantMenuItem[];
+        profilePath: string | null | undefined;
+        registrationPath: string | null | undefined;
+        requiresSubscription: boolean;
+        resolveTenantUsing: PanelTenantResolver<TActor> | null;
+        routeDomain: string | null;
+        routePrefix: string | null;
+        searchableMenu: boolean | null;
+        switcher: boolean;
+    };
     userMenu: PanelUserMenuItem[];
+    userMenuEnabled: boolean;
+    errorNotifications: {
+        disabledStatusCodes: readonly number[];
+        enabled: boolean;
+        hiddenStatusCodes: readonly number[];
+        notifications: readonly {
+            readonly body: string;
+            readonly statusCode: number | null;
+            readonly title: string;
+        }[];
+    };
 }
+type PanelTenantResolver<TActor> = (key: string, scope: PanelAuthenticatedScope<TActor>) => unknown | null | Promise<unknown | null>;
 interface PanelDiscoveryServer {
     readonly plugins: readonly {
         readonly compatibility: PluginCompatibility;
@@ -1138,18 +1215,30 @@ interface PanelDiscoveryServer {
         readonly id: string;
         readonly packageName: string;
     }[];
+    readonly registered: readonly PanelRegisteredDefinition[];
+    readonly routeDomain: string | null;
+    readonly routePrefix: string | null;
+    readonly routes: readonly {
+        readonly method: PanelRouteMethod;
+        readonly path: string;
+        readonly scope: PanelRouteScope;
+    }[];
 }
-declare class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelState<TActor>, CompiledPanelDefinition<TActor>> implements DiscoverableBuilder<'panel'> {
-    readonly id: string;
+type ExplicitPanelKind = 'cluster' | 'page' | 'resource' | 'widget';
+type ExplicitPanelDefinition<TKind extends ExplicitPanelKind> = DiscoverableBuilder<TKind> | DiscoverableDefinition<TKind>;
+declare class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelState<TActor>, CompiledPanelDefinition<TActor>> {
+    #private;
     readonly discoveryMarker: "@holo-js/panels/discovery/v1";
     readonly kind: "panel";
-    constructor(id: string);
+    constructor(initialId: string, actorSource?: RecordTypeSource);
     get route(): string;
+    id(value: string): this;
     get guardName(): string;
     get discover(): Readonly<DiscoveryDirectories>;
     get client(): Readonly<Record<string, string>>;
     path(value: string): this;
     guard(value: string): this;
+    authGuard(value: string): this;
     defaultPanel(value?: boolean): this;
     ['default'](value?: boolean): this;
     access(policy: (context: PanelAccessContext<TActor>) => boolean | Promise<boolean>): this;
@@ -1158,37 +1247,186 @@ declare class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSt
         readonly tenant: TTenantSource;
     }, options: PanelAuthPageConfiguration<TProfileValues, TProfileField, TActor, RuntimeTypeValue<TTenantSource>, RuntimeTypeValue<TServicesSource>>): this;
     auth<TProfileValues extends Readonly<Record<string, unknown>> = Readonly<Record<never, never>>, TProfileField extends Extract<keyof TProfileValues, string> = Extract<keyof TProfileValues, string>, TTenant = unknown, TServices = unknown>(options: PanelAuthPageConfiguration<TProfileValues, TProfileField, TActor, TTenant, TServices>): this;
+    login(configuration?: boolean | PanelLoginPageConfiguration): this;
+    loginRouteSlug(value: string): this;
+    registration(configuration?: boolean | PanelRegistrationPageConfiguration): this;
+    registrationRouteSlug(value: string): this;
+    passwordReset(configuration?: Omit<PanelPasswordResetPageConfiguration, 'broker'>): this;
+    passwordResetRoutePrefix(value: string): this;
+    passwordResetRequestRouteSlug(value: string): this;
+    passwordResetRouteSlug(value: string): this;
+    emailVerification(configuration?: boolean | PanelEmailVerificationPageConfiguration): this;
+    emailVerificationRoutePrefix(value: string): this;
+    emailVerificationPromptRouteSlug(value: string): this;
+    emailVerificationRouteSlug(value: string): this;
+    emailChangeVerification(configuration?: boolean | PanelEmailChangeVerificationPageConfiguration): this;
+    emailChangeVerificationRoutePrefix(value: string): this;
+    emailChangeVerificationRouteSlug(value: string): this;
+    revealablePasswords(value?: boolean): this;
+    profile(configuration?: PanelState<TActor>['authFeatures']['profile']): this;
+    simpleProfilePage(value?: boolean): this;
+    multiFactorAuthentication(configuration?: boolean | PanelMultiFactorPageConfiguration): this;
+    authPasswordBroker(value: string): this;
     presentActor(presenter: PanelActorPresenter<TActor>): this;
     plugin<TTenant = unknown>(plugin: PanelPlugin<TActor, TTenant>): this;
     defaults(...defaults: readonly ComponentDefault[]): this;
     slot(slot: PanelRenderSlot, reference: string | RenderSlotReference): this;
     tenancy<TTenantSource extends RuntimeTypeSource, TTenantId extends PanelTenantIdentifier, TRegistrationValues extends Readonly<Record<string, unknown>>, TProfileValues extends Readonly<Record<string, unknown>>>(options: PanelTenancyOptions<TActor, RuntimeTypeValue<TTenantSource>, TTenantId, TTenantSource, TRegistrationValues, TProfileValues>): this;
+    tenant<TTenantSource extends RuntimeTypeSource>(model: TTenantSource & (RuntimeTypeValue<TTenantSource> extends object ? object : never), options?: PanelModelTenancyOptions<TActor, RuntimeTypeValue<TTenantSource>>): this;
+    tenantRoutePrefix(prefix: string | null): this;
+    tenantDomain(domain: string | null): this;
+    tenantSwitcher(condition?: boolean): this;
+    searchableTenantMenu(condition?: boolean | null): this;
+    tenantMenu(condition?: boolean): this;
+    tenantMenuItems(items: readonly PanelTenantMenuItem[]): this;
+    tenantProfile(page?: string | null): this;
+    tenantRegistration(page?: string | null): this;
+    tenantBillingProvider(provider: PanelTenantBillingProvider<TActor> | null): this;
+    tenantBillingRouteSlug(slug: string): this;
+    requiresTenantSubscription(condition?: boolean): this;
+    resolveTenantUsing<TTenant>(callback: (key: string, scope: PanelAuthenticatedScope<TActor>) => TTenant | null | Promise<TTenant | null>): this;
     databaseNotifications(options?: Partial<PanelDatabaseNotificationConfiguration>): this;
+    databaseNotificationsPolling(interval: string | false): this;
+    globalSearch(value?: boolean): this;
+    globalSearchDebounce(value: number | string): this;
+    globalSearchKeyBindings(bindings: readonly string[]): this;
+    globalSearchFieldSuffix(value: string | null): this;
+    globalSearchFieldKeyBindingSuffix(value: string | null): this;
+    globalSearchResourceOptIn(value?: boolean): this;
     databaseNotificationInbox(options: PanelDatabaseNotificationInboxOptions<TActor>): this;
     branding(value: {
         readonly favicon?: string | null;
         readonly logo?: string | null;
         readonly name?: string;
     }): this;
-    theme(value: Partial<PanelTheme>): this;
+    brandName(value: string): this;
+    defaultAvatarProvider(value: string | null): this;
+    brandLogo(value: string | null): this;
+    darkModeBrandLogo(value: string | null): this;
+    brandLogoHeight(value: string | null): this;
+    favicon(value: string | null): this;
+    theme(value: Partial<PanelTheme> | PanelTokenTheme): this;
+    colors(value: JsonObject): this;
+    icons(value: JsonObject): this;
+    viteTheme(value: string): this;
+    darkMode(value?: boolean): this;
+    defaultThemeMode(value: PanelTheme['darkMode']): this;
+    themeSwitcher(value?: boolean): this;
+    font(value: string | null): this;
+    monoFont(value: string | null): this;
+    serifFont(value: string | null): this;
     navigationMode(value: PanelNavigationMode): this;
+    topNavigation(value?: boolean): this;
+    topbar(value?: boolean | string): this;
+    sidebarComponent(value: string | null): this;
+    topbarComponent(value: string | null): this;
+    breadcrumbs(value?: boolean): this;
+    maxContentWidth(value: PanelContentWidth): this;
+    simplePageMaxContentWidth(value: PanelContentWidth): this;
+    subNavigationPosition(value: PanelSubNavigationPosition): this;
+    sidebarCollapsibleOnDesktop(value?: boolean): this;
+    sidebarFullyCollapsibleOnDesktop(value?: boolean): this;
+    collapsibleNavigationGroups(value?: boolean): this;
+    sidebarWidth(value: string): this;
+    collapsedSidebarWidth(value: string): this;
     collapsibleSidebar(value?: boolean): this;
-    navigation(items: readonly PanelNavigationSeed[]): this;
-    userMenu(items: readonly PanelUserMenuItem[]): this;
+    navigation(value?: boolean): this;
+    navigationItems(items: readonly PanelNavigationSeed[]): this;
+    navigationGroups(groups: readonly (PanelNavigationGroup | string)[]): this;
+    userMenu(value?: boolean): this;
+    userMenuItems(items: readonly PanelUserMenuItem[]): this;
+    domain(value: string | null): this;
+    domains(values: readonly string[]): this;
+    homeUrl(value: string | null): this;
+    routes(registrar: PanelRouteRegistrar | null): this;
+    authenticatedRoutes(registrar: PanelRouteRegistrar | null): this;
+    tenantRoutes(registrar: PanelRouteRegistrar | null): this;
+    authenticatedTenantRoutes(registrar: PanelRouteRegistrar | null): this;
+    assets(assets: readonly PanelAsset[]): this;
+    bootUsing(callback: (panel: PanelBootContext) => void | Promise<void>): this;
+    broadcasting(value?: boolean): this;
+    spa(value?: boolean | {
+        readonly hasPrefetching?: boolean;
+    }): this;
+    spaUrlExceptions(values: readonly string[]): this;
+    unsavedChangesAlerts(value?: boolean): this;
+    databaseTransactions(value?: boolean): this;
+    resourceCreatePageRedirect(value: 'edit' | 'index' | 'view'): this;
+    resourceEditPageRedirect(value: 'index' | 'view' | null): this;
+    readOnlyRelationManagersOnResourceViewPagesByDefault(value?: boolean): this;
+    strictAuthorization(value?: boolean): this;
+    errorNotifications(value?: boolean): this;
+    registerErrorNotification(configuration: {
+        readonly body: string;
+        readonly statusCode?: number;
+        readonly title: string;
+    }): this;
+    registerErrorNotification(title: string, body: string, statusCode?: number): this;
+    hiddenErrorNotification(statusCode: number): this;
+    disabledErrorNotification(statusCode: number): this;
+    middleware(middleware: readonly PanelMiddleware<TActor>[], isPersistent?: boolean): this;
+    authMiddleware(middleware: readonly PanelMiddleware<TActor>[], isPersistent?: boolean): this;
+    tenantMiddleware(middleware: readonly PanelMiddleware<TActor>[], isPersistent?: boolean): this;
+    plugins(plugins: readonly PanelPlugin<TActor>[]): this;
     discoverResources(path?: string): this;
     discoverPages(path?: string): this;
     discoverWidgets(path?: string): this;
     discoverClusters(path?: string): this;
+    resources(definitions: readonly ExplicitPanelDefinition<'resource'>[]): this;
+    pages(definitions: readonly ExplicitPanelDefinition<'page'>[]): this;
+    widgets(definitions: readonly ExplicitPanelDefinition<'widget'>[]): this;
+    clusters(definitions: readonly ExplicitPanelDefinition<'cluster'>[]): this;
+    renderHook(slot: PanelRenderSlot, reference: string | RenderSlotReference): this;
     compileDiscoveryDefinition(): DiscoverableDefinition<'panel', PanelDiscoveryServer>;
     protected createDefinition(state: Readonly<PanelState<TActor>>): CompiledPanelDefinition<TActor>;
     private installPlugin;
+    private modelTenancyOptions;
+    private defaultProfileConfiguration;
+    private writeAuthFeature;
+    private writeAuthRoute;
+    private authFeaturesWithRoutes;
+    private writeRuntime;
+    private writeRoute;
+    private writeMiddleware;
+    private writeMiddlewareInput;
+    private writeTenancyConfiguration;
+    private staticRoute;
+    private routeSegment;
+    private componentReference;
+    private assertStatusCode;
+    private cssLength;
+    private hostname;
     private writeDiscovery;
+    private register;
 }
-interface PanelActorSource<TActor extends object> {
+type PanelActorSource<TActor extends object = object> = {
     readonly prototype: TActor;
-}
-declare function definePanel<TActor extends object>(id: string, actor: PanelActorSource<TActor>): PanelBuilder<TActor>;
+} | {
+    create(...parameters: never[]): TActor | Promise<TActor>;
+};
+declare function definePanel<TActorSource extends RecordTypeSource>(id: string, actor: TActorSource): PanelBuilder<RuntimeTypeValue<TActorSource>>;
+declare function definePanel<TActorSource extends RecordTypeSource>(actor: TActorSource): PanelBuilder<RuntimeTypeValue<TActorSource>>;
 declare function definePanel(id: string): PanelBuilder<unknown>;
+declare function definePanel(): PanelBuilder<unknown>;
+
+declare class TableQueryExecutor<TQuery extends HoloTableQuery<TQuery, TRecord>, TRecord, TContext> {
+    #private;
+    constructor(definition: TableQueryDefinition<TQuery, TContext>);
+    compile(state: TableQueryState, context: TContext): TQuery;
+    execute(state: TableQueryState, context: TContext): Promise<TableQueryResult<TRecord>>;
+    count(state: TableQueryState, context: TContext): Promise<number>;
+    executeSelection<TRecordId extends TableRecordIdentifier>(state: TableQueryState, selection: TableSelection<TRecordId>, context: TContext): Promise<readonly TRecord[]>;
+    resolveRowAction<TRecordId extends TableRecordIdentifier>(state: TableQueryState, recordId: TRecordId, context: TContext): Promise<TRecord | undefined>;
+    private createScopedQuery;
+    private applyUserConstraints;
+    private applySort;
+    private applyPlans;
+    private validatePagination;
+    private executeAll;
+    private pageResult;
+    private simpleResult;
+    private cursorResult;
+}
 
 interface RelationManagerContext<TOwner, TActor extends object, TTenant> {
     readonly actor: TActor | null;
@@ -1260,6 +1498,7 @@ interface RelationManagerBuilderOptions<TOwner, TRelated, TQuery, TInput extends
 }
 declare class RelationManagerBuilder<TOwner, TRelated, TQuery, TInput extends Readonly<Record<string, unknown>>, TPivot extends Readonly<Record<string, unknown>>, TValue extends OptionValue, TActor extends object, TTenant> {
     #private;
+    readonly resourceCompositionTypes: ResourceCompositionTypes<TOwner, TActor, TTenant>;
     constructor(options: RelationManagerBuilderOptions<TOwner, TRelated, TQuery, TInput, TPivot, TValue, TActor, TTenant>);
     id(id: string): this;
     operations(operations: readonly RelationOperation[]): this;
@@ -1471,6 +1710,7 @@ interface ColumnState<TRecord, TPath extends RecordPath<TRecord>> {
 }
 declare abstract class ColumnBuilder<TRecord, TPath extends RecordPath<TRecord>, TType extends string> extends ConstructionBuilder<ColumnState<TRecord, TPath>, CompiledColumnDefinition<TRecord, TPath, TType>> {
     #private;
+    readonly resourceRecordType: TRecord;
     protected constructor(type: TType, path: TPath);
     label(value: string | null): this;
     sortable(value?: boolean): this;
@@ -1921,25 +2161,6 @@ declare function executeGroupedFullQuery<TQuery, TRecord, TPath extends RecordPa
 
 declare function normalizeAggregateNumber(value: AggregatePrimitive, driver: AggregateDriver): number | null;
 
-declare class TableQueryExecutor<TQuery extends HoloTableQuery<TQuery, TRecord>, TRecord, TContext> {
-    #private;
-    constructor(definition: TableQueryDefinition<TQuery, TContext>);
-    compile(state: TableQueryState, context: TContext): TQuery;
-    execute(state: TableQueryState, context: TContext): Promise<TableQueryResult<TRecord>>;
-    count(state: TableQueryState, context: TContext): Promise<number>;
-    executeSelection<TRecordId extends TableRecordIdentifier>(state: TableQueryState, selection: TableSelection<TRecordId>, context: TContext): Promise<readonly TRecord[]>;
-    resolveRowAction<TRecordId extends TableRecordIdentifier>(state: TableQueryState, recordId: TRecordId, context: TContext): Promise<TRecord | undefined>;
-    private createScopedQuery;
-    private applyUserConstraints;
-    private applySort;
-    private applyPlans;
-    private validatePagination;
-    private executeAll;
-    private pageResult;
-    private simpleResult;
-    private cursorResult;
-}
-
 type AtomicValue = bigint | boolean | Date | null | number | string | symbol | undefined;
 type PreviousDepth = [never, 0, 1, 2, 3, 4, 5, 6];
 type NestedPath<TValue, TDepth extends number> = TDepth extends 0 ? never : TValue extends AtomicValue | ((...parameters: never[]) => unknown) ? never : TValue extends readonly (infer TItem)[] ? `${number}` | `${number}.${NestedPath<TItem, PreviousDepth[TDepth]>}` : TValue extends object ? {
@@ -2123,4 +2344,4 @@ type TranslationKey = Exclude<Extract<keyof KnownTranslations, string>, '__regis
 type KnownTranslationMessage<TKey extends TranslationKey> = KnownTranslations[TKey] extends TranslationMessage ? KnownTranslations[TKey] : never;
 declare function trans<TKey extends TranslationKey>(key: TKey, ...args: TranslationArguments<KnownTranslationMessage<TKey>>): TranslationReference<TKey>;
 
-export { ActionContext, ActionDefinition, ActionEngine, ActionEngineOptions, ActionExecutionError, ActionExecutionRequest, ActionExecutionResult, ActionGroupBuilder, ActionGroupItem, ActionGroupManifest, ActionKind, ActionManifest, ActionMount, type ActionPersistence, ActionResolvedState, type ActionResolverContext, AdvancedColumnFactory, AdvancedColumnMap, type AdvancedColumnRecordSource, AdvancedFilterColumn, AdvancedFilterCondition, AdvancedFilterValue, AdvancedOperatorFor, AdvancedQueryFilter, AdvancedScalarType, type AggregateDriver, type AggregatePrimitive, BasicFieldFactory, type BasicFormSchema, type BasicFormValues, BooleanColumn, BooleanEntry, BooleanFilter, BoundFormField, type BoundPanelTenantContext, type BuilderBlockDefinition, type BuilderBlockMap, type BuilderBlockValidationIssue, type BuilderBlockValue, BuilderFieldBuilder, type BuiltinActionOptions, CalloutBuilder, type CapabilityHost, ChartWidgetData, CheckboxColumn, CheckboxFieldBuilder, ChoiceFieldBuilder, ChoiceFieldFactory, type ChoiceFieldType, ChoiceOption, type ClientExpression, type ClientExpressionNode, type ClientExpressionOperator, CodeEntry, CodeFieldBuilder, CollectionFieldFactory, type CollectionFieldProperties, type CollectionValue, ColorColumn, ColorEntry, ColorFieldBuilder, ColumnAggregate, ColumnAlignment, ColumnBuilder, ColumnDataSource, type ColumnFactory, type ColumnRecordSource, ColumnResolver, type ColumnResolverContext, type CompiledChoiceFieldDefinition, CompiledColumnDefinition, CompiledDashboardDefinition, type CompiledEntryDefinition, CompiledFieldDefinition, CompiledFilterDefinition, type CompiledGroupDefinition, CompiledPageDefinition, CompiledPanelDefinition, CompiledPanelTenancy, CompiledSchema, CompiledSchemaComponent, type CompiledSummaryDefinition, CompiledWidgetDefinition, ComponentDefault, type ComponentDefaultLayers, ConstructionBuilder, ContainerComponentBuilder, ContextTypeSources, CreateTemporaryUploadInput, CustomColumn, CustomComponentBuilder, CustomComponentProperties, type CustomEntryDefinition, CustomFieldBuilder, type CustomFieldDefinition, type CustomFilterOptions, CustomOptionSource, type CustomOptionSourceHandlers, CustomSchemaFilter, type CustomSummaryResolver, CustomWidgetData, DashboardBuilder, DashboardContext, DashboardNavigation, DateFieldBuilder, type DatePickerMode, DateRangeFilter, DateRangeFilterValue, type DeepReadonly, DefaultableComponentKind, DeleteTemporaryUploadInput, DiscoverableBuilder, DiscoverableDefinition, DiscoverableKind, DiscoveryDirectories, EN_MESSAGES, Effect, EmptyStateBuilder, EntryBuilder, type EntryFactory, type EntryFormat, type EntryManifest, type EntryRecordPath, type EntryRecordPathValue, type EntryRecordSource, type EntryRelatedRecord, type EntryRelationPath, type EntryRendererProps, type EntryRendererRegistration, type EntryRendererRegistryContract, type EntryResolver, type EntryResolverContext, EntrySchemaComponentBuilder, type EntrySchemaSource, type EntryServerHandles, type EntryStateSource, type ExplicitServerResolver, ExtensionFilterBuilder, ExtensionFilterFactory, type ExtensionFilterOptions, ExtensionTypeId, FieldBuilder, FieldClientHints, type FieldPath, type FieldPathValue, FieldPresentationState, FieldResolvable, FieldResolver, FieldResolverContext, FieldsetBuilder, FilterBuilder, FilterCollection, FilterCollectionPlacement, FilterCollectionPresentation, FilterEncoder, FilterExecutionContext, FilterFactory, FilterIndicator, FilterIndicatorResolver, FilterManifest, FilterResponsiveColumns, FilterSchemaComponentBuilder, type FilterSchemaSource, FilterServerHandles, type FilterTypeSource, FormFieldPath, FormFieldPathFor, FormFieldValue, type FormResolverContext, FormSchemaBinding, GridBuilder, GroupBuilder$1 as GroupBuilder, type GroupManifest, type GroupOrder, type GroupResolver, type GroupResolverContext, type GroupStateSnapshot, type GroupedAggregateRequest, type GroupedAggregateRow, type GroupedRecords, type GroupedSummaryDriverAdapter, GroupingState, HiddenFieldBuilder, type HoloAggregateQuery, HoloOptionQuery, HoloTableQuery, IconColumn, IconEntry, ImageColumn, ImageEntry, type EntryResolverContext$1 as InfolistEntryResolverContext, type InlineEditActionExecutor, type InlineEditActionInput, type InlineEditRequest, type InlineEditableColumnManifest, InlineEditorManifest, JsonObject, JsonPrimitive, JsonValue, type KeyValueEntry$1 as KeyValueEntry, KeyValueFieldBuilder, KeyValueEntry as KeyValueInfolistEntry, LabelCapability, type LabelState, type LiteralResolver, MarkdownFieldBuilder, MediaAttachmentResult, MediaAttachmentTarget, type NamedClientResolver, NormalizedRelationListRequest, type NotificationResolverContext, type NullResolver, OptionPage, OptionQueryRequest, type OptionResolver, OptionService, OptionServiceLimits, OptionSource, OptionValue, OptionalRuntimeTypeValue, P7AFilterCompatibility, PANELS_CLEAN_TEMPORARY_UPLOADS_JOB, PageBreadcrumb, PageBuilder, PageComponentBody, PageContext, PageLayoutSlot, PageNavigation, PageNavigationInput, PageRendererManifest, PageResolvable, type PageResolverContext, PageServerHandles, PageType, type PageTypeSources, PanelAccessContext, PanelActorPresenter, type PanelActorSource, PanelAuthPageConfiguration, PanelAuthenticatedScope, PanelBranding, PanelBuilder, PanelDatabaseNotificationConfiguration, PanelDatabaseNotificationInboxOptions, PanelNavigationMode, PanelNavigationSeed, PanelNotificationScope, PanelNotificationStore, PanelPlugin, PanelPluginInstallation, PanelRenderSlot, type PanelResolverContext, PanelTenancyOptions, PanelTenantExecutionContext, PanelTenantIdentifier, PanelTheme, PanelUserMenuItem, PluginCompatibility, RadioFieldBuilder, type RadioOption, type RawServerCallback, RecordPath, RecordPathFor, RecordPathValue, RecordTypeSource, RecordTypeValue, RegisteredTranslations, RelatedRecord, RelationInputError, RelationListPaginationError, RelationListRequest, type RelationManagerAuthorization, RelationManagerBuilder, type RelationManagerBuilderOptions, type RelationManagerContext, type RelationManagerDefinition, RelationManagerExecutor, type RelationManagerTransaction, RelationOperation, RelationOperationNotAllowedError, type RelationOptionPage, RelationPath, type RelationPersistence, RelationPivotInputError, RelationPresentation, RelationRecordNotFoundError, RelationRecordPage, type RelationValidation, RelationshipOptionAdapter, RelationshipOptionQueryModifier, RelationshipOptionSource, RelationshipSelectFilter, RenderSlotReference, RepeatableEntry, RepeaterFieldBuilder, type Resolvable, ResolveTemporaryUploadInput, type ResolverComponentError, type ResolverContext, type ResolverContextInput, ResolverDependencyCycleError, type ResolverDomain, ResolverOptionSource, ResourceWidgetContext, type ResourceWidgetTypeSources, ResponsiveValue, RichEditorFieldBuilder, type RichTextDocument, type RichTextMark, type RichTextMarkType, type RichTextNode, type RichTextNodeType, type RichTextSanitizer, RuntimeTypeSource, RuntimeTypeValue, SchemaBreakpoint, SchemaBuilder, SchemaCollapseProperties, SchemaColumnSpan, SchemaComponentBuilder, type SchemaComponentFactory, SchemaComponentKind, SchemaComponentProperties, SchemaLayoutProperties, SchemaPath, SchemaRenderSlots, type SchemaTypeSource, SchemaVisibilityResolver, type SchemaWidgetContext, ScopedRenderSlots, SectionBuilder, SelectColumn, type SelectColumnOption, SelectFilter, SelectFilterOption, type SelectedOptionResolver, type ServerResolverBatchOptions, type ServerResolverBatchResult, ServerResolverBatcher, type ServerResolverPatch, type ServerResolverRequest, type ServerValueResolver, SliderFieldBuilder, SlugFieldBuilder, type SlugLocalTransform, SplitBuilder, StaticOptionSource, StatsWidgetData, StepBuilder, StoredUploadDescriptor, type SubmittedBuilderBlock, type SummaryAggregateRequest, SummaryBuilder, type SummaryDriverAdapter, SummaryFactory, type SummaryKind, type SummaryManifest, type SummaryMode, type SummaryResolverContext, type SummaryResult, type SummaryTypeSource, TabBuilder, TableFilterOperator, type TableFilterSnapshot, TableFilterState, GroupBuilder as TableGroupBuilder, GroupFactory as TableGroupFactory, TableQueryDefinition, TableQueryExecutor, TableQueryFilter, TableQueryFilterDefinition, TableQueryResult, TableQueryState, TableRecordIdentifier, TableSelection, TableWidgetData, TabsBuilder, TagsFieldBuilder, TemporaryUploadDescriptor, TemporaryUploadService, TemporaryUploadServiceOptions, TernaryFilter, TernaryFilterValue, TextColumn, TextEntry, TextFieldBuilder, TextFormatter, TextInputColumn, type TextInputMode, TextareaFieldBuilder, ToggleColumn, ToggleFieldBuilder, TranslationArguments, TranslationCatalog, type TranslationKey, TranslationMessage, TranslationReference, TrashedFilter, TrashedFilterValue, UploadEndpointRequest, UploadEndpointResponse, UploadFieldBuilder, UploadFieldFactory, UploadMimeInspector, UploadPolicy, UploadStorageAdapter, UploadStoragePaginationError, VisibilityCapability, type VisibilityState, WidgetBuilder, WidgetColumnSpan, WidgetContext, WidgetDataContext, WidgetFamily, WidgetFilterDefinition, WidgetManifest, type WidgetResolverContext, WidgetResourcePlacement, WidgetSchemaComponentBuilder, type WidgetSchemaSource, WidgetServerHandles, WizardBuilder, WriteTemporaryUploadInput, actionGroup, actionsFor, advancedColumnsFor, advancedFilterValue, advancedQueryFilter, allowedRelationOperations, arCatalog, asExecutableSummary, asFilterDefinition, assignStableId, assignStableKey, bindFormSchema, bindPanelTenantContext, callout, choiceFields, clientExpression, clientResolver, collectionFields, columnsFor, compileActionManifest, copyableEntryText, createHoloSummaryAdapter, createHoloUploadStorage, createNavigationSeed, createResourceWidgetContext, createTemporaryUploadService, customComponent, customField, defaultSlugTransform, defaultUploadMimeInspector, defineChartWidget, defineCreatePage, defineCustomPage, defineCustomWidget, defineDashboard, defineEditPage, defineEntry, defineListPage, definePage, definePanel, defineRelatedRecordPage, defineResourceChartWidget, defineResourceCustomWidget, defineResourceStatsWidget, defineResourceTableWidget, defineSchema, defineSingularPage, defineStatsWidget, defineTableWidget, defineUploadPolicy, defineViewPage, dehydrateFieldValue, deriveFieldClientHints, deriveSchemaDefault, deserializeRichText, emptyState, enCatalog, entriesFor, entryValueAt, executeFullQuerySummaries, executeGroupedFullQuery, executeInlineColumnEdit, executePageSummaries, extensionFiltersFor, fields, fieldset, filterCollection, filtersFor, formResolverContextFor, formatEntryState, formatTextValue, grid, group, groupPageRecords, groupingsFor, handleUploadEndpoint, holoNotificationStore, hydrateFieldValue, isClusterDefinition, isDiscoverableBuilder, isDiscoverableDefinition, isDiscoverableKind, isExportDefinition, isImportDefinition, isPageDefinition, isPanelDefinition, isPluginDefinition, isRelationManagerDefinition, isResourceDefinition, isWidgetDefinition, literal, markDiscoverableDefinition, normalizeAggregateNumber, nullResolver, panelTenantNotificationScope, relationManagersFor, relationSupportsOperation, resolveActionState, resolveEntrySource, resolveFieldDefault, resolveFieldPresentationState, runTemporaryUploadCleanupJob, schemaComponentsFor, schemaEntry, schemaFilter, schemaWidget, section, selectDefaultDashboard, serializeMarkdown, serializeRichText, serverResolver, split, step, structuralRichTextSanitizer, summariesFor, tab, tabs, trans, uploadExtension, uploadFields, validateBuilderBlocks, widgetContext, withComponentDefaults, wizard };
+export { ActionContext, ActionDefinition, ActionEngine, ActionEngineOptions, ActionExecutionError, ActionExecutionRequest, ActionExecutionResult, ActionGroupBuilder, ActionGroupItem, ActionGroupManifest, ActionKind, ActionManifest, ActionMount, type ActionPersistence, ActionResolvedState, type ActionResolverContext, AdvancedColumnFactory, AdvancedColumnMap, type AdvancedColumnRecordSource, AdvancedFilterColumn, AdvancedFilterCondition, AdvancedFilterValue, AdvancedOperatorFor, AdvancedQueryFilter, AdvancedScalarType, type AggregateDriver, type AggregatePrimitive, BasicFieldFactory, type BasicFormSchema, type BasicFormValues, BooleanColumn, BooleanEntry, BooleanFilter, BoundFormField, type BoundPanelTenantContext, type BuilderBlockDefinition, type BuilderBlockMap, type BuilderBlockValidationIssue, type BuilderBlockValue, BuilderFieldBuilder, type BuiltinActionOptions, CalloutBuilder, type CapabilityHost, ChartWidgetData, CheckboxColumn, CheckboxFieldBuilder, ChoiceFieldBuilder, ChoiceFieldFactory, type ChoiceFieldType, ChoiceOption, type ClientExpression, type ClientExpressionNode, type ClientExpressionOperator, CodeEntry, CodeFieldBuilder, CollectionFieldFactory, type CollectionFieldProperties, type CollectionValue, ColorColumn, ColorEntry, ColorFieldBuilder, ColumnAggregate, ColumnAlignment, ColumnBuilder, ColumnDataSource, type ColumnFactory, type ColumnRecordSource, ColumnResolver, type ColumnResolverContext, type CompiledChoiceFieldDefinition, CompiledColumnDefinition, CompiledDashboardDefinition, type CompiledEntryDefinition, CompiledFieldDefinition, CompiledFilterDefinition, type CompiledGroupDefinition, CompiledPageDefinition, CompiledPanelDefinition, CompiledPanelTenancy, CompiledSchema, CompiledSchemaComponent, type CompiledSummaryDefinition, CompiledWidgetDefinition, ComponentDefault, type ComponentDefaultLayers, ConstructionBuilder, ContainerComponentBuilder, ContextTypeSources, CustomColumn, CustomComponentBuilder, CustomComponentProperties, type CustomEntryDefinition, CustomFieldBuilder, type CustomFieldDefinition, type CustomFilterOptions, CustomOptionSource, type CustomOptionSourceHandlers, CustomSchemaFilter, type CustomSummaryResolver, CustomWidgetData, DashboardBuilder, DashboardContext, DashboardNavigation, DateFieldBuilder, type DatePickerMode, DateRangeFilter, DateRangeFilterValue, type DeepReadonly, type DefaultPanelActor, type DefaultPanelServices, type DefaultPanelTenant, DefaultableComponentKind, DiscoverableBuilder, DiscoverableDefinition, DiscoverableKind, DiscoveryDirectories, EN_MESSAGES, Effect, EmptyStateBuilder, EntryBuilder, type EntryFactory, type EntryFormat, type EntryManifest, type EntryRecordPath, type EntryRecordPathValue, type EntryRecordSource, type EntryRelatedRecord, type EntryRelationPath, type EntryRendererProps, type EntryRendererRegistration, type EntryRendererRegistryContract, type EntryResolver, type EntryResolverContext, EntrySchemaComponentBuilder, type EntrySchemaSource, type EntryServerHandles, type EntryStateSource, type ExplicitServerResolver, ExtensionFilterBuilder, ExtensionFilterFactory, type ExtensionFilterOptions, ExtensionTypeId, FieldBuilder, FieldClientHints, type FieldPath, type FieldPathValue, FieldPresentationState, FieldResolvable, FieldResolver, FieldResolverContext, FieldsetBuilder, FilterBuilder, FilterCollection, FilterCollectionPlacement, FilterCollectionPresentation, FilterEncoder, FilterExecutionContext, FilterFactory, FilterIndicator, FilterIndicatorResolver, FilterManifest, FilterResponsiveColumns, FilterSchemaComponentBuilder, type FilterSchemaSource, FilterServerHandles, type FilterTypeSource, FormFieldPath, FormFieldPathFor, FormFieldValue, type FormResolverContext, FormSchemaBinding, GridBuilder, GroupBuilder$1 as GroupBuilder, type GroupManifest, type GroupOrder, type GroupResolver, type GroupResolverContext, type GroupStateSnapshot, type GroupedAggregateRequest, type GroupedAggregateRow, type GroupedRecords, type GroupedSummaryDriverAdapter, GroupingState, HiddenFieldBuilder, type HoloAggregateQuery, HoloOptionQuery, HoloTableQuery, IconColumn, IconEntry, ImageColumn, ImageEntry, type EntryResolverContext$1 as InfolistEntryResolverContext, type InlineEditActionExecutor, type InlineEditActionInput, type InlineEditRequest, type InlineEditableColumnManifest, InlineEditorManifest, JsonObject, JsonPrimitive, JsonValue, type KeyValueEntry$1 as KeyValueEntry, KeyValueFieldBuilder, KeyValueEntry as KeyValueInfolistEntry, LabelCapability, type LabelState, type LiteralResolver, MarkdownFieldBuilder, type NamedClientResolver, NormalizedRelationListRequest, type NotificationResolverContext, type NullResolver, OptionPage, OptionQueryRequest, type OptionResolver, OptionService, OptionServiceLimits, OptionSource, OptionValue, OptionalRuntimeTypeValue, P7AFilterCompatibility, PageBreadcrumb, PageBuilder, PageComponentBody, PageContext, PageLayoutSlot, PageNavigation, PageNavigationInput, PageRendererManifest, PageResolvable, type PageResolverContext, PageServerHandles, PageType, type PageTypeSources, PanelAccessContext, PanelActorPresenter, type PanelActorSource, PanelAsset, PanelAuthPageConfiguration, PanelAuthenticatedScope, PanelBootContext, PanelBranding, PanelBuilder, PanelComponentConfiguration, PanelContentWidth, PanelDatabaseNotificationConfiguration, PanelDatabaseNotificationInboxOptions, PanelEmailVerificationPageConfiguration, PanelLoginPageConfiguration, PanelMiddleware, PanelModelTenancyOptions, PanelMultiFactorPageConfiguration, PanelNavigationGroup, PanelNavigationMode, PanelNavigationSeed, PanelNotificationScope, PanelNotificationStore, PanelPasswordResetPageConfiguration, PanelPlugin, PanelPluginInstallation, PanelRegisteredDefinition, PanelRenderSlot, type PanelResolverContext, PanelRouteMethod, PanelRouteRegistrar, PanelRouteScope, PanelSubNavigationPosition, PanelTenancyOptions, PanelTenantBillingProvider, PanelTenantExecutionContext, PanelTenantIdentifier, PanelTenantMenuItem, PanelTheme, PanelTokenTheme, PanelUserMenuItem, PluginCompatibility, RadioFieldBuilder, type RadioOption, type RawServerCallback, RecordPath, RecordPathFor, RecordPathValue, RecordTypeSource, RecordTypeValue, RegisteredTranslations, RelatedRecord, RelationInputError, RelationListPaginationError, RelationListRequest, type RelationManagerAuthorization, RelationManagerBuilder, type RelationManagerBuilderOptions, type RelationManagerContext, type RelationManagerDefinition, RelationManagerExecutor, type RelationManagerTransaction, RelationOperation, RelationOperationNotAllowedError, type RelationOptionPage, RelationPath, type RelationPersistence, RelationPivotInputError, RelationPresentation, RelationRecordNotFoundError, RelationRecordPage, type RelationValidation, RelationshipOptionAdapter, RelationshipOptionQueryModifier, RelationshipOptionSource, RelationshipSelectFilter, RenderSlotReference, RepeatableEntry, RepeaterFieldBuilder, type Resolvable, type ResolverComponentError, type ResolverContext, type ResolverContextInput, ResolverDependencyCycleError, type ResolverDomain, ResolverOptionSource, ResourceAttributes, ResourceCompositionTypes, ResourceWidgetContext, type ResourceWidgetTypeSources, ResponsiveValue, RichEditorFieldBuilder, type RichTextDocument, type RichTextMark, type RichTextMarkType, type RichTextNode, type RichTextNodeType, type RichTextSanitizer, RuntimeTypeSource, RuntimeTypeValue, SchemaBreakpoint, SchemaBuilder, SchemaCollapseProperties, SchemaColumnSpan, SchemaComponentBuilder, type SchemaComponentFactory, SchemaComponentKind, SchemaComponentProperties, SchemaLayoutProperties, SchemaPath, SchemaRenderSlots, type SchemaTypeSource, SchemaVisibilityResolver, type SchemaWidgetContext, ScopedRenderSlots, SectionBuilder, SelectColumn, type SelectColumnOption, SelectFilter, SelectFilterOption, type SelectedOptionResolver, type ServerResolverBatchOptions, type ServerResolverBatchResult, ServerResolverBatcher, type ServerResolverPatch, type ServerResolverRequest, type ServerValueResolver, SliderFieldBuilder, SlugFieldBuilder, type SlugLocalTransform, SplitBuilder, StaticOptionSource, StatsWidgetData, StepBuilder, type SubmittedBuilderBlock, type SummaryAggregateRequest, SummaryBuilder, type SummaryDriverAdapter, SummaryFactory, type SummaryKind, type SummaryManifest, type SummaryMode, type SummaryResolverContext, type SummaryResult, type SummaryTypeSource, TabBuilder, TableFilterOperator, type TableFilterSnapshot, TableFilterState, GroupBuilder as TableGroupBuilder, GroupFactory as TableGroupFactory, TableQueryDefinition, TableQueryExecutor, TableQueryFilter, TableQueryFilterDefinition, TableQueryResult, TableQueryState, TableRecordIdentifier, TableSelection, TableWidgetData, TabsBuilder, TagsFieldBuilder, TernaryFilter, TernaryFilterValue, TextColumn, TextEntry, TextFieldBuilder, TextFormatter, TextInputColumn, type TextInputMode, TextareaFieldBuilder, ToggleColumn, ToggleFieldBuilder, TranslationArguments, TranslationCatalog, type TranslationKey, TranslationMessage, TranslationReference, TrashedFilter, TrashedFilterValue, UploadFieldBuilder, UploadFieldFactory, UploadMimeInspector, UploadPolicy, VisibilityCapability, type VisibilityState, WidgetBuilder, WidgetColumnSpan, WidgetContext, WidgetDataContext, WidgetFamily, WidgetFilterDefinition, WidgetManifest, type WidgetResolverContext, WidgetResourcePlacement, WidgetSchemaComponentBuilder, type WidgetSchemaSource, WidgetServerHandles, WizardBuilder, actionGroup, actionsFor, advancedColumnsFor, advancedFilterValue, advancedQueryFilter, allowedRelationOperations, arCatalog, asExecutableSummary, asFilterDefinition, assignStableId, assignStableKey, bindFormSchema, bindPanelTenantContext, callout, choiceFields, clientExpression, clientResolver, collectionFields, columnsFor, compileActionManifest, copyableEntryText, createHoloSummaryAdapter, createNavigationSeed, createResourceWidgetContext, customComponent, customField, defaultSlugTransform, defaultUploadMimeInspector, defineChartWidget, defineCreatePage, defineCustomPage, defineCustomWidget, defineDashboard, defineEditPage, defineEntry, defineListPage, definePage, definePanel, defineRelatedRecordPage, defineResourceChartWidget, defineResourceCustomWidget, defineResourceStatsWidget, defineResourceTableWidget, defineSchema, defineSingularPage, defineStatsWidget, defineTableWidget, defineUploadPolicy, defineViewPage, dehydrateFieldValue, deriveFieldClientHints, deriveSchemaDefault, deserializeRichText, emptyState, enCatalog, entriesFor, entryValueAt, executeFullQuerySummaries, executeGroupedFullQuery, executeInlineColumnEdit, executePageSummaries, extensionFiltersFor, fields, fieldset, filterCollection, filtersFor, formResolverContextFor, formatEntryState, formatTextValue, grid, group, groupPageRecords, groupingsFor, holoNotificationStore, hydrateFieldValue, isClusterDefinition, isDiscoverableBuilder, isDiscoverableDefinition, isDiscoverableKind, isExportDefinition, isImportDefinition, isPageDefinition, isPanelDefinition, isPluginDefinition, isRelationManagerDefinition, isResourceDefinition, isWidgetDefinition, literal, markDiscoverableDefinition, normalizeAggregateNumber, nullResolver, panelTenantNotificationScope, relationManagersFor, relationSupportsOperation, resolveActionState, resolveEntrySource, resolveFieldDefault, resolveFieldPresentationState, schemaComponentsFor, schemaEntry, schemaFilter, schemaWidget, section, selectDefaultDashboard, serializeMarkdown, serializeRichText, serverResolver, split, step, structuralRichTextSanitizer, summariesFor, tab, tabs, trans, uploadExtension, uploadFields, validateBuilderBlocks, widgetContext, withComponentDefaults, wizard };

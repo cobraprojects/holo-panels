@@ -1,3 +1,4 @@
+import { ShadcnButton } from '../internal-ui'
 import {
   defineComponent,
   h,
@@ -187,7 +188,7 @@ const VueSchemaNode = defineComponent({
       if (!collapse?.collapsible) return children
       const regionId = elementId(props.schemaId, props.component.id, 'content')
       return [
-        h('button', {
+        h(ShadcnButton, {
           'aria-controls': regionId,
           'aria-expanded': String(open.value),
           type: 'button',
@@ -215,7 +216,7 @@ const VueSchemaNode = defineComponent({
       return h('div', attributes, [
         slot(props, 'before'),
         props.renderContent?.({ component: props.component, panelId: props.panelId, schema: props.schema }),
-        h('div', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? 'Tabs', role: 'tablist' }, children.map((child, index) => h('button', {
+        h('div', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? 'Tabs', role: 'tablist' }, children.map((child, index) => h(ShadcnButton, {
           'aria-controls': elementId(props.schemaId, child.id, 'panel'),
           'aria-selected': String(index === activeIndex),
           id: elementId(props.schemaId, child.id, 'tab'),
@@ -247,13 +248,13 @@ const VueSchemaNode = defineComponent({
         props.renderContent?.({ component: props.component, panelId: props.panelId, schema: props.schema }),
         h('nav', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? 'Wizard progress' }, [
           h('ol', children.map((child, index) => h('li', { 'aria-current': index === activeIndex ? 'step' : undefined, key: child.key }, [
-            h('button', { type: 'button', onClick: () => select(index) }, child.properties.label ?? `Step ${index + 1}`),
+            h(ShadcnButton, { type: 'button', onClick: () => select(index) }, child.properties.label ?? `Step ${index + 1}`),
           ]))),
         ]),
         active ? h(VueSchemaNode, { ...props, component: active, key: active.key }) : null,
         children.length > 1 ? h('div', { class: 'hp-schema-wizard-navigation' }, [
-          h('button', { disabled: activeIndex === 0, type: 'button', onClick: () => select(activeIndex - 1) }, 'Previous'),
-          h('button', { disabled: activeIndex === children.length - 1, type: 'button', onClick: () => select(activeIndex + 1) }, 'Next'),
+          h(ShadcnButton, { disabled: activeIndex === 0, type: 'button', onClick: () => select(activeIndex - 1) }, 'Previous'),
+          h(ShadcnButton, { disabled: activeIndex === children.length - 1, type: 'button', onClick: () => select(activeIndex + 1) }, 'Next'),
         ]) : null,
         slot(props, 'after'),
       ])

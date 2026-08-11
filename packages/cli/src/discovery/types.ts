@@ -27,6 +27,14 @@ export interface DiscoveredDefinition {
   readonly default: boolean
   readonly client: Readonly<Record<string, ClientManifestValue>>
   readonly server?: unknown
+  readonly registeredFrom?: {
+    readonly index: number
+    readonly exportName: string
+  }
+  readonly generatedResourcePage?: {
+    readonly manifest: Readonly<Record<string, ClientManifestValue>>
+    readonly resourceExportName: string
+  }
 }
 
 export interface DiscoveryModule {

@@ -1,6 +1,8 @@
 import { column, defineGeneratedTable, defineModel } from '@holo-js/db'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { ResourceBuilder, defineResource } from '../src/resources/builder'
+import { defineEditPage, defineListPage } from '../src/pages'
+import { defineStatsWidget } from '../src/widgets'
 import { ResourceExecutor, ResourceInputError, ResourceRecordNotFoundError } from '../src/resources/executor'
 import type {
   ResourceAuthorization,
@@ -14,6 +16,9 @@ import type {
 } from '../src/resources/contracts'
 
 interface PostAttributes {
+  readonly author?: {
+    toJSON(): { readonly createdAt: Date, readonly name: string }
+  }
   readonly id: number
   readonly password: string
   readonly tenantId: string
@@ -67,6 +72,11 @@ class PostQuery implements ResourceQuery<PostQuery, PostRecord> {
   async first(): Promise<PostRecord | undefined> {
     this.#events.push('lookup')
     return this.#records.find(record => record.values.id === this.#id && record.values.tenantId === this.#tenant)
+  }
+
+  async get(): Promise<readonly PostRecord[]> {
+    this.#events.push('get')
+    return this.#records.filter(record => record.values.tenantId === this.#tenant)
   }
 
   tenant(tenant: string): this {
@@ -170,6 +180,10 @@ function builder(model = fixture([]).model): ResourceBuilder<ResourceModel<PostR
   return new ResourceBuilder<ResourceModel<PostRecord, PostQuery>, PostRecord, PostQuery, Partial<PostAttributes>, Actor, string, boolean>(model)
 }
 
+function recordComposition<TRecord>(id: string): { readonly id: string, readonly resourceRecordType: TRecord } {
+  return { id } as { readonly id: string, readonly resourceRecordType: TRecord }
+}
+
 describe('P9-A resources', () => {
   it('infers Holo model fields and composes a callback-free discovery seed', () => {
     const posts = defineGeneratedTable('resource_posts', {
@@ -184,12 +198,11 @@ describe('P9-A resources', () => {
       .slug('articles')
       .navigation({ group: 'Content', icon: 'document-text', label: 'Posts', sort: 10 })
       .globalSearch({ attributes: ['title'], details: ['slug'], limit: 12, title: 'title' })
-      .form({ id: 'post.form' })
-      .infolist({ id: 'post.infolist' })
-      .table({ id: 'post.table' })
-      .pages({ id: 'list' }, { id: 'edit' })
-      .relations({ id: 'comments' })
-      .widgets({ id: 'stats' })
+      .form(recordComposition<ResourceRecordFor<typeof Post>>('post.form'))
+      .infolist(recordComposition<ResourceRecordFor<typeof Post>>('post.infolist'))
+      .table(recordComposition<ResourceRecordFor<typeof Post>>('post.table'))
+      .pages(defineListPage('list'), defineEditPage('edit'))
+      .widgets(defineStatsWidget('stats'))
       .writableAttributes(['slug', 'title'])
       .shared()
       .compile()
@@ -221,7 +234,7 @@ describe('P9-A resources', () => {
     const automaticContext = {
       ...context(),
       scopeTenantQuery: <TQuery>(query: TQuery): TQuery => (query as PostQuery).tenant('tenant-a') as TQuery,
-      tenantBindings: { tenantId: 'tenant-a' },
+      tenantBindings: { tenant_id: 'tenant-a' },
     }
     await expect(new ResourceExecutor(tenantScoped, setup).serialize(1, automaticContext)).resolves.toMatchObject({ id: 1 })
     await expect(new ResourceExecutor(tenantScoped, setup).create({ title: 'Created' }, automaticContext)).resolves.toMatchObject({
@@ -236,15 +249,33 @@ describe('P9-A resources', () => {
     expect(() => shared.configured('other-posts', () => shared)).toThrow(/configured variant/u)
   })
 
+  it('serializes eager-loaded model relations and dates into transport-safe records', async () => {
+    const events: string[] = []
+    const setup = fixture(events)
+    const related = {
+      toJSON: () => ({ createdAt: new Date('2026-08-05T00:00:00.000Z'), name: 'Ada' }),
+    }
+    const original = records[0]!.values
+    records[0]!.values = { ...original, author: related }
+    try {
+      await expect(new ResourceExecutor(resource(events).compile(), setup).serialize(1, context())).resolves.toMatchObject({
+        author: { createdAt: '2026-08-05T00:00:00.000Z', name: 'Ada' },
+        id: 1,
+      })
+    } finally {
+      records[0]!.values = original
+    }
+  })
+
   it('validates resource IDs and derives replacement component keys from configured variants', () => {
     const base = builder()
       .shared()
-      .form({ id: 'first-form' })
-      .form({ id: 'final-form' })
-      .infolist({ id: 'first-infolist' })
-      .infolist({ id: 'final-infolist' })
-      .table({ id: 'first-table' })
-      .table({ id: 'final-table' })
+      .form(recordComposition<PostRecord>('first-form'))
+      .form(recordComposition<PostRecord>('final-form'))
+      .infolist(recordComposition<PostRecord>('first-infolist'))
+      .infolist(recordComposition<PostRecord>('final-infolist'))
+      .table(recordComposition<PostRecord>('first-table'))
+      .table(recordComposition<PostRecord>('final-table'))
       .writableAttributes(['title'])
 
     expect(() => base.configured('../archive', configured => configured)).toThrow(/Invalid configured resource variant ID/u)
@@ -314,6 +345,29 @@ describe('P9-A resources', () => {
     await expect(executor.serialize(1, context())).resolves.toEqual({ id: 1, tenantId: 'tenant-a', title: 'Alpha' })
     expect(events).toEqual(['class:viewAny', 'query', 'base', 'tenant', 'where', 'lookup', 'record:view'])
     await expect(executor.serialize(2, context())).rejects.toBeInstanceOf(ResourceRecordNotFoundError)
+  })
+
+  it('allows resource operations when the model has no registered Holo policy', async () => {
+    const events: string[] = []
+    const executor = new ResourceExecutor(resource(events).compile())
+
+    await expect(executor.serialize(1, context())).resolves.toEqual({ id: 1, tenantId: 'tenant-a', title: 'Alpha' })
+    expect(events).toEqual(['query', 'query', 'tenant', 'where', 'lookup'])
+  })
+
+  it('rejects a missing Holo policy when strict authorization is enabled', async () => {
+    const executor = new ResourceExecutor(resource([]).compile(), { strictAuthorization: true })
+
+    await expect(executor.serialize(1, context())).rejects.toThrow()
+  })
+
+  it('lists only scoped and authorized records without exposing hidden attributes', async () => {
+    const events: string[] = []
+    const setup = fixture(events)
+    const executor = new ResourceExecutor(resource(events).compile(), setup)
+
+    await expect(executor.list(context())).resolves.toEqual([{ id: 1, tenantId: 'tenant-a', title: 'Alpha' }])
+    expect(events).toEqual(['class:viewAny', 'query', 'tenant', 'get', 'record:view'])
   })
 
   it('rejects mass assignment and record-policy denial without persistence', async () => {

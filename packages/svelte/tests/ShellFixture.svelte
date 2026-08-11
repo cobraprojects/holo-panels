@@ -18,8 +18,8 @@
     PanelsToastViewport,
   } from '../src/components'
 
-  interface Props { onselect?: (id: string) => void }
-  let { onselect }: Props = $props()
+  interface Props { dialogsOpen?: boolean; onselect?: (id: string) => void }
+  let { dialogsOpen = true, onselect }: Props = $props()
 </script>
 
 <PanelsButton />
@@ -30,8 +30,8 @@
 <PanelsInputWrapper description="Public title" error="Required" inputId="title" label="Title" />
 <PanelsLoadingIndicator label="Loading posts" />
 <PanelsDropdown items={[{ id: 'edit', label: 'Edit' }, { id: 'delete', label: 'Delete' }]} label="Actions" {onselect} />
-<PanelsModal labelledBy="modal-title" onclose={() => undefined} open={true} />
-<PanelsSlideOver labelledBy="drawer-title" onclose={() => undefined} open={true} />
+<PanelsModal labelledBy="modal-title" onclose={() => undefined} open={dialogsOpen} />
+<PanelsSlideOver labelledBy="drawer-title" onclose={() => undefined} open={dialogsOpen} />
 <PanelsTabs label="Content" tabs={[{ id: 'one', label: 'One' }, { id: 'two', label: 'Two' }]} value="one" />
 <PanelsSection heading="Details" />
 <PanelsEmptyState heading="Nothing here" />

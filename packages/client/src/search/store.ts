@@ -1,13 +1,21 @@
-import type { ClientSearchOptions, ClientSearchState, ClientSearchStateListener, ClientSearchTransport } from './contracts'
+import type { ClientSearchOptions, ClientSearchShortcut, ClientSearchState, ClientSearchStateListener, ClientSearchTransport } from './contracts'
 
 function frozen(state: ClientSearchState): ClientSearchState {
   return Object.freeze({ ...state, results: Object.freeze([...state.results]) })
+}
+
+function normalizedBinding(value: string): string {
+  const parts = value.toLocaleLowerCase().split('+')
+  const key = parts.at(-1) ?? ''
+  const modifiers = new Set(parts.slice(0, -1))
+  return [...['ctrl', 'meta', 'alt', 'shift'].filter(modifier => modifiers.has(modifier)), key].join('+')
 }
 
 export class GlobalSearchStore {
   readonly #debounceMilliseconds: number
   readonly #maximumLength: number
   readonly #minimumLength: number
+  readonly #keybindings: ReadonlySet<string>
   readonly #transport: ClientSearchTransport
   readonly #listeners = new Set<ClientSearchStateListener>()
   #abort: AbortController | null = null
@@ -20,9 +28,11 @@ export class GlobalSearchStore {
     this.#minimumLength = options.minimumLength ?? 2
     this.#maximumLength = options.maximumLength ?? 200
     this.#debounceMilliseconds = options.debounceMilliseconds ?? 250
+    this.#keybindings = new Set((options.keybindings ?? ['meta+k', 'ctrl+k']).map(normalizedBinding))
     if (!Number.isSafeInteger(this.#minimumLength) || this.#minimumLength < 1) throw new Error('Search minimum length must be a positive integer')
     if (!Number.isSafeInteger(this.#maximumLength) || this.#maximumLength < this.#minimumLength) throw new Error('Search maximum length must not be below the minimum')
     if (!Number.isSafeInteger(this.#debounceMilliseconds) || this.#debounceMilliseconds < 0 || this.#debounceMilliseconds > 5000) throw new Error('Search debounce must be from 0 to 5000 milliseconds')
+    if (this.#keybindings.size === 0) throw new Error('Search requires at least one key binding')
   }
 
   get snapshot(): ClientSearchState {
@@ -44,10 +54,21 @@ export class GlobalSearchStore {
     }, this.#debounceMilliseconds)
   }
 
-  shortcut(key: string, modifier: { readonly ctrl: boolean, readonly meta: boolean }): boolean {
-    if (key.toLowerCase() !== 'k' || !modifier.ctrl && !modifier.meta) return false
-    this.update({ open: true })
+  shortcut(key: string, modifier: ClientSearchShortcut): boolean {
+    const binding = normalizedBinding([
+      ...(modifier.ctrl ? ['ctrl'] : []),
+      ...(modifier.meta ? ['meta'] : []),
+      ...(modifier.alt ? ['alt'] : []),
+      ...(modifier.shift ? ['shift'] : []),
+      key.toLocaleLowerCase(),
+    ].join('+'))
+    if (!this.#keybindings.has(binding)) return false
+    this.open()
     return true
+  }
+
+  open(): void {
+    this.update({ open: true })
   }
 
   close(): void {

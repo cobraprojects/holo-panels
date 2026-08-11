@@ -110,7 +110,7 @@ function notificationResponse(id: string): Response {
 
 function operationRequest(): Request {
   const envelope = createRequestEnvelope({ id: 'request-p13', operation: 'action', panelId: 'admin', payload: {} })
-  return new Request('https://example.test/_holo/panels/admin/action', {
+  return new Request('https://example.test/holo/panels/admin/action', {
     body: new URLSearchParams({ [TRANSPORT_REQUEST_FIELD]: JSON.stringify(envelope), _token: 'valid' }),
     headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': 'valid' },
     method: 'POST',
@@ -125,9 +125,19 @@ function viewProperties(): JsonObject {
 
 async function click(container: HTMLElement, label: string): Promise<void> {
   await act(async () => {
-    const button = [...container.querySelectorAll('button')].find(candidate => candidate.textContent === label)
+    const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent === label)
     if (!button) throw new Error(`Missing ${label} button`)
     button.click()
+    await Promise.resolve()
+  })
+}
+
+async function openNotifications(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    const button = container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')
+    if (!button) throw new Error('Missing notification inbox trigger')
+    button.click()
+    await Promise.resolve()
     await Promise.resolve()
   })
 }
@@ -194,7 +204,8 @@ describe('Next notification and effect integration', () => {
       await Promise.resolve()
     })
     expect(container.querySelector(`[data-placement="${placement}"]`)).not.toBeNull()
-    expect(calls).toEqual(['/_holo/panels/admin/notification'])
+    await openNotifications(container)
+    expect(calls).toEqual(['/holo/panels/admin/notification'])
     await act(async () => root.unmount())
   })
 
@@ -213,6 +224,7 @@ describe('Next notification and effect integration', () => {
     })
     expect(notificationRealtime).toHaveBeenCalledOnce()
     expect(notificationRealtime).toHaveBeenCalledWith('panels.admin.7')
+    await openNotifications(container)
     expect(fetch).toHaveBeenCalled()
     await act(async () => root.unmount())
 
@@ -249,7 +261,7 @@ describe('Next notification and effect integration', () => {
     await click(container, 'Run action')
     expect(order).toEqual(['toast', 'redirect'])
     expect(toastStore.state.items).toHaveLength(1)
-    if (!ok) expect(container.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')
+    if (!ok) expect(document.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')
     await act(async () => root.unmount())
     effects.dispose()
   })
@@ -269,7 +281,7 @@ describe('Next notification and effect integration', () => {
     Reflect.set(ordinary, 'effects', [safeEffect])
     const ordinaryRoute = createPanelOperationRoute({ panelIds: ['admin'], runtime: runtime(async () => { throw ordinary }) })
     const ordinaryBody = await (await ordinaryRoute.POST(operationRequest(), context)).json() as ResponseEnvelope
-    expect(ordinaryBody.effects).toEqual([])
+    expect(ordinaryBody.effects).toEqual([{ kind: 'toast', level: 'danger', message: 'Please try again later.', title: 'An error occurred' }])
     expect(JSON.stringify(ordinaryBody)).not.toContain('ordinary secret')
 
     const invalidEffect = new ActionExecutionError('failed', 'invalid effect')

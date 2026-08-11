@@ -2,19 +2,35 @@ import {
   computed,
   defineComponent,
   h,
-  nextTick,
   onErrorCaptured,
   ref,
-  watch,
   type PropType,
   type VNode,
 } from 'vue'
+import {
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogRoot,
+  DialogTitle,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  TabsContent,
+  TabsList,
+  TabsRoot,
+  TabsTrigger,
+} from 'reka-ui'
+import { ChevronDown, X } from 'lucide-vue-next'
 import { ComponentRegistry } from './registry'
+import { ShadcnIcon } from './internal-ui'
 
 export interface PanelsDropdownItem {
   readonly id: string
   readonly label: string
   readonly disabled?: boolean
+  readonly icon?: string | null
 }
 
 export interface PanelsTabItem {
@@ -36,6 +52,7 @@ function slotContent(slot: (() => VNode[]) | undefined, fallback?: string): VNod
 export const PanelsButton = defineComponent({
   name: 'PanelsButton',
   props: {
+    ariaLabel: String,
     disabled: Boolean,
     type: { type: String as PropType<'button' | 'submit' | 'reset'>, default: 'button' },
     variant: { type: String as PropType<'primary' | 'secondary' | 'danger' | 'ghost'>, default: 'primary' },
@@ -43,10 +60,13 @@ export const PanelsButton = defineComponent({
   emits: ['click'],
   setup(props, { emit, slots }) {
     return () => h('button', {
+      'aria-label': props.ariaLabel,
       type: props.type,
       disabled: props.disabled,
       class: ['hp-button', `hp-button--${props.variant}`],
       'data-panels-component': 'button',
+      'data-slot': 'button',
+      'data-variant': props.variant === 'primary' ? 'default' : props.variant === 'danger' ? 'destructive' : props.variant,
       onClick: (event: unknown) => emit('click', event),
     }, slotContent(slots.default))
   },
@@ -63,6 +83,8 @@ export const PanelsLink = defineComponent({
       href: props.href,
       class: 'hp-link',
       'data-panels-component': 'link',
+      'data-slot': 'button',
+      'data-variant': 'link',
       'aria-current': props.current ? 'page' : undefined,
     }, slotContent(slots.default))
   },
@@ -74,7 +96,7 @@ export const PanelsBadge = defineComponent({
     tone: { type: String as PropType<'neutral' | 'info' | 'success' | 'warning' | 'danger'>, default: 'neutral' },
   },
   setup(props, { slots }) {
-    return () => h('span', { class: ['hp-badge', `hp-badge--${props.tone}`], 'data-panels-component': 'badge' }, slotContent(slots.default))
+    return () => h('span', { class: ['hp-badge', `hp-badge--${props.tone}`], 'data-panels-component': 'badge', 'data-slot': 'badge', 'data-variant': props.tone === 'danger' ? 'destructive' : props.tone === 'neutral' ? 'secondary' : props.tone }, slotContent(slots.default))
   },
 })
 
@@ -86,9 +108,9 @@ export const PanelsAvatar = defineComponent({
     fallback: String,
   },
   setup(props) {
-    return () => h('span', { class: 'hp-avatar', 'data-panels-component': 'avatar' }, props.src
-      ? h('img', { src: props.src, alt: props.alt })
-      : h('span', { 'aria-label': props.alt }, props.fallback ?? props.alt.slice(0, 1)))
+    return () => h('span', { class: 'hp-avatar', 'data-panels-component': 'avatar', 'data-slot': 'avatar' }, props.src
+      ? h('img', { src: props.src, alt: props.alt, 'data-slot': 'avatar-image' })
+      : h('span', { 'aria-label': props.alt, 'data-slot': 'avatar-fallback' }, props.fallback ?? props.alt.slice(0, 1)))
   },
 })
 
@@ -104,6 +126,9 @@ export const PanelsIconButton = defineComponent({
       type: 'button',
       class: 'hp-icon-button',
       'data-panels-component': 'icon-button',
+      'data-size': 'icon',
+      'data-slot': 'button',
+      'data-variant': 'ghost',
       disabled: props.disabled,
       'aria-label': props.label,
       onClick: (event: unknown) => emit('click', event),
@@ -124,16 +149,16 @@ export const PanelsInputWrapper = defineComponent({
     const descriptionId = computed(() => props.description ? `${props.inputId}-description` : undefined)
     const errorId = computed(() => props.error ? `${props.inputId}-error` : undefined)
     const describedBy = computed(() => [descriptionId.value, errorId.value].filter(Boolean).join(' ') || undefined)
-    return () => h('div', { class: 'hp-field', 'data-panels-component': 'input-wrapper' }, [
-      h('label', { for: props.inputId }, [props.label, props.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null]),
-      props.description ? h('div', { id: descriptionId.value, class: 'hp-field__description' }, props.description) : null,
+    return () => h('div', { class: 'hp-field', 'data-panels-component': 'input-wrapper', 'data-slot': 'field' }, [
+      h('label', { for: props.inputId, 'data-slot': 'label' }, [props.label, props.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null]),
+      props.description ? h('div', { id: descriptionId.value, class: 'hp-field__description', 'data-slot': 'field-description' }, props.description) : null,
       slots.default?.({
         id: props.inputId,
         'aria-describedby': describedBy.value,
         'aria-invalid': props.error ? 'true' : undefined,
         'aria-required': props.required ? 'true' : undefined,
       }),
-      props.error ? h('div', { id: errorId.value, class: 'hp-field__error', role: 'alert' }, props.error) : null,
+      props.error ? h('div', { id: errorId.value, class: 'hp-field__error', 'data-slot': 'field-error', role: 'alert' }, props.error) : null,
     ])
   },
 })
@@ -142,7 +167,7 @@ export const PanelsLoadingIndicator = defineComponent({
   name: 'PanelsLoadingIndicator',
   props: { label: { type: String, default: 'Loading' } },
   setup(props) {
-    return () => h('div', { class: 'hp-loading', role: 'status', 'aria-live': 'polite', 'data-panels-component': 'loading-indicator' }, [
+    return () => h('div', { class: 'hp-loading', role: 'status', 'aria-live': 'polite', 'data-panels-component': 'loading-indicator', 'data-slot': 'spinner' }, [
       h('span', { class: 'hp-loading__indicator', 'aria-hidden': 'true' }),
       h('span', { class: 'hp-visually-hidden' }, props.label),
     ])
@@ -152,50 +177,43 @@ export const PanelsLoadingIndicator = defineComponent({
 export const PanelsDropdown = defineComponent({
   name: 'PanelsDropdown',
   props: {
+    ariaLabel: String,
     label: { type: String, required: true },
     items: { type: Array as PropType<readonly PanelsDropdownItem[]>, required: true },
-    open: Boolean,
+    open: { type: Boolean as PropType<boolean | undefined>, default: undefined },
+    searchable: Boolean,
   },
   emits: ['select', 'update:open'],
   setup(props, { emit }) {
-    const activeIndex = ref(0)
-    const enabledIndexes = computed(() => props.items.flatMap((item, index) => item.disabled ? [] : [index]))
-    function move(direction: 1 | -1): void {
-      if (enabledIndexes.value.length === 0) return
-      const current = enabledIndexes.value.indexOf(activeIndex.value)
-      const next = (Math.max(current, 0) + direction + enabledIndexes.value.length) % enabledIndexes.value.length
-      activeIndex.value = enabledIndexes.value[next] ?? 0
-    }
-    function onKeydown(event: KeyboardEvent): void {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        move(event.key === 'ArrowDown' ? 1 : -1)
-      } else if (event.key === 'Escape') {
-        emit('update:open', false)
-      } else if (event.key === 'Enter' || event.key === ' ') {
-        const item = props.items[activeIndex.value]
-        if (item && !item.disabled) emit('select', item.id)
-      }
-    }
-    return () => h('div', { class: 'hp-dropdown', 'data-panels-component': 'dropdown' }, [
-      h('button', {
-        type: 'button',
-        class: 'hp-dropdown__trigger',
-        'aria-haspopup': 'menu',
-        'aria-expanded': String(props.open),
-        onClick: () => emit('update:open', !props.open),
-        onKeydown,
-      }, props.label),
-      props.open ? h('ul', { class: 'hp-dropdown__menu', role: 'menu', onKeydown }, props.items.map((item, index) => h('li', {
-        key: item.id,
-        role: 'menuitem',
-        tabindex: index === activeIndex.value ? 0 : -1,
-        'aria-disabled': item.disabled ? 'true' : undefined,
-        onClick: () => {
-          if (!item.disabled) emit('select', item.id)
-        },
-      }, item.label))) : null,
-    ])
+    const search = ref('')
+    return () => h(DropdownMenuRoot, {
+      open: props.open,
+      'onUpdate:open': (open: boolean) => emit('update:open', open),
+    }, {
+      default: () => h('div', { class: 'hp-dropdown', 'data-panels-component': 'dropdown' }, [
+        h(DropdownMenuTrigger, { as: 'button', 'aria-label': props.ariaLabel, class: 'hp-dropdown__trigger', type: 'button', 'data-slot': 'dropdown-menu-trigger' }, { default: () => [props.label, h(ChevronDown, { 'aria-hidden': 'true' })] }),
+        h(DropdownMenuContent, { class: 'hp-dropdown__menu', 'data-holo-panel': '', 'data-slot': 'dropdown-menu-content' }, {
+          default: () => [
+            props.searchable ? h('input', {
+              'aria-label': 'Search tenants',
+              'data-slot': 'input',
+              onInput: (event: Event) => { search.value = (event.currentTarget as HTMLInputElement).value },
+              placeholder: 'Search tenants…',
+              value: search.value,
+            }) : null,
+            ...props.items
+              .filter(item => !search.value || item.label.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))
+              .map(item => h(DropdownMenuItem, {
+            key: item.id,
+            disabled: item.disabled,
+            textValue: item.label,
+            'data-slot': 'dropdown-menu-item',
+            onSelect: () => emit('select', item.id),
+              }, { default: () => [item.icon ? ShadcnIcon(item.icon) : null, item.label] })),
+          ],
+        }),
+      ]),
+    })
   },
 })
 
@@ -210,47 +228,25 @@ function dialogComponent(name: string, className: string) {
     },
     emits: ['close'],
     setup(props, { emit, slots }) {
-      const titleId = `${name.toLowerCase()}-title`
-      const descriptionId = `${name.toLowerCase()}-description`
-      const dialog = ref<HTMLElement>()
-      watch(() => props.open, async open => {
-        if (!open) return
-        await nextTick()
-        dialog.value?.querySelector<HTMLElement>('button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus()
-      }, { immediate: true })
-      function onKeydown(event: KeyboardEvent): void {
-        if (event.key === 'Escape') {
-          emit('close')
-          return
-        }
-        if (event.key !== 'Tab' || !dialog.value) return
-        const focusable = Array.from(dialog.value.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
-        const first = focusable.at(0)
-        const last = focusable.at(-1)
-        if (!first || !last) return
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault()
-          last.focus()
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault()
-          first.focus()
-        }
-      }
-      return () => props.open ? h('div', {
-        ref: dialog,
-        class: className,
-        'data-panels-component': className === 'hp-modal' ? 'modal' : 'slide-over',
-        role: 'dialog',
-        'aria-modal': 'true',
-        'aria-labelledby': titleId,
-        'aria-describedby': props.description ? descriptionId : undefined,
-        onKeydown,
-      }, [
-        h('h2', { id: titleId }, props.title),
-        props.description ? h('p', { id: descriptionId }, props.description) : null,
-        h('div', { class: `${className}__content` }, slotContent(slots.default)),
-        h('button', { type: 'button', 'aria-label': props.closeLabel, onClick: () => emit('close') }, props.closeLabel),
-      ]) : null
+      return () => h(DialogRoot, {
+        open: props.open,
+        'onUpdate:open': (open: boolean) => { if (!open) emit('close') },
+      }, {
+        default: () => h(DialogContent, {
+          'aria-modal': 'true',
+          class: className,
+          'data-holo-panel': '',
+          'data-panels-component': className === 'hp-modal' ? 'modal' : 'slide-over',
+          'data-slot': className === 'hp-modal' ? 'dialog-content' : 'sheet-content',
+        }, {
+          default: () => [
+            h(DialogTitle, { as: 'h2', 'data-slot': 'dialog-title' }, { default: () => props.title }),
+            props.description ? h(DialogDescription, { as: 'p', 'data-slot': 'dialog-description' }, { default: () => props.description }) : null,
+            h('div', { class: `${className}__content` }, slotContent(slots.default)),
+            h(DialogClose, { as: 'button', class: 'hp-dialog-close', type: 'button', 'aria-label': props.closeLabel, 'data-slot': 'dialog-close' }, { default: () => h(X, { 'aria-hidden': 'true' }) }),
+          ],
+        }),
+      })
     },
   })
 }
@@ -267,45 +263,29 @@ export const PanelsTabs = defineComponent({
   },
   emits: ['update:modelValue'],
   setup(props, { emit, slots }) {
-    const tabElements = new Map<string, HTMLElement>()
-    function selectRelative(current: number, direction: 1 | -1): void {
-      const enabled = props.tabs.filter(tab => !tab.disabled)
-      const currentEnabled = enabled.findIndex(tab => tab.id === props.tabs[current]?.id)
-      const next = (Math.max(currentEnabled, 0) + direction + enabled.length) % enabled.length
-      const tab = enabled[next]
-      if (!tab) return
-      emit('update:modelValue', tab.id)
-      void nextTick(() => tabElements.get(tab.id)?.focus())
-    }
-    return () => h('div', { class: 'hp-tabs', 'data-panels-component': 'tabs' }, [
-      h('div', { role: 'tablist', 'aria-label': props.label }, props.tabs.map((tab, index) => h('button', {
-        key: tab.id,
-        ref: (element: unknown) => {
-          if (element instanceof HTMLElement) tabElements.set(tab.id, element)
-          else tabElements.delete(tab.id)
-        },
-        id: `${tab.id}-tab`,
-        type: 'button',
-        role: 'tab',
-        disabled: tab.disabled,
-        tabindex: tab.id === props.modelValue ? 0 : -1,
-        'aria-selected': String(tab.id === props.modelValue),
-        'aria-controls': `${tab.id}-panel`,
-        onClick: () => emit('update:modelValue', tab.id),
-        onKeydown: (event: KeyboardEvent) => {
-          if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-            event.preventDefault()
-            selectRelative(index, event.key === 'ArrowRight' ? 1 : -1)
-          }
-        },
-      }, tab.label))),
-      h('div', {
-        id: `${props.modelValue}-panel`,
-        role: 'tabpanel',
-        'aria-labelledby': `${props.modelValue}-tab`,
-        tabindex: 0,
-      }, slots.default?.({ activeTab: props.modelValue })),
-    ])
+    return () => h(TabsRoot, {
+      class: 'hp-tabs',
+      'data-panels-component': 'tabs',
+      'data-slot': 'tabs',
+      modelValue: props.modelValue,
+      'onUpdate:modelValue': (value: string | number) => emit('update:modelValue', String(value)),
+    }, {
+      default: () => [
+        h(TabsList, { 'aria-label': props.label, 'data-slot': 'tabs-list' }, {
+          default: () => props.tabs.map(tab => h(TabsTrigger, {
+            key: tab.id,
+            as: 'button',
+            disabled: tab.disabled,
+            type: 'button',
+            value: tab.id,
+            'data-slot': 'tabs-trigger',
+          }, { default: () => tab.label })),
+        }),
+        ...props.tabs.map(tab => h(TabsContent, { key: tab.id, tabindex: 0, value: tab.id, 'data-slot': 'tabs-content' }, {
+          default: () => tab.id === props.modelValue ? slots.default?.({ activeTab: props.modelValue }) : undefined,
+        })),
+      ],
+    })
   },
 })
 
@@ -353,9 +333,9 @@ export const PanelsSection = defineComponent({
     description: String,
   },
   setup(props, { slots }) {
-    return () => h('section', { class: 'hp-section', 'data-panels-component': 'section' }, [
-      h('header', { class: 'hp-section__header' }, [h('h2', props.title), props.description ? h('p', props.description) : null]),
-      h('div', { class: 'hp-section__content' }, slotContent(slots.default)),
+    return () => h('section', { class: 'hp-section', 'data-panels-component': 'section', 'data-slot': 'card' }, [
+      h('header', { class: 'hp-section__header', 'data-slot': 'card-header' }, [h('h2', { 'data-slot': 'card-title' }, props.title), props.description ? h('p', { 'data-slot': 'card-description' }, props.description) : null]),
+      h('div', { class: 'hp-section__content', 'data-slot': 'card-content' }, slotContent(slots.default)),
     ])
   },
 })
@@ -367,9 +347,9 @@ export const PanelsEmptyState = defineComponent({
     description: String,
   },
   setup(props, { slots }) {
-    return () => h('section', { class: 'hp-empty-state', 'aria-live': 'polite', 'data-panels-component': 'empty-state' }, [
-      h('h2', props.title),
-      props.description ? h('p', props.description) : null,
+    return () => h('section', { class: 'hp-empty-state', 'aria-live': 'polite', 'data-panels-component': 'empty-state', 'data-slot': 'empty' }, [
+      h('h2', { 'data-slot': 'empty-title' }, props.title),
+      props.description ? h('p', { 'data-slot': 'empty-description' }, props.description) : null,
       slots.default?.(),
     ])
   },
@@ -384,10 +364,10 @@ export const PanelsPagination = defineComponent({
   },
   emits: ['update:page'],
   setup(props, { emit }) {
-    return () => h('nav', { class: 'hp-pagination', 'aria-label': props.label, 'data-panels-component': 'pagination' }, [
-      h('button', { type: 'button', disabled: props.page <= 1, onClick: () => emit('update:page', props.page - 1) }, 'Previous'),
-      h('span', { 'aria-live': 'polite' }, `Page ${props.page} of ${props.pages}`),
-      h('button', { type: 'button', disabled: props.page >= props.pages, onClick: () => emit('update:page', props.page + 1) }, 'Next'),
+    return () => h('nav', { class: 'hp-pagination', 'aria-label': props.label, 'data-panels-component': 'pagination', 'data-slot': 'pagination' }, [
+      h('button', { type: 'button', disabled: props.page <= 1, 'data-slot': 'pagination-link', 'data-variant': 'outline', onClick: () => emit('update:page', props.page - 1) }, 'Previous'),
+      h('span', { 'aria-live': 'polite', 'data-slot': 'pagination-status' }, `Page ${props.page} of ${props.pages}`),
+      h('button', { type: 'button', disabled: props.page >= props.pages, 'data-slot': 'pagination-link', 'data-variant': 'outline', onClick: () => emit('update:page', props.page + 1) }, 'Next'),
     ])
   },
 })
@@ -399,9 +379,11 @@ export const PanelsToastViewport = defineComponent({
     label: { type: String, default: 'Notifications' },
   },
   setup(props) {
-    return () => h('section', { class: 'hp-toasts', 'aria-label': props.label, 'aria-live': 'polite', 'data-panels-component': 'toast-viewport' }, props.toasts.map(toast => h('div', {
+    return () => h('section', { class: 'hp-toasts', 'aria-label': props.label, 'aria-live': 'polite', 'data-panels-component': 'toast-viewport', 'data-slot': 'toast-viewport' }, props.toasts.map(toast => h('div', {
       key: toast.id,
       class: ['hp-toast', `hp-toast--${toast.tone ?? 'info'}`],
+      'data-slot': 'toast',
+      'data-variant': toast.tone ?? 'info',
       role: toast.tone === 'danger' ? 'alert' : 'status',
     }, toast.message)))
   },

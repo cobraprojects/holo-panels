@@ -1,6 +1,6 @@
 # Filament 5 feature parity
 
-This page classifies every topic in the official [Filament 5 documentation index](https://filamentphp.com/docs/llms.txt). The index was audited on 2026-07-28 and contained 161 documentation pages. The comparison is behavioral: Holo Panels uses Holo-JS, TypeScript, and framework-native renderers instead of Laravel, PHP, Livewire, and Blade.
+This page classifies every topic in the official [Filament 5 documentation index](https://filamentphp.com/docs/llms.txt). The 161-page URL set was audited on 2026-07-28 and revalidated on 2026-08-05. The deterministic parity validator checks the exact normalized URL-set digest, unique classification, rationale, repository evidence, and absence of deferred rows. The comparison is behavioral: Holo Panels uses Holo-JS, TypeScript, and framework-native renderers instead of Laravel, PHP, Livewire, and Blade.
 
 The classifications mean:
 

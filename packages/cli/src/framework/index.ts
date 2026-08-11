@@ -2,6 +2,7 @@ export {
   type DiscoveredPanelPath,
   type ExistingFrameworkArtifact,
   type FrameworkArtifactConflict,
+  type FrameworkArtifactDirectories,
   type FrameworkArtifactKind,
   type FrameworkArtifactManifest,
   type FrameworkArtifactOwnership,

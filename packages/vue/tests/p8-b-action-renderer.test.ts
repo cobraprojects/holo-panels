@@ -10,7 +10,7 @@ const manifest: ClientActionManifest = {
   color: null,
   confirmation: 'Delete this record?',
   disabled: false,
-  icon: null,
+  icon: 'check',
   id: 'posts.delete',
   kind: 'delete',
   label: 'Delete',
@@ -96,6 +96,7 @@ describe('P8-B Vue action renderer', () => {
     const app = createApp(defineComponent(() => () => h(VueActionRenderer, { action: manifest, recordIds: [9], store })))
     app.mount(container)
     mounted.push({ app, container })
+    expect(container.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
 
     container.querySelector<HTMLButtonElement>('button')?.click()
     await flush()

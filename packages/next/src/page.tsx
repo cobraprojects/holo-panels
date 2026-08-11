@@ -1,28 +1,43 @@
 import { headers } from 'next/headers.js'
-import { PanelRuntimeError, PageAccessError } from '@holo-js/panels-react/server'
+import { PanelRuntimeError, PanelSubscriptionRequiredError, PageAccessError } from '@holo-js/panels-react/server'
 import { NextPanelClient } from '@holo-js/panels-next/client'
 import type { CreatePanelPageOptions, NextPanelPageProps } from './contracts'
-import { NextPanelPageNotFoundError, resolveNextPanelPage, resolveNextPanelPath } from './runtime'
+import { NextPanelPageNotFoundError, resolveNextPanelBillingResponse, resolveNextPanelPage, resolveNextPanelPath } from './runtime'
 
-async function currentRequest(path: string): Promise<Request> {
+async function currentRequest(path: string, searchParams: Readonly<Record<string, string | readonly string[] | undefined>>): Promise<Request> {
   const source = await headers()
   const protocol = source.get('x-forwarded-proto') === 'http' ? 'http' : 'https'
   const host = source.get('x-forwarded-host') ?? source.get('host') ?? 'localhost'
-  return new Request(`${protocol}://${host}${path}`, { headers: source })
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (typeof value === 'string') query.append(key, value)
+    else if (value) for (const item of value) query.append(key, item)
+  }
+  const serialized = query.toString()
+  return new Request(`${protocol}://${host}${path}${serialized ? `?${serialized}` : ''}`, { headers: source })
 }
 
-function loginPath(path: string): string {
-  return `/login?next=${encodeURIComponent(path)}`
+function loginDestination(loginPath: string, path: string): string {
+  return `${loginPath}?next=${encodeURIComponent(path)}`
 }
 
 export function createPanelPage(options: CreatePanelPageOptions) {
-  return async function GeneratedPanelPage({ params }: NextPanelPageProps) {
+  return async function GeneratedPanelPage({ params, searchParams }: NextPanelPageProps) {
     const panelsPath = (await params).panelsPath ?? []
+    const query = await searchParams ?? {}
     const suffix = panelsPath.map(segment => encodeURIComponent(segment)).join('/')
     try {
       const panelPath = await resolveNextPanelPath(options.panelId, options.runtime)
       const tentativePath = `${panelPath === '/' ? '' : panelPath}${suffix ? `/${suffix}` : ''}` || '/'
-      const request = await currentRequest(tentativePath)
+      const request = await currentRequest(tentativePath, query)
+      const billing = await resolveNextPanelBillingResponse(options.panelId, panelsPath, request, options.runtime)
+      if (billing) {
+        const { redirect } = await import('next/navigation.js')
+        const location = billing.headers.get('location')
+        if (location && billing.status >= 300 && billing.status < 400) redirect(location)
+        if (!billing.ok) throw new Error('The tenant billing provider rejected the billing route request')
+        return <div data-panel-billing-response="">{await billing.text()}</div>
+      }
       const payload = await resolveNextPanelPage(options.panelId, panelsPath, request, options.runtime)
       const Client = options.client ?? NextPanelClient
       return <Client payload={payload} />
@@ -31,10 +46,11 @@ export function createPanelPage(options: CreatePanelPageOptions) {
       if (error instanceof NextPanelPageNotFoundError) notFound()
       if (error instanceof PageAccessError || error instanceof PanelRuntimeError && error.code === 'access-denied') forbidden()
       if (error instanceof PanelRuntimeError && error.code === 'panel-not-found') notFound()
+      if (error instanceof PanelSubscriptionRequiredError) redirect(error.billingPath)
       if (error instanceof PanelRuntimeError && error.code === 'unauthenticated') {
         const panelPath = await resolveNextPanelPath(options.panelId, options.runtime)
         const destination = `${panelPath === '/' ? '' : panelPath}${suffix ? `/${suffix}` : ''}` || '/'
-        redirect(loginPath(destination))
+        redirect(loginDestination(options.loginPath ?? '/login', destination))
       }
       throw error
     }

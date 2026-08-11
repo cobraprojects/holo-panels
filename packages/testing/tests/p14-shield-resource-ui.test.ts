@@ -1,9 +1,11 @@
 import { TableStateStore } from '@holo-js/panels-client'
-import { definePanel } from '@holo-js/panels-core'
+import { columnsFor, definePanel } from '@holo-js/panels-core'
 import {
   createInMemoryShieldRepository,
   shieldAdministrationRepository,
+  shieldPermissionModel,
   shieldPermissionResource,
+  shieldRoleModel,
   shieldRoleResource,
 } from '@holo-js/panels-shield'
 import { describe, expect, it } from 'vitest'
@@ -24,13 +26,15 @@ const panel = definePanel('admin', { prototype: actor }).tenancy({
 }).compile()
 
 const repository = shieldAdministrationRepository(createInMemoryShieldRepository())
+const roleColumns = columnsFor(shieldRoleModel)
+const permissionColumns = columnsFor(shieldPermissionModel)
 const roles = shieldRoleResource({ panel, repository, tenantId: context => context.tenant.id })
   .navigationLabel('Roles')
-  .table({ columns: ['name', 'super_admin'] })
+  .table([roleColumns.text('name'), roleColumns.boolean('super_admin')])
   .compile()
 const permissions = shieldPermissionResource({ panel, repository, tenantId: context => context.tenant.id })
   .navigationLabel('Permissions')
-  .table({ columns: ['key'] })
+  .table([permissionColumns.text('permission_key')])
   .compile()
 
 function model(resource: typeof roles | typeof permissions, records: readonly Record<string, unknown>[]): TableAcceptanceModel {

@@ -12,6 +12,11 @@ import {
   type UploadStorageAdapter,
 } from '../src/fields/upload'
 import { FormSchemaBinding } from '../src/fields/base'
+import { executeGeneratedUploadOperation } from '../src/resources/generated-pages'
+
+vi.mock('@holo-js/authorization', () => ({
+  forUser: () => ({ authorize: async () => undefined }),
+}))
 
 class MemoryUploadStorage implements UploadStorageAdapter {
   readonly bytes = new Map<string, Uint8Array>()
@@ -125,6 +130,46 @@ describe('temporary upload security and Holo integration', () => {
     expect(stored).toMatchObject({ id: created.id, state: 'stored' })
   })
 
+  it('executes generated upload requests only for registered resource upload fields', async () => {
+    const storage = new MemoryUploadStorage()
+    const resource = {
+      form: { fields: [{ path: 'avatar', properties: { uploadPolicy: policy }, type: 'panels:field:upload' }] },
+      id: 'users',
+      kind: 'resource',
+      model: {
+        definition: { name: 'User' },
+        query: () => ({ first: async () => undefined }),
+      },
+      nested: null,
+      shared: true,
+      singular: null,
+    }
+    const generatedContext = {
+      actor: { id: 'actor-1' },
+      signal: new AbortController().signal,
+      tenant: 'tenant-1',
+      uploadStorage: storage,
+    }
+    const created = await executeGeneratedUploadOperation(resource, {
+      context: generatedContext,
+      panelId: 'admin',
+      payload: { action: 'create', declaredMimeType: 'image/png', fieldId: 'avatar', name: 'avatar.png', resourceId: 'users', size: png.length },
+    })
+    expect(created).toMatchObject({ id: expect.any(String), state: 'pending', token: expect.any(String) })
+    if (typeof created.id !== 'string' || typeof created.token !== 'string') throw new Error('Expected generated upload credentials')
+    await expect(executeGeneratedUploadOperation(resource, {
+      contents: png,
+      context: generatedContext,
+      panelId: 'admin',
+      payload: { action: 'write', fieldId: 'avatar', id: created.id, resourceId: 'users', token: created.token },
+    })).resolves.toMatchObject({ id: created.id, state: 'stored' })
+    await expect(executeGeneratedUploadOperation(resource, {
+      context: generatedContext,
+      panelId: 'admin',
+      payload: { action: 'create', declaredMimeType: 'image/png', fieldId: 'missing', name: 'avatar.png', resourceId: 'users', size: png.length },
+    })).rejects.toThrow(/not registered/)
+  })
+
   it('rejects unsafe policy paths, oversized declarations, and spoofed MIME content', async () => {
     expect(() => defineUploadPolicy({ ...policy, directory: '../outside' })).toThrow(/safe relative path/)
     const uploads = service(new MemoryUploadStorage())
@@ -215,6 +260,36 @@ describe('temporary upload security and Holo integration', () => {
     expect(toMediaCollection).toHaveBeenCalledWith('avatars')
     expect(storage.bytes.size).toBe(0)
     expect(storage.json.size).toBe(0)
+  })
+
+  it('finalizes a stored upload to its configured disk and removes temporary state', async () => {
+    const storage = new MemoryUploadStorage()
+    const uploads = service(storage)
+    const descriptor = await uploads.create({ ...context, declaredMimeType: 'image/png', name: 'avatar.png', size: png.length })
+    await uploads.write({ ...context, contents: png, id: descriptor.id, token: descriptor.token })
+
+    await expect(uploads.finalizeToStorage({ ...context, id: descriptor.id, token: descriptor.token })).resolves.toEqual({
+      disk: 'local',
+      mimeType: 'image/png',
+      name: 'avatar.png',
+      path: 'panels/uploads/upload-1.png',
+      size: png.length,
+    })
+    expect(storage.bytes).toEqual(new Map([['panels/uploads/upload-1.png', png]]))
+    expect(storage.json.size).toBe(0)
+  })
+
+  it('retains temporary state when permanent storage rejects finalization', async () => {
+    const storage = new MemoryUploadStorage()
+    const uploads = service(storage)
+    const descriptor = await uploads.create({ ...context, declaredMimeType: 'image/png', name: 'avatar.png', size: png.length })
+    await uploads.write({ ...context, contents: png, id: descriptor.id, token: descriptor.token })
+    vi.spyOn(storage, 'put').mockRejectedValueOnce(new Error('permanent storage unavailable'))
+
+    await expect(uploads.finalizeToStorage({ ...context, id: descriptor.id, token: descriptor.token }))
+      .rejects.toThrow('permanent storage unavailable')
+    expect(storage.bytes.has('panels/uploads/temporary/upload-1.png')).toBe(true)
+    expect(storage.json.has('panels/uploads/temporary/upload-1.json')).toBe(true)
   })
 
   it('cleans abandoned temporary uploads after the documented expiry', async () => {

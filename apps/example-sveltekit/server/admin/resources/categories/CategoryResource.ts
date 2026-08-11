@@ -1,17 +1,16 @@
-import { column, defineResource, defineSchema, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import Category from '../../../models/Category'
-import { defineDomainResourcePages } from '../../pages/domain'
 
-export const CategoryPages = defineDomainResourcePages({ label: 'Categories', resourceId: 'categories', sort: 20 })
+const form = defineSchema(Category).fields(field => [field.text('name').required(), field.slug('slug').from('name').required()])
+const table = defineTable(Category).columns(column => [column.text('name').searchable(), column.text('slug')])
 
-export default defineResource(Category, { tenant: String })
+export default defineResource(Category)
   .tenantScope((query, context) => query.where('tenantId', context.tenant))
   .createBindings(context => ({ id: crypto.randomUUID(), tenantId: context.tenant }))
   .recordTitle('name')
   .routeKey('slug')
   .navigation({ group: 'Content', icon: 'folder', label: 'Categories', sort: 20 })
   .globalSearch({ attributes: ['name', 'slug'], title: 'name' })
-  .pages(CategoryPages.list, CategoryPages.create, CategoryPages.view, CategoryPages.edit)
-  .form([field.text('name').required(), field.text('slug').required()])
-  .infolist(defineSchema(Category).fields([column.text('name'), column.text('slug')]))
-  .table([column.text('name'), column.text('slug')])
+  .discoverPages()
+  .form(form)
+  .table(table)

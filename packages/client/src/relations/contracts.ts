@@ -10,15 +10,29 @@ export interface ClientRelationRecord {
   readonly values: Readonly<Record<string, JsonValue>>
 }
 
+export interface ClientRelationField {
+  readonly id: string
+  readonly label: string
+  readonly required: boolean
+  readonly type: 'date-time' | 'number' | 'text' | 'textarea' | 'toggle'
+}
+
+export interface ClientRelationOption {
+  readonly label: string
+  readonly value: number | string
+}
+
 export interface ClientRelationManager {
   readonly badge: number | string | null
   readonly columns: readonly ClientRelationColumn[]
   readonly emptyMessage?: string
+  readonly fields?: readonly ClientRelationField[]
   readonly group: string | null
   readonly id: string
   readonly label: string
   readonly operations: readonly RelationOperation[]
   readonly presentation: RelationPresentation
+  readonly pivotFields?: readonly ClientRelationField[]
   readonly records: readonly ClientRelationRecord[]
   readonly url: string | null
   readonly visible: boolean

@@ -1,3 +1,4 @@
+import { ShadcnButton } from '../internal-ui'
 import { safeExternalUrl, type ClientToast } from '@holo-js/panels-client'
 import { defineComponent, h, onMounted, onUnmounted, shallowRef, type PropType, type VNode, type VNodeChild } from 'vue'
 import type {
@@ -40,7 +41,7 @@ function toastAction(action: NotificationAction, toast: ClientToast, props: VueT
       props.navigate(url)
     }
   } }, action.label)
-  return h('button', { onClick: () => ignoreFailure(props.store.trigger(toast.id, action.id)), type: 'button' }, action.label)
+  return h(ShadcnButton, { onClick: () => ignoreFailure(props.store.trigger(toast.id, action.id)), type: 'button' }, action.label)
 }
 
 export const VueToastViewport = defineComponent({
@@ -62,7 +63,7 @@ export const VueToastViewport = defineComponent({
           h('h2', { id: `${toast.id}-toast-title` }, toast.title),
           toast.body ? h('p', toast.body) : null,
           h('div', toast.actions.map(actionValue).filter(action => action !== null).map(action => toastAction(action, toast, props))),
-          toast.closeable ? h('button', { 'aria-label': `Close ${toast.title}`, onClick: () => props.store.dismiss(toast.id), type: 'button' }, '×') : null,
+          toast.closeable ? h(ShadcnButton, { 'aria-label': `Close ${toast.title}`, onClick: () => props.store.dismiss(toast.id), type: 'button' }, '×') : null,
         ]),
       ]))),
     ])
@@ -73,16 +74,16 @@ function notificationActions(item: VueDatabaseNotification, controls: VueNotific
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null).map(action => {
     const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
     if (url) return h('a', { href: url, key: action.id, onClick: navigate ? (event: Event) => { event.preventDefault(); navigate(url) } : undefined }, action.label)
-    if (action.kind === 'mark-read') return h('button', { key: action.id, onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, action.label)
-    if (action.kind === 'mark-unread') return h('button', { key: action.id, onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, action.label)
-    return h('button', { key: action.id, onClick: () => ignoreFailure(controls.delete()), type: 'button' }, action.label)
+    if (action.kind === 'mark-read') return h(ShadcnButton, { key: action.id, onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, action.label)
+    if (action.kind === 'mark-unread') return h(ShadcnButton, { key: action.id, onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, action.label)
+    return h(ShadcnButton, { key: action.id, onClick: () => ignoreFailure(controls.delete()), type: 'button' }, action.label)
   })
   return h('div', { class: 'hp-notification-actions' }, [
     ...actions,
     item.read
-      ? h('button', { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, 'Mark unread')
-      : h('button', { onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, 'Mark read'),
-    h('button', { onClick: () => ignoreFailure(controls.delete()), type: 'button' }, 'Delete'),
+      ? h(ShadcnButton, { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, 'Mark unread')
+      : h(ShadcnButton, { onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, 'Mark read'),
+    h(ShadcnButton, { onClick: () => ignoreFailure(controls.delete()), type: 'button' }, 'Delete'),
   ])
 }
 
@@ -127,15 +128,15 @@ export const VueNotificationInbox = defineComponent({
         return h('li', { 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, key: item.id }, [content])
       })
       return h('section', { 'aria-busy': state.value.loading, 'aria-label': 'Notification inbox', class: 'hp-notification-inbox', 'data-placement': props.placement }, [
-        h('header', [h('h2', 'Notifications'), h('span', { 'aria-label': `${state.value.unread} unread` }, state.value.unread), h('button', { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), type: 'button' }, 'Mark all read')]),
+        h('header', [h('h2', 'Notifications'), h('span', { 'aria-label': `${state.value.unread} unread` }, state.value.unread), h(ShadcnButton, { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), type: 'button' }, 'Mark all read')]),
         state.value.error ? h('p', { role: 'alert' }, state.value.error) : null,
         state.value.loading ? h('p', { 'aria-live': 'polite', role: 'status' }, 'Loading notifications') : null,
         !state.value.loading && items.length === 0 ? h('p', props.emptyMessage) : null,
         h('ol', items),
         h('nav', { 'aria-label': 'Notification pagination' }, [
-          h('button', { 'aria-label': 'Previous notification page', disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button' }, 'Previous'),
+          h(ShadcnButton, { 'aria-label': 'Previous notification page', disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button' }, 'Previous'),
           h('span', `Page ${state.value.page} of ${pages}`),
-          h('button', { 'aria-label': 'Next notification page', disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button' }, 'Next'),
+          h(ShadcnButton, { 'aria-label': 'Next notification page', disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button' }, 'Next'),
         ]),
       ])
     }

@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-plugin-money",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Sample currency field and money column plugin for Holo Panels",
   "type": "module",
   "license": "MIT",

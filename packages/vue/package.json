@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-vue",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Vue renderer for Holo Panels",
   "type": "module",
   "license": "MIT",
@@ -30,7 +30,9 @@
   "dependencies": {
     "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
-    "@holo-js/panels-ui": "workspace:*"
+    "@holo-js/panels-ui": "workspace:*",
+    "lucide-vue-next": "catalog:",
+    "reka-ui": "catalog:"
   },
   "peerDependencies": {
     "vue": "catalog:"

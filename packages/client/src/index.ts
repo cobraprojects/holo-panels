@@ -47,6 +47,7 @@ export * from './uploads'
 export * from './actions'
 export * from './entries'
 export * from './panel-shell'
+export * from './auth'
 export * from './relations'
 export * from './navigation'
 export * from './search'
@@ -67,6 +68,7 @@ export type {
   ScopedRenderSlotManifest,
   StoredUploadDescriptor,
   TemporaryUploadDescriptor,
+  UploadPolicy,
 } from '@holo-js/panels-core'
 export {
   ActionExecutionError,

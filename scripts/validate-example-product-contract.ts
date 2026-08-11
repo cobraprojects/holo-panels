@@ -131,7 +131,7 @@ for (const application of applications) {
 
 requireFiles('example-next', [
   'app/admin/[[...panelsPath]]/page.tsx',
-  'app/%5Fholo/panels/[panelId]/[operation]/route.ts',
+  'app/holo/panels/[panelId]/[operation]/route.ts',
   'app/blog/page.tsx',
   'app/blog/[slug]/page.tsx',
   'server/admin/AdminPanel.ts',
@@ -140,11 +140,14 @@ requireFiles('example-next', [
   'server/admin/widgets/ContentOverview.ts',
   'server/db/migrations/2026_07_28_000100_create_notifications.ts',
 ])
-forbidFiles('example-next', ['app/_holo/panels/[panelId]/[operation]/route.ts'])
+forbidFiles('example-next', [
+  'app/%5Fholo/panels/[panelId]/[operation]/route.ts',
+  'app/_holo/panels/[panelId]/[operation]/route.ts',
+])
 requireFiles('example-nuxt', [
   'app/pages/index.vue',
   'app/pages/admin/[[...panelsPath]].vue',
-  'server/routes/_holo/panels/[panelId]/[operation].ts',
+  'server/routes/holo/panels/[panelId]/[operation].ts',
   'app/pages/blog/index.vue',
   'app/pages/blog/[slug].vue',
   'server/admin/AdminPanel.ts',
@@ -155,7 +158,7 @@ requireFiles('example-nuxt', [
 ])
 requireFiles('example-sveltekit', [
   'src/routes/admin/[...path]/+page.server.ts',
-  'src/routes/_holo/panels/[panelId]/[operation]/+server.ts',
+  'src/routes/holo/panels/[panelId]/[operation]/+server.ts',
   'src/routes/blog/+page.server.ts',
   'src/routes/blog/[slug]/+page.server.ts',
   'server/admin/panels/AdminPanel.ts',

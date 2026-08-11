@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-svelte",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Svelte renderer for Holo Panels",
   "type": "module",
   "license": "MIT",
@@ -31,7 +31,9 @@
   "dependencies": {
     "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
-    "@holo-js/panels-ui": "workspace:*"
+    "@holo-js/panels-ui": "workspace:*",
+    "bits-ui": "catalog:",
+    "lucide-svelte": "catalog:"
   },
   "peerDependencies": {
     "svelte": "catalog:"

@@ -8,11 +8,12 @@ const execFileAsync = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const holoRoot = resolve(process.env.HOLO_PANELS_HOLO_JS_ROOT ?? resolve(repositoryRoot, '../holo-js'))
 const expectedRepository = 'cobraprojects/holo-js'
-const expectedRef = '15ac56ba94d19b6735d9bc607ef56087ae11a243'
-const expectedVersion = '0.3.10'
-const expectedCompatibilityRange = '^0.3.10'
+const expectedRef = '9abcce12588feeb22353fd57869719df43d3ac39'
+const expectedVersion = '0.3.12'
+const expectedCompatibilityRange = '>=0.3.9'
 const workflow = await readFile(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release.yml'), 'utf8')
+const hostReleaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release-holo.yml'), 'utf8')
 
 const requiredWorkflowText = [
   `HOLO_JS_REPOSITORY: ${expectedRepository}`,
@@ -23,6 +24,7 @@ const requiredWorkflowText = [
   'bun install --frozen-lockfile --ignore-scripts',
   'npm rebuild better-sqlite3',
   'node ../holo-panels/scripts/build-compatible-holo.mjs',
+  'run: bun run link:holo',
   'run: bun run validate',
 ]
 
@@ -46,6 +48,7 @@ const requiredReleaseWorkflowText = [
   'bun install --frozen-lockfile --ignore-scripts',
   'npm rebuild better-sqlite3',
   'node ../holo-panels/scripts/build-compatible-holo.mjs',
+  'run: bun run link:holo',
   'run: bun run release',
 ]
 
@@ -57,6 +60,31 @@ for (const requiredText of requiredReleaseWorkflowText) {
 
 if (releaseWorkflow.includes('pull_request:') || releaseWorkflow.includes('push:')) {
   throw new Error('Release CI must only publish through explicit workflow dispatch')
+}
+
+const requiredHostReleaseWorkflowText = [
+  'workflow_dispatch:',
+  'environment: npm-release',
+  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
+  `HOLO_JS_REF: ${expectedRef}`,
+  `HOLO_JS_VERSION: ${expectedVersion}`,
+  'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
+  'bun install --frozen-lockfile --ignore-scripts',
+  'npm rebuild better-sqlite3',
+  'bun run typecheck',
+  'bun run lint',
+  'bun run test',
+  'run: bun run release',
+]
+
+for (const requiredText of requiredHostReleaseWorkflowText) {
+  if (!hostReleaseWorkflow.includes(requiredText)) {
+    throw new Error(`Holo release CI is missing required publication text: ${requiredText}`)
+  }
+}
+
+if (hostReleaseWorkflow.includes('pull_request:') || hostReleaseWorkflow.includes('push:')) {
+  throw new Error('Holo release CI must only publish through explicit workflow dispatch')
 }
 
 const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {

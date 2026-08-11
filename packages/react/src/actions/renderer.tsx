@@ -1,5 +1,6 @@
 import { createElement, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import type { ClientActionFrame } from '@holo-js/panels-client'
+import { ShadcnButton, ShadcnIcon } from '../internal-ui'
 import { PanelsDropdown, PanelsModal, PanelsSlideOver } from '../primitives'
 import { createComponentRegistry } from '../registry'
 import { ReactSchemaRenderer } from '../schema'
@@ -8,12 +9,12 @@ import type { ReactActionCustomProps, ReactActionRendererProps, ReactActionSlotP
 const emptyRegistry = createComponentRegistry()
 
 function ActionTrigger<TResult>({ action, props }: { readonly action: ReactActionRendererProps<TResult>['manifest'], readonly props: ReactActionRendererProps<TResult> }): ReactNode {
-  return action.visible === false ? null : <button
+  return action.visible === false ? null : <ShadcnButton
     data-action-id={action.id}
     disabled={action.disabled === true || props.store.state.frames.some(frame => frame.manifest.id === action.id)}
     onClick={() => props.store.mount(action)}
     type="button"
-  >{action.label}</button>
+  >{action.icon ? <ShadcnIcon name={action.icon} /> : null}<span>{action.label}</span></ShadcnButton>
 }
 
 function ActionTriggers<TResult>(props: ReactActionRendererProps<TResult>): ReactNode {
@@ -66,7 +67,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
         {frame.manifest.modal?.description ? <p>{frame.manifest.modal.description}</p> : null}
         <ModalSlot frame={frame} placement="content" props={props} />
         {frame.phase === 'confirming'
-          ? <><p>{frame.manifest.confirmation}</p><button onClick={() => props.store.confirm()} type="button">Confirm</button></>
+          ? <><p>{frame.manifest.confirmation}</p><ShadcnButton onClick={() => props.store.confirm()} type="button">Confirm</ShadcnButton></>
           : Custom
             ? createElement(Custom, { frame, setInput: input => props.store.setInput(input), submit: submitFrame })
             : <form onSubmit={(event: FormEvent) => {
@@ -80,7 +81,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
                     schema={frame.manifest.modal.schema}
                   />
                 : null}
-              <button disabled={frame.phase === 'submitting'} type="submit">{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</button>
+              <ShadcnButton disabled={frame.phase === 'submitting'} type="submit">{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</ShadcnButton>
             </form>}
         {frame.manifest.modal?.nestedActions.map(id => {
           const nested = props.actions?.find(action => action.id === id)
@@ -89,7 +90,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
         {frame.error ? <div role="alert">{frame.error}</div> : null}
         {frame.phase === 'succeeded' ? <div aria-live="polite" role="status">Action completed</div> : null}
         <ModalSlot frame={frame} placement="footer" props={props} />
-        <button onClick={() => props.store.close()} type="button">Close</button>
+        <ShadcnButton onClick={() => props.store.close()} type="button">Close</ShadcnButton>
       </Surface>
     })}
   </div>

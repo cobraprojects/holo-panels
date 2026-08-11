@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import type { Component } from 'svelte'
 import type { render as renderSvelteComponent } from 'svelte/server'
@@ -63,7 +63,7 @@ function renderFields(FieldRenderer: Component, renderComponent: typeof renderSv
 async function acceptanceRuntime(): Promise<SvelteAcceptanceRuntime> {
   if (runtimePromise) return runtimePromise
   runtimePromise = (async () => {
-    const rendererRoot = fileURLToPath(new URL('../../../packages/svelte', import.meta.url))
+    const rendererRoot = resolve(process.cwd(), '../svelte')
     const server = await createServer({
       appType: 'custom',
       cacheDir: `/tmp/holo-panels-svelte-p6-acceptance-${process.pid}`,

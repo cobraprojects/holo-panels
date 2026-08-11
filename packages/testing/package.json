@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-testing",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Behavior and renderer contract testing utilities for Holo Panels",
   "type": "module",
   "license": "MIT",
@@ -74,6 +74,8 @@
     }
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@holo-js/core": "catalog:",
     "@holo-js/db": "catalog:",
     "@holo-js/notifications": "catalog:",
     "@holo-js/queue": "catalog:",

@@ -23,6 +23,46 @@ function stableIdentifier(value: string, label: string): string {
   return normalized
 }
 
+function nestedFieldLabel(path: string): string {
+  const name = path.split('.').at(-1) ?? path
+  return name.replace(/([a-z0-9])([A-Z])/gu, '$1 $2').replace(/[._-]+/gu, ' ').replace(/^\w/u, character => character.toUpperCase())
+}
+
+function nestedFieldType(kind: unknown, item: unknown): { readonly properties: JsonObject, readonly type: string } {
+  if (kind === 'boolean') return { properties: {}, type: 'toggle' }
+  if (kind === 'date') return { properties: { mode: 'date' }, type: 'date' }
+  if (kind === 'number') return { properties: { inputMode: 'number' }, type: 'text' }
+  if (kind === 'array' && item && typeof item === 'object' && Reflect.get(item, 'kind') === 'field' && Reflect.get(Reflect.get(item, 'definition'), 'kind') === 'string') {
+    return { properties: { separator: ',' }, type: 'tags' }
+  }
+  return { properties: {}, type: 'text' }
+}
+
+function nestedFields(shape: unknown, prefix = ''): JsonObject[] {
+  if (!shape || typeof shape !== 'object' || Array.isArray(shape)) return []
+  const fields: JsonObject[] = []
+  for (const [key, node] of Object.entries(shape)) {
+    const path = prefix ? `${prefix}.${key}` : key
+    if (!node || typeof node !== 'object' || Array.isArray(node) || Reflect.get(node, 'kind') !== 'field') {
+      fields.push(...nestedFields(node, path))
+      continue
+    }
+    const definition = Reflect.get(node, 'definition')
+    if (!definition || typeof definition !== 'object' || Array.isArray(definition)) continue
+    const rules = Reflect.get(definition, 'rules')
+    const required = Array.isArray(rules) && rules.some(rule => rule && typeof rule === 'object' && Reflect.get(rule, 'name') === 'required')
+    const presentation = nestedFieldType(Reflect.get(definition, 'kind'), Reflect.get(definition, 'item'))
+    fields.push({
+      label: nestedFieldLabel(path),
+      path,
+      properties: presentation.properties,
+      required,
+      type: presentation.type,
+    })
+  }
+  return fields
+}
+
 abstract class CollectionFieldBuilder<
   TValues,
   TPath extends FormFieldPath<TValues>,
@@ -245,7 +285,12 @@ export class RepeaterFieldBuilder<
   }
 
   protected override fieldProperties(): JsonObject {
-    return this.collectionProperties({ collapsible: this.#collapsible, cloneable: this.#cloneable, reorderable: this.#reorderable })
+    return this.collectionProperties({
+      collapsible: this.#collapsible,
+      cloneable: this.#cloneable,
+      fields: nestedFields(Reflect.get(this.schema, 'item')),
+      reorderable: this.#reorderable,
+    })
   }
 }
 
@@ -267,6 +312,7 @@ export class BuilderFieldBuilder<
     const blocks = Object.entries(this.#blocks).map(([type, definition]) => {
       if (type !== definition.type) throw new Error(`Builder block key ${type} must match its type`)
       return {
+        fields: nestedFields(definition.schema.fields),
         icon: definition.icon ?? null,
         label: definition.label,
         type: stableIdentifier(type, 'Builder block types'),

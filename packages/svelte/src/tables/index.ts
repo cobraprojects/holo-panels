@@ -11,6 +11,7 @@ export const SvelteTableRenderer: Component<SvelteTableRendererComponentProps> =
 export { displayValue as displaySvelteTableValue, pageCount as svelteTablePageCount, recordValue as svelteTableRecordValue, visibleColumns as visibleSvelteTableColumns } from './helpers'
 export type {
   SvelteCustomColumnProps,
+  SvelteCustomFilterProps,
   SvelteFilterCollectionSlotProps,
   SvelteInlineEditRequest,
   SvelteInlineEditTransport,

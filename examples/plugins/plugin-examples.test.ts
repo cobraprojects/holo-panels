@@ -9,6 +9,15 @@ import {
   ratingFilter,
   ratingWidget,
 } from './index'
+import {
+  FeatureAction,
+  InsightsPage,
+  RatingColumn,
+  RatingEntry,
+  RatingField,
+  RatingFilter,
+  RatingWidget,
+} from './renderers'
 
 describe('P16 public plugin examples', () => {
   it('preserves model paths and extension IDs without manual generic arguments', async () => {
@@ -44,5 +53,15 @@ describe('P16 public plugin examples', () => {
     expect(kinds.filter(kind => kind === 'extension')).toHaveLength(7)
     expect(kinds.filter(kind => kind === 'renderer')).toHaveLength(7)
     expect(kinds).toEqual(expect.arrayContaining(['page', 'widget', 'translation', 'asset']))
+  })
+
+  it('ships functional renderer exports with concrete inferred properties', () => {
+    expect(RatingField({ value: 4.5 })).toBe('Rating: 4.5 / 5')
+    expect(RatingColumn({ label: 'Score', maximum: 10, value: 8 })).toBe('Score: 8.0 / 10')
+    expect(RatingEntry({ value: 3 })).toBe('Rating: 3.0 / 5')
+    expect(RatingFilter({ value: 2.5 })).toBe('Minimum rating: 2.5 / 5')
+    expect(FeatureAction({ pending: true })).toBe('Featuring…')
+    expect(RatingWidget({ average: 4.25, count: 12 })).toBe('Average rating: 4.3 / 5 from 12 reviews')
+    expect(InsightsPage({ featured: 12, reviewed: 48 })).toBe('Product insights: 12 featured, 48 reviewed')
   })
 })

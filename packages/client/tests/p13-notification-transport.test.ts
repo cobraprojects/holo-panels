@@ -33,7 +33,7 @@ function createClient(steps: readonly ReturnType<typeof success>[]) {
   })
   return {
     notifications: createPanelNotificationTransport(transport, {
-      endpoint: '/_holo/panels/notifications',
+      endpoint: '/holo/panels/notifications',
       panelId: 'commerce',
     }),
     recorder,
@@ -101,10 +101,10 @@ describe('panel notification transport', () => {
       csrfProvider: { getField: () => ({ name: '_token', value: 'signed' }) },
     }), { endpoint: 'https://example.com/notifications', panelId: 'commerce' })).toThrow('root-relative')
     for (const endpoint of [
-      '/_holo/panels/../admin',
-      '/_holo%2fpanels/notifications',
-      '/_holo/panels/notifications?tenant=other',
-      '/_holo/panels/notifications#other',
+      '/holo/panels/../admin',
+      '/holo%2fpanels/notifications',
+      '/holo/panels/notifications?tenant=other',
+      '/holo/panels/notifications#other',
     ]) {
       expect(() => createPanelNotificationTransport(new PanelsTransport({
         adapter: malformedPage.recorder,

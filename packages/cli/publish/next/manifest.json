@@ -3,16 +3,24 @@
   "framework": "next",
   "files": [
     {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "checksum": "08ba05f995786e338b3b453f92e6c3f62effa238a39a7a04b805fedf365871b0"
+    },
+    {
       "path": "contracts.ts",
-      "checksum": "dc49c43ea624982f801bb9f275ad71953c541361578daca96edd77c6e049a6b8"
+      "checksum": "468d2286d708f9f0f477b7c41c21f5ae7df6ccf1ffd3200bd20d77696c88ae00"
+    },
+    {
+      "path": "internal-ui.tsx",
+      "checksum": "fcea75694d010a8d2d42cf06dfebe29036d1e1ba4459c8f2c54ec43acf44a28c"
     },
     {
       "path": "panel-client.tsx",
-      "checksum": "41a686032326eb72a65c07428887422adce6406cb84502edb558be86f64009d2"
+      "checksum": "e41213c5ece6165a79f4ba552175dbf3bb005cf19ea91fde565360e3ce1a9042"
     },
     {
       "path": "resource-page.tsx",
-      "checksum": "61e6cf2aaf29a49df8d6cb2d34f5e6dd3494435213cac58d85d600460a578d97"
+      "checksum": "d7289f6c71e51eabd570cded2b6919a591ffd82d5016e83d6cfd0aa8c26e7862"
     }
   ]
 }

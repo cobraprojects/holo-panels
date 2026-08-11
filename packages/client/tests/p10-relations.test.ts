@@ -37,6 +37,11 @@ describe('P10 relation client layout', () => {
     ])
   })
 
+  it('accepts inferred camel-case and dotted model field paths as relation columns', () => {
+    expect(createClientRelationLayout([manager({ columns: [{ key: 'tenantId', label: 'Tenant' }, { key: 'profile.name', label: 'Profile' }] })]).inline[0]?.columns)
+      .toEqual([{ key: 'tenantId', label: 'Tenant' }, { key: 'profile.name', label: 'Profile' }])
+  })
+
   it('rejects duplicate IDs, unsafe standalone URLs, invalid columns, and missing grouped labels', () => {
     expect(() => createClientRelationLayout([manager({}), manager({})])).toThrow(/Duplicate/u)
     expect(() => createClientRelationLayout([manager({ presentation: 'page', url: 'https://attacker.test' })])).toThrow(/safe local URL/u)

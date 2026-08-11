@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react'
 import { safeExternalUrl, type ClientToast, type ClientToastStore } from '@holo-js/panels-client'
+import { ShadcnButton } from '../internal-ui'
 import type {
   ReactCustomNotificationProps,
   ReactDatabaseNotification,
@@ -45,7 +46,7 @@ function ToastAction({ action, navigate, store, toast }: {
       navigate(url)
     }
   }}>{action.label}</a>
-  return <button onClick={() => ignoreFailure(store.trigger(toast.id, action.id))} type="button">{action.label}</button>
+  return <ShadcnButton onClick={() => ignoreFailure(store.trigger(toast.id, action.id))} type="button">{action.label}</ShadcnButton>
 }
 
 export function ReactToastViewport({ navigate, placement = 'top', store }: ReactToastViewportProps): ReactNode {
@@ -63,7 +64,7 @@ export function ReactToastViewport({ navigate, placement = 'top', store }: React
           <h2 id={`${toast.id}-toast-title`}>{toast.title}</h2>
           {toast.body ? <p>{toast.body}</p> : null}
           <div>{toast.actions.map(actionValue).filter(action => action !== null).map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</div>
-          {toast.closeable ? <button aria-label={`Close ${toast.title}`} onClick={() => store.dismiss(toast.id)} type="button">×</button> : null}
+          {toast.closeable ? <ShadcnButton aria-label={`Close ${toast.title}`} onClick={() => store.dismiss(toast.id)} type="button">×</ShadcnButton> : null}
         </article>
       </li>)}
     </ol>
@@ -80,15 +81,15 @@ function NotificationActions({ controls, item, navigate }: {
     {actions.map(action => {
       const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
       if (url) return <a href={url} key={action.id} onClick={navigate ? event => { event.preventDefault(); navigate(url) } : undefined}>{action.label}</a>
-      if (action.kind === 'mark-read') return <button key={action.id} onClick={() => ignoreFailure(controls.markRead())} type="button">{action.label}</button>
-      if (action.kind === 'mark-unread') return <button key={action.id} onClick={() => ignoreFailure(controls.markUnread())} type="button">{action.label}</button>
-      if (action.kind === 'dismiss') return <button key={action.id} onClick={() => ignoreFailure(controls.delete())} type="button">{action.label}</button>
+      if (action.kind === 'mark-read') return <ShadcnButton key={action.id} onClick={() => ignoreFailure(controls.markRead())} type="button">{action.label}</ShadcnButton>
+      if (action.kind === 'mark-unread') return <ShadcnButton key={action.id} onClick={() => ignoreFailure(controls.markUnread())} type="button">{action.label}</ShadcnButton>
+      if (action.kind === 'dismiss') return <ShadcnButton key={action.id} onClick={() => ignoreFailure(controls.delete())} type="button">{action.label}</ShadcnButton>
       return null
     })}
     {item.read
-      ? <button onClick={() => ignoreFailure(controls.markUnread())} type="button">Mark unread</button>
-      : <button onClick={() => ignoreFailure(controls.markRead())} type="button">Mark read</button>}
-    <button onClick={() => ignoreFailure(controls.delete())} type="button">Delete</button>
+      ? <ShadcnButton onClick={() => ignoreFailure(controls.markUnread())} type="button">Mark unread</ShadcnButton>
+      : <ShadcnButton onClick={() => ignoreFailure(controls.markRead())} type="button">Mark read</ShadcnButton>}
+    <ShadcnButton onClick={() => ignoreFailure(controls.delete())} type="button">Delete</ShadcnButton>
   </div>
 }
 
@@ -107,11 +108,11 @@ export function ReactNotificationInbox({
   )
   useEffect(() => {
     ignoreFailure(store.start())
-    return () => store.dispose()
+    return () => store.stop()
   }, [store])
   const pages = Math.max(1, Math.ceil(state.total / state.pageSize))
   return <section aria-busy={state.loading} aria-label="Notification inbox" className="hp-notification-inbox" data-placement={placement}>
-    <header><h2>Notifications</h2><span aria-label={`${state.unread} unread`}>{state.unread}</span><button disabled={state.unread === 0} onClick={() => ignoreFailure(store.markAllRead())} type="button">Mark all read</button></header>
+    <header><h2>Notifications</h2><span aria-label={`${state.unread} unread`}>{state.unread}</span><ShadcnButton disabled={state.unread === 0} onClick={() => ignoreFailure(store.markAllRead())} type="button">Mark all read</ShadcnButton></header>
     {state.error ? <p role="alert">{state.error}</p> : null}
     {state.loading ? <p aria-live="polite" role="status">Loading notifications</p> : null}
     {!state.loading && state.items.length === 0 ? <p>{emptyMessage}</p> : null}
@@ -136,9 +137,9 @@ export function ReactNotificationInbox({
       </li>
     })}</ol>
     <nav aria-label="Notification pagination">
-      <button aria-label="Previous notification page" disabled={state.page <= 1} onClick={() => ignoreFailure(store.load(state.page - 1))} type="button">Previous</button>
+      <ShadcnButton aria-label="Previous notification page" disabled={state.page <= 1} onClick={() => ignoreFailure(store.load(state.page - 1))} type="button">Previous</ShadcnButton>
       <span>Page {state.page} of {pages}</span>
-      <button aria-label="Next notification page" disabled={state.page >= pages} onClick={() => ignoreFailure(store.load(state.page + 1))} type="button">Next</button>
+      <ShadcnButton aria-label="Next notification page" disabled={state.page >= pages} onClick={() => ignoreFailure(store.load(state.page + 1))} type="button">Next</ShadcnButton>
     </nav>
   </section>
 }

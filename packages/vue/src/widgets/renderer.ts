@@ -1,3 +1,4 @@
+import { ShadcnButton, ShadcnInput, ShadcnTable } from '../internal-ui'
 import { safeExternalUrl } from '@holo-js/panels-client'
 import {
   defineComponent,
@@ -82,7 +83,7 @@ function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAc
   ]
   const url = safeExternalUrl(stat.url)
   if (url) return h('a', { class: 'hp-widget-stat', href: url, style: stat.color ? { '--hp-widget-color': stat.color } : undefined }, content)
-  if (stat.action && onAction) return h('button', {
+  if (stat.action && onAction) return h(ShadcnButton, {
     class: 'hp-widget-stat',
     type: 'button',
     onClick: () => void onAction(stat.action!, stat),
@@ -191,7 +192,7 @@ function renderChart(data: VueChartWidgetData, heading: string): VNodeChild {
   return h('figure', { class: `hp-widget-chart hp-widget-chart--${data.type}` }, [
     h('svg', { 'aria-hidden': 'true', focusable: 'false', viewBox: '0 0 100 40' }, chartMarks(data, labels)),
     h('figcaption', [h('strong', data.summary), h('span', data.description)]),
-    h('table', { 'aria-label': `${heading} chart data` }, [
+    h(ShadcnTable, { 'aria-label': `${heading} chart data` }, [
       h('caption', data.summary),
       h('thead', [h('tr', [h('th', { scope: 'col' }, 'Category'), ...data.series.map(series => h('th', { key: series.id, scope: 'col' }, series.label))])]),
       h('tbody', labels.map(label => h('tr', { key: label }, [
@@ -230,7 +231,7 @@ function filterControl(props: VueWidgetRendererProps, state: VueWidgetStore['sna
   const inputId = `hp-widget-${props.manifest.id}-filter-${filter.id}`
   if (typeof filter.defaultValue === 'boolean') {
     return h('label', { for: inputId }, [
-      h('input', {
+      h(ShadcnInput, {
         checked: value === true,
         disabled: state.loading,
         id: inputId,
@@ -244,7 +245,7 @@ function filterControl(props: VueWidgetRendererProps, state: VueWidgetStore['sna
   const displayValue = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
   return h('label', { for: inputId }, [
     h('span', filter.label),
-    h('input', {
+    h(ShadcnInput, {
       disabled: state.loading,
       id: inputId,
       type,
@@ -262,7 +263,7 @@ function filterControls(props: VueWidgetRendererProps, state: VueWidgetStore['sn
   return h('fieldset', { class: 'hp-widget-filters', disabled: state.loading }, [
     h('legend', 'Filters'),
     ...props.manifest.filters.map(filter => h('div', { key: filter.id }, [filterControl(props, state, filter)])),
-    h('button', { type: 'button', onClick: () => void props.store.resetFilters() }, 'Reset filters'),
+    h(ShadcnButton, { type: 'button', onClick: () => void props.store.resetFilters() }, 'Reset filters'),
   ])
 }
 
@@ -312,17 +313,18 @@ export const VueWidgetRenderer = defineComponent({
           : state.value.status === 'ready'
             ? readyContent(componentProps.widget, state.value.data)
             : manifest.lazy
-              ? h('button', { type: 'button', onClick: activate }, `Load ${manifest.heading ?? manifest.id}`)
+              ? h(ShadcnButton, { type: 'button', onClick: activate }, `Load ${manifest.heading ?? manifest.id}`)
               : null
       const empty = state.value.status === 'ready' && content === null
       return h('section', {
         ref: host,
         'aria-labelledby': manifest.heading ? headingId : undefined,
         class: `hp-widget hp-widget--${manifest.family}`,
+        'data-slot': 'card',
         'data-widget-id': manifest.id,
       }, [
-        manifest.heading ? h('h2', { id: headingId }, manifest.heading) : null,
-        manifest.description ? h('p', manifest.description) : null,
+        manifest.heading ? h('h2', { 'data-slot': 'card-title', id: headingId }, manifest.heading) : null,
+        manifest.description ? h('p', { 'data-slot': 'card-description' }, manifest.description) : null,
         filterControls(componentProps.widget, state.value),
         empty ? h('div', { class: 'hp-widget-empty' }, manifest.emptyState) : content,
       ])

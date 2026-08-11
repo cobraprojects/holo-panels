@@ -8,6 +8,7 @@ import Membership from '../../models/Membership'
 import Post from '../../models/Post'
 import PostTag from '../../models/PostTag'
 import Tag from '../../models/Tag'
+import Tenant from '../../models/Tenant'
 import User from '../../models/User'
 
 const tenantCity = (tenantId: string): string => tenantId === 'tenant-acme' ? 'Cairo' : 'London'
@@ -16,6 +17,10 @@ export default defineSeeder({
   name: 'ExampleBlogSeeder',
   async run() {
     const password = await hashPassword('panel-secret')
+    await Tenant.unguarded(async () => {
+      await Tenant.updateOrCreate({ id: 'tenant-acme' }, { name: 'Acme', slug: 'acme' })
+      await Tenant.updateOrCreate({ id: 'tenant-globex' }, { name: 'Globex', slug: 'globex' })
+    })
     await User.unguarded(async () => {
       for (const user of exampleSeedData.users) {
         const membership = exampleSeedData.memberships.find(value => value.userId === user.id)
@@ -74,9 +79,9 @@ export default defineSeeder({
     })
     await PostTag.unguarded(async () => {
       for (const post of exampleSeedData.posts) {
-        for (const tagId of post.tagIds) {
+        for (const [position, tagId] of post.tagIds.entries()) {
           const id = `post-tag-${post.id}-${tagId}`
-          await PostTag.updateOrCreate({ id }, { postId: post.id, tagId, tenantId: post.tenantId })
+          await PostTag.updateOrCreate({ id }, { position: position + 1, postId: post.id, tagId, tenantId: post.tenantId })
         }
       }
     })

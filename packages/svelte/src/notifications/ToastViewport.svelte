@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '../components/Button.svelte'
   import { toSvelteState } from '../stores'
   import type { SvelteToastViewportProps } from './contracts'
   import { notificationActions, notificationUrl } from './helpers'
@@ -23,10 +24,10 @@
           <div>
             {#each notificationActions(toast.actions) as action (action.id)}
               {@const url = notificationUrl(action)}
-              {#if url}<a href={url} onclick={(event) => { ignoreFailure(store.trigger(toast.id, action.id)); if (navigate) { event.preventDefault(); navigate(url) } }}>{action.label}</a>{:else}<button type="button" onclick={() => ignoreFailure(store.trigger(toast.id, action.id))}>{action.label}</button>{/if}
+              {#if url}<a href={url} onclick={(event) => { ignoreFailure(store.trigger(toast.id, action.id)); if (navigate) { event.preventDefault(); navigate(url) } }}>{action.label}</a>{:else}<Button type="button" onclick={() => ignoreFailure(store.trigger(toast.id, action.id))}>{action.label}</Button>{/if}
             {/each}
           </div>
-          {#if toast.closeable}<button aria-label={`Close ${toast.title}`} type="button" onclick={() => store.dismiss(toast.id)}>×</button>{/if}
+          {#if toast.closeable}<Button aria-label={`Close ${toast.title}`} type="button" onclick={() => store.dismiss(toast.id)}>×</Button>{/if}
         </article>
       </li>
     {/each}

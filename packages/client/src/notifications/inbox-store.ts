@@ -152,8 +152,8 @@ export class ClientNotificationInboxStore {
     return this.refresh()
   }
 
-  dispose(): void {
-    this.#disposed = true
+  stop(): void {
+    this.#requestVersion++
     this.#active?.abort()
     this.#active = null
     this.#mutation?.abort()
@@ -162,6 +162,11 @@ export class ClientNotificationInboxStore {
     this.#poll = null
     this.#unsubscribeRealtime?.()
     this.#unsubscribeRealtime = null
+  }
+
+  dispose(): void {
+    this.#disposed = true
+    this.stop()
     this.#listeners.clear()
   }
 

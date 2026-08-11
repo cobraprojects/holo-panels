@@ -7,6 +7,7 @@ const appEnv = env('APP_ENV') === 'production'
     : 'development'
 
 export default defineAppConfig({
+  plugins: ['@holo-js/panels'],
   name: env('APP_NAME', "example-sveltekit"),
   key: env('APP_KEY'),
   url: env('APP_URL', 'http://localhost:5173'),

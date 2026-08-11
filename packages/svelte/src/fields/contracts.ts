@@ -1,6 +1,8 @@
 import type {
   CollectionStore,
+  FormPath,
   FormStore,
+  FormValueAtPath,
   JsonObject,
   JsonValue,
   OptionStore,
@@ -27,9 +29,18 @@ export interface SvelteFieldFrameProps {
   readonly required?: boolean
 }
 
-export interface SvelteFieldDefinition {
+export type SvelteFieldPath<TValues extends object> = [FormPath<TValues>] extends [never] ? string : FormPath<TValues>
+
+export type SvelteFieldValue<TValues extends object, TPath extends SvelteFieldPath<TValues>> = TPath extends FormPath<TValues>
+  ? FormValueAtPath<TValues, TPath>
+  : unknown
+
+export interface SvelteFieldDefinition<
+  TValues extends object = Record<string, unknown>,
+  TPath extends SvelteFieldPath<TValues> = SvelteFieldPath<TValues>,
+> {
   readonly type: string
-  readonly path: string
+  readonly path: TPath
   readonly label: string
   readonly helperText?: string
   readonly hint?: string
@@ -41,13 +52,16 @@ export interface SvelteFieldDefinition {
   readonly properties?: JsonObject
 }
 
-export type SvelteFormStore = FormStore<Record<string, unknown>>
+export type SvelteFormStore<TValues extends object = Record<string, unknown>> = FormStore<TValues>
 export type SvelteOptionStore = OptionStore<OptionValue>
 export type SvelteCollectionStore = CollectionStore<JsonValue>
 
-export interface SvelteFieldRendererProps extends Record<string, unknown> {
-  readonly definition: SvelteFieldDefinition
-  readonly form: SvelteFormStore
+export interface SvelteFieldRendererProps<
+  TValues extends object = Record<string, unknown>,
+  TPath extends SvelteFieldPath<TValues> = SvelteFieldPath<TValues>,
+> {
+  readonly definition: SvelteFieldDefinition<TValues, TPath>
+  readonly form: SvelteFormStore<TValues>
   readonly optionStore?: SvelteOptionStore
   readonly collectionStore?: SvelteCollectionStore
   readonly uploadStore?: UploadStore
@@ -56,14 +70,17 @@ export interface SvelteFieldRendererProps extends Record<string, unknown> {
   readonly requestedFrom?: string
 }
 
-export interface SvelteCustomFieldProps extends SvelteFieldRendererProps {
-  readonly value: unknown
+export interface SvelteCustomFieldProps<
+  TValues extends object = Record<string, unknown>,
+  TPath extends SvelteFieldPath<TValues> = SvelteFieldPath<TValues>,
+> extends SvelteFieldRendererProps<TValues, TPath> {
+  readonly value: SvelteFieldValue<TValues, TPath>
   readonly errors: readonly string[]
   readonly disabled: boolean
   readonly readOnly: boolean
   readonly required: boolean
   readonly inputId: string
-  readonly setValue: (value: unknown) => void
+  readonly setValue: (value: SvelteFieldValue<TValues, TPath>) => void
 }
 
 export interface SvelteEditorProps extends Record<string, unknown> {

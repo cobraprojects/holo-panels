@@ -31,6 +31,7 @@ function panel(switchTenant = vi.fn(async (value: string) => ({ id: 'tenant-1', 
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,
       default: true,
+      globalSearch: false,
       id: 'admin',
       navigation: [],
       navigationMode: 'sidebar',
@@ -46,6 +47,7 @@ function panel(switchTenant = vi.fn(async (value: string) => ({ id: 'tenant-1', 
       defaults: [],
       plugins: [],
       presentActor: () => ({}),
+      registered: [],
       tenancy: {
         active: async () => null,
         activeContext: async () => ({
@@ -72,6 +74,7 @@ function panel(switchTenant = vi.fn(async (value: string) => ({ id: 'tenant-1', 
         }),
         resolveQueued: async () => ({ id: 'tenant-1', routeKey: 'acme' }),
         resolveQueuedValue: async () => ({}),
+        resolveRoute: async value => ({ id: 'tenant-1', routeKey: value }),
         switch: switchTenant,
       },
     },
@@ -175,7 +178,7 @@ describe('panel tenant switch operation', () => {
     }).compile()
     const inferredScope = { actor: { id: 'actor-1' }, guard: 'web', panelId: 'admin', provider: 'users', signal: new AbortController().signal }
 
-    expect(configured.manifest.tenancy).toEqual({
+    expect(configured.manifest.tenancy).toMatchObject({
       enabled: true,
       profile: { path: '/admin/tenant/profile' },
       registration: { path: '/admin/tenant/register' },

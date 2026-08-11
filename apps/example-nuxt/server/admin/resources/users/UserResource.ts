@@ -1,19 +1,16 @@
-import { column, defineResource, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import User from '../../../models/User'
+
+const form = defineSchema(User).fields(field => [field.text('name').required(), field.text('email').email().required()])
+const table = defineTable(User).columns(column => [column.text('name').searchable(), column.text('email').copyable()])
 
 export default defineResource(User)
   .shared()
   .createBindings(() => ({ id: crypto.randomUUID() }))
   .recordTitle('name')
   .routeKey('id')
-  .navigation({ group: 'Access', icon: 'users', label: 'Users', sort: 50 })
+  .navigation({ group: 'Access', icon: 'users', label: 'Users', sort: 70 })
   .globalSearch({ attributes: ['name', 'email'], title: 'name' })
   .discoverPages()
-  .form([
-    field.text('name').required(),
-    field.text('email').required(),
-  ])
-  .table([
-    column.text('name'),
-    column.text('email'),
-  ])
+  .form(form)
+  .table(table)

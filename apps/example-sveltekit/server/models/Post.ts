@@ -1,4 +1,8 @@
-import { column, defineGeneratedTable, defineModel, HasUlids } from '@holo-js/db'
+import { belongsTo, belongsToMany, column, defineGeneratedTable, defineModel, hasMany, HasUlids } from '@holo-js/db'
+import Comment from './Comment'
+import { postTags } from './PostTag'
+import Tag from './Tag'
+import User from './User'
 
 const posts = defineGeneratedTable('posts', {
   id: column.string().primaryKey(),
@@ -32,6 +36,11 @@ export default defineModel(posts, {
     'city',
   ],
   guarded: ['id', 'tenantId'],
+  relations: {
+    author: belongsTo(() => User, 'authorId'),
+    comments: hasMany(() => Comment, 'postId'),
+    tags: belongsToMany(() => Tag, postTags, 'postId', 'tagId').withPivot('id', 'tenantId', 'position', 'createdAt', 'updatedAt'),
+  },
   timestamps: true,
   traits: [HasUlids()],
   updatedAtColumn: 'updatedAt',

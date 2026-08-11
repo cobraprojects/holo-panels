@@ -1,3 +1,4 @@
+import { ShadcnButton, ShadcnIcon } from '../internal-ui'
 import { defineComponent, h, onScopeDispose, shallowRef, type PropType, type VNode } from 'vue'
 import type { ClientActionFrame, ClientActionState, JsonObject } from '@holo-js/panels-client'
 import { PanelsDropdown, PanelsModal, PanelsSlideOver } from '../primitives'
@@ -48,18 +49,18 @@ export const VueActionRenderer = defineComponent({
               schema: frame.manifest.modal.schema,
             })
           : null,
-        h('button', { disabled: frame.phase === 'submitting', type: 'submit' }, frame.phase === 'submitting' ? 'Working…' : 'Run action'),
+        h(ShadcnButton, { disabled: frame.phase === 'submitting', type: 'submit' }, frame.phase === 'submitting' ? 'Working…' : 'Run action'),
       ])
     }
 
     function trigger(action: VueActionRendererProps['action']): VNode | null {
       if (action.visible === false) return null
-      return h('button', {
+      return h(ShadcnButton, {
         'data-action-id': action.id,
         disabled: action.disabled === true || state.value.frames.some(frame => frame.manifest.id === action.id),
         type: 'button',
         onClick: () => props.store.mount(action),
-      }, action.label)
+      }, () => [action.icon ? ShadcnIcon(action.icon) : null, h('span', action.label)])
     }
 
     function modalSlot(frame: ClientActionFrame, placement: 'content' | 'footer'): VNode | null {
@@ -100,7 +101,7 @@ export const VueActionRenderer = defineComponent({
           ? props.registry.resolve(customName, props.panelId, 'action modal')
           : null
         const content = frame.phase === 'confirming'
-          ? [h('p', frame.manifest.confirmation ?? ''), h('button', { type: 'button', onClick: () => props.store.confirm() }, 'Confirm')]
+          ? [h('p', frame.manifest.confirmation ?? ''), h(ShadcnButton, { type: 'button', onClick: () => props.store.confirm() }, 'Confirm')]
           : Custom
             ? [h(Custom, {
                 frame,
@@ -126,6 +127,7 @@ export const VueActionRenderer = defineComponent({
             frame.error ? h('div', { role: 'alert' }, frame.error) : null,
             frame.phase === 'succeeded' ? h('div', { 'aria-live': 'polite', role: 'status' }, 'Action completed') : null,
             modalSlot(frame, 'footer'),
+            h(ShadcnButton, { type: 'button', onClick: () => props.store.close() }, 'Close'),
           ])],
         })
       }),

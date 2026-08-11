@@ -129,4 +129,23 @@ describe('P13-B client notification inbox runtime', () => {
     expect(list).toHaveBeenCalledTimes(2)
     vi.useRealTimers()
   })
+
+  it('stops reversible subscriptions and restarts the same inbox store', async () => {
+    const listeners = new Set<() => void>()
+    const list = vi.fn(async () => page([item('restart')]))
+    const realtime = { subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) }) }
+    const store = new ClientNotificationInboxStore({
+      polling: false,
+      realtime,
+      transport: { delete: async () => 0, list, markRead: async () => 0, markUnread: async () => 0 },
+    })
+
+    await store.start()
+    store.stop()
+    expect(listeners.size).toBe(0)
+    await store.start()
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(listeners.size).toBe(1)
+    store.dispose()
+  })
 })

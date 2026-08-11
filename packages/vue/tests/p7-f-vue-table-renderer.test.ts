@@ -287,7 +287,7 @@ describe('P7-F Vue table renderer', () => {
       actions: [
         { id: 'posts.export', label: 'Export', scope: 'header' },
         { id: 'posts.inspect', label: 'Inspect', scope: 'row' },
-        { id: 'posts.publish', label: 'Publish', scope: 'bulk' },
+        { color: 'success', icon: 'check', id: 'posts.publish', label: 'Publish', scope: 'bulk' },
       ],
       actionTransport: { execute },
     })
@@ -309,6 +309,8 @@ describe('P7-F Vue table renderer', () => {
 
     const publish = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
       .find(button => button.textContent === 'Publish')
+    expect(publish?.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
+    expect(publish?.getAttribute('data-color')).toBe('success')
     publish?.click()
     await flush()
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({

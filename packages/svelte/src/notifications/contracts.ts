@@ -32,6 +32,7 @@ export interface SvelteNotificationInboxProps extends Record<string, unknown> {
 export interface SvelteNotificationInboxTriggerProps extends Record<string, unknown> {
   readonly emptyMessage?: string
   readonly label?: string
+  readonly lazy?: boolean
   readonly navigate?: (url: string) => void
   readonly panelId?: string
   readonly placement: 'sidebar' | 'topbar'

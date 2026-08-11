@@ -1,4 +1,6 @@
+import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect, ShadcnTable } from '../internal-ui'
 import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import { ChevronDown, ChevronLeft, ChevronRight, Columns3, ListFilter } from 'lucide-vue-next'
 import {
   computed,
   defineComponent,
@@ -99,15 +101,15 @@ const VueTransferAction = defineComponent({
       else await store.startExport(formatId.value, [...columns.value], props.table.store.selectionPayload())
     }
     return () => h('span', { class: 'hp-transfer-action' }, [
-      h('button', { disabled: !store, type: 'button', onClick: () => { open.value = true } }, props.manifest.label),
+      h(ShadcnButton, { disabled: !store, type: 'button', onClick: () => { open.value = true } }, props.manifest.label),
       h(PanelsModal, { open: open.value, title: props.manifest.label, onClose: () => { store?.cancel(); open.value = false } }, { default: () => [
-        h('label', ['Format', h('select', { value: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
+        h('label', ['Format', h(ShadcnSelect, { value: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
         props.manifest.kind === 'import' ? h('div', [
-          h('label', ['CSV file', h('input', { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
-          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h('select', { required: column.required, value: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, 'Do not import'), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
+          h('label', ['CSV file', h(ShadcnInput, { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
+          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h(ShadcnSelect, { required: column.required, value: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, 'Do not import'), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
           state.value?.uploadProgress ? h('progress', { 'aria-label': 'Upload progress', max: 100, value: state.value.uploadProgress }) : null,
-        ]) : h('div', props.manifest.columns.map(column => h('label', [h('input', { checked: columns.value.has(column.id), type: 'checkbox', onChange: (event: Event) => { const next = new Set(columns.value); if (eventTarget<HTMLInputElement>(event).checked) next.add(column.id); else next.delete(column.id); columns.value = next } }), column.label]))),
-        h('button', { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, `Start ${props.manifest.kind}`),
+        ]) : h('div', props.manifest.columns.map(column => h('label', [h(ShadcnInput, { checked: columns.value.has(column.id), type: 'checkbox', onChange: (event: Event) => { const next = new Set(columns.value); if (eventTarget<HTMLInputElement>(event).checked) next.add(column.id); else next.delete(column.id); columns.value = next } }), column.label]))),
+        h(ShadcnButton, { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, `Start ${props.manifest.kind}`),
         state.value?.progress ? h('progress', { 'aria-label': 'Transfer progress', max: Math.max(1, state.value.progress.total), value: state.value.progress.completed }) : null,
         state.value?.error ? h('div', { role: 'alert' }, state.value.error) : null,
       ] }),
@@ -136,13 +138,13 @@ function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value
       const scalarType = typeof column?.scalarType === 'string' ? column.scalarType : 'string'
       const inputValue = Array.isArray(condition.value) ? condition.value.join(', ') : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
       return h('div', { 'data-advanced-condition': '', key: index }, [
-        h('select', { 'aria-label': 'Column', value: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
-        h('select', { 'aria-label': 'Operator', value: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, item))),
-        ['null', 'not-null'].includes(operator) ? null : h('input', { 'aria-label': 'Value', type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', value: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
-        h('button', { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, 'Remove condition'),
+        h(ShadcnSelect, { 'aria-label': 'Column', value: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
+        h(ShadcnSelect, { 'aria-label': 'Operator', value: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, item))),
+        ['null', 'not-null'].includes(operator) ? null : h(ShadcnInput, { 'aria-label': 'Value', type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', value: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
+        h(ShadcnButton, { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, 'Remove condition'),
       ])
     }),
-    h('button', {
+    h(ShadcnButton, {
       disabled: columns.length === 0,
       type: 'button',
       onClick: () => {
@@ -206,10 +208,15 @@ const TableActionButton = defineComponent({
         pending.value = false
       }
     }
-    return (): VNode => h('span', [
-      h('button', { disabled: pending.value, type: 'button', onClick: () => void run() }, pending.value ? 'Working…' : componentProps.action.label),
+    return (): VNode => {
+      const action = componentProps.action
+      const inferredIcon = action.id.includes('delete') ? 'delete' : action.id.includes('edit') ? 'edit' : action.id.includes('view') ? 'view' : null
+      const icon = action.icon ?? inferredIcon
+      return h('span', [
+      h(ShadcnButton, { class: 'hp-table-action', 'data-action': action.id, 'data-color': action.color ?? undefined, disabled: pending.value, type: 'button', onClick: () => void run() }, () => [icon ? ShadcnIcon(icon) : null, h('span', pending.value ? 'Working…' : action.label)]),
       error.value ? h('span', { role: 'alert' }, error.value) : null,
-    ])
+      ])
+    }
   },
 })
 
@@ -285,11 +292,11 @@ const InlineTableCell = defineComponent({
         value: original.value,
       } })
       if (!valid) return rendered
-      if (!editing.value) return h('button', { 'aria-label': `Edit ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: begin }, [rendered])
+      if (!editing.value) return h(ShadcnButton, { 'aria-label': `Edit ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: begin }, () => [rendered])
       const label = column.manifest.label ?? column.manifest.path
       if (kind === 'checkbox' || kind === 'toggle') {
         return h('span', [
-          h('input', {
+          h(ShadcnInput, {
             'aria-label': label,
             checked: value.value === true,
             disabled: pending.value,
@@ -306,7 +313,7 @@ const InlineTableCell = defineComponent({
       if (kind === 'select') {
         const options: readonly unknown[] = Array.isArray(editor.options) ? editor.options : []
         return h('span', [
-          h('select', {
+          h(ShadcnSelect, {
             'aria-label': label,
             disabled: pending.value,
             value: String(value.value ?? ''),
@@ -331,7 +338,7 @@ const InlineTableCell = defineComponent({
         ])
       }
       return h('span', [
-        h('input', {
+        h(ShadcnInput, {
           'aria-label': label,
           disabled: pending.value,
           ref: input,
@@ -387,13 +394,13 @@ function tableFilters(
       const to = typeof Reflect.get(range, 'to') === 'string' ? String(Reflect.get(range, 'to')) : ''
       return wrap(h('fieldset', [
         h('legend', filter.manifest.label ?? filter.manifest.id),
-        h('label', { for: `${id}-from` }, ['From', h('input', {
+        h('label', { for: `${id}-from` }, ['From', h(ShadcnInput, {
           id: `${id}-from`,
           type: 'date',
           value: from,
           onInput: (event: Event) => update({ from: eventTarget<HTMLInputElement>(event).value || null, to: to || null }),
         })]),
-        h('label', { for: `${id}-to` }, ['To', h('input', {
+        h('label', { for: `${id}-to` }, ['To', h(ShadcnInput, {
           id: `${id}-to`,
           type: 'date',
           value: to,
@@ -402,14 +409,14 @@ function tableFilters(
       ]))
     }
     if (filter.manifest.type === 'ternary') {
-      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h('select', {
+      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(ShadcnSelect, {
         id,
         value: typeof current === 'string' ? current : 'all',
         onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
       }, [h('option', { value: 'all' }, 'All'), h('option', { value: 'true' }, 'Yes'), h('option', { value: 'false' }, 'No')])]))
     }
     if (filter.manifest.type === 'trashed') {
-      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h('select', {
+      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(ShadcnSelect, {
         id,
         value: typeof current === 'string' ? current : 'without',
         onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
@@ -426,7 +433,7 @@ function tableFilters(
     const multiple = filter.manifest.properties.multiple === true
     const selectedValues = Array.isArray(current) ? current.map(String) : [String(current ?? '')]
     const control = filter.options
-      ? h('select', {
+      ? h(ShadcnSelect, {
           id,
           multiple,
           value: multiple ? selectedValues : selectedValues[0],
@@ -438,10 +445,13 @@ function tableFilters(
             }
             update(filter.options?.find(option => String(option.value ?? '') === select.value)?.value ?? null)
           },
-        }, filter.options.map(option => h('option', { disabled: option.disabled, key: String(option.value), value: String(option.value ?? '') }, option.label)))
+        }, [
+          ...(!multiple ? [h('option', { key: 'all', value: '' }, 'All')] : []),
+          ...filter.options.map(option => h('option', { disabled: option.disabled, key: String(option.value), value: String(option.value ?? '') }, option.label)),
+        ])
       : filter.manifest.type.includes('boolean') || typeof current === 'boolean'
-        ? h('input', { checked: current === true, id, type: 'checkbox', onChange: (event: Event) => update(eventTarget<HTMLInputElement>(event).checked) })
-        : h('input', {
+        ? h(ShadcnInput, { checked: current === true, id, type: 'checkbox', onChange: (event: Event) => update(eventTarget<HTMLInputElement>(event).checked) })
+        : h(ShadcnInput, {
             id,
             type: 'search',
             value: typeof current === 'number' || typeof current === 'string' ? String(current) : '',
@@ -462,8 +472,8 @@ function tableFilters(
   }, [
     filterCollectionSlot(table, 'before'),
     ...orderedFilters(filters, presentation).map(field),
-    state.filters.mode === 'deferred' ? h('button', { type: 'submit' }, 'Apply filters') : null,
-    h('button', {
+    state.filters.mode === 'deferred' ? h(ShadcnButton, { type: 'submit' }, 'Apply filters') : null,
+    h(ShadcnButton, {
       type: 'button',
       onClick: () => {
         table.store.resetFilters()
@@ -473,20 +483,20 @@ function tableFilters(
     filterCollectionSlot(table, 'after'),
   ])
   if (placement === 'inline') return content
-  const trigger = h('button', {
+  const trigger = h(ShadcnButton, {
     'aria-expanded': String(open.value),
     'aria-haspopup': 'dialog',
     type: 'button',
     onClick: () => { open.value = !open.value },
-  }, 'Filters')
+  }, [h(ListFilter, { 'aria-hidden': 'true' }), 'Filters'])
   if (placement === 'dropdown') return h('div', { class: 'hp-table-filters-dropdown' }, [trigger, open.value ? h('div', { role: 'dialog' }, [content]) : null])
   return [trigger, h(PanelsModal, { open: open.value, title: 'Filters', onClose: () => { open.value = false } }, { default: () => [content] })]
 }
 
 function summaryRows(columnCount: number, summaries: readonly VueTableSummary[]): VNode | null {
   if (summaries.length === 0) return null
-  return h('tfoot', summaries.map(summary => h('tr', { key: summary.id }, [
-    h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, [summary.label, ': ', summary.value]),
+  return h('tfoot', summaries.map(summary => h('tr', { class: 'hp-table-total-summary', key: summary.id }, [
+    h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, ['Total · ', summary.label, ': ', summary.value]),
   ])))
 }
 
@@ -496,14 +506,15 @@ function tableRecords(
   records: readonly Record<string, unknown>[],
   group?: VueTableGroup<Record<string, unknown>>,
   onToggleGroup?: () => void,
+  selectable = false,
 ): VNodeChild[] {
   const nodes: VNodeChild[] = []
   const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
   if (group) {
     nodes.push(h('tr', { class: 'hp-table-group', key: `group-${group.key}` }, [
-      h('th', { colspan: columns.length + 2, scope: 'rowgroup' }, [
+      h('th', { colspan: columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0), scope: 'rowgroup' }, [
         group.collapsible
-          ? h('button', { 'aria-expanded': !group.collapsed, type: 'button', onClick: onToggleGroup }, group.title)
+          ? h(ShadcnButton, { 'aria-expanded': !group.collapsed, type: 'button', onClick: onToggleGroup }, () => [h(ChevronDown, { 'aria-hidden': 'true' }), h('span', group.title), h('span', { class: 'hp-table-group-count' }, records.length)])
           : group.title,
         group.description ? h('small', group.description) : null,
       ]),
@@ -513,24 +524,24 @@ function tableRecords(
     for (const record of records) {
       const recordId = table.getRecordId(record)
       nodes.push(h('tr', { key: String(recordId) }, [
-        h('td', { 'data-label': 'Select' }, [h('input', {
+        selectable ? h('td', { 'data-label': 'Select' }, [h(ShadcnInput, {
           'aria-label': `Select record ${String(recordId)}`,
           checked: table.store.isSelected(recordId),
           type: 'checkbox',
           onChange: (event: Event) => table.store.selectRecord(recordId, eventTarget<HTMLInputElement>(event).checked),
-        })]),
+        })]) : null,
         ...columns.map(column => h('td', {
           'data-label': column.manifest.label ?? column.manifest.path,
           key: column.manifest.path,
           style: { textAlign: column.manifest.alignment },
         }, [h(InlineTableCell, { column, record, table })])),
-        h('td', { 'data-label': 'Actions' }, rowActions.map(action => h(TableActionButton, { action, key: action.id, record, table }))),
+        rowActions.length > 0 ? h('td', { class: 'hp-table-row-actions', 'data-label': 'Actions' }, rowActions.map(action => h(TableActionButton, { action, key: action.id, record, table }))) : null,
       ]))
     }
   }
   for (const summary of group?.summaries ?? []) {
-    nodes.push(h('tr', { key: `${group?.key}-${summary.id}` }, [
-      h('th', { colspan: columns.length + 2, scope: 'row' }, [summary.label, ': ', summary.value]),
+    nodes.push(h('tr', { class: 'hp-table-group-summary', key: `${group?.key}-${summary.id}` }, [
+      h('th', { colspan: columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0), scope: 'row' }, [group?.title, ' subtotal · ', summary.label, ': ', summary.value]),
     ]))
   }
   return nodes
@@ -566,7 +577,10 @@ export const VueTableRenderer = defineComponent({
       const pageCount = pages(snapshot.total, snapshot.perPage)
       const headerActions = table.actions?.filter(action => action.scope === 'header') ?? []
       const bulkActions = table.actions?.filter(action => action.scope === 'bulk') ?? []
-      const hasSelection = snapshot.selection.mode === 'all-matching' || snapshot.selection.selectedRecordIds.length > 0
+      const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
+      const selectable = bulkActions.length > 0 || (table.transfers?.some(transfer => transfer.kind === 'export') ?? false)
+      const columnCount = columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0)
+      const hasSelection = selectable && (snapshot.selection.mode === 'all-matching' || snapshot.selection.selectedRecordIds.length > 0)
       const currentColumns = snapshot.visibleColumns.length > 0
         ? new Set(snapshot.visibleColumns)
         : new Set(table.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path))
@@ -576,18 +590,19 @@ export const VueTableRenderer = defineComponent({
         table.store.setSort([{ column: column.manifest.path, direction: active?.direction === 'asc' ? 'desc' : 'asc' }])
         notifyQueryChange(table.onQueryChange)
       }
-      const groups = table.groups?.flatMap(group => tableRecords(
+      const groups = table.groups && table.groups.length > 0 ? table.groups.flatMap(group => tableRecords(
         table,
         columns,
         group.records,
         { ...group, collapsed: collapsedGroups.value.has(group.key) },
         () => toggleGroup(group.key),
-      ))
+        selectable,
+      )) : undefined
       const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen)
       const children: VNodeChild[] = [
         h('h2', { id: captionId }, table.caption),
         h('div', { class: 'hp-table-toolbar' }, [
-          h('label', ['Search', h('input', {
+          h('label', ['Search', h(ShadcnInput, {
             type: 'search',
             value: snapshot.search,
             onInput: (event: Event) => {
@@ -596,13 +611,13 @@ export const VueTableRenderer = defineComponent({
             },
           })]),
           h('div', { class: 'hp-column-manager' }, [
-            h('button', { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', type: 'button', onClick: () => { columnsOpen.value = !columnsOpen.value } }, 'Columns'),
+            h(ShadcnButton, { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', type: 'button', onClick: () => { columnsOpen.value = !columnsOpen.value } }, () => [h(Columns3, { 'aria-hidden': 'true' }), 'Columns']),
             columnsOpen.value ? h('div', { 'aria-label': 'Visible columns', role: 'menu' }, table.columns.filter(column => column.manifest.toggleable).map(column => h('label', {
               'aria-checked': currentColumns.has(column.manifest.path),
               key: column.manifest.path,
               role: 'menuitemcheckbox',
             }, [
-              h('input', {
+              h(ShadcnInput, {
                 checked: currentColumns.has(column.manifest.path),
                 type: 'checkbox',
                 onChange: (event: Event) => {
@@ -616,35 +631,35 @@ export const VueTableRenderer = defineComponent({
               column.manifest.label ?? column.manifest.path,
             ]))) : null,
           ]),
+          filtersNode,
           ...headerActions.map(action => h(TableActionButton, { action, key: action.id, table })),
           ...table.transfers?.map(manifest => h(VueTransferAction, { key: manifest.id, manifest, table })) ?? [],
         ]),
-        filtersNode,
         hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions' }, [
           h('span', snapshot.selection.mode === 'all-matching'
             ? `All ${snapshot.total} matching records selected`
             : `${snapshot.selection.selectedRecordIds.length} records selected`),
           ...bulkActions.map(action => h(TableActionButton, { action, key: action.id, table })),
-          h('button', { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
+          h(ShadcnButton, { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
         ]) : null,
         snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
-          ? h('button', { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
+          ? h(ShadcnButton, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
           : null,
         snapshot.error ? h('div', { role: 'alert' }, [h('strong', 'Unable to load table'), h('span', snapshot.error.message)]) : null,
         snapshot.loading ? h('div', { 'aria-live': 'polite', role: 'status' }, 'Loading records…') : null,
         !snapshot.loading && !snapshot.error && snapshot.records.length === 0
           ? h('div', { class: 'hp-table-empty' }, table.emptyMessage ?? 'No records found.')
           : null,
-        snapshot.records.length > 0 ? h('div', { 'aria-label': `${table.caption} data`, class: 'hp-table-responsive', role: 'region', tabindex: 0 }, [
-          h('table', [
+        snapshot.records.length > 0 ? h('div', { 'aria-label': `${table.caption} data`, class: 'hp-table-responsive', 'data-slot': 'table-container', role: 'region', tabindex: 0 }, [
+          h(ShadcnTable, null, () => [
             h('caption', { class: 'hp-visually-hidden' }, table.caption),
             h('thead', [h('tr', [
-              h('th', { scope: 'col' }, [h('input', {
+              selectable ? h('th', { scope: 'col' }, [h(ShadcnInput, {
                 'aria-label': 'Select page',
                 checked: selectedOnPage,
                 type: 'checkbox',
                 onChange: (event: Event) => table.store.selectPage(recordIds, eventTarget<HTMLInputElement>(event).checked),
-              })]),
+              })]) : null,
               ...columns.map(column => {
                 const active = snapshot.sort.find(item => item.column === column.manifest.path)
                 return h('th', {
@@ -652,17 +667,17 @@ export const VueTableRenderer = defineComponent({
                   key: column.manifest.path,
                   scope: 'col',
                 }, [column.manifest.sortable
-                  ? h('button', { type: 'button', onClick: () => sort(column) }, column.manifest.label ?? column.manifest.path)
+                  ? h(ShadcnButton, { type: 'button', onClick: () => sort(column) }, () => column.manifest.label ?? column.manifest.path)
                   : column.manifest.label ?? column.manifest.path])
               }),
-              h('th', { scope: 'col' }, 'Actions'),
+              rowActions.length > 0 ? h('th', { scope: 'col' }, 'Actions') : null,
             ])]),
-            h('tbody', groups ?? tableRecords(table, columns, snapshot.records)),
-            summaryRows(columns.length + 2, table.summaries ?? []),
+            h('tbody', groups ?? tableRecords(table, columns, snapshot.records, undefined, undefined, selectable)),
+            summaryRows(columnCount, table.summaries ?? []),
           ]),
         ]) : null,
         h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination' }, [
-          h('button', {
+          h(ShadcnButton, {
             'aria-label': 'Previous page',
             disabled: snapshot.page <= 1 || snapshot.loading,
             type: 'button',
@@ -670,9 +685,9 @@ export const VueTableRenderer = defineComponent({
               table.store.setPage(snapshot.page - 1)
               notifyQueryChange(table.onQueryChange)
             },
-          }, 'Previous'),
+          }, () => [h(ChevronLeft, { 'aria-hidden': 'true' }), 'Previous']),
           h('span', { 'aria-live': 'polite' }, `Page ${snapshot.page} of ${pageCount}`),
-          h('button', {
+          h(ShadcnButton, {
             'aria-label': 'Next page',
             disabled: snapshot.page >= pageCount || snapshot.loading,
             type: 'button',
@@ -680,7 +695,7 @@ export const VueTableRenderer = defineComponent({
               table.store.setPage(snapshot.page + 1)
               notifyQueryChange(table.onQueryChange)
             },
-          }, 'Next'),
+          }, () => ['Next', h(ChevronRight, { 'aria-hidden': 'true' })]),
         ]),
       ]
       return h('section', { 'aria-labelledby': captionId, class: 'hp-table-view', 'data-panels-component': 'table' }, children)

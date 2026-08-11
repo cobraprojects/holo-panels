@@ -1,34 +1,99 @@
-import { column, defineResource, field } from '@holo-js/panels'
+import { defineRelationManager, defineResource, defineResourceStatsWidget, defineSchema, defineTable, entriesFor } from '@holo-js/panels'
 import Post from '../../../models/Post'
-import { AdminActor } from '../../pages/posts/access'
 
-export default defineResource(Post, { actor: AdminActor, tenant: String })
+const form = defineSchema(Post).fields(field => [
+  field.text('title').required(),
+  field.slug('slug').from('title').required(),
+  field.radio('category').options([
+    { label: 'News', value: 'News' },
+    { label: 'Guides', value: 'Guides' },
+  ]).required(),
+  field.select('city').options([
+    { label: 'Cairo', value: 'Cairo' },
+    { label: 'London', value: 'London' },
+    { label: 'New York', value: 'New York' },
+  ]).preload().required(),
+  field.file('featuredMediaId', {
+    acceptedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+    acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    directory: 'panels/uploads/posts',
+    disk: 'private',
+    expiresInSeconds: 900,
+    imageOnly: true,
+    maximumFiles: 1,
+    maximumSize: 5_242_880,
+    private: true,
+  }),
+])
+const table = defineTable(Post)
+  .columns(column => [
+    column.text('title').searchable().sortable(),
+    column.text('slug').copyable(),
+    column.text('category').badge(),
+    column.text('city'),
+    column.text('author.name').label('Author'),
+  ])
+  .filters(filter => [
+    filter.select('category', 'category').label('Category').options([{ label: 'News', value: 'News' }, { label: 'Guides', value: 'Guides' }]),
+    filter.select('city', 'city').label('City').options([{ label: 'Cairo', value: 'Cairo' }, { label: 'London', value: 'London' }, { label: 'New York', value: 'New York' }]),
+  ])
+  .deferFilters()
+  .groups(group => [group.group('category', 'category').label('Category').collapsible()])
+  .summaries(summary => [summary.count('posts-count').label('Posts')])
+const infolist = entriesFor(Post)
+const activeQuery = defineResourceStatsWidget('active-query', { record: Post })
+  .heading('Active query')
+  .columnSpan('full')
+  .data(context => ({
+    stats: [{
+      action: null,
+      chart: [],
+      color: 'primary',
+      description: `Search: ${context.resource?.tableState?.search ?? ''}`,
+      icon: 'search',
+      id: 'search',
+      label: 'Search',
+      trend: null,
+      url: null,
+      value: context.resource?.tableState?.search || 'All records',
+    }],
+  }))
+
+export default defineResource(Post)
+  .actions(action => [
+    action.action('publish-selected')
+      .label('Publish selected')
+      .icon('check')
+      .mount('bulk')
+      .requiresConfirmation('Publish the selected posts?')
+      .authorize(() => true)
+      .action(async (_input, context) => {
+        if (!context.record) throw new Error('A selected post is required.')
+        const post = await Post.where('id', context.record.id).first()
+        if (!post) throw new Error('The selected post no longer exists.')
+        await post.update({ status: 'published' })
+        return { id: context.record.id, published: true }
+      }),
+  ])
   .tenantScope((query, context) => query.where('tenantId', context.tenant))
-  .createBindings(context => ({ tenantId: context.tenant }))
+  .createBindings((context) => {
+    if (!context.actor) throw new Error('An authenticated actor is required to create a post.')
+    return {
+      authorId: String(context.actor.id),
+      body: 'Created through Holo Panels.',
+      categoryId: `category-${context.tenant.replace(/^tenant-/u, '')}-guides`,
+      excerpt: 'Created through Holo Panels.',
+      status: 'draft',
+      tenantId: context.tenant,
+    }
+  })
   .recordTitle('title')
   .routeKey('slug')
-  .navigationLabel('Posts')
-  .navigationIcon('document-text')
-  .globalSearch({ attributes: ['title', 'slug', 'excerpt'], details: ['status', 'categoryId'], title: 'title' })
+  .navigation({ icon: 'document', label: 'Posts', sort: 10 })
+  .globalSearch({ attributes: ['title', 'slug'], details: ['category', 'city'], title: 'title' })
   .discoverPages()
-  .form([
-    field.text('title').required(),
-    field.text('slug').required(),
-    field.text('excerpt').required(),
-    field.text('body').required(),
-    field.text('status').required(),
-    field.text('categoryId').required(),
-    field.text('authorId').required(),
-    field.text('featuredMediaId'),
-    field.text('category').required(),
-    field.text('city').required(),
-  ])
-  .table([
-    column.text('title'),
-    column.text('slug'),
-    column.text('status'),
-    column.text('categoryId'),
-    column.text('authorId'),
-    column.text('category'),
-    column.text('city'),
-  ])
+  .form(form)
+  .infolist([infolist.text('title').label('Title'), infolist.text('slug').label('Slug').copyable(), infolist.text('category').label('Category').badge(), infolist.text('city').label('City')])
+  .relations(defineRelationManager('comments', Post), defineRelationManager('tags', Post))
+  .table(table)
+  .widgets(activeQuery)

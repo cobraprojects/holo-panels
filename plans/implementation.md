@@ -42,7 +42,7 @@ Master phase checklist:
 - [x] P14: Shield, auth pages, multi-factor authentication, and tenancy
 - [x] P15: imports and exports
 - [x] P16: extended parity and plugin ecosystem
-- [x] P17: documentation, hardening, and release
+- [ ] P17: documentation, hardening, and release
 
 ## 1. Objective
 
@@ -231,7 +231,7 @@ panels-ui                panels-core
 panels-cli ────────┴─────────────┘
 panels-shield ───────────────────┘
 panels-testing ───────> core/client/renderers
-panels umbrella ──────> core/cli
+panels umbrella ──────> core/cli/ui
 ```
 
 Rules:
@@ -402,6 +402,28 @@ export default definePanel('admin')
 ```
 
 Discovery methods without arguments scan conventional directories relative to the panel file. They may accept an explicit panel-relative directory. Explicit `.resources()`, `.pages()`, `.widgets()`, and `.clusters()` registration remains supported.
+
+### 6.1 Filament-shaped panel configuration parity
+
+Every panel owns an independent configuration file such as `server/admin/AdminPanel.ts` or `server/cp/CpPanel.ts`. Generated registries may compile those files internally, but applications never maintain a central panel configuration or runtime-helper file.
+
+The public panel builder preserves Filament 5 method names and chaining semantics wherever the behavior is framework-neutral. Laravel-, Blade-, Livewire-, or Vite-specific implementation types are replaced by Holo and renderer contracts without changing the observable panel capability.
+
+- [x] Identity and routing: `default()`, `id()`, `path()`, `domain()`, `domains()`, `homeUrl()`, `routes()`, `authenticatedRoutes()`, `tenantRoutes()`, and `authenticatedTenantRoutes()`.
+- [x] Authentication: `login()`, `registration()`, `passwordReset()`, `emailVerification()`, `emailChangeVerification()`, `profile()`, `simpleProfilePage()`, `authGuard()`, `authPasswordBroker()`, authentication route slug and prefix methods, `revealablePasswords()`, `multiFactorAuthentication()`, and `strictAuthorization()`.
+- [x] Branding and appearance: `defaultAvatarProvider()`, `brandName()`, `brandLogo()`, `darkModeBrandLogo()`, `brandLogoHeight()`, `favicon()`, `colors()`, `darkMode()`, `defaultThemeMode()`, `themeSwitcher()`, `font()`, `monoFont()`, `serifFont()`, `theme()`, `viteTheme()`-equivalent compiled theme assets, and `icons()`.
+- [x] Layout: `maxContentWidth()`, `simplePageMaxContentWidth()`, `subNavigationPosition()`, and `breadcrumbs()`.
+- [x] Navigation: `navigation()`, `navigationGroups()`, `navigationItems()`, `collapsibleNavigationGroups()`, `sidebarCollapsibleOnDesktop()`, `sidebarFullyCollapsibleOnDesktop()`, `sidebarWidth()`, `collapsedSidebarWidth()`, `topNavigation()`, `topbar()`, sidebar and topbar component replacement, `userMenu()`, and `userMenuItems()`.
+- [x] Components: `resources()`, `pages()`, `widgets()`, discovery for resources, pages, widgets, and clusters, configured registrations, resource create/edit redirects, and read-only relation-manager defaults.
+- [x] Global search: `globalSearch()`, `globalSearchDebounce()`, `globalSearchKeyBindings()`, `globalSearchFieldSuffix()`, `globalSearchFieldKeyBindingSuffix()`, and `globalSearchResourceOptIn()` while resource record titles enable default participation.
+- [x] Notifications: `databaseNotifications()`, lazy loading, placement, polling, component replacement, and `broadcasting()`.
+- [x] Tenancy: `tenant()`, `tenantRoutePrefix()`, `tenantDomain()`, `tenantSwitcher()`, `searchableTenantMenu()`, `tenantMenu()`, `tenantMenuItems()`, `tenantProfile()`, `tenantRegistration()`, `tenantBillingProvider()`, `tenantBillingRouteSlug()`, `requiresTenantSubscription()`, and `resolveTenantUsing()`.
+- [x] Runtime behavior: `bootUsing()`, `spa()`, `spaUrlExceptions()`, SPA prefetching, `unsavedChangesAlerts()`, `databaseTransactions()`, `middleware()`, `authMiddleware()`, `tenantMiddleware()`, and persistent middleware behavior.
+- [x] Errors and extensibility: `errorNotifications()`, `registerErrorNotification()`, `hiddenErrorNotification()`, `disabledErrorNotification()`, `assets()`, `plugin()`, `plugins()`, and `renderHook()`.
+- [x] A panel may omit login, registration, password reset, profile, or every built-in authentication page independently. A panel without a built-in login may use external authentication; guest access must be explicit and tested.
+- [x] Every configuration family has immutable compilation tests, precise TypeScript inference tests, and identical observable Next, Nuxt, and SvelteKit acceptance behavior.
+
+Evidence: revalidated on 2026-08-11 through immutable panel compilation and public type-inference suites, the exact 161-topic Filament 5 parity validator with no deferred rows, all 14 package behavior suites, and the production Next, Nuxt, and SvelteKit browser matrix. Each example owns only its Filament-shaped panel provider and inferred resources; generated registries, framework routes, auth pages, tenancy handlers, and renderer wiring remain internal managed artifacts.
 
 ## 7. Fluent API and definition rules
 
@@ -1058,7 +1080,7 @@ Discovery rules:
 
 Transport characteristics:
 
-- One versioned internal endpoint namespace per framework under `/_holo/panels/{panelId}`.
+- One versioned internal endpoint namespace per framework under `/holo/panels/{panelId}`.
 - Operations include bootstrap, page data, table data, form submit, options, resolver patches, action execute, notifications, global search, import, and export.
 - Request schemas are strict and length/size limited.
 - The server resolves panel/resource/component/action IDs from its generated registry.
@@ -1468,7 +1490,7 @@ Tasks:
 - [x] Print manual integration snippets when automatic placement conflicts.
 - [x] Include every discovered panel path and reject cross-panel path overlap.
 
-Evidence: strict CLI and umbrella typechecks, ESLint fix pass, 16 framework planner tests, managed-artifact preparer integration tests, and checksum/conflict behavior passed on 2026-07-27.
+Evidence: strict CLI and umbrella typechecks, ESLint fix pass, managed-artifact preparer integration tests, and checksum/conflict behavior passed on 2026-07-27. Revalidated on 2026-08-11: Nuxt resolves `rootDir`, `srcDir`, `dir.pages`, and `serverDir`; Next selects the framework-supported root `app` or `src/app`; SvelteKit resolves `kit.files.routes` from the project configuration. Nuxt parent auth pages use `index.vue` whenever a managed descendant exists, preventing profile and nested MFA route conflicts. All frameworks reject paths outside the project where applicable. Panel configuration owns the managed login path and generates isolated login pages plus ordinary, auth, and tenant endpoints inside each resolved framework route root. Thirty planner behaviors, the directory-resolution behaviors, all three production builds and application typechecks, configured-login redirects, and all 60 production-browser journeys passed.
 
 - [x] **P2 phase gate:** install a packed plugin into three fixture apps, generate one panel/resource each, run `holo prepare`, and typecheck the generated artifacts.
 
@@ -1616,7 +1638,7 @@ Tasks:
 - [x] Ensure consuming applications do not need Tailwind configuration.
 - [x] Define component conformance fixtures and screenshot/reference states.
 
-Evidence: the UI package passed strict typecheck, ESLint fix, 8 focused tests, declarations/CSS build, runtime import and packed-artifact checks. It ships complete light/dark semantic themes, icon and accessibility contracts, Tailwind-independent CSS, deterministic reference states, and notices recording the verified MIT obligations for the shadcn family without copying upstream source.
+Evidence: the UI package passed strict typecheck, ESLint fix, 8 focused tests, declarations/CSS build, runtime import, and packed-artifact checks. It ships complete light/dark semantic themes and isolated Tailwind-independent CSS. The source-owned React, Vue, and Svelte component boundaries compose Radix UI, Reka UI, and Bits UI primitives with Lucide icons, and package notices record the applicable MIT attribution. The cross-framework browser gate rejects any panel button, input, select, textarea, or table that is not classified by a shadcn-family component slot.
 
 ### P5-B: React renderer foundation
 
@@ -1669,7 +1691,7 @@ Acceptance criteria:
 
 - [x] **P5 phase gate:** compare shell fixtures across all frameworks, run accessibility checks, and verify no renderer imports server packages.
 
-Evidence: the shared renderer foundation suite verified equal primitive coverage and accessibility-pattern obligations across React, Vue, and Svelte. Framework tests observed keyboard-only navigation, source-located missing-registration failures, and mismatch-free SSR hydration. Full workspace validation, stylesheet-aware architecture and dependency checks, every package build, packed lifecycle/package smoke tests, and three-example parity passed on 2026-07-27.
+Evidence: the shared renderer foundation suite verified equal primitive coverage and accessibility-pattern obligations across React, Vue, and Svelte. Framework tests observed keyboard-only navigation, source-located missing-registration failures, mismatch-free SSR hydration, isolated shadcn-family component slots, generated login composition, and full admin behavior. Full workspace validation, architecture and dependency checks, every package build, packed lifecycle/package smoke tests, and 42 serialized admin journeys across the three production example builds passed on 2026-08-11.
 
 ## 38. Phase P6: forms
 
@@ -1913,6 +1935,7 @@ Tasks:
 - [x] Implement lifecycle hooks and complete persistence replacement.
 - [x] Implement soft-delete-aware behavior.
 - [x] Implement immutable configured resource variants.
+- [x] Treat absent Holo model policies as unrestricted resource access while preserving panel access, tenant scope, Shield checks when installed, and all explicit policy decisions. Revalidated on 2026-08-09 through no-policy resource execution, explicit-policy denial suites, and every generated resource route in all three production examples.
 - [x] Add class/record policy, hidden attribute, mass assignment, and lifecycle rollback tests.
 
 Evidence: the resource builder, typed Holo model inputs, tenant-scoped executor, trusted create bindings, lifecycle and persistence replacement, soft-delete capability manifest, configured variants, and three tenant-safe example Post resources passed strict core/umbrella/example typechecks, ESM and declaration builds, ESLint, and 11 JSON-reported resource behavior tests on 2026-07-27.
@@ -1925,7 +1948,7 @@ Tasks:
 
 - [x] Implement List, Create, Edit, View, custom, singular, and related-record page definitions.
 - [x] Implement page data loaders, headers, breadcrumbs, actions, widgets, schemas, and custom component body.
-- [x] Implement panel bootstrap, active route, branding, theme, sidebar/topbar, user menu, responsive state, and error pages.
+- [x] Implement panel bootstrap, active route, branding, theme, sidebar/topbar, user menu, responsive state, and error pages. Revalidated on 2026-08-09: the generated Next, Nuxt, and SvelteKit shells render isolated panel themes, branding, icons, user menus, sidebar/topbar state, desktop collapse, mobile drawers, and safe unknown-route pages in production-browser acceptance.
 - [x] Resolve fixed panel guard and panel-access policy on every operation.
 - [x] Add same-guard and different-guard panel bootstrap tests.
 
@@ -1970,7 +1993,7 @@ Tasks:
 
 Evidence: the SvelteKit adapter uses fixed registry IDs, strict resource/action allow-lists, raw request bounds before CSRF and envelope decoding, Holo request/auth integration, native errors/redirects, and a generic JSON-safe Svelte resource renderer with schema-driven Create/View/Edit navigation. Generated page and endpoint shells import the app-owned `src/lib/server/panels/registry.ts` `panelsRegistry` export; the app hook supplies canonical Holo request context, while the operation endpoint owns CSRF enforcement. Generated shells pass strict typechecking and server execution in the 92-test CLI suite. Adapter and example Svelte diagnostics reported 0 errors/warnings; ESLint, 13 JSON-reported adapter tests, direct SvelteKit production build, the shared P9 gate, package build, and packed consumer validation passed on 2026-07-27.
 
-- [x] **P9 phase gate:** each example app has a generated Admin panel with Post List/Create/View/Edit/Delete, policies, filters, slug reactivity, category/city dependent selects, and error handling.
+- [x] **P9 phase gate:** each example app has a generated Admin panel with Post List/Create/View/Edit/Delete, optional policies, filters, slug reactivity, category/city dependent selects, and error handling. Revalidated on 2026-08-09 through the shared generated-app CRUD journey, exhaustive List/Create/View/Edit coverage for all eight example resources, 57 production-browser checks, and the complete workspace validation gate.
 
 Evidence: the three conventional framework entrypoints load app-owned panel runtimes or registries and pass the shared real Post lifecycle acceptance suite, including tenant isolation, policies, validation, filters, slug reactivity, dependent category/city options, CRUD, navigation, and error handling. Frozen installation, full workspace typecheck, ESLint, JSON Vitest suites, architecture and dependency validation, example parity, all package builds, packed lifecycle, 13-package installation/import smoke tests, isolated Next/Nuxt/SvelteKit consumer typechecks, and public API declaration validation passed on 2026-07-27.
 
@@ -1996,7 +2019,9 @@ Tasks:
 
 Evidence: the framework-neutral relation builder preserves owner, related-record, input, pivot, actor, tenant, query, and option-value types; derives safe defaults for every Holo relation kind; re-authorizes owner and related records; scopes owner before tenant and authorization; reuses constrained P6 option selection; and executes allow-listed record and pivot mutations transactionally. `make:resource --generate` now emits deterministic relation-manager definitions from injected or canonical Holo model metadata, including string and callback relation targets, in compact and split modes. Core and CLI typechecks, ESLint fix on all touched executable files, 8 focused relation tests, 22 focused generator tests, all 176 core tests, the complete CLI suite, package declaration builds, generated-resource typechecks, and public API fixture validation passed on 2026-07-27.
 
-- [x] **P10 phase gate:** Post/Comments has-many and Post/Tags belongs-to-many journeys pass in all example apps; lower-level tests cover remaining relation kinds.
+Revalidation on 2026-08-11: generated Post relation managers expose create/edit/view/delete, constrained associate/dissociate, attach/detach, and inferred numeric pivot editing in the real Next, Nuxt, and SvelteKit admin routes. The shared production-browser journey passed all positive and hostile route cases, including persisted pivot values, zero-mutation read-only View behavior, wrong-owner rejection, and wrong-tenant owner/related-record rejection. Lower-level relation-kind and read-only-through coverage passes in the focused core suite, and the complete workspace-wide gate is green.
+
+- [x] **P10 phase gate:** Post/Comments has-many and Post/Tags belongs-to-many journeys pass in all example apps; lower-level tests cover remaining relation kinds. Revalidated on 2026-08-09 through the production-browser relation lifecycle and hostile owner/tenant cases, focused relation-kind suites, and the complete workspace validation gate.
 
 Evidence: one shared relation-manager presentation model validates deterministic IDs, safe local standalone URLs, unique columns and records, visibility, badges, inline sections, tabs, grouped tabs, and standalone related-record links. React, Vue, and Svelte render the same semantic tables, tab lists, tab panels, operation allow-lists, empty states, badges, and page navigation. The shared example journey renders Post/Comments has-many and Post/Tags belongs-to-many through Next, Nuxt, and SvelteKit with deterministic SSR, then executes create, associate, dissociate, attach, pivot edit, detach, denial, wrong-owner, wrong-tenant, and read-only-through behavior through the core relation executor. Focused client and phase-gate tests, all affected package and example typechecks, zero-warning Svelte diagnostics, ESLint, full workspace tests and builds, architecture/dependency/publish validation, example parity, packed lifecycle tests for all frameworks, 13-package packed installation/import smoke tests, and isolated consumer typechecks passed on 2026-07-27.
 
@@ -2011,9 +2036,9 @@ Parallel lanes: navigation/clusters and global search can run in parallel.
 ### P11-A: navigation and clusters
 
 - [x] Implement generated resource/page/dashboard navigation.
-- [x] Implement groups, parents, clusters, badges, sorting, active state, collapsibility, and panel switcher.
+- [x] Implement groups, parents, clusters, badges, sorting, active state, collapsibility, and panel switcher. Revalidated on 2026-08-09 through the real generated-shell group, active-state, badge, hierarchy, collapse, and responsive journeys plus the shared React, Vue, and Svelte navigation renderer acceptance for clusters and panel switching.
 - [x] Implement resource sub-navigation and configured resource/page variants.
-- [x] Implement top navigation and sidebar modes.
+- [x] Implement top navigation and sidebar modes. Revalidated on 2026-08-09: Next/React, Nuxt/Vue, and SvelteKit/Svelte render compiled topbar navigation without a sidebar, while production-browser acceptance covers the responsive collapsible sidebar and mobile drawer in all three generated apps.
 - [x] Add collision, unauthorized-item, responsive, and keyboard tests.
 
 ### P11-B: global search
@@ -2023,7 +2048,7 @@ Parallel lanes: navigation/clusters and global search can run in parallel.
 - [x] Search relation paths without N+1 queries.
 - [x] Add stale request, search-length, unauthorized resource, inaccessible result page, and multiple-panel isolation tests.
 
-- [x] **P11 phase gate:** navigation and global search acceptance pass in all renderers and framework apps.
+- [x] **P11 phase gate:** navigation and global search acceptance pass in all renderers and framework apps. Revalidated on 2026-08-09 through renderer acceptance, tenant-scoped generated-shell search, responsive navigation, and the complete workspace and production-browser gates.
 
 Evidence: core navigation resolution deterministically compiles authorized resource, page, dashboard, configured variant, parent, group, cluster, badge, active-route, panel-switcher, sidebar, and topbar state while rejecting collisions, cycles, unknown hierarchy, cross-panel destinations, and denied ancestor chains. Global search preserves typed record and relation paths, scopes guard/panel/tenant/policy before lookup, batches relation loading, projects only allow-listed result fields/actions, bounds terms/results, rejects unsafe pages, and isolates panels. Reactive client stores cover responsive collapse, keyboard navigation, debouncing, cancellation, stale responses, and shortcuts. React, Vue, and Svelte render the same accessible navigation, panel switcher, combobox, listbox, result details, icons/images, and actions. The shared Next, Nuxt, and SvelteKit journey observed deterministic SSR, hierarchy/variant navigation, group and cluster collapse, keyboard routing, panel switching, and populated search results. Focused core/client/phase-gate tests, all affected package and example typechecks, zero-warning Svelte diagnostics, ESLint, full workspace tests and builds, architecture/dependency/publish validation, example parity, packed lifecycle tests for all frameworks, 13-package packed installation/import smoke tests, and isolated consumer typechecks passed on 2026-07-27.
 
@@ -2045,10 +2070,10 @@ Tasks:
 - [x] Implement custom component widgets.
 - [x] Implement widget filters and persisted filter state.
 - [x] Implement multiple dashboards and default authorized dashboard selection.
-- [x] Implement resource page header/footer widgets with record/table context.
+- [x] Implement resource page header/footer widgets with record/table context. Revalidated on 2026-08-09: generated Next, Nuxt, and SvelteKit list pages pass their active search query into resource-widget context, render the resulting widget state, and display the same filtered table rows in production-browser acceptance.
 - [x] Add polling cancellation, unauthorized widget, filtered data, responsive grid, and cross-framework tests.
 
-- [x] **P12 phase gate:** stats, chart, table, and custom widgets render on dashboard and resource pages across all frameworks.
+- [x] **P12 phase gate:** stats, chart, table, and custom widgets render on dashboard and resource pages across all frameworks. Revalidated on 2026-08-09 through the shared renderer phase gate, generated resource-widget query journey, and complete workspace validation.
 
 Evidence: widget and dashboard builders now compile immutable client manifests, retain authorization, visibility, data, and dashboard access callbacks exclusively on the server, and participate in deterministic prepare-time discovery. The client store provides allow-listed persisted filters, lazy activation, stale-request cancellation, polling lifecycle cancellation, safe error state, and responsive grid placement. React, Vue, and Svelte render stats, dependency-free line, area, bar, and pie SVG charts with accessible data tables, composed table widgets, registry-backed custom widgets, loading/error/unauthorized states, sorted responsive dashboards, and resource header/footer placements. The chart implementation and accessibility/bundle tradeoff is recorded in `packages/ui/WIDGET_CHARTS.md`. Focused core, client, umbrella, and renderer suites, a shared Next/Nuxt/SvelteKit phase-gate journey, all workspace typechecks and zero-warning Svelte diagnostics, ESLint, all workspace tests, public API declaration validation, architecture/dependency/publish validation, example parity, all package builds, 13-package packed installation/import smoke tests, isolated consumer typechecks, and packed lifecycle acceptance for all three frameworks passed on 2026-07-27.
 
@@ -2179,7 +2204,7 @@ Parallel lanes: component families, render hooks/assets/themes, custom plugins, 
 
 Tasks:
 
-- [x] Complete every form field, infolist entry, table column, filter, layout, summary, and action listed in sections 9 through 12. Evidence: React, Vue, and Svelte mount import/export transfer actions; render grouped actions and complete modal/slide-over presentations with slots and nested actions; render infolist visibility, layout, attributes, slots, safe Markdown, and sanitizer-bound rich content; and share entry, filter, and widget schema leaves plus responsive inline/dropdown/modal filter layouts. Public record, context, resolver-result, action, column, entry, filter, summary, and schema authoring types derive from runtime sources without factory generics or callback annotations. Focused inference and renderer suites, all package tests, strict workspace typecheck, ESLint, all 14 builds, and the packed validation gate passed on 2026-07-29.
+- [x] Complete every form field, infolist entry, table column, filter, layout, summary, and action listed in sections 9 through 12. Revalidated on 2026-08-09: behavior-oriented Core and React/Vue/Svelte renderer suites cover the complete built-in families, generated apps exercise real CRUD, table, relation, action, search, widget, tenant, and MFA workflows, and the exact 161-topic Filament 5 parity validator reports no deferred rows.
 - [x] Implement singular and nested resource edge cases. Evidence: singular resources resolve only after base/tenant/authorization scopes and reject list/create pages; nested resources infer the parent record from a supplied parent resource builder, resolve and authorize the trusted parent before applying the mandatory child scope, scope child lookup/mutation, verify parents before create, return 404 for missing/unauthorized combinations, and remain mutually exclusive with singular resources. Strict Core typecheck, ESLint, declaration build, and 3/3 focused nested executor tests passed on 2026-07-29.
 - [x] Implement configured resource/page variants registered multiple times. Evidence: immutable configured resources and pages preserve the original definition while deriving independent IDs, slugs/routes, component identities, and discovery contributions; one plugin can register base and configured variants into multiple panels without shared installation mutation. Focused plugin-authoring JSON Vitest passed 7/7 and Core declaration build passed on 2026-07-29.
 - [x] Implement render slots scoped to panel/resource/page/component. Evidence: panel, resource, page, and schema-component builders accept named JSON-safe ordered references, append repeated registrations, reject exact duplicates, sort deterministically by order/source/component, and serialize source-scoped manifests without callbacks or paths. React, Vue, and Svelte resolve the same ordered schema slot lists with trusted renderer properties; Core schema/plugin tests passed 15/15 and renderer suites passed 3/3, 4/4, and 4/4 with strict renderer typechecks on 2026-07-29.
@@ -2191,7 +2216,7 @@ Tasks:
 - [x] Add plugin compatibility, missing renderer, duplicate type, assets, translation, permission, and packed installation tests. Evidence: preparation tests reject incompatible versions, absent framework renderers, private renderer modules, duplicate/conflicting contributions, and escaping assets while verifying translations and permission metadata; the packed `@holo-js/panels-plugin-money` installs from tarballs, generates branded renderer registries plus asset/translation/icon metadata, and typechecks in clean Next, Nuxt, and SvelteKit fixtures. Focused preparation tests passed 8/8 and the three-framework packed lifecycle passed on 2026-07-29.
 - [x] Update the parity matrix so every official Filament 5 documentation topic is marked implemented, intentionally different, deferred, or not applicable with rationale. Evidence: `docs/filament-5-parity.md` classifies all 161 pages in the official Filament 5 index with an exact URL-set check, rationale, and source/test evidence.
 
-- [x] **P16 phase gate:** no parity item is unclassified; third-party sample plugin installs without changes to Holo Panels core and passes the public contract suite. Evidence: all 161 Filament 5 topics have evidence-backed classifications with no deferred rows; the independent `@acme/panels-plugin-catalog` tarball installs and imports against packed Holo Panels packages without core changes; full workspace typecheck, ESLint, package tests, architecture/dependency/publish validation, all 14 builds, conditional-export isolation, packed Next/Nuxt/SvelteKit lifecycle acceptance, isolated consumer checks, and the packed public plugin contract passed on 2026-07-29.
+- [x] **P16 phase gate:** no parity item is unclassified; third-party sample plugin installs without changes to Holo Panels core and passes the public contract suite. Revalidated on 2026-08-09 through the 161-topic matrix, packed third-party plugin install/import/typecheck, public inference contracts, and complete workspace validation.
 
 ## 49. Phase P17: documentation, hardening, and release
 
@@ -2214,10 +2239,10 @@ Parallel lanes: documentation, security/performance audit, examples, and release
 
 ### P17-B: examples and acceptance
 
-- [x] Complete equivalent blog/admin apps for all three frameworks. Evidence: the Next, Nuxt, and SvelteKit fixtures expose equivalent guarded admin shells, dashboard, resources, tenant switching, MFA, notifications, and public tenant-scoped blog routes; all three production builds and the shared 30-test browser gate passed on 2026-07-29.
+- [x] Complete equivalent blog/admin apps for all three frameworks. Revalidated on 2026-08-11: the three production builds expose the same compiled navigation structure, user menu, isolated panel theme, resource widget context, CRUD, relation, tenant, search, and MFA behavior through their generated framework entrypoints.
 - [x] Cover Post, Category, Tag, Comment, User/Admin, media, roles, notifications, widgets, tenant-scoped records, import, and export. Evidence: the three framework fixtures and their shared P17 acceptance contracts cover all listed domains, including Post/Comment and Post/Tag relation behavior, tenant-owned content, Role and membership management, media fields, database notifications, dashboard widgets, and durable transfer workflows; the focused domain/transfer suite passed 23/23 on 2026-07-29.
-- [x] Add Playwright or framework-appropriate browser journeys for critical user behavior. Evidence: Playwright runs the same guarded-shell, dashboard, tenant-scoped CRUD/relation/delete, authorized tenant switch, Holo Auth MFA enrollment/challenge/recovery/disable, and public blog visibility/filter/detail/not-found journeys against production Next, Nuxt, and SvelteKit servers; 30/30 tests passed with six workers and zero retries on 2026-07-29. The acceptance suite exposed and verified request-bound Nuxt cookie accessors, request-hydrated MFA completion, and production project-accessor initialization coalescing in adjacent Holo-JS.
-- [x] Pack and install release artifacts into clean fixtures rather than testing workspace aliases only. Evidence: the source-resolved release dry run packed all 14 Holo Panels packages at `0.1.0-next.0` with exact internal ranges and `^0.3.10` Holo peers, packed the adjacent published Holo-JS 0.3.10 source, installed the tarballs into independent non-workspace and isolated optional-peer consumers, typechecked clean Next, Nuxt, and SvelteKit fixtures, installed the packed third-party plugin example, rejected source maps and non-release content, simulated all 14 publications with the `next` tag, and restored every source manifest byte-for-byte.
+- [x] Add Playwright or framework-appropriate browser journeys for critical user behavior. Revalidated on 2026-08-11: 60 production-browser journeys pass across Next, Nuxt, and SvelteKit, including the styled root admin page, computed isolated themes, responsive navigation, user menu navigation, safe 404s, tenant-scoped search and widgets, hostile relation routes, complete relation CRUD/pivot behavior, public blog isolation, tenant switching, and the full MFA enrollment, recovery challenge, and disable lifecycle.
+- [x] Pack and install release artifacts into clean fixtures rather than testing workspace aliases only. Revalidated on 2026-08-11: the protected source release dry-run packed all 14 Holo Panels packages at `0.1.0-next.1` with exact internal ranges and `>=0.3.9` Holo peers, installed the tarballs into independent non-workspace and isolated optional-peer consumers, typechecked clean Next, Nuxt, and SvelteKit fixtures, installed the packed third-party plugin example, rejected non-release content, passed every packed P0-C lifecycle, simulated all 14 npm publications with the `next` tag, and restored source manifest dependency ranges after packing.
 
 ### P17-C: security and performance audit
 
@@ -2231,13 +2256,15 @@ Parallel lanes: documentation, security/performance audit, examples, and release
 
 ### P17-D: release
 
-- [x] Verify lockstep versions and peer compatibility with supported Holo-JS versions. Evidence: all 14 Holo Panels candidates are `0.1.0-next.0`; every Holo dependency and peer consistently uses `^0.3.10`, accepting Holo-JS `>=0.3.10 <0.4.0`; published Holo-JS `0.3.10` is pinned at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`; dependency policies, resolved release manifests, clean tarball consumers, isolated optional-peer consumers, and the minimum-peer compatibility suite passed on 2026-08-04.
-- [x] Run full typecheck, lint, tests, coverage diagnostics, architecture checks, package builds, packed smoke tests, and example acceptance. Evidence: the complete `bun run validate` gate passed on 2026-08-04 against the published Holo-JS 0.3.10 lockfile, including ordered strict workspace typechecks, ESLint, all package and architecture tests, every package build, conditional-export isolation, packed P0-C lifecycle acceptance, clean 14-package consumers, public and third-party plugin contracts, optional/minimum-peer checks, and all three framework fixture typechecks. Coverage diagnostics passed at 77.19% statements, 66.84% branches, 79.80% functions, and 85.13% lines; generated API references were current; the source-resolved release dry run passed; and freshly rebuilt Next, Nuxt, and SvelteKit production applications passed the six-worker 30/30 Playwright suite with zero retries.
+- [x] Verify lockstep versions and peer compatibility with supported Holo-JS versions. Revalidated on 2026-08-11: all 14 Holo Panels candidates and lockfile workspace entries are `0.1.0-next.1`; every Holo dependency and peer consistently uses `>=0.3.9`, accepting every later stable Holo-JS release without per-version Panels edits. Holo-JS `0.3.9` was never published, so executable minimum-version validation begins at published `0.3.10`; dependency policies, resolved release manifests, clean tarball consumers, isolated optional-peer consumers, and compatibility-floor tests pass.
+- [x] Run full typecheck, lint, tests, coverage diagnostics, architecture checks, package builds, packed smoke tests, and example acceptance. Revalidated on 2026-08-11: all 14 package builds/typechecks and 412 behavior suites with 1,036 tests, ESLint, architecture and dependency policies, conditional exports, exact 161-topic parity with no deferred rows, coverage diagnostics, packed P0-C lifecycles, packed independent/framework/plugin consumers, three production builds, 60 browser journeys, and API-reference freshness passed.
 - [x] Publish prerelease packages and test installation from the registry. Evidence: the protected npm release published all 14 Holo Panels packages at `0.1.0-next.0` with the `next` tag on 2026-08-04. The adjacent Holo-JS resolver fix was published across the 46-package lockstep `0.3.11` release from commit `0d074287272b769cda83fe4886c2127c96c9c529`, with 46 matching Git tags and registry versions. `bun run test:registry-release` then bootstrapped the published Holo CLI and exact Panels prerelease into clean, non-workspace Next, Nuxt, and SvelteKit applications and passed plugin activation, preparation, panel/resource generation, adapter selection, Shield, idempotency, and safe uninstall for all three frameworks.
 - [x] Publish migration/upgrade guide and changelog. Evidence: `docs/testing-deployment-upgrades.md` documents clean installation, generated artifacts, deployment, lockstep releases, safe upgrades, migrations, and uninstall; `CHANGELOG.md` records the published `0.1.0-next.0` package family, compatibility evidence, and registry acceptance.
 - [x] Release `@holo-js/panels` and its workspace family. Evidence: GitHub release run `30908409841` published all 14 public packages at `0.1.0-next.0` with the `next` tag; registry verification observed every version and tag, the staged queue was empty, and the subsequent three-framework registry lifecycle passed.
 
-- [x] **P17 final gate:** a new Holo app can install the published plugin, create a panel and generated resource exclusively with `holo` commands, run all three supported frameworks, and pass the documented security and behavior acceptance suite. Evidence: `bun run test:registry-release` passed from clean registry-only Next, Nuxt, and SvelteKit fixtures on 2026-08-04 using published `@holo-js/cli@0.3.11` and `@holo-js/panels@0.1.0-next.0`; the release also retains the 30/30 production browser acceptance and complete `bun run validate` evidence recorded above.
+- [ ] **P17 final gate:** a new Holo app can install the published plugin, create a panel and generated resource exclusively with `holo` commands, run all three supported frameworks, and pass the documented security and behavior acceptance suite.
+
+Current evidence on 2026-08-11: the complete `0.1.0-next.1` protected dry-run and local-tarball lifecycle pass for all three frameworks. The registry lifecycle correctly remains open because npm still serves `0.1.0-next.0`, which predates fingerprinted plugin stylesheet generation. Publishing `0.1.0-next.1` and rerunning `bun run test:registry-release` are the only remaining phase-gate actions.
 
 ## 50. Feature parity inventory
 

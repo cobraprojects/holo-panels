@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
+import { ShadcnButton, ShadcnInput } from '../internal-ui'
 import type { ComponentRegistry } from '../registry'
-import type { ReactCustomColumnProps, ReactTableColumn } from './types'
+import type { ReactCustomColumnProps, ReactTableColumn, ReactTableColumnPath, ReactTableColumnValue } from './types'
 
 type Formatter = Readonly<Record<string, unknown>> & { readonly kind: string }
 
@@ -123,15 +124,16 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
   readonly registry?: ComponentRegistry
   readonly value: unknown
 }): ReactNode {
+  const inferredValue = value as ReactTableColumnValue<TRecord, ReactTableColumnPath<TRecord>>
   const [copyStatus, setCopyStatus] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState(false)
-  if (column.render) return column.render(value, record)
+  if (column.render) return column.render(inferredValue, record)
   const formatters = formatterList(column.manifest)
   const formatted = formattedValue(value, formatters)
   const type = column.manifest.type
   const tooltip = formatters.find(formatter => formatter.kind === 'tooltip')?.value
-  const url = safeUrl(formatters.find(formatter => formatter.kind === 'url')?.value)
+  const url = safeUrl(column.url?.(record)) ?? safeUrl(formatters.find(formatter => formatter.kind === 'url')?.value)
   const actionValue = formatters.find(formatter => formatter.kind === 'action')?.value
   const actionId = typeof actionValue === 'string' && /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u.test(actionValue) ? actionValue : null
   const badge = type === 'badge' || formatters.some(formatter => formatter.kind === 'badge' && formatter.value !== false)
@@ -150,7 +152,7 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     )
     const configuration = formatters.find(formatter => formatter.kind === 'custom')?.configuration
     const properties = configuration !== null && typeof configuration === 'object' && !Array.isArray(configuration) ? configuration : {}
-    content = <Renderer {...properties} column={column} record={record} value={value} />
+    content = <Renderer {...properties} column={column} record={record} value={inferredValue} />
   } else if (type === 'boolean' || type === 'icon') {
     const active = Boolean(value)
     content = <span aria-label={active ? 'Yes' : 'No'} data-icon={iconName(formatters, active)} role="img">{active ? '✓' : '✕'}</span>
@@ -164,7 +166,7 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     const color = safeColor(value)
     content = color ? <span><span aria-hidden="true" className="hp-table-color" style={{ backgroundColor: color }} />{color}</span> : formatted
   } else if ((type === 'checkbox' || type === 'toggle') && !column.manifest.inlineEditor) {
-    content = <input aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled readOnly type="checkbox" />
+    content = <ShadcnInput aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled readOnly type="checkbox" />
   } else {
     const configuredIcon = formatters.find(formatter => formatter.kind === 'icon')?.name
     const textColor = safeColor(formatters.find(formatter => formatter.kind === 'color')?.value)
@@ -176,13 +178,13 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
   }
 
   const linked = url ? <a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{content}</a> : content
-  const actionable = actionId && onAction ? <button disabled={actionPending} onClick={() => {
+  const actionable = actionId && onAction ? <ShadcnButton disabled={actionPending} onClick={() => {
     setActionPending(true)
     setActionError(null)
     void onAction(actionId).catch(cause => {
       setActionError(cause instanceof Error ? cause.message : 'Column action failed')
     }).finally(() => setActionPending(false))
-  }} type="button">{linked}</button> : linked
+  }} type="button">{linked}</ShadcnButton> : linked
   const copy = async (): Promise<void> => {
     if (!globalThis.navigator?.clipboard) {
       setCopyStatus('Copy unavailable')
@@ -196,6 +198,6 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     }
   }
   return <span title={typeof tooltip === 'string' ? tooltip : undefined}>{actionable}{column.manifest.copyable && !column.manifest.inlineEditor
-    ? <button aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} onClick={() => void copy()} type="button">Copy</button>
+    ? <ShadcnButton aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} onClick={() => void copy()} type="button">Copy</ShadcnButton>
     : null}<span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>{actionError ? <span role="alert">{actionError}</span> : null}</span>
 }

@@ -629,6 +629,7 @@ export class CustomComponentBuilder<TValues = Readonly<Record<string, unknown>>,
 }
 
 export class SchemaBuilder<TValues = Readonly<Record<string, unknown>>, TContext = unknown> {
+  declare readonly resourceRecordType: TValues
   readonly #id: string
   #statePath?: SchemaPath<TValues>
   #components: readonly SchemaComponentBuilder<TValues, TContext>[] = []

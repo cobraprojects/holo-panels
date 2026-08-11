@@ -1,6 +1,6 @@
 {
   "name": "@holo-js/panels-react",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "React renderer for Holo Panels",
   "type": "module",
   "license": "MIT",
@@ -35,7 +35,9 @@
   "dependencies": {
     "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
-    "@holo-js/panels-ui": "workspace:*"
+    "@holo-js/panels-ui": "workspace:*",
+    "lucide-react": "catalog:",
+    "radix-ui": "catalog:"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -45,8 +47,6 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "happy-dom": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

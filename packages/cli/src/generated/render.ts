@@ -20,6 +20,7 @@ const artifactNames = [
   'permissions.ts',
   'types.d.ts',
   'framework-artifacts.json',
+  'panel-routes.json',
   'registry.json',
 ] as const
 
@@ -66,6 +67,12 @@ function byKind(
 function renderServerRegistry(definitions: readonly DiscoveredDefinition[]): string {
   const entries = definitions.map((definition) => {
     const importPath = posix.join('../../..', definition.projectPath).replace(/\.[cm]?[jt]sx?$/, '')
+    if (definition.generatedResourcePage) {
+      return `  ${JSON.stringify(`${definition.panelId}:${definition.kind}:${definition.id}`)}: async () => { const { createGeneratedResourcePage } = await import('@holo-js/panels/server'); const resource = (await import(${JSON.stringify(importPath)}))[${JSON.stringify(definition.generatedResourcePage.resourceExportName)}]; return createGeneratedResourcePage(resource, ${JSON.stringify(definition.generatedResourcePage.manifest)}) },`
+    }
+    if (definition.registeredFrom) {
+      return `  ${JSON.stringify(`${definition.panelId}:${definition.kind}:${definition.id}`)}: async () => { const panel = (await import(${JSON.stringify(importPath)}))[${JSON.stringify(definition.registeredFrom.exportName)}]; const definition = 'compileDiscoveryDefinition' in panel ? panel.compileDiscoveryDefinition() : panel; return definition.server.registered[${definition.registeredFrom.index}].value },`
+    }
     return `  ${JSON.stringify(`${definition.panelId}:${definition.kind}:${definition.id}`)}: async () => (await import(${JSON.stringify(importPath)}))[${JSON.stringify(definition.exportName)}],`
   })
 
@@ -118,6 +125,33 @@ function renderJson(value: ClientManifestValue): string {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
+function joinedRoutePath(...values: readonly string[]): string {
+  const segments = values.flatMap(value => value.split('/').filter(Boolean))
+  return segments.length === 0 ? '/' : `/${segments.join('/')}`
+}
+
+function panelRoutesValue(definitions: readonly DiscoveredDefinition[]): ClientManifestValue {
+  const routes = definitions.filter(definition => definition.kind === 'panel').flatMap((definition) => {
+    const server = definition.server && typeof definition.server === 'object' ? definition.server : null
+    const configured = server && Array.isArray(Reflect.get(server, 'routes')) ? Reflect.get(server, 'routes') as readonly object[] : []
+    const panelPath = typeof definition.client.path === 'string' ? definition.client.path : `/${definition.panelId}`
+    const routeDomain = server && typeof Reflect.get(server, 'routeDomain') === 'string' ? String(Reflect.get(server, 'routeDomain')) : null
+    const routePrefix = server && typeof Reflect.get(server, 'routePrefix') === 'string' ? String(Reflect.get(server, 'routePrefix')) : ''
+    return configured.map((route) => {
+      const method = Reflect.get(route, 'method')
+      const path = Reflect.get(route, 'path')
+      const scope = Reflect.get(route, 'scope')
+      if (typeof method !== 'string' || typeof path !== 'string' || typeof scope !== 'string') throw new TypeError('Compiled panel routes require method, path, and scope metadata')
+      const tenantScoped = scope === 'tenant' || scope === 'authenticated-tenant'
+      const source = tenantScoped && !routeDomain
+        ? joinedRoutePath(panelPath, routePrefix, ':tenant', path)
+        : joinedRoutePath(panelPath, path)
+      return { domain: tenantScoped ? routeDomain : null, method, panelId: definition.panelId, scope, source }
+    })
+  })
+  return { routes, version: 1 }
+}
+
 export function renderPanelArtifacts(
   definitions: readonly DiscoveredDefinition[],
 ): readonly GeneratedPanelArtifact[] {
@@ -154,6 +188,7 @@ export function renderPanelArtifacts(
     'permissions.ts': renderModule('permissions', permissions),
     'types.d.ts': renderTypes(definitions),
     'framework-artifacts.json': renderJson(frameworkArtifacts),
+    'panel-routes.json': renderJson(panelRoutesValue(definitions)),
     'registry.json': renderJson(registryValue(definitions)),
   }
 

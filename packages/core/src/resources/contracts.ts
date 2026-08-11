@@ -72,6 +72,13 @@ export interface ResourceExecutionContext<TActor extends object, TTenant> {
   readonly scopeTenantQuery?: <TQuery>(query: TQuery) => TQuery
 }
 
+export interface ResourceCompositionTypes<TRecord, TActor = unknown, TTenant = unknown, TServices = unknown> {
+  readonly actor: TActor
+  readonly record: TRecord
+  readonly services: TServices
+  readonly tenant: TTenant
+}
+
 export interface ResourceAuthorization<TModel, TRecord, TActor extends object> {
   authorizeClass(actor: TActor | null, operation: 'create' | 'viewAny', model: TModel): Promise<void>
   authorizeRecord(actor: TActor | null, operation: Exclude<ResourceOperation, 'create' | 'viewAny'>, record: TRecord): Promise<void>
@@ -183,6 +190,7 @@ export interface ResourceDefinition<
   TTenant,
   TSoftDeletes extends boolean,
 > extends DiscoverableDefinition<'resource'> {
+  readonly actions: readonly Readonly<{ readonly id: string, readonly kind: string }>[]
   readonly baseQuery: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery
   readonly capabilities: ResourceCapabilities<TSoftDeletes>
   readonly client: ResourceClientManifest<TRecord, TSoftDeletes>

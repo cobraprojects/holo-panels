@@ -3,6 +3,6 @@ import { defineEventHandler, getRequestURL } from 'h3'
 
 const csrf = csrfProtection()
 
-export default defineEventHandler(event => getRequestURL(event).pathname.startsWith('/_holo/panels/')
+export default defineEventHandler(event => getRequestURL(event).pathname.startsWith('/holo/panels/')
   ? undefined
   : csrf(event))

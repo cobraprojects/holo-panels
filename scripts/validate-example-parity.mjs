@@ -63,8 +63,10 @@ try {
     const actualRoot = resolve(repositoryRoot, 'apps', example.directory)
     if (example.framework === 'next') {
       const operationRoute = await readFile(join(actualRoot, nextOperationRoutePath)).catch(() => undefined)
+      const encodedOperationRoute = await readFile(join(actualRoot, 'app/%5Fholo/panels/[panelId]/[operation]/route.ts')).catch(() => undefined)
       const privateOperationRoute = await readFile(join(actualRoot, 'app/_holo/panels/[panelId]/[operation]/route.ts')).catch(() => undefined)
-      if (!operationRoute) differences.push(`${example.directory}/${nextOperationRoutePath}: missing encoded Next operation route`)
+      if (!operationRoute) differences.push(`${example.directory}/${nextOperationRoutePath}: missing clean Next operation route`)
+      if (encodedOperationRoute) differences.push(`${example.directory}/app/%5Fholo/panels/[panelId]/[operation]/route.ts: encoded Next route must not exist`)
       if (privateOperationRoute) differences.push(`${example.directory}/app/_holo/panels/[panelId]/[operation]/route.ts: private Next route must not exist`)
     }
     const expectedManifest = JSON.parse(await readFile(join(expectedRoot, 'package.json'), 'utf8'))

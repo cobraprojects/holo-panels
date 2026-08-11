@@ -8,6 +8,7 @@ import {
   examplePosts,
   examplePostTags,
   exampleTags,
+  exampleTenants,
 } from '../../fixtures/example-domain'
 import Category from '../../models/Category'
 import Comment from '../../models/Comment'
@@ -16,6 +17,7 @@ import Membership from '../../models/Membership'
 import Post from '../../models/Post'
 import PostTag from '../../models/PostTag'
 import Tag from '../../models/Tag'
+import Tenant from '../../models/Tenant'
 import User from '../../models/User'
 
 const actors = [
@@ -30,6 +32,9 @@ export default defineSeeder({
   async run() {
     const password = await hashPassword('panel-secret')
     const timestamp = new Date('2026-07-29T00:00:00.000Z')
+    await Tenant.unguarded(async () => {
+      for (const tenant of exampleTenants) await Tenant.updateOrCreate({ id: tenant.id }, { name: tenant.name, slug: tenant.routeKey })
+    })
     await User.unguarded(async () => {
       for (const actor of actors) await User.updateOrCreate({ id: actor.id }, { ...actor, createdAt: timestamp, password, updatedAt: timestamp })
     })

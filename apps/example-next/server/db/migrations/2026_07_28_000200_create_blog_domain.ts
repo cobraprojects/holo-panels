@@ -61,7 +61,7 @@ export default defineMigration({
     await schema.createTable('comments', (table) => {
       table.string('id').primaryKey()
       table.string('tenantId')
-      table.string('postId')
+      table.string('postId').nullable()
       table.string('authorName')
       table.text('body')
       table.string('status')
@@ -87,6 +87,7 @@ export default defineMigration({
       table.string('tenantId')
       table.string('postId')
       table.string('tagId')
+      table.integer('position').default(0)
       table.foreign('postId').references('id').on('posts').cascadeOnDelete()
       table.foreign('tagId').references('id').on('tags').cascadeOnDelete()
       table.unique(['tenantId', 'postId', 'tagId'], 'post_tags_tenant_unique')

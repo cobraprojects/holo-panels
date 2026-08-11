@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { ShadcnButton, ShadcnInput, ShadcnTextarea } from '../internal-ui'
 import { FieldFrame, property, touchField, updateField } from './shared'
 import type { ReactFieldControlProps } from './types'
 
@@ -21,12 +22,13 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
     readOnly: context.readOnly,
   }
   if (context.definition.type === 'hidden') {
-    return <input name={context.definition.path} type="hidden" value={textValue(context.value)} />
+    return <ShadcnInput data-slot="input" name={context.definition.path} type="hidden" value={textValue(context.value)} />
   }
   if (context.definition.type === 'textarea') {
-    return <FieldFrame context={context}><textarea
+    return <FieldFrame context={context}><ShadcnTextarea
       {...common}
       data-autosize={property(context, 'autosize', false) || undefined}
+      data-slot="textarea"
       maxLength={property(context, 'maximumLength', undefined as number | undefined)}
       onChange={event => updateField(props, event.currentTarget.value)}
       onInput={property(context, 'autosize', false) ? (event: FormEvent<HTMLTextAreaElement>) => {
@@ -41,8 +43,9 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
     const stateLabel = context.value === true
       ? stringProperty(props, 'onLabel')
       : stringProperty(props, 'offLabel')
-    return <FieldFrame after={stateLabel ? <span className="hp-field-toggle-label">{stateLabel}</span> : null} context={context}><input
+    return <FieldFrame after={stateLabel ? <span className="hp-field-toggle-label">{stateLabel}</span> : null} context={context}><ShadcnInput
       checked={context.value === true}
+      data-slot={context.definition.type === 'toggle' ? 'switch' : 'checkbox'}
       disabled={context.disabled}
       onBlur={common.onBlur}
       onChange={event => updateField(props, event.currentTarget.checked)}
@@ -60,8 +63,9 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
         const value: unknown = Reflect.get(option, 'value')
         if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return null
         const id = `${context.inputId}-${index}`
-        return <label htmlFor={id} key={String(value)}><input
+        return <label htmlFor={id} key={String(value)}><ShadcnInput
           checked={context.value === value}
+          data-slot="radio-group-item"
           disabled={context.disabled || Reflect.get(option, 'disabled') === true}
           id={id}
           name={context.definition.path}
@@ -95,18 +99,19 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
   const datalistId = datalist.length > 0 ? `${context.inputId}-list` : undefined
   const after = <>
     {suffix ? <span className="hp-field-suffix">{suffix}</span> : null}
-    {revealable ? <button
+    {revealable ? <ShadcnButton
       aria-controls={context.inputId}
       aria-label={passwordVisible ? 'Hide password' : 'Show password'}
       onClick={() => setPasswordVisible(value => !value)}
       type="button"
-    >{passwordVisible ? 'Hide' : 'Show'}</button> : null}
+    >{passwordVisible ? 'Hide' : 'Show'}</ShadcnButton> : null}
     {datalistId ? <datalist id={datalistId}>{datalist.map(option => <option key={option} value={option} />)}</datalist> : null}
   </>
-  return <FieldFrame after={after} before={prefix ? <span className="hp-field-prefix">{prefix}</span> : null} context={context}><input
+  return <FieldFrame after={after} before={prefix ? <span className="hp-field-prefix">{prefix}</span> : null} context={context}><ShadcnInput
     {...common}
     autoComplete={property(context, 'autocomplete', undefined as string | undefined)}
     data-mask={stringProperty(props, 'mask') ?? undefined}
+    data-slot={context.definition.type === 'slider' ? 'slider' : 'input'}
     list={datalistId}
     max={property(context, 'maximum', undefined as number | string | undefined)}
     maxLength={property(context, 'maximumLength', undefined as number | undefined)}

@@ -37,8 +37,10 @@ const AUTH_OPERATIONS = new Set<PanelAuthOperation>([
   'password-reset',
   'profile-read',
   'profile-update',
+  'registration',
 ])
 const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'profile-read'])
+const TENANT_AWARE_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['profile-read', 'profile-update'])
 const TENANT_OPERATIONS = new Set<PanelTenantOperation>(['profile-read', 'profile-update', 'register', 'switch'])
 const JSON_HEADERS = Object.freeze({ 'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8' })
 
@@ -89,6 +91,11 @@ async function resolvedAuth(runtime: NextPanelsRuntime) {
   return auth as unknown as PanelAuthRuntime<object>
 }
 
+async function authTenant(runtime: NextPanelsRuntime, operation: PanelAuthOperation, request: Request): Promise<unknown> {
+  if (!TENANT_AWARE_AUTH_OPERATIONS.has(operation)) return undefined
+  return runtime.resolveTenant?.(request)
+}
+
 async function protectMutation(request: Request): Promise<Response | null> {
   if (request.method !== 'POST') return null
   const csrfResponse = await csrfProtection()(request.clone())
@@ -117,7 +124,7 @@ export function createPanelAuthRoute(options: CreatePanelAuthRouteOptions): { re
           payload: await payload(request),
           services: await runtime.resolveServices?.(request),
           signal: request.signal,
-          tenant: await runtime.resolveTenant?.(request),
+          tenant: await authTenant(runtime, operation, request),
         })
         return response(outcome.data, outcome.status, outcome.cookies, outcome.redirectTo)
       })

@@ -177,24 +177,13 @@ The exported `@holo-js/panels-testing/react`, `@holo-js/panels-testing/vue`, and
 
 Evidence: [manifest](../packages/testing/package.json), [root declarations](../packages/testing/dist/index.d.ts), [React declarations](../packages/testing/dist/react.d.ts), [Vue declarations](../packages/testing/dist/vue.d.ts), [Svelte declarations](../packages/testing/dist/svelte.d.ts).
 
-## Unavailable and incomplete surfaces
+## Completed P14-P16 surfaces
 
-The following work exists only as internal implementation, partial scaffolding, or a future phase. It is not a supported public API.
+Shield commands execute through the Holo application-command runtime using generated panel permissions and application Shield configuration. Role and Permission resources use the ordinary resource and renderer contracts. Panel authentication, Holo Auth MFA, tenant registration/profile/switching, and secure framework-native dispatch are available through the public panel and adapter APIs.
 
-### P14: Shield, authentication, MFA, and tenancy
+Imports and exports include durable revisioned jobs, atomic outbox transitions, bounded queue workers, private streaming Holo Storage artifacts, progress and cancellation, completion notifications, authorized expiring downloads, and end-to-end framework acceptance.
 
-- Shield contributes `shield:setup`, `shield:diff`, `shield:sync`, `shield:make-role`, and `shield:seed`, but their validated handlers deliberately fail until the Holo application-command runtime and application Shield configuration contracts are approved and connected.
-- Role/permission resources and Shield administration UI are unavailable.
-- Panel auth compilation/controller and MFA delegation exist, but framework-native auth-page routing is unavailable. The tenant runtime and switch executor exist, while tenant switcher/registration/profile UI and adapter dispatch remain incomplete.
-- Do not import `@holo-js/panels-shield` internal filesystem paths; use only its declared root, plugin, and package metadata exports.
-
-### P15: imports and exports
-
-The umbrella exposes the approved importer/exporter builders and format contracts, and the CLI exposes their generators. Core includes validated CSV/XLSX execution, private download grants, lifecycle state, cleanup, and fixed-job queue groundwork. Durable immutable job inputs, atomic outbox dispatch, streaming Holo Storage artifacts, completion notifications, progress UI, and end-to-end workflows remain incomplete.
-
-### P16: general compiled-schema rendering
-
-Schema manifests and layout-tree renderers are public through the shared and framework packages. Plugin preparation still does not copy contributed assets or connect renderer registration and default precedence, and nested resource parent resolution needs an approved execution-context contract.
+Plugin preparation resolves contributed assets and renderer registrations, applies deterministic default precedence, and supports nested resources through trusted parent execution context. These surfaces are public only through the package exports documented above; internal filesystem paths remain unsupported.
 
 ## Import-path rule
 

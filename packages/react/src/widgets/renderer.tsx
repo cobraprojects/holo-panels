@@ -19,6 +19,7 @@ import {
   type WidgetGridPlacement,
   type WidgetStat,
 } from '@holo-js/panels-client'
+import { ShadcnButton, ShadcnInput, ShadcnTable } from '../internal-ui'
 import type {
   ReactCustomWidgetProps,
   ReactDashboardRendererProps,
@@ -97,7 +98,7 @@ function StatContent({ action, navigate, stat }: {
     } : undefined}>{content}</a>
   }
   const statAction = stat.action
-  if (statAction && action) return <button onClick={() => void action(statAction)} type="button">{content}</button>
+  if (statAction && action) return <ShadcnButton onClick={() => void action(statAction)} type="button">{content}</ShadcnButton>
   return content
 }
 
@@ -239,11 +240,11 @@ function ChartWidget({ data }: { readonly data: ChartWidgetData }): ReactNode {
     </svg>
     <figcaption id={descriptionId}>{model.description}</figcaption>
     <div className="hp-table-responsive" role="region" aria-label={model.caption} tabIndex={0}>
-      <table>
+      <ShadcnTable>
         <caption>{model.caption}</caption>
         <thead><tr><th scope="col">Label</th>{model.columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
         <tbody>{model.rows.map(row => <tr key={row.label}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td key={`${row.label}-${model.columns[index] ?? index}`}>{value ?? '—'}</td>)}</tr>)}</tbody>
-      </table>
+      </ShadcnTable>
     </div>
   </figure>
 }
@@ -274,11 +275,11 @@ function WidgetFilters({ props, state }: { readonly props: ReactWidgetRendererPr
       const id = `${props.manifest.id}-${filter.id}`
       return <label htmlFor={id} key={filter.id}>{filter.label}
         {typeof value === 'boolean'
-          ? <input checked={value} id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.checked)} type="checkbox" />
-          : <input id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
+          ? <ShadcnInput checked={value} id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.checked)} type="checkbox" />
+          : <ShadcnInput id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
       </label>
     })}
-    <button onClick={() => void props.store.resetFilters()} type="button">Reset filters</button>
+    <ShadcnButton onClick={() => void props.store.resetFilters()} type="button">Reset filters</ShadcnButton>
   </form>
 }
 
@@ -296,17 +297,18 @@ export function ReactWidgetRenderer(props: ReactWidgetRendererProps): ReactNode 
   if (state.status === 'hidden') return null
   return <section
     aria-labelledby={props.manifest.heading ? headingId : undefined}
-    className={`hp-widget hp-widget-${props.manifest.family}`}
+    className={`hp-widget hp-widget--${props.manifest.family}`}
     data-panels-component="widget"
+    data-slot="card"
     data-widget-id={props.manifest.id}
   >
-    {props.manifest.heading ? <h2 id={headingId}>{props.manifest.heading}</h2> : null}
-    {props.manifest.description ? <p>{props.manifest.description}</p> : null}
+    {props.manifest.heading ? <h2 data-slot="card-title" id={headingId}>{props.manifest.heading}</h2> : null}
+    {props.manifest.description ? <p data-slot="card-description">{props.manifest.description}</p> : null}
     <WidgetFilters props={props} state={state} />
-    {state.status === 'idle' ? <button onClick={() => void props.store.activate()} type="button">Load widget</button> : null}
+    {state.status === 'idle' ? <ShadcnButton onClick={() => void props.store.activate()} type="button">Load widget</ShadcnButton> : null}
     {state.status === 'loading' ? <p aria-live="polite" role="status">Loading widget…</p> : null}
     {state.status === 'unauthorized' ? <p role="status">Widget unavailable</p> : null}
-    {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong>{state.error ? <span>{state.error}</span> : null}<button onClick={() => void props.store.load()} type="button">Retry</button></div> : null}
+    {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong>{state.error ? <span>{state.error}</span> : null}<ShadcnButton onClick={() => void props.store.load()} type="button">Retry</ShadcnButton></div> : null}
     {state.status === 'ready' ? <ReadyWidget props={props} state={state} /> : null}
   </section>
 }

@@ -31,9 +31,9 @@ The user approved this policy exactly as proposed on 2026-07-27. It governs pack
 
 ### 2.1 Holo-JS peers
 
-- The release compatibility line is `^0.3.10`, matching the validated published Holo-JS host release.
-- Holo Panels source manifests use `"catalog:"`; packed manifests must contain the resolved `^0.3.10` range.
-- All Holo peers in one release use the same compatibility line. Do not mix `^0.3.10`, exact `0.3.10`, and broad `>=0.3` ranges.
+- The release compatibility floor is `>=0.3.9`, accepting every later stable Holo-JS release without a Panels peer-range edit.
+- Holo Panels source manifests use `"catalog:"`; packed manifests must contain the resolved `>=0.3.9` range.
+- All Holo peers in one release use the same compatibility floor. Do not mix caret, exact, and inconsistent minimum ranges.
 - A future Holo minor or major range is adopted only after packed compatibility fixtures pass against the minimum and newest supported versions.
 - Cross-repository local development must use the documented pack/link workflow. Never place `workspace:*`, `file:`, `link:`, or an absolute path in a published Holo peer range.
 
@@ -128,6 +128,8 @@ All three renderers have these ordinary dependencies:
 
 `@holo-js/panels-react` additionally depends on `@holo-js/panels-core` using `workspace:*` for its approved `react-server` entrypoint. The browser renderer continues to consume client-safe contracts through the conditional export graph, and the server entry remains hook-free.
 
+The renderer-owned shadcn source boundary uses ordinary implementation dependencies only in the matching renderer: `radix-ui` and `lucide-react` for React, `reka-ui` and `lucide-vue-next` for Vue, and `bits-ui` and `lucide-svelte` for Svelte. Framework adapters remain dependent only on their matching renderer; their generated shells use internal source-owned icons so published UI does not require undeclared application dependencies.
+
 Required peers:
 
 | Renderer | Required peers |
@@ -204,23 +206,23 @@ All optional peers are dev dependencies for the repository's full renderer contr
 Before implementing any integration, the Holo Panels root catalog may add only the following approved version keys:
 
 ```text
-@holo-js/adapter-next       ^0.3.10
-@holo-js/adapter-nuxt       ^0.3.10
-@holo-js/adapter-sveltekit  ^0.3.10
-@holo-js/auth               ^0.3.10
-@holo-js/authorization      ^0.3.10
-@holo-js/broadcast          ^0.3.10
-@holo-js/config             ^0.3.10
-@holo-js/db                 ^0.3.10
-@holo-js/flux               ^0.3.10
-@holo-js/forms              ^0.3.10
-@holo-js/media              ^0.3.10
-@holo-js/notifications      ^0.3.10
-@holo-js/queue              ^0.3.10
-@holo-js/realtime           ^0.3.10
-@holo-js/security           ^0.3.10
-@holo-js/storage            ^0.3.10
-@holo-js/validation         ^0.3.10
+@holo-js/adapter-next       >=0.3.9
+@holo-js/adapter-nuxt       >=0.3.9
+@holo-js/adapter-sveltekit  >=0.3.9
+@holo-js/auth               >=0.3.9
+@holo-js/authorization      >=0.3.9
+@holo-js/broadcast          >=0.3.9
+@holo-js/config             >=0.3.9
+@holo-js/db                 >=0.3.9
+@holo-js/flux               >=0.3.9
+@holo-js/forms              >=0.3.9
+@holo-js/media              >=0.3.9
+@holo-js/notifications      >=0.3.9
+@holo-js/queue              >=0.3.9
+@holo-js/realtime           >=0.3.9
+@holo-js/security           >=0.3.9
+@holo-js/storage            >=0.3.9
+@holo-js/validation         >=0.3.9
 react-test-renderer         ^19.2.6
 @types/react-test-renderer  ^19.1.0
 ```
@@ -269,7 +271,7 @@ No manifest work may begin until the user approves this exact checklist:
 - [x] Approve optional core peers: Notifications, Queue, Storage, Media, Broadcast, Realtime, and Flux.
 - [x] Approve framework renderer peers and matching adapter peers.
 - [x] Approve exact lockstep published versions for internal Holo Panels dependencies.
-- [x] Approve `^0.3.8` as the initial Holo compatibility line.
+- [x] Approve the initial Holo compatibility line, since superseded by the current `>=0.3.9` compatibility floor.
 - [x] Approve renderer packages as optional peers of `panels-testing` rather than ordinary dependencies.
 - [x] Approve adding only the catalog keys listed in section 4, on demand.
 - [x] Approve implementation of dependency-policy validation and packed-install fixtures.

@@ -33,6 +33,7 @@ export interface OptionPage<TValue extends OptionValue = OptionValue> {
 
 export interface OptionSource<TValue extends OptionValue, TContext> {
   readonly kind: 'custom' | 'relationship' | 'resolver' | 'static'
+  manifestOptions?(): readonly ChoiceOption<TValue>[]
   list(request: OptionQueryRequest<TValue>, context: TContext, signal?: AbortSignal): Promise<OptionPage<TValue>>
   hydrateSelected(
     request: OptionQueryRequest<TValue>,

@@ -1,5 +1,7 @@
 import type { CompiledPanelProfileServer, PanelAuthContext } from './contracts'
 import type { CompiledPanelDefinition } from '../panels/contracts'
+import { toSchemaManifest } from '../schemas/manifest'
+import type { SchemaManifest } from '../schemas/contracts'
 
 type Awaitable<TValue> = TValue | Promise<TValue>
 
@@ -29,6 +31,7 @@ interface SessionGuard<TActor> {
   logout(): Promise<{ readonly cookies: readonly string[], readonly guard: string }>
   provider(): Promise<string | null>
   refreshUser(): Promise<TActor | null>
+  register?(input: Readonly<Record<string, unknown>> & { readonly passwordConfirmation: string }): Promise<TActor>
   user(): Promise<TActor | null>
 }
 
@@ -65,7 +68,7 @@ interface AuthControllerOptions<TActor, TTenant, TServices> {
   readonly tenant: TTenant
 }
 
-type AuthControllerErrorCode = 'access-denied' | 'auth-unavailable' | 'multi-factor-unavailable' | 'password-reset-unavailable' | 'profile-input-invalid' | 'profile-unavailable' | 'unauthenticated'
+type AuthControllerErrorCode = 'access-denied' | 'auth-unavailable' | 'multi-factor-unavailable' | 'password-reset-unavailable' | 'profile-input-invalid' | 'profile-unavailable' | 'registration-unavailable' | 'unauthenticated'
 
 export type PanelAuthSessionOutcome<TActor> = Readonly<{
   actor: TActor
@@ -158,6 +161,12 @@ export class PanelAuthController<TActor, TTenant = unknown, TServices = unknown>
     return Object.freeze({ ...outcome, redirectTo: this.#routes.logoutRedirect })
   }
 
+  async register(input: Readonly<Record<string, unknown>>): Promise<TActor> {
+    if (!this.#guard.register) throw new AuthControllerError('registration-unavailable', 'Panel registration is not supported by this guard')
+    if (typeof input.passwordConfirmation !== 'string') throw new AuthControllerError('profile-input-invalid', 'Panel registration requires password confirmation')
+    return this.#guard.register({ ...input, passwordConfirmation: input.passwordConfirmation })
+  }
+
   async profile(): Promise<TActor> {
     const actor = await this.#guard.user()
     if (actor === null) throw new AuthControllerError('unauthenticated', 'Authentication is required to view a panel profile')
@@ -170,6 +179,15 @@ export class PanelAuthController<TActor, TTenant = unknown, TServices = unknown>
     const actor = await this.profile()
     const context = await this.#profileContext(actor, signal)
     return profile.values(context)
+  }
+
+  async profilePage(signal: AbortSignal): Promise<Readonly<{ readonly schema: SchemaManifest, readonly values: Readonly<Record<string, unknown>> }>> {
+    const profile = this.#profile
+    if (!profile) throw new AuthControllerError('profile-unavailable', 'Panel profiles are not configured')
+    const actor = await this.profile()
+    const context = await this.#profileContext(actor, signal)
+    const [schema, values] = await Promise.all([toSchemaManifest(profile.schema, context), profile.values(context)])
+    return Object.freeze({ schema, values })
   }
 
   async updateProfile(input: Readonly<Record<string, unknown>>, signal: AbortSignal): Promise<TActor> {

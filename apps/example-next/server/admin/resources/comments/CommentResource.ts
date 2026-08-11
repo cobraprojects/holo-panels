@@ -1,21 +1,29 @@
-import { column, defineResource, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import Comment from '../../../models/Comment'
 
-export default defineResource(Comment, { tenant: String })
+const form = defineSchema(Comment).fields(field => [
+  field.text('postId').required(),
+  field.text('authorName').required(),
+  field.textarea('body').required(),
+  field.select('status').options([
+    { label: 'Approved', value: 'approved' },
+    { label: 'Pending', value: 'pending' },
+    { label: 'Spam', value: 'spam' },
+  ]).required(),
+])
+const table = defineTable(Comment).columns(column => [
+  column.text('authorName').searchable(),
+  column.text('body').limit(80).wrap(),
+  column.text('status').badge(),
+])
+
+export default defineResource(Comment)
   .recordTitle('authorName')
   .routeKey('id')
   .slug('comments')
-  .navigation({ icon: 'chat-bubble-left-right', label: 'Comments', sort: 40 })
+  .navigation({ group: 'Content', icon: 'chat', label: 'Comments', sort: 40 })
   .tenantScope((query, context) => query.where('tenantId', context.tenant))
   .createBindings(context => ({ tenantId: context.tenant }))
-  .form([
-    field.text('postId').required(),
-    field.text('authorName').required(),
-    field.text('body').required(),
-    field.text('status').required(),
-  ])
-  .table([
-    column.text('authorName'),
-    column.text('body'),
-    column.text('status'),
-  ])
+  .discoverPages()
+  .form(form)
+  .table(table)

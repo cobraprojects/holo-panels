@@ -6,12 +6,15 @@ import type {
   JsonValue,
   PanelAuthenticatedScope as CorePanelAuthenticatedScope,
   PanelOperation as CorePanelOperation,
-  PanelRuntime,
   ResolvedPageData,
   SvelteComponentRegistry,
+  CompiledPanelDefinition,
 } from '@holo-js/panels-svelte'
+import type { PanelRuntime, ResolvedWidget } from '@holo-js/panels-svelte/server'
 
 export type PanelOperation = CorePanelOperation
+export type SvelteKitPanelRegistryValue = object | { readonly compile: () => object }
+export type SvelteKitPanelServerRegistry = Readonly<Record<string, () => Promise<SvelteKitPanelRegistryValue>>>
 export type PanelBootstrapData = Awaited<ReturnType<PanelRuntime<unknown>['bootstrap']>>[number]
 export type PanelResolvedPageData = ResolvedPageData<JsonObject>
 
@@ -19,6 +22,10 @@ export interface PanelPageData {
   readonly effects: readonly Effect[]
   readonly panel: PanelBootstrapData
   readonly page: PanelResolvedPageData
+  readonly widgets: {
+    readonly footer: readonly ResolvedWidget<JsonValue>[]
+    readonly header: readonly ResolvedWidget<JsonValue>[]
+  }
 }
 
 export type PanelAuthenticatedScope<TActor = unknown> = CorePanelAuthenticatedScope<TActor>
@@ -44,13 +51,14 @@ export interface SvelteKitPanelEvent {
   readonly url: URL
 }
 
-export interface PanelPageResolutionInput<TActor = unknown> {
+export interface PanelPageResolutionInput<TActor = unknown, TTenant = unknown> {
   readonly event: SvelteKitPanelEvent
   readonly holo: ReturnType<typeof createSvelteKitHoloHelpers>
   readonly panelId: string
   readonly parameters: Readonly<Record<string, string>>
   readonly path: string
   readonly scope: PanelAuthenticatedScope<TActor>
+  readonly tenant: TTenant | undefined
 }
 
 export interface PanelOperationResult {
@@ -59,7 +67,7 @@ export interface PanelOperationResult {
   readonly status?: number
 }
 
-export interface PanelOperationInput<TActor = unknown> {
+export interface PanelOperationInput<TActor = unknown, TTenant = unknown> {
   readonly event: SvelteKitPanelEvent
   readonly holo: ReturnType<typeof createSvelteKitHoloHelpers>
   readonly idempotencyKey?: string
@@ -67,23 +75,39 @@ export interface PanelOperationInput<TActor = unknown> {
   readonly panelId: string
   readonly payload: JsonValue
   readonly scope: PanelAuthenticatedScope<TActor>
+  readonly tenant: TTenant | undefined
 }
 
-export interface SvelteKitPanelRegistry<TActor = unknown> {
-  readonly operations?: Readonly<Partial<Record<PanelOperation, (input: PanelOperationInput<TActor>) => PanelOperationResult | Promise<PanelOperationResult>>>>
-  readonly resolvePage: (input: PanelPageResolutionInput<TActor>) => PanelResolvedPageData | Promise<PanelResolvedPageData>
+export interface SvelteKitPanelRegistry<TActor = unknown, TTenant = unknown> {
+  readonly operations?: Readonly<Partial<Record<PanelOperation, (input: PanelOperationInput<TActor, TTenant>) => PanelOperationResult | Promise<PanelOperationResult>>>>
+  readonly panels?: Readonly<Record<string, CompiledPanelDefinition<TActor>>>
+  readonly resolvePage: (input: PanelPageResolutionInput<TActor, TTenant>) => PanelResolvedPageData | Promise<PanelResolvedPageData>
+  readonly resolveWidgets?: (input: PanelPageResolutionInput<TActor, TTenant> & { readonly page: PanelResolvedPageData }) => PanelPageData['widgets'] | Promise<PanelPageData['widgets']>
+  readonly resolveTenant?: (event: SvelteKitPanelEvent) => Promise<TTenant> | TTenant
   readonly runtime: PanelRuntimeLike<TActor>
 }
 
-export interface CreatePanelPageLoadOptions<TActor = unknown> {
-  readonly loginPath?: string
-  readonly panelId: string
-  readonly registry?: SvelteKitPanelRegistry<TActor>
+export function defineSvelteKitPanelRegistry<TActor, TTenant>(
+  runtime: PanelRuntimeLike<TActor>,
+  registry: Omit<SvelteKitPanelRegistry<TActor, TTenant>, 'runtime'>,
+): SvelteKitPanelRegistry<TActor, TTenant> {
+  return Object.freeze({ ...registry, runtime })
 }
 
-export interface CreatePanelOperationHandlerOptions<TActor = unknown> {
+export interface CreatePanelPageLoadOptions<TActor = unknown, TTenant = unknown> {
+  readonly loginPath?: string
+  readonly panelId: string
+  readonly registry?: SvelteKitPanelRegistry<TActor, TTenant>
+}
+
+export interface CreatePanelOperationHandlerOptions<TActor = unknown, TTenant = unknown> {
   readonly panelIds: readonly string[]
-  readonly registry?: SvelteKitPanelRegistry<TActor>
+  readonly registry?: SvelteKitPanelRegistry<TActor, TTenant>
+}
+
+export interface CreateSvelteKitPanelRouteOptions<TActor = unknown, TTenant = unknown> {
+  readonly panelId: string
+  readonly registry?: SvelteKitPanelRegistry<TActor, TTenant>
 }
 
 export interface PanelPageProps {
@@ -96,3 +120,11 @@ export interface SvelteKitPanelOperationHandler {
   readonly GET: (event: SvelteKitPanelEvent) => Promise<Response>
   readonly POST: (event: SvelteKitPanelEvent) => Promise<Response>
 }
+
+export interface SvelteKitPanelRouteHandler extends SvelteKitPanelOperationHandler {
+  readonly DELETE: (event: SvelteKitPanelEvent) => Promise<Response>
+  readonly PATCH: (event: SvelteKitPanelEvent) => Promise<Response>
+  readonly PUT: (event: SvelteKitPanelEvent) => Promise<Response>
+}
+
+export type SvelteKitPanelTenantHandler = SvelteKitPanelOperationHandler

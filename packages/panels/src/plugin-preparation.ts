@@ -165,7 +165,7 @@ async function prepareAsset(
   const contents = new Uint8Array(await readFile(resolved))
   const digest = createHash('sha256').update(contents).digest('hex').slice(0, 16)
   const filename = `${digest}-${basename(resolved)}`
-  const publicPath = `/_holo/panels/plugins/${pluginId}/${filename}`
+  const publicPath = `/holo/panels/plugins/${pluginId}/${filename}`
   return {
     artifact: { contents, path: `public${publicPath}` },
     manifest: Object.freeze({

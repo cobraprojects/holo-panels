@@ -36,6 +36,7 @@ export interface ReactNotificationInboxProps {
 
 export interface ReactNotificationInboxTriggerProps extends Omit<ReactNotificationInboxProps, 'placement'> {
   readonly label?: string
+  readonly lazy?: boolean
   readonly placement: 'sidebar' | 'topbar'
 }
 

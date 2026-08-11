@@ -1,5 +1,5 @@
 import { cloneVNode, computed, getCurrentScope, h, onScopeDispose, shallowRef, useId, type ComputedRef, type VNode, type VNodeChild } from 'vue'
-import type { VueFieldControlProps, VueFieldRenderContext, VueFieldRendererProps } from './types'
+import type { VueFieldControlProps, VueFieldPath, VueFieldRenderContext, VueFieldRendererProps, VueFieldValue } from './types'
 
 export function fieldValue(values: object, path: string): unknown {
   return path.split('.').reduce<unknown>((value, segment) => {
@@ -9,9 +9,9 @@ export function fieldValue(values: object, path: string): unknown {
   }, values)
 }
 
-export function useFieldContext<TValues extends object>(
-  props: VueFieldRendererProps<TValues>,
-): ComputedRef<VueFieldRenderContext<TValues> | null> {
+export function useFieldContext<TValues extends object, TPath extends VueFieldPath<TValues>>(
+  props: VueFieldRendererProps<TValues, TPath>,
+): ComputedRef<VueFieldRenderContext<TValues, TPath> | null> {
   const generatedId = useId().replaceAll(':', '')
   const state = shallowRef(props.store.state)
   const unsubscribe = props.store.subscribe(next => { state.value = next })
@@ -26,7 +26,7 @@ export function useFieldContext<TValues extends object>(
       errors: state.value.errors[path] ?? [],
       inputId: `hp-field-${generatedId}`,
       readOnly: state.value.readOnly[path] ?? props.definition.readOnly,
-      value: fieldValue(state.value.values, path),
+      value: fieldValue(state.value.values, path) as VueFieldValue<TValues, TPath>,
     }
   })
 }

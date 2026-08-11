@@ -1,5 +1,6 @@
 import { cloneElement, useId, type ReactElement, type ReactNode } from 'react'
 import { useFormStore, usePanelsStore } from '../store'
+import type { FormPath, FormValueAtPath } from '@holo-js/panels-client'
 import type { ReactFieldControlProps, ReactFieldRenderContext, ReactFieldRendererProps } from './types'
 
 export function fieldValue(values: object, path: string): unknown {
@@ -10,9 +11,9 @@ export function fieldValue(values: object, path: string): unknown {
   }, values)
 }
 
-export function useFieldContext<TValues extends object>(
-  props: ReactFieldRendererProps<TValues>,
-): ReactFieldRenderContext<TValues> | null {
+export function useFieldContext<TValues extends object, TPath extends FormPath<TValues>>(
+  props: ReactFieldRendererProps<TValues, TPath>,
+): ReactFieldRenderContext<TValues, TPath> | null {
   const generatedId = useId()
   const state = useFormStore(props.store)
   const path = props.definition.path
@@ -24,7 +25,7 @@ export function useFieldContext<TValues extends object>(
     errors: state.errors[path] ?? [],
     inputId: `hp-field-${generatedId.replaceAll(':', '')}`,
     readOnly: state.readOnly[path] ?? props.definition.readOnly,
-    value: fieldValue(state.values, path),
+    value: fieldValue(state.values, path) as FormValueAtPath<TValues, TPath>,
   }
 }
 

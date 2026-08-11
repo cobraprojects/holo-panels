@@ -1,12 +1,16 @@
 import { DISCOVERY_MARKER } from '../discovery/types'
 import type { ClientManifestValue, DiscoverableBuilder, DiscoveryDirectories } from '../discovery/types'
+import { createResourceActionComposer, type ResourceActionComposer } from '../actions'
 import { appendScopedRenderSlot, type ResourceRenderSlot, type ScopedRenderSlots } from '../panels/render-slots'
 import type { RenderSlotReference } from '../schemas/contracts'
-import type { OptionalRuntimeTypeValue, RuntimeTypeSource } from '../inference/type-source'
+import type { OptionalRuntimeTypeValue, RecordTypeSource, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
+import type { JsonObject } from '../protocol/json'
 import type {
   CompiledNestedResource,
   NestedResourceOptions,
   ResourceAttribute,
+  ResourceAttributes,
+  ResourceCompositionTypes,
   ResourceDefinition,
   ResourceExecutionContext,
   ResourceGlobalSearch,
@@ -25,6 +29,7 @@ import type {
 } from './contracts'
 
 interface ResourceBuilderState<TModel, TRecord, TQuery, TInput extends Readonly<Record<string, unknown>>, TActor extends object, TTenant, TSoftDeletes extends boolean> {
+  readonly actions: readonly ResourceActionDefinition[]
   readonly baseQuery: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery
   readonly createBindings?: (context: ResourceExecutionContext<TActor, TTenant>) => Partial<TInput> | Promise<Partial<TInput>>
   readonly discover?: Readonly<DiscoveryDirectories>
@@ -54,6 +59,77 @@ interface ResourceBuilderState<TModel, TRecord, TQuery, TInput extends Readonly<
   readonly writableAttributes: readonly ResourceAttribute<TRecord>[]
 }
 
+type CompactValueKind = 'boolean' | 'date-time' | 'number' | 'text'
+
+interface CompactComponentDescriptor<TKey extends string = string, TValueKind extends CompactValueKind = CompactValueKind> {
+  readonly key: TKey
+  readonly valueKind: TValueKind
+}
+
+interface ResourceRecordComposition<TRecord> {
+  readonly resourceRecordType: TRecord
+}
+
+interface ResourceActionDefinition {
+  readonly id: string
+  readonly kind: string
+}
+
+type ContextTypeCompatible<TActual, TExpected> = unknown extends TActual ? true : TActual extends TExpected ? true : false
+
+type CheckedResourceComposition<TRecord, TActor, TTenant, TComposition, TRecordMode extends 'ignore' | 'owner' | 'record'> =
+  TComposition extends { readonly resourceCompositionTypes: ResourceCompositionTypes<infer TCompositionRecord, infer TCompositionActor, infer TCompositionTenant, infer _TServices> }
+    ? ContextTypeCompatible<TCompositionActor, TActor> extends true
+      ? ContextTypeCompatible<TCompositionTenant, TTenant> extends true
+        ? TRecordMode extends 'ignore' ? TComposition
+          : TRecordMode extends 'owner'
+            ? TRecord extends TCompositionRecord ? TComposition : never
+            : TRecord extends TCompositionRecord ? TComposition : never
+        : never
+      : never
+    : TRecordMode extends 'owner'
+      ? TComposition extends { readonly kind: 'relation-manager', readonly resourceRecordType: infer TCompositionRecord }
+        ? TRecord extends TCompositionRecord ? TComposition : never
+        : never
+    : never
+
+type CheckedResourceCompositions<TRecord, TActor, TTenant, TCompositions extends readonly object[], TRecordMode extends 'ignore' | 'owner' | 'record'> = {
+  readonly [TIndex in keyof TCompositions]: CheckedResourceComposition<TRecord, TActor, TTenant, TCompositions[TIndex], TRecordMode>
+}
+
+interface CompilableResourceAction {
+  compile(): ResourceActionDefinition
+}
+
+type CompactDescriptorValue<TValueKind extends CompactValueKind> =
+  TValueKind extends 'boolean' ? boolean
+    : TValueKind extends 'number' ? number
+      : TValueKind extends 'date-time' ? Date
+        : string
+
+type CheckedCompactDescriptor<TRecord, TDescriptor> =
+  TDescriptor extends CompactComponentDescriptor<infer TKey, infer TValueKind>
+    ? TKey extends ResourceAttribute<TRecord>
+      ? NonNullable<ResourceAttributes<TRecord>[TKey]> extends CompactDescriptorValue<TValueKind> ? TDescriptor : never
+      : never
+    : never
+
+type CheckedCompactComposition<TRecord, TComposition> =
+  TComposition extends readonly CompactComponentDescriptor[]
+    ? { readonly [TIndex in keyof TComposition]: CheckedCompactDescriptor<TRecord, TComposition[TIndex]> }
+    : TComposition
+
+type CheckedRecordComposition<TRecord, TComposition> =
+  TComposition extends ResourceRecordComposition<infer TCompositionRecord>
+    ? TCompositionRecord extends TRecord
+      ? TComposition
+      : TCompositionRecord extends Partial<ResourceAttributes<TRecord>> ? TComposition : never
+    : never
+
+type CheckedRecordCompositions<TRecord, TCompositions extends readonly ResourceRecordComposition<object>[]> = {
+  readonly [TIndex in keyof TCompositions]: CheckedRecordComposition<TRecord, TCompositions[TIndex]>
+}
+
 function slugify(value: string): string {
   return value.replace(/([a-z0-9])([A-Z])/gu, '$1-$2').replaceAll('_', '-').toLowerCase()
 }
@@ -74,6 +150,13 @@ function normalizeDiscoveryPath(path: string): string {
     throw new Error('[Holo Panels] Resource discovery directories must be resource-relative.')
   }
   return normalized
+}
+
+function compileResourceComposition(value: object | undefined): object | undefined {
+  if (!value || !('compile' in value) || typeof value.compile !== 'function') return value
+  const compiled: unknown = value.compile()
+  if (typeof compiled !== 'object' || compiled === null) throw new TypeError('[Holo Panels] Resource compositions must compile to objects.')
+  return compiled
 }
 
 function protectedAttributes(model: { readonly definition: ResourceModelDefinition }): ReadonlySet<string> {
@@ -141,6 +224,7 @@ export class ResourceBuilder<
     const modelName = model.definition.name
     const id = pluralize(slugify(modelName))
     this.#state = state ?? {
+      actions: [],
       baseQuery: query => query,
       id,
       lifecycle: {},
@@ -166,11 +250,18 @@ export class ResourceBuilder<
     return this.#state.id
   }
 
-  baseQuery(scope: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  actions(
+    configure: (actions: ResourceActionComposer<TRecord, TInput & JsonObject, TActor, TTenant, unknown>) => readonly CompilableResourceAction[],
+  ): this {
+    const definitions = configure(createResourceActionComposer()).map(action => action.compile())
+    return this.with({ actions: [...this.#state.actions, ...definitions] })
+  }
+
+  baseQuery(scope: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery): this {
     return this.with({ baseQuery: scope })
   }
 
-  configured(id: string, configure: (resource: ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>) => ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  configured(id: string, configure: (resource: this) => this): this {
     const normalized = id.trim()
     assertIdentifier(normalized, 'configured resource variant ID')
     const configured = configure(this.with({ id: normalized }))
@@ -178,11 +269,19 @@ export class ResourceBuilder<
     return configured
   }
 
-  form<TForm extends object>(form: TForm): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  form<const TForm extends readonly CompactComponentDescriptor[]>(
+    form: TForm,
+    ..._validation: TForm extends CheckedCompactComposition<TRecord, TForm> ? [] : [error: never]
+  ): this
+  form<TForm extends ResourceRecordComposition<object>>(form: CheckedRecordComposition<TRecord, TForm>): this
+  form<const TFields extends readonly ResourceRecordComposition<object>[]>(
+    form: TFields extends CheckedRecordCompositions<TRecord, TFields> ? TFields : CheckedRecordCompositions<TRecord, TFields>,
+  ): this
+  form(form: object): this {
     return this.with({ form })
   }
 
-  globalSearch(metadata: ResourceGlobalSearch<TRecord>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  globalSearch(metadata: ResourceGlobalSearch<TRecord>): this {
     if (metadata.attributes.length === 0) throw new Error('[Holo Panels] Global search requires at least one searchable attribute.')
     if (metadata.limit !== undefined && (!Number.isSafeInteger(metadata.limit) || metadata.limit < 1 || metadata.limit > 100)) {
       throw new Error('[Holo Panels] Global search limits must be integers from 1 to 100.')
@@ -193,50 +292,56 @@ export class ResourceBuilder<
     return this.with({ globalSearch: { ...metadata, attributes: [...metadata.attributes], details: metadata.details ? [...metadata.details] : undefined } })
   }
 
-  infolist<TInfolist extends object>(infolist: TInfolist): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  infolist<TInfolist extends ResourceRecordComposition<object>>(infolist: CheckedRecordComposition<TRecord, TInfolist>): this
+  infolist<const TEntries extends readonly ResourceRecordComposition<object>[]>(
+    infolist: TEntries extends CheckedRecordCompositions<TRecord, TEntries> ? TEntries : CheckedRecordCompositions<TRecord, TEntries>,
+  ): this
+  infolist(infolist: object): this {
     return this.with({ infolist })
   }
 
-  createBindings(bindings: (context: ResourceExecutionContext<TActor, TTenant>) => Partial<TInput> | Promise<Partial<TInput>>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  createBindings(bindings: (context: ResourceExecutionContext<TActor, TTenant>) => Partial<TInput> | Promise<Partial<TInput>>): this {
     return this.with({ createBindings: bindings })
   }
 
-  discoverPages(path = 'pages'): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  discoverPages(path = 'pages'): this {
     return this.withDiscovery('pages', path)
   }
 
-  discoverRelationManagers(path = 'relation-managers'): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  discoverRelationManagers(path = 'relation-managers'): this {
     return this.withDiscovery('relationManagers', path)
   }
 
-  discoverWidgets(path = 'widgets'): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  discoverWidgets(path = 'widgets'): this {
     return this.withDiscovery('widgets', path)
   }
 
-  lifecycle(lifecycle: ResourceLifecycle<TRecord, TInput, ResourceExecutionContext<TActor, TTenant>>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  lifecycle(lifecycle: ResourceLifecycle<TRecord, TInput, ResourceExecutionContext<TActor, TTenant>>): this {
     return this.with({ lifecycle })
   }
 
-  navigation(navigation: ResourceNavigation): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  navigation(navigation: ResourceNavigation): this {
     return this.with({ navigation: { ...navigation } })
   }
 
-  navigationIcon(icon: string): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  navigationIcon(icon: string): this {
     return this.with({ navigation: { ...this.#state.navigation, icon } })
   }
 
-  navigationLabel(label: string): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  navigationLabel(label: string): this {
     return this.with({ navigation: { ...this.#state.navigation, label } })
   }
 
-  pages(...pages: readonly object[]): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  pages<const TPages extends readonly object[]>(
+    ...pages: TPages extends CheckedResourceCompositions<TRecord, TActor, TTenant, TPages, 'ignore'> ? TPages : CheckedResourceCompositions<TRecord, TActor, TTenant, TPages, 'ignore'>
+  ): this {
     if (this.#state.singular !== null) assertSingularPages(pages)
     return this.with({ pages: [...this.#state.pages, ...pages] })
   }
 
   singular(
     options: SingularResourceOptions<TRecord, TQuery, TActor, TTenant>,
-  ): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  ): this {
     if (this.#state.nested !== null) throw new Error('[Holo Panels] Singular and nested resources are mutually exclusive.')
     if (typeof options.resolve !== 'function') throw new TypeError('[Holo Panels] Singular resources require a resolver.')
     assertSingularPages(this.#state.pages)
@@ -254,12 +359,12 @@ export class ResourceBuilder<
   >(
     parent: ResourceBuilder<TParentModel, TParentRecord, TParentQuery, TParentInput, TParentActor, TParentTenant, TParentSoftDeletes>,
     options: NestedResourceOptions<TParentRecord, TRecord, TQuery, TActor, TTenant>,
-  ): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>
+  ): this
 
   nestedUnder<TParentRecord extends ResourceRecord>(
     parent: ResourceParentReference<TParentRecord>,
     options: NestedResourceOptions<TParentRecord, TRecord, TQuery, TActor, TTenant>,
-  ): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>
+  ): this
 
   nestedUnder<TParentRecord extends ResourceRecord>(
     parent: ResourceParentReference<TParentRecord> | {
@@ -267,7 +372,7 @@ export class ResourceBuilder<
       compile(): { readonly routeKey: string }
     },
     options: NestedResourceOptions<TParentRecord, TRecord, TQuery, TActor, TTenant>,
-  ): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  ): this {
     if (this.#state.singular !== null) throw new Error('[Holo Panels] Singular and nested resources are mutually exclusive.')
     const parentReference = 'compile' in parent
       ? { id: parent.id, routeKey: parent.compile().routeKey as ResourceAttribute<TParentRecord> }
@@ -289,61 +394,77 @@ export class ResourceBuilder<
   slot(
     slot: ResourceRenderSlot,
     reference: string | RenderSlotReference,
-  ): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  ): this {
     return this.with({ slots: appendScopedRenderSlot(this.#state.slots, slot, reference, 'resource') })
   }
 
-  persistence(persistence: ResourcePersistence<TRecord, TInput, ResourceExecutionContext<TActor, TTenant>, TSoftDeletes>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  persistence(persistence: ResourcePersistence<TRecord, TInput, ResourceExecutionContext<TActor, TTenant>, TSoftDeletes>): this {
     return this.with({ persistence })
   }
 
-  recordTitle<TAttribute extends ResourceAttribute<TRecord>>(attribute: TAttribute): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  recordTitle<TAttribute extends ResourceAttribute<TRecord>>(attribute: TAttribute): this {
     assertExposedAttribute(this.#state.model, attribute, 'the record title')
     return this.with({ recordTitle: attribute })
   }
 
-  readOnly(): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  readOnly(): this {
     return this.with({ readOnly: true, writableAttributes: [] })
   }
 
-  relations(...relations: readonly object[]): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  relations<const TRelations extends readonly object[]>(
+    ...relations: TRelations extends CheckedResourceCompositions<TRecord, TActor, TTenant, TRelations, 'owner'> ? TRelations : CheckedResourceCompositions<TRecord, TActor, TTenant, TRelations, 'owner'>
+  ): this {
     return this.with({ relations: [...this.#state.relations, ...relations] })
   }
 
-  routeKey<TAttribute extends ResourceAttribute<TRecord>>(attribute: TAttribute): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  routeKey<TAttribute extends ResourceAttribute<TRecord>>(attribute: TAttribute): this {
     assertExposedAttribute(this.#state.model, attribute, 'the route key')
     return this.with({ routeKey: attribute })
   }
 
-  shared(value = true): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  shared(value = true): this {
     return this.with({ shared: value, tenantScope: value ? undefined : this.#state.tenantScope })
   }
 
-  slug(slug: string): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  slug(slug: string): this {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(slug)) throw new Error(`[Holo Panels] Invalid resource slug "${slug}".`)
     return this.with({ slug })
   }
 
-  table<TTable extends object>(table: TTable): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  table<const TTable extends readonly CompactComponentDescriptor[]>(
+    table: TTable,
+    ..._validation: TTable extends CheckedCompactComposition<TRecord, TTable> ? [] : [error: never]
+  ): this
+  table<TTable extends ResourceRecordComposition<object>>(table: CheckedRecordComposition<TRecord, TTable>): this
+  table<const TColumns extends readonly ResourceRecordComposition<object>[]>(
+    table: TColumns extends CheckedRecordCompositions<TRecord, TColumns> ? TColumns : CheckedRecordCompositions<TRecord, TColumns>,
+  ): this
+  table(table: object): this {
     return this.with({ table })
   }
 
-  tenantScope(scope: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>
+  tenantScope(scope: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery): this
   tenantScope<TNextTenant>(scope: (query: TQuery, context: ResourceExecutionContext<TActor, TNextTenant>) => TQuery): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TNextTenant, TSoftDeletes>
   tenantScope<TNextTenant>(scope: (query: TQuery, context: ResourceExecutionContext<TActor, TNextTenant>) => TQuery): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TNextTenant, TSoftDeletes> {
     const state = this.#state as unknown as ResourceBuilderState<TModel, TRecord, TQuery, TInput, TActor, TNextTenant, TSoftDeletes>
-    return new ResourceBuilder(this.#state.model, cloneState(state, { shared: false, tenantScope: scope }))
+    const Builder = this.constructor as new (
+      model: TModel,
+      nextState: ResourceBuilderState<TModel, TRecord, TQuery, TInput, TActor, TNextTenant, TSoftDeletes>,
+    ) => ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TNextTenant, TSoftDeletes>
+    return new Builder(this.#state.model, cloneState(state, { shared: false, tenantScope: scope }))
   }
 
-  validation(validation: ResourceValidation<TInput, ResourceExecutionContext<TActor, TTenant>>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  validation(validation: ResourceValidation<TInput, ResourceExecutionContext<TActor, TTenant>>): this {
     return this.with({ validation })
   }
 
-  widgets(...widgets: readonly object[]): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  widgets<const TWidgets extends readonly object[]>(
+    ...widgets: TWidgets extends CheckedResourceCompositions<TRecord, TActor, TTenant, TWidgets, 'record'> ? TWidgets : CheckedResourceCompositions<TRecord, TActor, TTenant, TWidgets, 'record'>
+  ): this {
     return this.with({ widgets: [...this.#state.widgets, ...widgets] })
   }
 
-  writableAttributes<const TAttributes extends readonly ResourceAttribute<TRecord>[]>(attributes: TAttributes): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  writableAttributes<const TAttributes extends readonly ResourceAttribute<TRecord>[]>(attributes: TAttributes): this {
     assertWritableAttributes(this.#state.model, attributes)
     return this.with({ readOnly: false, writableAttributes: [...attributes] })
   }
@@ -374,8 +495,15 @@ export class ResourceBuilder<
       slug: this.#state.slug,
       softDeletes: this.#state.softDeletes,
     })
+    const form = compileResourceComposition(this.#state.form)
+    const infolist = compileResourceComposition(this.#state.infolist)
+    const table = compileResourceComposition(this.#state.table)
     return Object.freeze({
       ...this.#state,
+      ...(form ? { form } : {}),
+      ...(infolist ? { infolist } : {}),
+      ...(table ? { table } : {}),
+      actions: Object.freeze([...this.#state.actions]),
       capabilities,
       client,
       componentKeys: Object.freeze(componentKeys),
@@ -394,11 +522,15 @@ export class ResourceBuilder<
     return this.compile()
   }
 
-  private with(patch: Partial<ResourceBuilderState<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>>): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
-    return new ResourceBuilder(this.#state.model, cloneState(this.#state, patch))
+  private with(patch: Partial<ResourceBuilderState<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>>): this {
+    const Builder = this.constructor as new (
+      model: TModel,
+      state: ResourceBuilderState<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>,
+    ) => this
+    return new Builder(this.#state.model, cloneState(this.#state, patch))
   }
 
-  private withDiscovery(key: keyof DiscoveryDirectories, path: string): ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes> {
+  private withDiscovery(key: keyof DiscoveryDirectories, path: string): this {
     return this.with({ discover: { ...this.#state.discover, [key]: normalizeDiscoveryPath(path) } })
   }
 }
@@ -409,15 +541,15 @@ type InferredRecord<TModel extends ResourceModel<ResourceRecord, ResourceQuery<u
 type InferredQuery<TModel extends ResourceModel<ResourceRecord, ResourceQuery<unknown, ResourceRecord>>> = ReturnType<TModel['query']>
 
 export interface ResourceContextTypeSources<
-  TActorSource extends { readonly prototype: object } | undefined = undefined,
+  TActorSource extends RecordTypeSource | undefined = undefined,
   TTenantSource extends RuntimeTypeSource | undefined = undefined,
 > {
   readonly actor?: TActorSource
   readonly tenant?: TTenantSource
 }
 
-type ResourceActorValue<TActorSource extends { readonly prototype: object } | undefined> =
-  TActorSource extends { readonly prototype: infer TActor extends object } ? TActor : object
+type ResourceActorValue<TActorSource extends RecordTypeSource | undefined> =
+  TActorSource extends RecordTypeSource ? Extract<RuntimeTypeValue<TActorSource>, object> : object
 
 type PublicResourceRecord<TModel extends ResourceModel<ResourceRecord, ResourceQuery<unknown, ResourceRecord>>> =
   [ResourceRecordFor<TModel>] extends [never]
@@ -446,7 +578,7 @@ export type InferredResourceBuilder<
 type ResourceFactory = {
   <
     TModel extends ResourceModel<ResourceRecord, ResourceQuery<unknown, ResourceRecord>>,
-    TActorSource extends { readonly prototype: object } | undefined = undefined,
+    TActorSource extends RecordTypeSource | undefined = undefined,
     TTenantSource extends RuntimeTypeSource | undefined = undefined,
   >(
     model: TModel,

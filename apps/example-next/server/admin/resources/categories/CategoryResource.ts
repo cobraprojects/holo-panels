@@ -1,13 +1,17 @@
-import { column, defineResource, field } from '@holo-js/panels'
+import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
 import Category from '../../../models/Category'
 
-export default defineResource(Category, { tenant: String })
+const form = defineSchema(Category).fields(field => [field.text('name').required(), field.text('slug').required()])
+const table = defineTable(Category).columns(column => [column.text('name'), column.text('slug')])
+
+export default defineResource(Category)
   .recordTitle('name')
   .routeKey('id')
   .slug('categories')
-  .navigation({ icon: 'folder', label: 'Categories', sort: 20 })
+  .navigation({ group: 'Content', icon: 'folder', label: 'Categories', sort: 20 })
   .globalSearch({ attributes: ['name', 'slug'], limit: 10, title: 'name' })
   .tenantScope((query, context) => query.where('tenantId', context.tenant))
   .createBindings(context => ({ tenantId: context.tenant }))
-  .form([field.text('name').required(), field.text('slug').required()])
-  .table([column.text('name'), column.text('slug')])
+  .discoverPages()
+  .form(form)
+  .table(table)

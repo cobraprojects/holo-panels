@@ -37,9 +37,8 @@ describe('Vue tenant switcher', () => {
     const shell = { store: store(), transport: { switch: async (routeKey: string) => ({ tenant: { id: routeKey, routeKey } }) } }
     const html = await renderToString(createSSRApp(() => h(VueTenantSwitcher, { shell })))
 
-    expect(html).toContain('aria-label="Tenant"')
-    expect(html).toContain('value="acme"')
-    expect(html).toContain('<option value="acme">Acme</option>')
-    expect(html).toContain('<option value="globex">Globex</option>')
+    expect(html).toContain('aria-label="Tenant menu"')
+    expect(html).toContain('data-slot="dropdown-menu-trigger"')
+    expect(html).toContain('Acme')
   })
 })

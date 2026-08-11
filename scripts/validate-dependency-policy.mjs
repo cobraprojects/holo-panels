@@ -32,7 +32,7 @@ for (const directory of packageDirectories) {
 
 const expectedRuntime = new Map([
   ['@holo-js/panels', {
-    dependencies: ['@holo-js/panels-cli', '@holo-js/panels-client', '@holo-js/panels-core'],
+    dependencies: ['@holo-js/panels-cli', '@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui'],
     peers: ['@holo-js/db', '@holo-js/forms', '@holo-js/kernel'],
   }],
   ['@holo-js/panels-cli', {
@@ -87,7 +87,7 @@ const expectedRuntime = new Map([
     optional: ['@holo-js/panels-react', '@holo-js/panels-svelte', '@holo-js/panels-vue', 'react', 'svelte', 'vue'],
   }],
   ['@holo-js/panels-react', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'lucide-react', 'radix-ui'],
     peers: ['react', 'react-dom'],
   }],
   ['@holo-js/panels-shield', {
@@ -95,7 +95,7 @@ const expectedRuntime = new Map([
     peers: ['@holo-js/auth', '@holo-js/authorization', '@holo-js/db', '@holo-js/kernel'],
   }],
   ['@holo-js/panels-svelte', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'bits-ui', 'lucide-svelte'],
     peers: ['svelte'],
   }],
   ['@holo-js/panels-sveltekit', {
@@ -128,7 +128,7 @@ const expectedRuntime = new Map([
     peers: [],
   }],
   ['@holo-js/panels-vue', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'lucide-vue-next', 'reka-ui'],
     peers: ['vue'],
   }],
 ])
@@ -251,7 +251,8 @@ for (const [subpath, renderer] of testingRendererEntries) {
   }
 
   const source = await readFile(new URL(`../packages/testing/src/${subpath.slice(2)}.ts`, import.meta.url), 'utf8')
-  if (!source.includes(`'${renderer}'`) && !source.includes(`"${renderer}"`)) {
+  const runtimeSpecifier = renderer === '@holo-js/panels-svelte' ? `${renderer}/server` : renderer
+  if (!source.includes(`'${runtimeSpecifier}'`) && !source.includes(`"${runtimeSpecifier}"`)) {
     throw new Error(`@holo-js/panels-testing ${subpath} must load ${renderer}`)
   }
 

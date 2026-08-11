@@ -51,6 +51,8 @@ export type {
 } from './discovery/types'
 export { ConstructionBuilder } from './builders/construction-builder'
 export * from './transfers'
+export { uploadFields, UploadFieldBuilder, UploadFieldFactory } from './fields/upload'
+export type { FinalizedUploadResult, UploadPolicy } from './fields/upload'
 export { LabelCapability, VisibilityCapability } from './builders/capabilities'
 export { assignStableId, assignStableKey } from './builders/stable-id'
 export type { DeepReadonly } from './builders/deep-freeze'
@@ -159,7 +161,7 @@ export type {
   SuccessEnvelope,
 } from './protocol/envelopes'
 export type { PublicSourceLocation, SourceLocation } from './protocol/source-location'
-export type { ContextTypeSources, OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from './inference'
+export type { ContextTypeSources, DefaultPanelActor, DefaultPanelServices, DefaultPanelTenant, OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from './inference'
 export type { ProtocolVersion } from './protocol/version'
 export * from './schemas'
 export * from './fields'

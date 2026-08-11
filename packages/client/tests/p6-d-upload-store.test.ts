@@ -1,6 +1,7 @@
 import type { StoredUploadDescriptor, TemporaryUploadDescriptor, UploadActorContext } from '@holo-js/panels-core'
 import { describe, expect, it, vi } from 'vitest'
-import { createUploadStore, type ClientUploadFile, type UploadClientAdapter } from '../src/uploads'
+import { createBrowserUploadAdapter, createUploadStore, type ClientUploadFile, type UploadClientAdapter } from '../src/uploads'
+import { PROTOCOL_VERSION, TRANSPORT_REQUEST_FIELD } from '@holo-js/panels-core'
 
 const context: UploadActorContext = {
   actorId: 'actor-1',
@@ -109,5 +110,51 @@ describe('upload client store', () => {
 
     expect(remove).toHaveBeenCalledWith(context, 'upload-1', 'token-1', expect.any(AbortSignal))
     expect(store.state.items).toEqual([])
+  })
+
+  it('sends binary upload contents as multipart data to the fixed panel route', async () => {
+    const send = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      expect(_url).toBe('/holo/panels/admin/upload')
+      expect(init?.body).toBeInstanceOf(FormData)
+      const body = init?.body as FormData
+      expect(body.get('_token')).toBe('csrf-token')
+      const request = JSON.parse(String(body.get(TRANSPORT_REQUEST_FIELD))) as { readonly id: string, readonly payload: Record<string, unknown> }
+      expect(request.payload).toMatchObject({ action: 'write', fieldId: 'avatar', intent: 'edit', recordId: 'user-1', resourceId: 'users' })
+      const contents = body.get('contents')
+      expect(contents).toBeInstanceOf(Blob)
+      expect((contents as Blob).size).toBe(4)
+      return new Response(JSON.stringify({
+        data: {
+          declaredMimeType: 'image/png',
+          detectedMimeType: 'image/png',
+          expiresAt: '2026-07-27T12:05:00.000Z',
+          extension: 'png',
+          fieldId: 'avatar',
+          id: 'upload-1',
+          name: 'avatar.png',
+          panelId: 'admin',
+          resourceId: 'users',
+          size: 4,
+          state: 'stored',
+        },
+        effects: [],
+        id: request.id,
+        ok: true,
+        protocolVersion: PROTOCOL_VERSION,
+      }), { status: 200 })
+    })
+    const transport = createBrowserUploadAdapter({
+      csrfProvider: { getField: () => ({ name: '_token', value: 'csrf-token' }) },
+      endpoint: '/holo/panels/admin/upload',
+      fieldId: 'avatar',
+      intent: 'edit',
+      panelId: 'admin',
+      recordId: 'user-1',
+      resourceId: 'users',
+    })
+    const temporary = { ...(await adapter().create(context, file('avatar.png'), new AbortController().signal)), id: 'upload-1' }
+    await expect(transport.write(context, temporary, new Uint8Array([1, 2, 3, 4]), new AbortController().signal, () => undefined))
+      .resolves.toMatchObject({ id: 'upload-1', state: 'stored' })
+    expect(send).toHaveBeenCalledOnce()
   })
 })

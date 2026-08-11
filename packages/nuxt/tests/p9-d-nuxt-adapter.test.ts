@@ -1,4 +1,4 @@
-import { ActionExecutionError, createRequestEnvelope, PROTOCOL_VERSION, type JsonObject } from '@holo-js/panels-core'
+import { ActionExecutionError, createRequestEnvelope, definePanel, defineStatsWidget, PROTOCOL_VERSION, type JsonObject } from '@holo-js/panels-core'
 import { createApp as createH3App, createRouter, defineEventHandler, toWebHandler } from 'h3'
 import { createApp, createSSRApp, defineComponent, h, nextTick, shallowRef, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
@@ -22,8 +22,8 @@ vi.mock('@holo-js/adapter-nuxt/runtime', () => ({
   runWithNuxtRequest: <TValue>(_event: unknown, callback: () => TValue): TValue => callback(),
 }))
 
-const { PanelPage, usePanelPage } = await import('../src')
-const { createPanelOperationHandler } = await import('../src/server')
+const { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } = await import('../src')
+const { createGeneratedNuxtPanelRouteHandler, createPanelOperationHandler } = await import('../src/server')
 import type { NuxtPanelOperationContext, NuxtPanelOperationResult, NuxtPanelPage, NuxtPanelRuntime } from '../src'
 
 const page: NuxtPanelPage = {
@@ -33,27 +33,31 @@ const page: NuxtPanelPage = {
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,
       default: true,
+      globalSearch: true,
       id: 'admin',
       navigation: [{ badge: '4', group: null, icon: 'posts', id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 1 }],
       navigationMode: 'sidebar',
       path: '/admin',
       sidebarCollapsible: true,
-      theme: { darkMode: 'system' },
+      tenancy: null,
+      theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
       userMenu: [],
     },
     notifications: null,
     provider: 'users',
+    tenancy: null,
   },
   page: {
     breadcrumbs: [{ label: 'Posts', path: '/admin/posts' }],
     data: { records: [] },
     heading: 'Posts',
-    manifest: { body: null, id: 'posts.list', pageType: 'list', path: '/admin/posts', schemaId: null },
+    manifest: { body: null, id: 'posts.list', pageType: 'list', path: '/admin/posts', schemaId: null, widgets: { footer: [], header: [] } },
     schema: null,
     subheading: 'Manage published content',
     title: 'Posts',
   },
   path: '/admin/posts',
+  widgets: { footer: [], header: [] },
 }
 
 const compiledResourceSchema: JsonObject = {
@@ -82,7 +86,7 @@ const compiledResourceSchema: JsonObject = {
 function formRequest(panelId: string, operation: string, payload: JsonObject = {}, id = 'request-1234567890'): Request {
   const envelope = createRequestEnvelope({ id, operation, panelId, payload })
   const body = new URLSearchParams({ request: JSON.stringify(envelope), _token: 'valid' })
-  return new Request(`http://localhost/_holo/panels/${panelId}/${operation}`, {
+  return new Request(`http://localhost/holo/panels/${panelId}/${operation}`, {
     body,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': 'valid' },
     method: 'POST',
@@ -92,8 +96,8 @@ function formRequest(panelId: string, operation: string, payload: JsonObject = {
 function webHandler(handler: ReturnType<typeof createPanelOperationHandler>): (request: Request) => Promise<Response> {
   const app = createH3App()
   const router = createRouter()
-  router.get('/_holo/panels/:panelId/:operation', handler)
-  router.post('/_holo/panels/:panelId/:operation', handler)
+  router.get('/holo/panels/:panelId/:operation', handler)
+  router.post('/holo/panels/:panelId/:operation', handler)
   app.use(router)
   return toWebHandler(app)
 }
@@ -114,6 +118,108 @@ beforeEach(() => {
 })
 
 describe('P9-D Nuxt adapter', () => {
+  it('mounts generated public custom routes at their native Nuxt URL', async () => {
+    const customPanel = definePanel('admin')
+      .path('/admin')
+      .routes(routes => routes.get('/health', () => new Response('healthy')))
+      .compile()
+    const configured: NuxtPanelRuntime<object> = {
+      execute: async () => ({ data: {} }),
+      panels: { admin: { access: () => true, definition: customPanel, guard: 'web' } },
+    }
+    const app = createH3App()
+    const router = createRouter()
+    router.get('/admin/health', createGeneratedNuxtPanelRouteHandler({ panelId: 'admin', runtime: configured }))
+    app.use(router)
+
+    const response = await toWebHandler(app)(new Request('http://localhost/admin/health'))
+
+    expect(response.status).toBe(200)
+    await expect(response.text()).resolves.toBe('healthy')
+  })
+
+  it('uses the configured panel home URL for the brand link', async () => {
+    const configured: NuxtPanelPage = {
+      ...page,
+      bootstrap: { ...page.bootstrap, manifest: { ...page.bootstrap.manifest, icons: { posts: 'home' }, routing: { domain: null, domains: [], homeUrl: '/admin/overview' } } },
+    }
+
+    const markup = await renderToString(createSSRApp(PanelPage, { page: configured }))
+    expect(markup).toContain('href="/admin/overview"')
+    expect(markup).toContain('data-icon="home"')
+  })
+
+  it('navigates same-origin panel links in SPA mode, honors exceptions, and prefetches on hover', async () => {
+    const configured: NuxtPanelPage = {
+      ...page,
+      bootstrap: {
+        ...page.bootstrap,
+        manifest: {
+          ...page.bootstrap.manifest,
+          navigation: [
+            ...page.bootstrap.manifest.navigation,
+            { badge: null, group: null, icon: null, id: 'external', label: 'External', parent: null, path: '/admin/external-report', sort: 2 },
+          ],
+          runtime: { databaseTransactions: false, readOnlyRelationManagersOnResourceViewPagesByDefault: false, resourceCreatePageRedirect: 'edit', resourceEditPageRedirect: null, spa: true, spaPrefetching: true, spaUrlExceptions: ['/admin/external*'], strictAuthorization: false, unsavedChangesAlerts: false },
+        },
+      },
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(PanelPage, { page: configured })
+    const pushState = vi.spyOn(window.history, 'pushState')
+    app.mount(container)
+    const postsLink = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === 'Posts')
+    const externalLink = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === 'External')
+    if (!postsLink || !externalLink) throw new Error('SPA navigation links did not render')
+
+    postsLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    expect(document.head.querySelector('link[data-holo-panel-prefetch][href="/admin/posts"]')).not.toBeNull()
+    const internalClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
+    postsLink.dispatchEvent(internalClick)
+    expect(internalClick.defaultPrevented).toBe(true)
+    expect(pushState).toHaveBeenCalledWith({}, '', '/admin/posts')
+    const excludedClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
+    externalLink.dispatchEvent(excludedClick)
+    expect(excludedClick.defaultPrevented).toBe(false)
+    app.unmount()
+  })
+
+  it('returns configured panel error notifications as client toast effects', async () => {
+    const configured = runtime(['admin'], async () => { throw new Error('database unavailable') })
+    const runtimePanel = configured.panels.admin
+    if (!runtimePanel) throw new Error('Admin panel fixture was not registered')
+    Reflect.set(runtimePanel, 'definition', definePanel('admin')
+      .registerErrorNotification('Save failed', 'The post could not be saved.', 500)
+      .compile())
+    const response = await webHandler(createPanelOperationHandler({ panelIds: ['admin'], runtime: configured }))(formRequest('admin', 'form-submit'))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      ok: false,
+    })
+  })
+
+  it('serves the configured tenant billing route before subscription-protected page execution', async () => {
+    const routeAction = vi.fn(() => new Response(null, { headers: { location: 'https://billing.example.test/session' }, status: 303 }))
+    const configured = runtime(['admin'], vi.fn(() => ({ data: {} })))
+    const configuredPanel = configured.panels.admin
+    if (!configuredPanel) throw new Error('Admin panel fixture was not registered')
+    Reflect.set(configuredPanel, 'definition', {
+      manifest: { tenancy: { billing: { path: '/admin/subscription' } } },
+      server: { tenancy: { billing: { getRouteAction: () => routeAction, getSubscribedMiddleware: () => () => false } } },
+    })
+    const response = await webHandler(createPanelOperationHandler({ panelIds: ['admin'], runtime: configured }))(
+      new Request('http://localhost/holo/panels/admin/page-data?path=/admin/subscription'),
+    )
+
+    expect(response.status).toBe(303)
+    expect(response.headers.get('location')).toBe('https://billing.example.test/session')
+    expect(routeAction).toHaveBeenCalledOnce()
+    expect(configured.execute).not.toHaveBeenCalled()
+  })
+
   it('deduplicates SSR page loading through Nuxt state and supports multiple fixed panels', async () => {
     const requests: string[] = []
     configureNuxtImports({
@@ -127,7 +233,7 @@ describe('P9-D Nuxt adapter', () => {
     const staff = await usePanelPage({ panelId: 'staff', path: '/staff', load: async request => ({ ...page, path: request.path }) })
     expect(admin.page.title).toBe('Posts')
     expect(staff.path).toBe('/staff')
-    expect(requests[0]).toContain('/_holo/panels/admin/page-data')
+    expect(requests[0]).toContain('/holo/panels/admin/page-data')
     expect(requests[0]).toContain('/admin/posts')
     await expect(usePanelPage({ panelId: '../admin', path: '/admin', load: async () => page })).rejects.toThrow('stable panel IDs')
   })
@@ -157,6 +263,133 @@ describe('P9-D Nuxt adapter', () => {
     container.remove()
   })
 
+  it('renders top navigation without a sidebar when the panel selects topbar mode', async () => {
+    const topbarPage: NuxtPanelPage = {
+      ...page,
+      bootstrap: { ...page.bootstrap, manifest: { ...page.bootstrap.manifest, navigationMode: 'topbar' } },
+    }
+    const html = await renderToString(createSSRApp(PanelPage, { page: topbarPage }))
+
+    expect(html).toContain('hp-panel-navigation--topbar')
+    expect(html).not.toContain('hp-panel-sidebar')
+  })
+
+  it('omits the panel header when the provider disables the topbar', async () => {
+    const withoutTopbar: NuxtPanelPage = {
+      ...page,
+      bootstrap: { ...page.bootstrap, manifest: { ...page.bootstrap.manifest, layout: { ...page.bootstrap.manifest.layout!, topbar: false } } },
+    }
+
+    expect(await renderToString(createSSRApp(PanelPage, { page: withoutTopbar }))).not.toContain('hp-panel-header')
+  })
+
+  it('omits the account dropdown when the provider disables the user menu', async () => {
+    const withoutUserMenu: NuxtPanelPage = {
+      ...page,
+      bootstrap: { ...page.bootstrap, manifest: { ...page.bootstrap.manifest, userMenuEnabled: false } },
+    }
+
+    expect(await renderToString(createSSRApp(PanelPage, { page: withoutUserMenu }))).not.toContain('hp-panel-user-trigger')
+  })
+
+  it('omits navigation chrome when the provider disables navigation', async () => {
+    const withoutNavigation: NuxtPanelPage = {
+      ...page,
+      bootstrap: { ...page.bootstrap, manifest: { ...page.bootstrap.manifest, navigationEnabled: false } },
+    }
+    const markup = await renderToString(createSSRApp(PanelPage, { page: withoutNavigation }))
+
+    expect(markup).not.toContain('data-slot="sidebar"')
+    expect(markup).not.toContain('hp-panel-navigation-toggle')
+  })
+
+  it('renders provider-configured topbar, sidebar, and avatar components', async () => {
+    const registry = createNuxtPanelComponentRegistry()
+      .register('custom-topbar', defineComponent({ props: { manifest: { type: Object, required: true } }, setup: props => () => h('header', { 'data-custom-topbar': Reflect.get(props.manifest, 'id') }, 'Custom topbar') }))
+      .register('custom-sidebar', defineComponent({ props: { actor: { type: Object, required: true } }, setup: props => () => h('aside', { 'data-custom-sidebar': Reflect.get(props.actor, 'id') }, 'Custom sidebar') }))
+      .register('custom-avatar', defineComponent({ props: { actor: { type: Object, required: true }, label: { type: String, required: true } }, setup: props => () => h('span', { 'data-custom-avatar': Reflect.get(props.actor, 'id') }, props.label) }))
+      .register('custom-notification', defineComponent({ props: { placement: { type: String, required: true } }, setup: props => () => h('span', { 'data-custom-notification': props.placement }, 'Custom notifications') }))
+    const configured = (components: { readonly sidebar: string | null, readonly topbar: string | null }, avatarProvider: string | null): NuxtPanelPage => ({
+      ...page,
+      bootstrap: {
+        ...page.bootstrap,
+        manifest: { ...page.bootstrap.manifest, assets: [{ id: 'admin-theme', src: '/admin/theme.css', type: 'css' }], branding: { ...page.bootstrap.manifest.branding, avatarProvider }, components },
+      },
+    })
+
+    const chrome = await renderToString(createSSRApp(PanelPage, { page: configured({ sidebar: 'custom-sidebar', topbar: 'custom-topbar' }, null), registry }))
+    const configuredAvatar = configured({ sidebar: null, topbar: null }, 'custom-avatar')
+    const avatarPage: NuxtPanelPage = {
+      ...configuredAvatar,
+      bootstrap: {
+        ...configuredAvatar.bootstrap,
+        manifest: { ...configuredAvatar.bootstrap.manifest, databaseNotifications: { component: 'custom-notification', lazy: true, placement: 'topbar', polling: false, realtime: false } },
+      },
+    }
+    const avatar = await renderToString(createSSRApp(PanelPage, { page: avatarPage, registry }))
+    expect(chrome).toContain('data-custom-topbar="admin"')
+    expect(chrome).toContain('data-custom-sidebar="7"')
+    expect(chrome).not.toContain('hp-panel-header')
+    expect(chrome).toContain('data-panel-asset="admin-theme"')
+    expect(chrome).toContain('href="/admin/theme.css"')
+    expect(avatar).toContain('data-custom-avatar="7"')
+    expect(avatar).toContain('data-custom-notification="topbar"')
+  })
+
+  it('renders the built-in tenant switcher without application transport helpers', async () => {
+    const tenantPage: NuxtPanelPage = {
+      ...page,
+      bootstrap: {
+        ...page.bootstrap,
+        manifest: { ...page.bootstrap.manifest, tenancy: { enabled: true } },
+        tenancy: {
+          active: { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+          memberships: {
+            memberships: [
+              { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+              { avatarUrl: null, description: null, label: 'Globex', routeKey: 'globex' },
+            ],
+            nextCursor: null,
+          },
+        },
+      },
+    }
+
+    const html = await renderToString(createSSRApp(PanelPage, { page: tenantPage }))
+
+    expect(html).toContain('aria-label="Tenant menu"')
+    expect(html).toContain('data-slot="dropdown-menu-trigger"')
+    expect(html).toContain('Acme')
+    const hidden = await renderToString(createSSRApp(PanelPage, {
+      page: {
+        ...tenantPage,
+        bootstrap: { ...tenantPage.bootstrap, manifest: { ...tenantPage.bootstrap.manifest, tenancy: { enabled: true, switcher: false } } },
+      },
+    }))
+    expect(hidden).not.toContain('aria-label="Tenant menu"')
+  })
+
+  it('renders resolved page widgets inside the admin shell', async () => {
+    const manifest = defineStatsWidget('content-overview')
+      .heading('Content overview')
+      .data(() => ({ stats: [] }))
+      .compile().manifest
+    const widgetPage: NuxtPanelPage = {
+      ...page,
+      page: { ...page.page, manifest: { ...page.page.manifest, pageType: 'custom', widgets: { footer: [], header: ['content-overview'] } } },
+      widgets: {
+        footer: [],
+        header: [{ data: { stats: [{ action: null, chart: [], color: 'primary', description: 'All posts', icon: null, id: 'posts', label: 'Posts', trend: null, url: '/admin/posts', value: 3 }] }, manifest, status: 'ready' }],
+      },
+    }
+
+    const html = await renderToString(createSSRApp(PanelPage, { page: widgetPage }))
+
+    expect(html).toContain('Page header widgets')
+    expect(html).toContain('Content overview')
+    expect(html).toContain('All posts')
+  })
+
   it('decodes protocol mutations, binds route identity, invokes Holo accessors, and returns effects', async () => {
     const execute = vi.fn(async context => ({
       data: { deleted: context.input.id },
@@ -182,7 +415,7 @@ describe('P9-D Nuxt adapter', () => {
     expect(execute).not.toHaveBeenCalled()
 
     const wrongOperationEnvelope = createRequestEnvelope({ id: 'request-abcdefghijkl', operation: 'upload', panelId: 'admin', payload: {} })
-    const wrongOperation = await fetch(new Request('http://localhost/_holo/panels/admin/action', {
+    const wrongOperation = await fetch(new Request('http://localhost/holo/panels/admin/action', {
       body: new URLSearchParams({ request: JSON.stringify(wrongOperationEnvelope), _token: 'valid' }),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',
@@ -190,7 +423,7 @@ describe('P9-D Nuxt adapter', () => {
     expect(wrongOperation.status).toBe(400)
     expect(await wrongOperation.json()).toMatchObject({ ok: false, error: { category: 'protocol', code: 'invalid_request' } })
 
-    const malformed = await fetch(new Request('http://localhost/_holo/panels/admin/action', {
+    const malformed = await fetch(new Request('http://localhost/holo/panels/admin/action', {
       body: new URLSearchParams({ request: '{', _token: 'valid' }),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',
@@ -238,10 +471,10 @@ describe('P9-D Nuxt adapter', () => {
         return { data: page }
       }),
     }))
-    const response = await fetch(new Request('http://localhost/_holo/panels/admin/page-data?path=%2Fadmin%2Fposts'))
+    const response = await fetch(new Request('http://localhost/holo/panels/admin/page-data?path=%2Fadmin%2Fposts'))
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ path: '/admin/posts', page: { title: 'Posts' } })
-    const missing = await fetch(new Request('http://localhost/_holo/panels/admin/page-data?path=%2Fadmin%2Fmissing'))
+    const missing = await fetch(new Request('http://localhost/holo/panels/admin/page-data?path=%2Fadmin%2Fmissing'))
     expect(missing.status).toBe(404)
     expect(await missing.text()).not.toContain('missing')
   })
@@ -254,7 +487,7 @@ describe('P9-D Nuxt adapter', () => {
       new Headers({ 'Content-Type': 'application/x-www-form-urlencoded' }),
       new Headers({ 'Content-Length': '1', 'Content-Type': 'application/x-www-form-urlencoded' }),
     ]) {
-      const response = await fetch(new Request('http://localhost/_holo/panels/admin/action', { body: oversized, headers, method: 'POST' }))
+      const response = await fetch(new Request('http://localhost/holo/panels/admin/action', { body: oversized, headers, method: 'POST' }))
       expect(response.status).toBe(413)
       expect(await response.json()).toMatchObject({ ok: false, error: { code: 'payload_too_large' } })
     }
@@ -263,15 +496,20 @@ describe('P9-D Nuxt adapter', () => {
   })
 
   it('uses shared table, form, option, and action engines for CRUD rendering', async () => {
-    const resourcePage = {
+    const resourcePage: NuxtPanelPage = {
       ...page,
       bootstrap: {
         ...page.bootstrap,
-        manifest: { ...page.bootstrap.manifest, id: 'backoffice', navigation: [{ ...page.bootstrap.manifest.navigation[0]!, path: '/control/articles' }], path: '/control' },
+        manifest: { ...page.bootstrap.manifest, id: 'backoffice', navigation: [{ ...page.bootstrap.manifest.navigation[0]!, path: '/control/articles' }], path: '/control', runtime: { databaseTransactions: false, readOnlyRelationManagersOnResourceViewPagesByDefault: false, resourceCreatePageRedirect: 'edit', resourceEditPageRedirect: null, spa: false, spaUrlExceptions: [], strictAuthorization: false, unsavedChangesAlerts: false } },
       },
       page: {
         ...page.page,
-        data: { department: 'docs', record: { department: 'docs', headline: 'Guide', id: 1, office: 'Berlin', permalink: 'guide' }, records: [{ department: 'docs', headline: 'Guide', id: 1, office: 'Berlin', permalink: 'guide' }] },
+        data: {
+          department: 'docs',
+          record: { created_at: 'private', department: 'docs', headline: 'Guide', id: 1, office: 'Berlin', permalink: 'guide' },
+          records: [{ department: 'docs', headline: 'Guide', id: 1, office: 'Berlin', permalink: 'guide' }],
+          relations: [{ badge: null, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'author', label: 'Author', operations: ['select', 'associate'], presentation: 'inline', records: [{ id: 'author-1', values: { name: 'Ada' } }], url: null, visible: true }],
+        },
         heading: 'Articles',
         manifest: { ...page.page.manifest, body: { component: 'resource-page', properties: { resourceId: 'articles' } }, pageType: 'edit' as const, path: '/control/articles/guide/edit' },
         schema: compiledResourceSchema,
@@ -288,6 +526,7 @@ describe('P9-D Nuxt adapter', () => {
     await nextTick()
     const title = container.querySelector<HTMLInputElement>('[data-field-path="headline"] input')
     expect(title).not.toBeNull()
+    expect(container.querySelector('[data-field-path="created_at"]')).toBeNull()
     if (title) {
       title.value = 'Reactive Slug'
       title.dispatchEvent(new Event('input', { bubbles: true }))
@@ -349,7 +588,7 @@ describe('P9-D Nuxt adapter', () => {
     await vi.waitFor(() => expect(actionRequests.length + (container.querySelector('[role="alert"]') ? 1 : 0)).toBeGreaterThan(0))
     expect(container.querySelector('[role="alert"]')?.textContent).toBeUndefined()
     expect(actionRequests).toHaveLength(1)
-    expect(actionRequests[0]?.url).toBe('http://localhost/_holo/panels/backoffice/action')
+    expect(actionRequests[0]?.url).toBe('http://localhost/holo/panels/backoffice/action')
     const actionParameters = new URLSearchParams(await actionRequests[0]?.clone().text())
     expect(JSON.parse(actionParameters.get('request') ?? '{}')).toMatchObject({
       operation: 'action',
@@ -366,13 +605,34 @@ describe('P9-D Nuxt adapter', () => {
     await nextTick()
     expect(container.querySelector('[data-action-mount="record"]')).not.toBeNull()
     expect(container.querySelector('a[href="/control/articles/guide/edit"]')?.textContent).toBe('Edit')
+    expect(container.querySelector('[data-relation-manager="author"]')?.textContent).toContain('Ada')
+    expect(container.querySelector('[data-operation="associate"]')).not.toBeNull()
     expect(container.querySelector('[data-panels-panel="backoffice"]')).not.toBeNull()
     viewApp.unmount()
+
+    const readOnlyPage = {
+      ...resourcePage,
+      bootstrap: {
+        ...resourcePage.bootstrap,
+        manifest: {
+          ...resourcePage.bootstrap.manifest,
+          runtime: { ...resourcePage.bootstrap.manifest.runtime, readOnlyRelationManagersOnResourceViewPagesByDefault: true },
+        },
+      },
+      page: { ...resourcePage.page, manifest: { ...resourcePage.page.manifest, pageType: 'view' as const } },
+    }
+    const readOnlyApp = createApp(PanelPage, { page: readOnlyPage })
+    readOnlyApp.mount(container)
+    await nextTick()
+    expect(container.querySelector('[data-relation-manager="author"]')?.textContent).toContain('Ada')
+    expect(container.querySelector('[data-operation="associate"]')).toBeNull()
+    readOnlyApp.unmount()
     container.remove()
   })
 
   it('loads the example compiled Post schema and applies its real panel policy', async () => {
     const { nuxtPanelAcceptanceFixture } = await import('../../../apps/example-nuxt/tests/p9-panel-acceptance-nuxt')
+    const { default: AdminPanel } = await import('../../../apps/example-nuxt/server/admin/AdminPanel')
     const schema = await nuxtPanelAcceptanceFixture.loadResourceSchema()
     const fields = Reflect.get(schema, 'fields') as readonly Record<string, unknown>[]
     const columns = Reflect.get(schema, 'columns') as readonly Record<string, unknown>[]
@@ -381,30 +641,26 @@ describe('P9-D Nuxt adapter', () => {
     expect(fields.map(field => field.path)).toEqual([
       'title',
       'slug',
-      'excerpt',
-      'body',
-      'status',
-      'categoryId',
-      'authorId',
-      'featuredMediaId',
       'category',
       'city',
+      'featuredMediaId',
     ])
+    expect(fields.find(field => field.path === 'title')?.label).toBe('Title')
+    expect(fields.find(field => field.path === 'featuredMediaId')?.label).toBe('Featured Media Id')
     expect(columns.map(column => Reflect.get(Reflect.get(column, 'manifest') as object, 'path'))).toEqual([
       'title',
       'slug',
-      'status',
-      'categoryId',
-      'authorId',
       'category',
       'city',
+      'author.name',
     ])
-    expect(actions.map(action => action.kind)).toEqual(['view', 'edit', 'delete'])
-    expect(fields.find(field => field.path === 'slug')).toMatchObject({ reactive: { source: 'title', transform: 'slug' } })
-    expect(fields.find(field => field.path === 'city')).toMatchObject({ optionSource: { dependency: 'category' } })
-    const runtime = await nuxtPanelAcceptanceFixture.loadRuntime()
-    await expect(Promise.resolve(runtime.panels.admin?.access({ actor: { id: 1, role: 'editor', tenantId: null }, operation: 'page-data', panelId: 'admin', signal: new AbortController().signal }))).resolves.toBe(true)
-    await expect(Promise.resolve(runtime.panels.admin?.access({ actor: { id: 2, role: 'viewer', tenantId: null }, operation: 'page-data', panelId: 'admin', signal: new AbortController().signal }))).resolves.toBe(false)
+    expect(actions.map(action => action.kind)).toEqual(['view', 'edit', 'delete', 'custom'])
+    expect(fields.find(field => field.path === 'slug')).toMatchObject({ properties: { source: 'title', specialization: 'slug' } })
+    expect(fields.find(field => field.path === 'category')).toMatchObject({ properties: { options: [{ disabled: false, label: 'News', value: 'News' }, { disabled: false, label: 'Guides', value: 'Guides' }] } })
+    const panel = AdminPanel.compile()
+    const context = { guard: 'web', operation: 'page-data' as const, panelId: 'admin', provider: 'session', signal: new AbortController().signal }
+    await expect(Promise.resolve(panel.server.access({ ...context, actor: { email: 'editor@example.test', id: '1', name: 'Editor', password: 'secret', role: 'editor', tenantId: null } }))).resolves.toBe(true)
+    await expect(Promise.resolve(panel.server.access({ ...context, actor: { email: 'viewer@example.test', id: '2', name: 'Viewer', password: 'secret', role: 'viewer', tenantId: null } }))).resolves.toBe(false)
     expect(nuxtPanelAcceptanceFixture.pages.map(definition => definition.manifest.path)).toContain('/admin/posts/:record/edit')
   })
 })

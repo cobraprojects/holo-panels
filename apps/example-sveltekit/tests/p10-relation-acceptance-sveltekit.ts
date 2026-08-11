@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { createServer, type ViteDevServer } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import type { Component } from 'svelte'
@@ -16,7 +17,7 @@ async function render(managers: readonly ClientRelationManager[]): Promise<strin
       configFile: false,
       logLevel: 'silent',
       plugins: [svelte()],
-      root: new URL('..', import.meta.url).pathname,
+      root: resolve(process.cwd(), '../../apps/example-sveltekit'),
       server: { middlewareMode: true },
     })
     const fixture = await server.ssrLoadModule('/tests/P10RelationFixture.svelte')

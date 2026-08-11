@@ -1,12 +1,12 @@
+import type User from '../models/User'
+
 export type ExampleRoleKey = 'editor' | 'super-admin' | 'tenant-admin'
 export type ExampleCommentStatus = 'approved' | 'pending' | 'spam'
 export type ExamplePostStatus = 'draft' | 'published'
 
-export class ExampleActor {
-  declare readonly id: string
-  declare readonly role: ExampleRoleKey
-  declare readonly tenantId: string
-}
+type UserRecord = Awaited<ReturnType<typeof User.create>>
+
+export type ExampleActor = Pick<UserRecord, 'id' | 'role' | 'tenantId'>
 
 export interface ExampleCategory {
   readonly id: string

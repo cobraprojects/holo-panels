@@ -14,6 +14,7 @@ export type {
   DiscoveredPanelPath,
   ExistingFrameworkArtifact,
   FrameworkArtifactConflict,
+  FrameworkArtifactDirectories,
   FrameworkArtifactKind,
   FrameworkArtifactManifest,
   FrameworkArtifactOwnership,

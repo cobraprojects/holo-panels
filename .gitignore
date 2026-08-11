@@ -9,3 +9,5 @@ test-results/
 .svelte-kit/
 .holo-js/
 *.tgz
+.kiro
+.DS_Store

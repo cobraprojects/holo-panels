@@ -43,7 +43,7 @@ Maintainers will not ask a reporter to access data they do not own, degrade a th
 
 ## Scope
 
-The policy covers source maintained in this repository and the published package family planned from `packages/`:
+The policy covers source maintained in this repository and the published package family under `packages/`:
 
 - `@holo-js/panels`
 - `@holo-js/panels-core`
@@ -58,6 +58,7 @@ The policy covers source maintained in this repository and the published package
 - `@holo-js/panels-cli`
 - `@holo-js/panels-shield`
 - `@holo-js/panels-testing`
+- `@holo-js/panels-plugin-money`
 
 Security-sensitive areas include:
 
@@ -91,7 +92,7 @@ All publishable Holo Panels packages release in lockstep. An application must no
 | Published `0.1.0-next.0` | Packed minimum-version compatibility against Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`; clean registry lifecycle against Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529` | Newest experimental prerelease; eligible under the prerelease policy below, with no stable-release SLA |
 | Stable release | None | No stable support line exists |
 
-The workspace catalog declares Holo-JS peers as `^0.3.10`, which permits compatible `0.3.x` releases from `0.3.10` onward and excludes `0.4.0`. Packed minimum-version evidence covers published Holo-JS `0.3.10`, while registry installation and lifecycle evidence covers `0.3.11` at the immutable commits above. The wider peer range permits installation; it does not prove every later `0.3.x` version has passed packed compatibility and acceptance testing. Release notes must identify the Holo-JS and framework lines actually validated for that release.
+The workspace catalog declares Holo-JS peers as `>=0.3.9`, so Panels does not require a peer-range edit for each Holo-JS patch, minor, or major release. Holo-JS `0.3.9` was never published; packed minimum-version evidence therefore starts with the first available satisfying release, `0.3.10`, while registry installation and lifecycle evidence covers `0.3.11` at the immutable commits above. The open-ended peer range permits installation of later stable Holo-JS versions; release validation still identifies the concrete versions exercised for each Panels release.
 
 The `0.1.0-next.0` prerelease must not be treated as a stable or long-lived security branch. Source checkouts are moving development targets; reports should name a commit.
 

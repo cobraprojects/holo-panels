@@ -42,9 +42,9 @@ function fixture() {
     auth,
     registry: { 'admin:panel:admin': async () => panel },
     resolveServices: async () => ({ audit: true }),
-    resolveTenant: async () => ({ id: 'tenant-a' }),
+    resolveTenant: vi.fn(async () => { throw new Error('Tenant could not be resolved') }),
   }
-  return { guard, route: createPanelAuthRoute({ panelIds: ['admin'], runtime }) }
+  return { guard, route: createPanelAuthRoute({ panelIds: ['admin'], runtime }), runtime }
 }
 
 function request(operation: string, body: unknown, csrf = 'valid'): Request {
@@ -57,7 +57,7 @@ function request(operation: string, body: unknown, csrf = 'valid'): Request {
 
 describe('Next panel auth route', () => {
   it('uses a fixed compiled panel, preserves secure cookies, and emits a native 303', async () => {
-    const { guard, route } = fixture()
+    const { guard, route, runtime } = fixture()
     const response = await route.POST(request('login', { credentials: { email: 'ava@example.com', password: 'secret' } }), {
       params: Promise.resolve({ operation: 'login', panelId: 'admin' }),
     })
@@ -67,6 +67,7 @@ describe('Next panel auth route', () => {
     expect(response.headers.get('set-cookie')).toContain('Secure; HttpOnly; SameSite=Lax')
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(guard.login).toHaveBeenCalledWith({ email: 'ava@example.com', password: 'secret' })
+    expect(runtime.resolveTenant).not.toHaveBeenCalled()
   })
 
   it('applies CSRF before Auth and rejects client-selected configuration', async () => {

@@ -95,9 +95,14 @@ async function render(model: TableAcceptanceModel): Promise<string> {
       cacheDir: '/tmp/holo-panels-sveltekit-p7-acceptance',
       configFile: false,
       logLevel: 'silent',
+      optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
       plugins: [svelte()],
-      root: new URL('..', import.meta.url).pathname,
+      root: resolve(process.cwd(), '../../apps/example-sveltekit'),
       server: { middlewareMode: true },
+      ssr: {
+        noExternal: ['bits-ui', 'runed', 'svelte-toolbelt'],
+        optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
+      },
     })
     const fixture = await ssrServer.ssrLoadModule('/tests/p7-table-acceptance-ssr.svelte')
     const svelteServer = await ssrServer.ssrLoadModule('svelte/server')

@@ -8,6 +8,7 @@ import {
   TRANSPORT_REQUEST_FIELD,
   TransportDecodingError,
   type JsonObject,
+  type CompiledPanelDefinition,
   type Effect,
   type PanelOperation,
   type ResponseEnvelope,
@@ -19,18 +20,26 @@ import {
   PanelRuntime,
   PanelRuntimeError,
   decodeTransportServerRequest,
+  executePanelRoute,
+  panelErrorNotificationEffect,
 } from '@holo-js/panels-react/server'
 import type {
   CreatePanelOperationRouteOptions,
   NextPanelOperationResult,
   NextPanelRouteContext,
+  NextPanelsRuntime,
 } from './contracts'
 import { nextPanelsRuntimeInternals, requireNextPanelsRuntime } from './runtime'
 
-const OPERATIONS = new Set<PanelOperation>(['action', 'bootstrap', 'form-submit', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload'])
+const OPERATIONS = new Set<PanelOperation>(['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload'])
 const MAX_REQUEST_BYTES = 1_048_576
+const MAX_UPLOAD_REQUEST_BYTES = 67_108_864
 const MAX_RESPONSE_BYTES = 4_194_304
 const RESPONSE_HEADERS = Object.freeze({ 'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8' })
+
+type NextTenantScopedQuery<TQuery> = TQuery & {
+  where(column: string, operator: '=', value: number | string): NextTenantScopedQuery<TQuery>
+}
 
 function responseFromBytes(bytes: Uint8Array<ArrayBuffer>, status: number): Response {
   return new Response(bytes, { status, headers: RESPONSE_HEADERS })
@@ -101,11 +110,13 @@ async function flashRedirectToasts(
   }
 }
 
-function failure(id: string, error: unknown, explicitStatus?: number): Response {
+function failure(id: string, error: unknown, explicitStatus?: number, panel?: CompiledPanelDefinition<object>): Response {
   const status = explicitStatus ?? statusFor(error)
   const normalizedError = normalizeTransportError(error, status)
+  const actionEffects = error instanceof ActionExecutionError ? [...error.effects] : []
+  const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status ?? 500) : null
   const envelope: ResponseEnvelope = {
-    effects: error instanceof ActionExecutionError ? [...error.effects] : [],
+    effects: notification ? [...actionEffects, notification] : actionEffects,
     error: normalizedError,
     id,
     ok: false,
@@ -119,6 +130,7 @@ function failure(id: string, error: unknown, explicitStatus?: number): Response 
 }
 
 function statusFor(error: unknown): number | undefined {
+  const name = error instanceof Error ? error.name : ''
   if (error instanceof NextPanelHttpError) return error.status
   if (error instanceof PanelNotificationRequestError) return 400
   if (error instanceof PanelNotificationAccessError) return 403
@@ -128,6 +140,9 @@ function statusFor(error: unknown): number | undefined {
     if (error.code === 'access-denied') return 403
     if (error.code === 'panel-not-found') return 404
   }
+  if (name === 'ResourceRecordNotFoundError' || name === 'RelationRecordNotFoundError') return 404
+  if (name === 'ResourceInputError' || name === 'RelationInputError' || name === 'RelationPivotInputError' || name === 'RelationListPaginationError') return 422
+  if (name === 'RelationOperationNotAllowedError') return 403
   return undefined
 }
 
@@ -136,9 +151,9 @@ function operation(value: string): PanelOperation {
   return value as PanelOperation
 }
 
-async function boundRequest(request: Request): Promise<Request> {
+async function boundRequest(request: Request, maximumBytes = MAX_REQUEST_BYTES): Promise<Request> {
   const declaredLength = Number(request.headers.get('content-length') ?? '0')
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) throw new NextPanelHttpError(413, 'Panel operation request is too large')
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) throw new NextPanelHttpError(413, 'Panel operation request is too large')
   if (!request.body) throw new TransportDecodingError('Missing transport request body.')
   const reader = request.body.getReader()
   const chunks: Uint8Array[] = []
@@ -147,7 +162,7 @@ async function boundRequest(request: Request): Promise<Request> {
     const chunk = await reader.read()
     if (chunk.done) break
     total += chunk.value.byteLength
-    if (total > MAX_REQUEST_BYTES) {
+    if (total > maximumBytes) {
       await reader.cancel()
       throw new NextPanelHttpError(413, 'Panel operation request is too large')
     }
@@ -175,14 +190,41 @@ function requestIdFromFailure(request: Request): string {
   return request.headers.get('x-request-id')?.trim().slice(0, 128) || 'invalid-request'
 }
 
-async function handle(request: Request, context: NextPanelRouteContext, options: CreatePanelOperationRouteOptions): Promise<Response> {
+async function handle<TRuntime>(request: Request, context: NextPanelRouteContext, options: CreatePanelOperationRouteOptions<TRuntime>): Promise<Response> {
   let requestId = requestIdFromFailure(request)
+  let configuredPanel: CompiledPanelDefinition<object> | undefined
   try {
-    if (request.method !== 'POST') throw new NextPanelHttpError(405, 'Panel operation routes require POST')
     const parameters = await context.params
     if (!options.panelIds.includes(parameters.panelId)) throw new NextPanelHttpError(404, 'Panel was not found')
+    if (parameters.operation === 'custom-route') {
+      const runtime = requireNextPanelsRuntime(options.runtime as NextPanelsRuntime | undefined)
+      const panelEntries = await nextPanelsRuntimeInternals.definitions(runtime, parameters.panelId, 'panel')
+      const discoveredPanel = panelEntries.find(candidate => candidate.manifest.id === parameters.panelId)
+      if (!discoveredPanel) throw new NextPanelHttpError(404, 'Panel was not found')
+      configuredPanel = discoveredPanel
+      const pages = await nextPanelsRuntimeInternals.definitions(runtime, parameters.panelId, 'page')
+      const panel = nextPanelsRuntimeInternals.panelWithDiscoveredNavigation(discoveredPanel, pages)
+      const rewrittenUrl = new URL(request.url)
+      const panelRoute = rewrittenUrl.searchParams.get('panelRoute')
+      if (!panelRoute?.startsWith('/')) throw new NextPanelHttpError(400, 'Panel custom routes require their generated source path')
+      rewrittenUrl.pathname = panelRoute
+      rewrittenUrl.searchParams.delete('panelRoute')
+      const routedRequest = new Request(rewrittenUrl, request)
+      const nextContext = createNextRequestContext(routedRequest)
+      return await runWithNextRequest(nextContext, async () => {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          const csrfResponse = await csrfProtection()(routedRequest.clone())
+          if (csrfResponse) return csrfResponse
+        }
+        const auth = typeof runtime.auth === 'function' ? await runtime.auth() : runtime.auth
+        const response = await executePanelRoute(panel, auth, routedRequest)
+        if (!response) throw new NextPanelHttpError(404, 'Panel custom route was not found')
+        return response
+      })
+    }
+    if (request.method !== 'POST') throw new NextPanelHttpError(405, 'Panel operation routes require POST')
     const selectedOperation = operation(parameters.operation)
-    request = await boundRequest(request)
+    request = await boundRequest(request, selectedOperation === 'upload' ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES)
     const nextContext = createNextRequestContext(request)
     return await runWithNextRequest(nextContext, async () => {
       const csrfResponse = await csrfProtection()(request.clone())
@@ -192,10 +234,14 @@ async function handle(request: Request, context: NextPanelRouteContext, options:
       if (decoded.envelope.panelId !== parameters.panelId || decoded.envelope.operation !== selectedOperation) {
         throw new NextPanelHttpError(400, 'Panel request envelope does not match its fixed route')
       }
-      const runtime = requireNextPanelsRuntime(options.runtime)
+      const runtime = requireNextPanelsRuntime(options.runtime as NextPanelsRuntime | undefined)
       const panelEntries = await nextPanelsRuntimeInternals.definitions(runtime, parameters.panelId, 'panel')
-      const panel = panelEntries.find(candidate => candidate.manifest.id === parameters.panelId)
-      if (!panel) throw new NextPanelHttpError(404, 'Panel was not found')
+      const discoveredPanel = panelEntries.find(candidate => candidate.manifest.id === parameters.panelId)
+      if (!discoveredPanel) throw new NextPanelHttpError(404, 'Panel was not found')
+      configuredPanel = discoveredPanel
+      if (!nextPanelsRuntimeInternals.panelAcceptsHost(discoveredPanel, request)) throw new NextPanelHttpError(404, 'Panel was not found')
+      const pages = await nextPanelsRuntimeInternals.definitions(runtime, parameters.panelId, 'page')
+      const panel = nextPanelsRuntimeInternals.panelWithDiscoveredNavigation(discoveredPanel, pages)
       const auth = typeof runtime.auth === 'function' ? await runtime.auth() : runtime.auth
       const panelRuntime = new PanelRuntime(auth, [panel])
       if (selectedOperation === 'bootstrap') {
@@ -203,6 +249,7 @@ async function handle(request: Request, context: NextPanelRouteContext, options:
       }
       if (!runtime.execute) throw new NextPanelHttpError(501, `Panel operation "${selectedOperation}" has no registered executor`)
       return panelRuntime.execute(parameters.panelId, selectedOperation, request.signal, async scope => {
+        const tenantContext = runtime.resolveTenant || !panel.server.tenancy ? undefined : await panel.server.tenancy.activeContext(scope)
         const result = await runtime.execute!({
           operation: selectedOperation,
           panelId: parameters.panelId,
@@ -217,7 +264,11 @@ async function handle(request: Request, context: NextPanelRouteContext, options:
             request,
             services: await runtime.resolveServices?.(request),
             signal: request.signal,
-            tenant: await runtime.resolveTenant?.(request),
+            tenant: runtime.resolveTenant ? await runtime.resolveTenant(request) : tenantContext?.tenantId,
+            ...(tenantContext ? {
+              scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenantContext.scopeTenantQuery(query as NextTenantScopedQuery<TQuery>) as TQuery,
+              tenantBindings: tenantContext.tenantBindings,
+            } : {}),
           },
         })
         const succeeded = success(requestId, result)
@@ -226,18 +277,21 @@ async function handle(request: Request, context: NextPanelRouteContext, options:
       })
     })
   } catch (error) {
-    return failure(requestId, error)
+    return failure(requestId, error, undefined, configuredPanel)
   }
 }
 
-export function createPanelOperationRoute(options: CreatePanelOperationRouteOptions) {
+export function createPanelOperationRoute<TRuntime>(options: CreatePanelOperationRouteOptions<TRuntime>) {
   const uniqueIds = new Set(options.panelIds)
   if (uniqueIds.size !== options.panelIds.length || [...uniqueIds].some(id => !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u.test(id))) {
     throw new Error('Panel operation routes require unique stable panel IDs')
   }
   return Object.freeze({
+    DELETE: (request: Request, context: NextPanelRouteContext) => handle(request, context, options),
     GET: (request: Request, context: NextPanelRouteContext) => handle(request, context, options),
+    PATCH: (request: Request, context: NextPanelRouteContext) => handle(request, context, options),
     POST: (request: Request, context: NextPanelRouteContext) => handle(request, context, options),
+    PUT: (request: Request, context: NextPanelRouteContext) => handle(request, context, options),
   })
 }
 

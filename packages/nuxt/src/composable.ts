@@ -13,7 +13,7 @@ async function nuxtImports(): Promise<NuxtImports> {
 }
 
 function pageEndpoint(panelId: string): string {
-  return `/_holo/panels/${encodeURIComponent(panelId)}/page-data`
+  return `/holo/panels/${encodeURIComponent(panelId)}/page-data`
 }
 
 function isPage(value: unknown): value is NuxtPanelPage {

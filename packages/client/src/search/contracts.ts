@@ -36,8 +36,16 @@ export interface ClientSearchTransport {
 
 export interface ClientSearchOptions {
   readonly debounceMilliseconds?: number
+  readonly keybindings?: readonly string[]
   readonly maximumLength?: number
   readonly minimumLength?: number
+}
+
+export interface ClientSearchShortcut {
+  readonly alt?: boolean
+  readonly ctrl: boolean
+  readonly meta: boolean
+  readonly shift?: boolean
 }
 
 export type ClientSearchStateListener = (state: ClientSearchState) => void

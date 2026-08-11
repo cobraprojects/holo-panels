@@ -6,6 +6,7 @@ import type {
 } from './contracts'
 
 const identifierPattern = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
+const columnPattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*$/u
 
 function assertManager(manager: ClientRelationManager, ids: Set<string>): void {
   if (!identifierPattern.test(manager.id)) throw new Error(`[Holo Panels] Invalid client relation manager ID "${manager.id}".`)
@@ -20,7 +21,7 @@ function assertManager(manager: ClientRelationManager, ids: Set<string>): void {
   }
   const columns = new Set<string>()
   for (const column of manager.columns) {
-    if (!identifierPattern.test(column.key) || columns.has(column.key) || !column.label.trim()) {
+    if (!columnPattern.test(column.key) || columns.has(column.key) || !column.label.trim()) {
       throw new Error(`[Holo Panels] Relation manager "${manager.id}" has invalid columns.`)
     }
     columns.add(column.key)

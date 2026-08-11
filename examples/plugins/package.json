@@ -29,9 +29,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@holo-js/forms": "^0.3.10",
-    "@holo-js/panels": "^0.1.0-next.0",
-    "@holo-js/panels-core": "^0.1.0-next.0"
+    "@holo-js/forms": ">=0.3.9",
+    "@holo-js/panels": "^0.1.0-next.1",
+    "@holo-js/panels-core": "^0.1.0-next.1"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

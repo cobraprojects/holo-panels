@@ -81,6 +81,25 @@ describe('public authoring inference', () => {
         expectTypeOf(context).toEqualTypeOf<ResourceExecutionContext<Actor, string>>()
         return query.where('tenantId', '=', context.tenant)
       })
+    const resourceWidget = defineStatsWidget('resource-totals', { actor: Actor, tenant: String })
+    const resourceSchema = defineSchema('resource-post', PostModel)
+    const resourceEntries = entriesFor(PostModel)
+    const resourcePage = defineCustomPage('resource-overview', {
+      actor: Actor,
+      load: () => ({ ready: true }),
+      tenant: String,
+    })
+    const incompatibleWidget = defineStatsWidget('incompatible', { actor: QueryContext, tenant: String })
+    const invalidResourceComposition = (): void => {
+      // @ts-expect-error widget actor context does not match the resource actor
+      resource.widgets(incompatibleWidget)
+    }
+    const composedResource = resource
+      .form(resourceSchema)
+      .infolist([resourceEntries.text('title')])
+      .pages(resourcePage)
+      .widgets(resourceWidget)
+      .readOnly()
     const definePostSearch = globalSearchFor({ actor: Actor, query: SearchQuery, record: Post, tenant: Tenant })
     const search = definePostSearch({
       applySearch: query => query,
@@ -104,6 +123,8 @@ describe('public authoring inference', () => {
     expectTypeOf(dashboard).toEqualTypeOf<DashboardBuilder<Actor, Tenant, Services>>()
     expectTypeOf(search).toEqualTypeOf<RegisteredGlobalSearchResource<Actor, Tenant>>()
     expect(resource.id).toBe('posts')
+    expect(composedResource.compile().infolist).toHaveLength(1)
+    expectTypeOf(invalidResourceComposition).toBeFunction()
     widget.data(context => ({ stats: context.tenant.id ? [] : [] }))
     dashboard.authorize(context => context.actor.id === context.services.revision)
 

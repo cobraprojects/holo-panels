@@ -80,11 +80,11 @@ The generated route paths differ by framework:
 
 | Framework | Panel page for a panel at `/admin` | Operation endpoint |
 | --- | --- | --- |
-| Next.js | `app/admin/[[...panelsPath]]/page.tsx` | `app/%5Fholo/panels/[panelId]/[operation]/route.ts` |
-| Nuxt | `pages/admin/[[...panelsPath]].vue` | `server/api/_holo/panels/[panelId]/[operation].ts` |
-| SvelteKit | `src/routes/admin/[...path]/+page.server.ts` and `+page.svelte` | `src/routes/_holo/panels/[panelId]/[operation]/+server.ts` |
+| Next.js | `app/admin/[[...panelsPath]]/page.tsx` | `app/holo/panels/[panelId]/[operation]/route.ts` |
+| Nuxt | `pages/admin/[[...panelsPath]].vue` | `server/routes/holo/panels/[panelId]/[operation].ts` |
+| SvelteKit | `src/routes/admin/[...path]/+page.server.ts` and `+page.svelte` | `src/routes/holo/panels/[panelId]/[operation]/+server.ts` |
 
-Next.js requires the encoded `%5Fholo` filesystem segment so the App Router does not treat `_holo` as a private folder. Requests still use `/_holo/panels/...`.
+Next.js requires the encoded `holo` filesystem segment so the App Router does not treat `_holo` as a private folder. Requests still use `/holo/panels/...`.
 
 Panel generators invoke `holo prepare` after writing their files. Run it again after manually changing discoverable panel, page, resource, widget, or cluster definitions.
 

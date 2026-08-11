@@ -2,6 +2,7 @@ import type { RelationDefinition } from '@holo-js/db'
 import type { OptionValue } from '../fields/options'
 import type { OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import { allowedRelationOperations } from './metadata'
+import type { ResourceCompositionTypes } from '../resources/contracts'
 import type {
   RelationManagerAuthorization,
   RelationManagerContext,
@@ -46,6 +47,7 @@ export class RelationManagerBuilder<
   TActor extends object,
   TTenant,
 > {
+  declare readonly resourceCompositionTypes: ResourceCompositionTypes<TOwner, TActor, TTenant>
   readonly #relationName: string
   readonly #relation: RelationDefinition
   readonly #persistence: RelationPersistence<TOwner, TRelated, TQuery, TInput, TPivot, TValue, TActor, TTenant>

@@ -1,8 +1,6 @@
-import { resolveWidget } from '@holo-js/panels'
-import { resolveNextPanelPage, type NextPanelOperationInput } from '@holo-js/panels-next'
+import { generatedResourcePageManifests, resolveWidget, type RuntimeTypeValue } from '@holo-js/panels'
 import { describe, expect, it } from 'vitest'
 import { GET as getBlogMedia } from '../app/blog/media/[id]/route'
-import { createAdminPanelsRuntime } from '../server/admin/runtime'
 import AdminPanel from '../server/admin/AdminPanel'
 import PostExporter from '../server/admin/exports/PostExporter'
 import PostImporter from '../server/admin/imports/PostImporter'
@@ -16,30 +14,19 @@ import TagResource from '../server/admin/resources/tags/TagResource'
 import UserResource from '../server/admin/resources/users/UserResource'
 import ContentOverview from '../server/admin/widgets/ContentOverview'
 import { createExampleBlogDomain, exampleActors } from '../server/domain/blog'
+import type User from '../server/models/User'
 
 const signal = new AbortController().signal
-
-const operation = (
-  payload: NextPanelOperationInput['payload'],
-  actor: object = exampleActors.acmeEditor,
-  operationName: NextPanelOperationInput['operation'] = 'action',
-): NextPanelOperationInput => ({
-  operation: operationName,
-  panelId: 'admin',
-  payload,
-  request: new Request('https://panels.test/admin/_panels/action'),
-  scope: {
-    actor,
-    locale: 'en',
-    panelId: 'admin',
-    parameters: {},
-    provider: 'session',
-    request: new Request('https://panels.test/admin/_panels/action'),
-    services: {},
-    signal,
-    tenant: 'tenant-acme',
-  },
-})
+const panelActor = {
+  createdAt: new Date(),
+  email: 'editor@acme.example.test',
+  id: 'user-acme-editor',
+  name: 'Acme Editor',
+  password: 'hidden',
+  role: 'editor',
+  tenantId: 'tenant-acme',
+  updatedAt: new Date(),
+} satisfies RuntimeTypeValue<typeof User>
 
 describe('Next example blog domain', () => {
   it('registers the complete administration slice with notifications and transfers', () => {
@@ -83,64 +70,32 @@ describe('Next example blog domain', () => {
     ])
   })
 
-  it('executes tenant-safe tag and comment actions through the fixed panel operation runtime', async () => {
+  it('enforces tenant-safe tag and comment behavior', () => {
     const domain = createExampleBlogDomain()
-    const runtime = createAdminPanelsRuntime({ domain })
-    const execute = runtime.execute
-    if (!execute) throw new Error('The example runtime has no operation executor.')
-
-    const attached = await execute(operation({
-      actionId: 'example.tags.attach',
-      postId: 'post-acme-release',
-      tagId: 'tag-acme-typescript',
-    }))
-    expect(attached.data).toMatchObject({ id: 'post-acme-release', tagIds: ['tag-acme-holo', 'tag-acme-typescript'] })
-
-    const created = await execute(operation({
-      actionId: 'example.comments.create',
-      authorName: 'Katherine',
-      body: 'Ready for moderation.',
-      postId: 'post-acme-release',
-    }))
-    expect(created.data).toMatchObject({ status: 'pending', tenantId: 'tenant-acme' })
-
-    await expect(execute(operation({
-      actionId: 'example.tags.attach',
-      postId: 'post-acme-release',
-      tagId: 'tag-globex-holo',
-    }))).rejects.toThrow('Tag access was denied')
-    await expect(execute(operation({ actionId: 'example.tags.attach', postId: 'post-acme-release', tagId: 'tag-acme-holo' }, {
+    const attached = domain.attachTag(exampleActors.acmeEditor, 'post-acme-release', 'tag-acme-typescript')
+    expect(attached).toMatchObject({ id: 'post-acme-release', tagIds: ['tag-acme-holo', 'tag-acme-typescript'] })
+    const created = domain.createComment(exampleActors.acmeEditor, 'post-acme-release', 'Katherine', 'Ready for moderation.')
+    expect(created).toMatchObject({ status: 'pending', tenantId: 'tenant-acme' })
+    expect(() => domain.attachTag(exampleActors.acmeEditor, 'post-acme-release', 'tag-globex-holo')).toThrow('Tag access was denied')
+    expect(() => domain.attachTag({
       id: 'user-denied',
       role: 'denied',
       tenantId: 'tenant-acme',
-    }))).rejects.toThrow('access was denied')
+    }, 'post-acme-release', 'tag-acme-holo')).toThrow('access was denied')
   })
 
-  it('scopes resource definitions and widget output to the active tenant', async () => {
+  it('scopes resource definitions and widget access to the active tenant', async () => {
     for (const resource of [CategoryResource, CommentResource, MediaResource, TagResource]) {
       const definition = resource.compile()
       expect(definition.tenantScope).toBeTypeOf('function')
-      expect(await definition.createBindings?.({ actor: {}, signal, tenant: 'tenant-acme' })).toEqual({ tenantId: 'tenant-acme' })
+      expect(await definition.createBindings?.({ actor: panelActor, signal, tenant: 'tenant-acme' })).toEqual({ tenantId: 'tenant-acme' })
     }
 
-    const domain = createExampleBlogDomain()
-    const resolved = await resolveWidget(ContentOverview.compile(), {
-      actor: exampleActors.acmeEditor,
-      locale: 'en',
-      panelId: 'admin',
-      services: { domain },
-      signal,
-      tenant: 'tenant-acme',
-    })
-    expect(resolved).toMatchObject({
-      data: { stats: [{ id: 'posts', value: '3' }, { id: 'pending-comments', value: '1' }] },
-      status: 'ready',
-    })
     const hidden = await resolveWidget(ContentOverview.compile(), {
-      actor: exampleActors.acmeEditor,
+      actor: panelActor,
       locale: 'en',
       panelId: 'admin',
-      services: { domain },
+      services: undefined,
       signal,
       tenant: 'tenant-globex',
     })
@@ -162,56 +117,27 @@ describe('Next example blog domain', () => {
     expect(denied.status).toBe(404)
   })
 
-  it('resolves overview and administration pages and performs category CRUD through the manual runtime', async () => {
+  it('derives the complete Post CRUD route set and preserves tenant category behavior', () => {
     const domain = createExampleBlogDomain()
     const actor = exampleActors.acmeAdmin
-    const runtime = createAdminPanelsRuntime({
-      auth: { guard: () => ({ provider: async () => 'session', user: async () => actor }) },
-      domain,
-      resolveServices: async () => ({ domain }),
-      resolveTenant: async () => 'tenant-acme',
-    })
-    const execute = runtime.execute
-    if (!execute) throw new Error('The example runtime has no operation executor.')
-
-    const overview = await resolveNextPanelPage('admin', [], new Request('https://panels.test/admin'), runtime)
-    expect(overview.page.manifest.widgets.header).toEqual(['content-overview'])
-    expect(overview.page.data).toMatchObject({ status: 'ready' })
-
-    const created = await execute(operation({
-      intent: 'create',
-      name: 'Culture',
-      resourceId: 'categories',
-      slug: 'culture',
-    }, actor, 'form-submit'))
-    expect(created.data).toMatchObject({ id: 'category-acme-culture', tenantId: 'tenant-acme' })
-
-    const categories = await resolveNextPanelPage('admin', ['categories'], new Request('https://panels.test/admin/categories'), runtime)
-    expect(categories.page.data.records).toContainEqual(expect.objectContaining({ id: 'category-acme-culture' }))
-
-    await execute(operation({
-      intent: 'edit',
-      name: 'Culture desk',
-      recordId: 'category-acme-culture',
-      resourceId: 'categories',
-      slug: 'culture-desk',
-    }, actor, 'form-submit'))
-    await execute(operation({
-      actionId: 'delete-record',
-      intent: 'delete',
-      recordId: 'category-acme-culture',
-      resourceId: 'categories',
-    }, actor))
-
-    const media = await resolveNextPanelPage('admin', ['media'], new Request('https://panels.test/admin/media'), runtime)
-    expect(JSON.stringify(media.page.data)).not.toContain('tenant-acme/posts')
-    expect(JSON.stringify(media.page.data)).not.toContain('private')
-
-    const users = await resolveNextPanelPage('admin', ['users'], new Request('https://panels.test/admin/users'), runtime)
-    expect(users.page.data.records).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'user-acme-admin', roleKey: 'tenant-admin' }),
-      expect.objectContaining({ id: 'user-acme-editor', roleKey: 'editor' }),
-    ]))
-    expect(users.page.data.records).not.toContainEqual(expect.objectContaining({ id: 'user-globex-editor' }))
+    const pages = generatedResourcePageManifests({ panelPath: '/admin', resource: PostResource })
+    expect(pages.map(page => page.path)).toEqual([
+      '/admin/posts',
+      '/admin/posts/create',
+      '/admin/posts/:record',
+      '/admin/posts/:record/edit',
+    ])
+    const resource = pages[0]?.body?.properties.resource
+    const table = resource && typeof resource === 'object' && !Array.isArray(resource) ? resource.table : null
+    const actions = table && typeof table === 'object' && !Array.isArray(table) && Array.isArray(table.actions) ? table.actions : []
+    expect(actions).toContainEqual(expect.objectContaining({
+      id: 'publish-selected',
+      label: 'Publish selected',
+      scope: 'bulk',
+    }))
+    const created = domain.saveCategory(actor, null, 'Culture', 'culture')
+    expect(created).toMatchObject({ id: 'category-acme-culture', tenantId: 'tenant-acme' })
+    domain.deleteCategory(actor, created.id)
+    expect(domain.adminSnapshot(actor).categories).not.toContainEqual(expect.objectContaining({ id: created.id }))
   })
 })

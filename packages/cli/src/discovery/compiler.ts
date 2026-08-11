@@ -1,6 +1,6 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { dirname, extname, relative, resolve, sep } from 'node:path'
-import type { ComponentDefault, ComponentDefaultLayers } from '@holo-js/panels-core'
+import { generatedResourcePageManifests, toJsonValue, type ComponentDefault, type ComponentDefaultLayers } from '@holo-js/panels-core'
 import { PanelsDiscoveryError } from './error'
 import { isDiscoverableBuilder, isDiscoverableDefinition } from './markers'
 import type {
@@ -244,7 +244,7 @@ function validateDefinitions(definitions: readonly DiscoveredDefinition[]): void
       ['component-key', definition.componentKeys, componentOwners],
       ['navigation-key', definition.navigationKeys, navigationOwners],
     ]
-    if (definition.route) {
+    if (definition.route && definition.kind !== 'panel') {
       const routeKey = `${definition.panelId}\0${definition.route}`
       const owner = routeOwners.get(routeKey)
       if (owner) duplicateKeyError('route', definition.route, owner, definition)
@@ -296,6 +296,53 @@ function convertDefinition(candidate: Candidate, loaded: LoadedExport): Discover
   })
 }
 
+function registeredDefinitions(
+  candidate: Candidate,
+  loaded: LoadedExport,
+): readonly DiscoveredDefinition[] {
+  const server = loaded.definition.server
+  if (typeof server !== 'object' || server === null) return []
+  const registered = Reflect.get(server, 'registered')
+  if (registered === undefined) return []
+  if (!Array.isArray(registered)) {
+    throw new PanelsDiscoveryError('PANELS_DISCOVERY_REGISTRATION_INVALID', 'Explicit panel registrations must be an array.', {
+      path: candidate.projectPath,
+      exportName: loaded.exportName,
+    })
+  }
+  return registered.map((registration, index) => {
+    const value = typeof registration === 'object' && registration !== null ? Reflect.get(registration, 'definition') : undefined
+    if (!isDiscoverableDefinition(value) || !['cluster', 'page', 'resource', 'widget'].includes(value.kind)) {
+      throw new PanelsDiscoveryError('PANELS_DISCOVERY_REGISTRATION_INVALID', 'Explicit panel registrations must contain discoverable resource, page, widget, or cluster definitions.', {
+        path: candidate.projectPath,
+        exportName: loaded.exportName,
+      })
+    }
+    if (value.panelId !== undefined && value.panelId !== loaded.definition.id) {
+      throw new PanelsDiscoveryError('PANELS_DISCOVERY_PANEL_MISMATCH', `Explicit registration declares panel ${value.panelId} but belongs to panel ${loaded.definition.id}.`, {
+        path: candidate.projectPath,
+        exportName: loaded.exportName,
+      })
+    }
+    assertClientSafe(value.client ?? {}, candidate.projectPath, loaded.exportName)
+    return Object.freeze({
+      kind: value.kind,
+      id: value.id,
+      panelId: loaded.definition.id,
+      projectPath: candidate.projectPath,
+      exportName: `${loaded.exportName}.${value.kind}.${value.id}`,
+      ...(value.route ? { route: value.route } : {}),
+      permissionKeys: uniqueSorted(value.permissionKeys ?? []),
+      componentKeys: uniqueSorted(value.componentKeys ?? []),
+      navigationKeys: uniqueSorted(value.navigationKeys ?? []),
+      default: value.default ?? false,
+      client: value.client ?? {},
+      ...(typeof value.server === 'undefined' ? {} : { server: value.server }),
+      registeredFrom: { exportName: loaded.exportName, index },
+    })
+  })
+}
+
 export class DiscoveryCompiler {
   readonly #options: DiscoveryCompilerOptions
   readonly #moduleCache = new Map<string, LoadedExport | null>()
@@ -340,10 +387,47 @@ export class DiscoveryCompiler {
       if (!activePaths.has(cachedPath)) this.#moduleCache.delete(cachedPath)
     }
 
-    const definitions = (await this.#loadCandidates(deduplicated, candidate => candidate.expectedKind === 'panel'
+    const loadedCandidates = await this.#loadCandidates(deduplicated, candidate => candidate.expectedKind === 'panel'
       ? { application: applicationDefaults }
-      : layersByPanel.get(candidate.panelId ?? '')))
-      .map(({ candidate, loaded }) => convertDefinition(candidate, loaded))
+      : layersByPanel.get(candidate.panelId ?? ''))
+    const loadedDefinitions = loadedCandidates.map(({ candidate, loaded }) => convertDefinition(candidate, loaded))
+    const explicitDefinitions = panels.flatMap(panel => registeredDefinitions(panel.candidate, panel.loaded))
+    const discoveredDefinitions = [...loadedDefinitions, ...explicitDefinitions]
+    const existingPageKeys = new Set(discoveredDefinitions
+      .filter(definition => definition.kind === 'page')
+      .flatMap(definition => [`${definition.panelId}:id:${definition.id}`, `${definition.panelId}:route:${definition.route ?? ''}`]))
+    const panelPaths = new Map(panels.map(panel => [panel.definition.panelId, String(panel.definition.client.path ?? '/')]))
+    const generatedPages = loadedCandidates.flatMap(({ candidate, loaded }): readonly DiscoveredDefinition[] => {
+      if (candidate.expectedKind !== 'resource' || !candidate.panelId) return []
+      const discovery = loaded.definition.discover
+      if (!discovery || typeof discovery.pages !== 'string') return []
+      const panelPath = panelPaths.get(candidate.panelId)
+      if (!panelPath) return []
+      return generatedResourcePageManifests({ panelPath, resource: loaded.definition }).flatMap((manifest) => {
+        const idKey = `${candidate.panelId}:id:${manifest.id}`
+        const routeKey = `${candidate.panelId}:route:${manifest.path}`
+        if (existingPageKeys.has(idKey) || existingPageKeys.has(routeKey)) return []
+        existingPageKeys.add(idKey)
+        existingPageKeys.add(routeKey)
+        const client = toJsonValue(manifest)
+        if (!client || Array.isArray(client) || typeof client !== 'object') throw new PanelsDiscoveryError('PANELS_DISCOVERY_CLIENT_UNSAFE', 'Generated resource page manifest is not JSON-safe.', { path: candidate.projectPath })
+        return [Object.freeze({
+          client,
+          componentKeys: Object.freeze([]),
+          default: false,
+          exportName: `${loaded.exportName}.generated.${manifest.pageType}`,
+          generatedResourcePage: { manifest: client, resourceExportName: loaded.exportName },
+          id: manifest.id,
+          kind: 'page' as const,
+          navigationKeys: Object.freeze(manifest.navigation ? [manifest.id] : []),
+          panelId: candidate.panelId!,
+          permissionKeys: Object.freeze([]),
+          projectPath: candidate.projectPath,
+          route: manifest.path,
+        })]
+      })
+    })
+    const definitions = [...discoveredDefinitions, ...generatedPages]
       .sort((left, right) => compareText(left.projectPath, right.projectPath) || compareText(left.exportName, right.exportName))
     validateDefinitions(definitions)
 

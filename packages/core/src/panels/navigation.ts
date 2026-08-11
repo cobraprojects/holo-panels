@@ -2,7 +2,9 @@ import type { CompiledPageDefinition } from '../pages/contracts'
 import type { JsonObject } from '../protocol/json'
 import type { PanelNavigationSeed } from './contracts'
 
-export function createNavigationSeed(pages: readonly CompiledPageDefinition<JsonObject, unknown, unknown, unknown>[]): readonly PanelNavigationSeed[] {
+export function createNavigationSeed<TData extends JsonObject, TActor, TTenant, TServices>(
+  pages: readonly CompiledPageDefinition<TData, TActor, TTenant, TServices>[],
+): readonly PanelNavigationSeed[] {
   const items = pages.flatMap(page => page.manifest.navigation
     ? [{
         ...page.manifest.navigation,

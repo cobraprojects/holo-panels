@@ -1,3 +1,4 @@
+import { ShadcnButton, ShadcnInput, ShadcnTextarea } from '../internal-ui'
 import { defineComponent, h, ref, type PropType, type VNode, type VNodeChild } from 'vue'
 import { fieldFrame, property, touchField, updateField } from './shared'
 import type { VueFieldControlProps } from './types'
@@ -46,13 +47,14 @@ export const VueBasicField = defineComponent({
         onBlur: () => touchField(props),
       }
       if (context.definition.type === 'hidden') {
-        return h('input', { name: context.definition.path, type: 'hidden', value: textValue(context.value) })
+        return h(ShadcnInput, { name: context.definition.path, type: 'hidden', value: textValue(context.value), 'data-slot': 'input' })
       }
       if (context.definition.type === 'textarea') {
         const autosize = property(context, 'autosize', false)
-        return fieldFrame(context, h('textarea', {
+        return fieldFrame(context, h(ShadcnTextarea, {
           ...common,
           'data-autosize': autosize || undefined,
+          'data-slot': 'textarea',
           maxlength: property(context, 'maximumLength', undefined as number | undefined),
           rows: property(context, 'rows', 4),
           value: textValue(context.value),
@@ -67,8 +69,9 @@ export const VueBasicField = defineComponent({
         const stateLabel = context.value === true
           ? stringProperty(props, 'onLabel')
           : stringProperty(props, 'offLabel')
-        return fieldFrame(context, h('input', {
+        return fieldFrame(context, h(ShadcnInput, {
           checked: context.value === true,
+          'data-slot': context.definition.type === 'toggle' ? 'switch' : 'checkbox',
           disabled: context.disabled || context.readOnly,
           readonly: context.readOnly,
           role: context.definition.type === 'toggle' ? 'switch' : undefined,
@@ -101,8 +104,9 @@ export const VueBasicField = defineComponent({
             if (!['boolean', 'number', 'string'].includes(typeof value)) return null
             const id = `${context.inputId}-${index}`
             return h('label', { for: id, key: String(value) }, [
-              h('input', {
+              h(ShadcnInput, {
                 checked: context.value === value,
+                'data-slot': 'radio-group-item',
                 disabled: context.disabled || context.readOnly || Reflect.get(option, 'disabled') === true,
                 id,
                 name: context.definition.path,
@@ -133,7 +137,7 @@ export const VueBasicField = defineComponent({
       const datalistId = datalist.length > 0 ? `${context.inputId}-list` : undefined
       const after: VNodeChild[] = [
         suffix ? h('span', { class: 'hp-field-suffix' }, suffix) : null,
-        revealable ? h('button', {
+        revealable ? h(ShadcnButton, {
           'aria-controls': context.inputId,
           'aria-label': passwordVisible.value ? 'Hide password' : 'Show password',
           type: 'button',
@@ -141,10 +145,11 @@ export const VueBasicField = defineComponent({
         }, passwordVisible.value ? 'Hide' : 'Show') : null,
         datalistId ? h('datalist', { id: datalistId }, datalist.map(option => h('option', { key: option, value: option }))) : null,
       ]
-      return fieldFrame(context, h('input', {
+      return fieldFrame(context, h(ShadcnInput, {
         ...common,
         autocomplete: property(context, 'autocomplete', undefined as string | undefined),
         'data-mask': stringProperty(props, 'mask') ?? undefined,
+        'data-slot': context.definition.type === 'slider' ? 'slider' : 'input',
         list: datalistId,
         max: property(context, 'maximum', undefined as number | string | undefined),
         maxlength: property(context, 'maximumLength', undefined as number | undefined),

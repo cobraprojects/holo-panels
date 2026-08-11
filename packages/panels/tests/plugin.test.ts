@@ -84,6 +84,7 @@ describe('Holo Panels plugin', () => {
       'permissions.ts',
       'types.d.ts',
       'framework-artifacts.json',
+      'panel-routes.json',
       'registry.json',
     ])
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'registry.json')?.contents)
@@ -116,9 +117,11 @@ describe('Holo Panels plugin', () => {
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'registry.json')?.contents)
       .toContain('server/admin/AdminPanel.ts')
     expect(result.managedArtifacts?.map(artifact => artifact.path)).toEqual([
-      'app/_holo/panels/[panelId]/[operation]/route.ts',
       'app/admin/[[...panelsPath]]/page.tsx',
       'app/admin/[[...panelsPath]]/panels-client.tsx',
+      'app/holo/panels/[panelId]/[operation]/route.ts',
+      'app/holo/panels/[panelId]/auth/[operation]/route.ts',
+      'app/holo/panels/[panelId]/tenant/[operation]/route.ts',
     ])
     expect(result.generatedArtifacts?.map(artifact => artifact.path)).toEqual(expect.arrayContaining(['plugin-renderers.ts', 'plugins.json']))
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'framework-artifacts.json')?.contents)

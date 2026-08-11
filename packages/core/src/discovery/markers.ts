@@ -51,8 +51,6 @@ export function isDiscoverableBuilder(value: unknown): value is DiscoverableBuil
   return isRecord(value)
     && value.discoveryMarker === DISCOVERY_MARKER
     && isDiscoverableKind(value.kind)
-    && typeof value.id === 'string'
-    && value.id.length > 0
     && typeof value.compileDiscoveryDefinition === 'function'
 }
 

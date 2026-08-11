@@ -14,6 +14,7 @@ import {
   safeMarkdownBlocks,
   type EntrySafeContentSegment,
 } from '@holo-js/panels-client'
+import { ShadcnButton } from '../internal-ui'
 import { colorValue, entryRendererName, entryText, safeEntryUrl } from './helpers'
 import type {
   ReactCustomEntryProps,
@@ -188,8 +189,8 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
       ? <a href={safeUrl} rel={safeUrl.startsWith('/') ? undefined : 'noopener noreferrer'}>{content}</a>
       : content}</div>
     <EntrySlot entry={entry} placement="after" props={props} />
-    {entry.copyable ? <button onClick={() => void copy()} type="button">Copy</button> : null}
-    {entry.actions.map(action => <button disabled={entry.pending || !props.action} key={action} onClick={() => void runAction(action)} type="button">{action}</button>)}
+    {entry.copyable ? <ShadcnButton onClick={() => void copy()} type="button">Copy</ShadcnButton> : null}
+    {entry.actions.map(action => <ShadcnButton disabled={entry.pending || !props.action} key={action} onClick={() => void runAction(action)} type="button">{action}</ShadcnButton>)}
     <span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>
     {entry.pending ? <span role="status">Loading entry</span> : null}
     {entry.error ? <span role="alert">{entry.error}</span> : null}

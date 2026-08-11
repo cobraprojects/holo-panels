@@ -8,7 +8,9 @@ export * from './navigation'
 export * from './widgets'
 export * from './notifications'
 export * from './schemas'
+export * from './extensions'
 export { createExtensionTypeId } from '@holo-js/panels-core'
+export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
 export {
   SvelteComponentRegistry,
   registerSvelteExtensionRenderer,
@@ -47,6 +49,7 @@ export {
 } from './stores'
 
 export const panelsSvelteStyle = '@holo-js/panels-svelte/style.css'
+export type { PanelClientAuthOperation } from '@holo-js/panels-client'
 export {
   ClientEffectSession,
   ClientNotificationInboxStore,
@@ -57,11 +60,21 @@ export {
   TransportDecodingError,
   PanelsTransport,
   ClientActionStore,
+  CollectionStore,
+  createBrowserUploadAdapter,
+  createUploadStore,
   FormStore,
+  GlobalSearchStore,
+  installPanelSpaNavigation,
   OptionStore,
   TableStateStore,
+  UploadStore,
+  WidgetStore,
   createRequestEnvelope,
+  executePanelAuthRequest,
+  executePanelLogin,
   createPanelNotificationTransport,
+  createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
   toJsonValue,
@@ -70,6 +83,8 @@ export type {
   ClientEffectSessionOptions,
   ClientNotificationInboxOptions,
   ClientNotificationRealtime,
+  ClientSearchResponse,
+  ClientSearchState,
   PanelNotificationTransportOptions,
   CompiledPageDefinition,
   CompiledPanelDefinition,
@@ -83,6 +98,8 @@ export type {
   PanelDatabaseNotificationOperationResult,
   PanelNotificationStore,
   PanelOperation,
+  PanelAvatarComponentProps,
+  PanelChromeComponentProps,
   PanelShellBootstrap,
   PanelShellTenancyBootstrap,
   PanelShellTenantPresentation,
@@ -94,4 +111,5 @@ export type {
   FormStoreOptions,
   OptionStoreOptions,
   TableStateOptions,
+  UploadPolicy,
 } from '@holo-js/panels-client'

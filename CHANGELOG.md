@@ -4,7 +4,35 @@ All notable changes to the Holo Panels workspace are recorded here. Holo Panels 
 
 The newest published prerelease is `0.1.0-next.0`. All 14 packages are available from npm with the `next` tag.
 
-This prerelease requires Holo-JS `^0.3.10`. Packed minimum-version compatibility is validated against Holo-JS `0.3.10`, and the clean registry lifecycle is validated against published Holo-JS `0.3.11`.
+This prerelease accepts every stable Holo-JS version at or above `0.3.9`. Holo-JS `0.3.9` was not published, so packed minimum-version compatibility is validated against Holo-JS `0.3.10`, and the clean registry lifecycle is validated against published Holo-JS `0.3.11`.
+
+## 0.1.0-next.1 - Unreleased
+
+### Added
+
+- Filament-shaped per-panel providers covering routing, authentication, branding, layout, navigation, resources, global search, notifications, tenancy, runtime behavior, errors, assets, plugins, and render hooks.
+- Inferred resource schemas whose form fields, table columns, infolist entries, relation paths, and dot notation derive from Holo model metadata without application-authored helper types.
+- Isolated shadcn-family React, Vue, and Svelte panel interfaces with light, dark, and system modes, configurable panel colors, responsive navigation, user menus, actions, bulk actions, filters, pagination, search, notifications, and theme overrides.
+
+### Changed
+
+- Example applications now use only final public panel providers and inferred resource APIs; internal registries, routes, auth pages, and framework wiring are generated managed artifacts.
+- Next.js, Nuxt, and SvelteKit preparation respects each framework's configured application, page, route, and server directories as well as panel-specific paths and login routes.
+- Absent Holo model policies allow resource access after panel and tenant checks; explicit policies and optional Shield permissions remain authoritative when configured.
+
+### Fixed
+
+- Replaced encoded or internal application route directories with framework-native managed routes rooted at `holo` endpoints.
+- Prevented Nuxt parent auth pages from shadowing nested profile, MFA, and recovery-code routes by generating convention-correct index pages.
+- Fixed SvelteKit login and MFA submissions during hydration by reading submitted form values directly.
+- Rehydrated model-backed tenant actors before persistence so tenant switching behaves identically across all framework session adapters.
+- Added resource-widget table query context and completed cross-framework MFA enrollment, recovery challenge, and disable behavior.
+
+### Validation
+
+- All 14 package builds and strict typechecks, 412 behavior suites with 1,036 tests, ESLint, architecture and dependency validation, exact 161-topic Filament parity, coverage diagnostics, packed independent consumers, packed plugin consumers, and packed P0-C lifecycles pass.
+- All 60 production-browser journeys pass across Next.js, Nuxt, and SvelteKit.
+- Registry validation remains pending until this lockstep candidate is published; the older `0.1.0-next.0` registry package does not contain the fingerprinted plugin stylesheet behavior added by this release.
 
 ## 0.1.0-next.0 - 2026-08-04
 

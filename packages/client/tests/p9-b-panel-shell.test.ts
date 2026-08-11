@@ -7,8 +7,9 @@ const bootstrap: PanelShellBootstrap = {
   manifest: {
     branding: { favicon: '/favicon.svg', logo: '/logo.svg', name: 'Admin' },
     databaseNotifications: { placement: 'topbar', polling: 30_000, realtime: true },
-    default: true,
-    id: 'admin',
+  default: true,
+  globalSearch: false,
+  id: 'admin',
     navigation: [
       { badge: null, group: null, icon: 'home', id: 'dashboard', label: 'Dashboard', parent: null, path: '/admin/dashboard', sort: 10 },
       { badge: '4', group: 'Content', icon: 'document', id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 20 },

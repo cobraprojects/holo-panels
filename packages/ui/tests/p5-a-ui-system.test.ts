@@ -10,6 +10,8 @@ import {
   definePanelTheme,
   lightPanelTheme,
   panelIconNames,
+  panelThemeStyleAttribute,
+  panelThemeVariables,
   PanelIconRegistry,
   panelTokenNames,
   panelTokenVariable,
@@ -31,8 +33,12 @@ describe('P5-A design tokens', () => {
 
     expect(theme.name).toBe('Ocean')
     expect(theme.tokens['color-primary']).toBe('#00a8cc')
+    expect(panelThemeVariables(theme)['--holo-color-primary']).toBe('#00a8cc')
+    expect(panelThemeVariables({ colors: { primary: '#7c3aed' } })['--holo-color-primary']).toBe('#7c3aed')
+    expect(panelThemeStyleAttribute(theme)).toContain('--holo-color-primary:#00a8cc')
     expect(darkPanelTheme.tokens['color-primary']).toBe('#8da2fb')
     expect(() => definePanelTheme('  ', 'light')).toThrow('cannot be empty')
+    expect(() => definePanelTheme('Unsafe', 'light', { 'color-primary': 'red; background: black' })).toThrow('unsafe value')
   })
 })
 
@@ -112,14 +118,16 @@ describe('P5-A compiled semantic CSS', () => {
     const css = await readFile(cssPath, 'utf8')
 
     for (const selector of [
-      '.holo-panel-shell',
-      '.holo-panel-navigation',
-      '.holo-panel-field',
-      '.holo-panel-table',
-      '.holo-panel-dialog',
-      '.holo-panel-popover',
-      '.holo-panel-notification',
-      '.holo-panel-loading',
+      '.hp-panel-shell',
+      '.hp-panel-navigation',
+      '.hp-field',
+      '.hp-table',
+      '.hp-dialog',
+      '.hp-panel-popover',
+      '.hp-notification',
+      '.hp-panel-loading',
+      '.hp-auth-page',
+      '.hp-auth-card',
     ]) {
       expect(css).toContain(selector)
     }

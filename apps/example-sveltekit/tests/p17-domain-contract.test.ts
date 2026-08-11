@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { canAccessTenant, canBootstrapAdmin, canManageResource } from '../server/admin/access'
+import { generatedResourcePageManifests } from '@holo-js/panels'
+import { canAccessTenant, canBootstrapAdmin, canManageResource } from '../server/fixtures/access'
 import PostExporter from '../server/admin/exports/PostExporter'
 import PostImporter from '../server/admin/imports/PostImporter'
-import AdminPanel from '../server/admin/panels/AdminPanel'
-import CategoryResource, { CategoryPages } from '../server/admin/resources/categories/CategoryResource'
+import AdminPanel from '../server/admin/AdminPanel'
+import CategoryResource from '../server/admin/resources/categories/CategoryResource'
 import CommentResource from '../server/admin/resources/comments/CommentResource'
 import MediaResource from '../server/admin/resources/media/MediaResource'
 import MembershipResource from '../server/admin/resources/memberships/MembershipResource'
@@ -11,7 +12,7 @@ import PostTagResource from '../server/admin/resources/post-tags/PostTagResource
 import PostResource from '../server/admin/resources/posts/PostResource'
 import TagResource from '../server/admin/resources/tags/TagResource'
 import UserResource from '../server/admin/resources/users/UserResource'
-import { ContentDashboard, ContentOverviewWidget } from '../server/admin/widgets/ContentOverview'
+import ContentOverview from '../server/admin/widgets/ContentOverview'
 import { getBlogIndex, getBlogPost } from '../server/blog'
 import {
   exampleActors,
@@ -58,7 +59,7 @@ describe('P17 SvelteKit example domain contract', () => {
     expect(denied && canBootstrapAdmin(denied)).toBe(false)
   })
 
-  it('compiles every current-slice resource and tenant-scoped page under stable IDs', async () => {
+  it('compiles every current-slice resource and tenant-scoped page under stable IDs', () => {
     const definitions = [
       PostResource.compile(),
       CategoryResource.compile(),
@@ -81,16 +82,8 @@ describe('P17 SvelteKit example domain contract', () => {
     ])
     expect(definitions.slice(0, 7).every(definition => typeof definition.tenantScope === 'function')).toBe(true)
     expect(definitions[7]?.shared).toBe(true)
-    expect(CategoryPages.list.compile().manifest.path).toBe('/admin/categories')
-    expect(await CategoryPages.list.compile().server.authorize({
-      actor: exampleActors['user-acme-editor'],
-      locale: 'en',
-      panelId: 'admin',
-      parameters: {},
-      services: {},
-      signal: new AbortController().signal,
-      tenant: 'tenant-acme',
-    })).toBe(true)
+    const categoryPages = generatedResourcePageManifests({ panelPath: '/admin', resource: CategoryResource })
+    expect(categoryPages.map(page => page.path)).toEqual(['/admin/categories', '/admin/categories/create', '/admin/categories/:record', '/admin/categories/:record/edit'])
   })
 
   it('serves tenant-safe public content and registers the inferred dashboard widget', () => {
@@ -104,7 +97,6 @@ describe('P17 SvelteKit example domain contract', () => {
       private: true,
       url: null,
     })
-    expect(ContentDashboard.compile().manifest.widgets).toEqual(['content-overview'])
-    expect(ContentOverviewWidget.compile().manifest.type).toBe('panels.widgets.stats')
+    expect(ContentOverview.compile().manifest.type).toBe('panels.widgets.stats')
   })
 })

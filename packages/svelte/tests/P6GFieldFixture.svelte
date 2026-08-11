@@ -31,7 +31,7 @@
 {#each collectionTypes as type}
   <FieldRenderer definition={{ type, path: `collection.${type}`, label: `Collection ${type}`, properties: type === 'rich-editor' ? { editorAdapter: 'test-editor' } : {} }} {form} {registry} />
 {/each}
-<FieldRenderer definition={{ type: 'repeater', path: 'sections', label: 'Sections', properties: { cloneable: true, collapsible: true } }} {form} {collectionStore} {registry} />
+<FieldRenderer definition={{ type: 'repeater', path: 'sections', label: 'Sections', properties: { cloneable: true, collapsible: true, fields: [{ label: 'Title', path: 'title', required: true, type: 'text' }] } }} {form} {collectionStore} {registry} />
 <FieldRenderer definition={{ type: 'builder', path: 'builder', label: 'Builder', properties: { cloneable: true } }} {form} {collectionStore} {registry} />
 <FieldRenderer definition={{ type: 'panels:field:upload', path: 'attachment', label: 'Attachment', required: true }} {form} {uploadStore} {registry} />
 <FieldRenderer definition={{ type: 'acme:field:rating', path: 'rating', label: 'Rating' }} {form} {registry} panelId="admin" requestedFrom="P6GFieldFixture.svelte" />

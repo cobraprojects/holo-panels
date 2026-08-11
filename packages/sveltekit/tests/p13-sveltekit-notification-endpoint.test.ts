@@ -51,6 +51,7 @@ const panel: CompiledPanelDefinition<Actor> = {
     branding: { favicon: null, logo: null, name: 'Admin' },
     databaseNotifications: { placement: 'topbar', polling: 30_000, realtime: false },
     default: true,
+    globalSearch: true,
     id: 'admin',
     navigation: [],
     navigationMode: 'sidebar',
@@ -71,6 +72,7 @@ const panel: CompiledPanelDefinition<Actor> = {
       },
     },
     plugins: [],
+    registered: [],
     presentActor: actor => actor,
   },
 }
@@ -149,7 +151,7 @@ class NotificationStore {
 }
 
 function event(payload: JsonObject): SvelteKitPanelEvent {
-  const url = new URL('https://panels.test/_holo/panels/admin/notification')
+  const url = new URL('https://panels.test/holo/panels/admin/notification')
   const envelope = createRequestEnvelope({ id: 'notification-request-1', operation: 'notification', panelId: 'admin', payload })
   return {
     cookies: { get: () => undefined, set: () => undefined },

@@ -62,6 +62,7 @@ export abstract class FieldBuilder<
   TType extends string = string,
   TRecord = unknown,
 > {
+  declare readonly resourceRecordType: TValues
   readonly path: TPath
   readonly type: TType
   readonly schema: FieldDefinition

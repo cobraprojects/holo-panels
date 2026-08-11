@@ -5,4 +5,4 @@
   let { managers }: { readonly managers: readonly ClientRelationManager[] } = $props()
 </script>
 
-<SvelteRelationManagerRenderer relations={{ managers }} />
+<SvelteRelationManagerRenderer relations={{ managers, onOperation: () => undefined }} />

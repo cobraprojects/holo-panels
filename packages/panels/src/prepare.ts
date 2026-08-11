@@ -5,6 +5,7 @@ import {
   PanelsDiscoveryError,
   createProjectDiscoveryModuleLoader,
   planFrameworkArtifacts,
+  type DiscoveredPanelPath,
   type FrameworkArtifactManifest,
   type FrameworkId,
 } from '@holo-js/panels-cli'
@@ -18,6 +19,7 @@ import {
   HOLO_PROJECT_PREPARE_API_VERSION,
   HoloProjectPrepareError,
 } from '@holo-js/kernel'
+import { resolveFrameworkProjectDirectories } from './framework-project-directories'
 import { preparePanelPlugins, type PanelPluginPreparationInput } from './plugin-preparation'
 
 const compilers = new Map<string, DiscoveryCompiler>()
@@ -45,7 +47,7 @@ function parseFrameworkOwnership(contents: string | undefined): FrameworkArtifac
     if (!isRecord(artifact)
       || typeof artifact.path !== 'string'
       || !frameworkIds.has(String(artifact.framework))
-      || (artifact.kind !== 'panel-page' && artifact.kind !== 'operation-endpoint')
+      || (artifact.kind !== 'auth-page' && artifact.kind !== 'panel-page' && artifact.kind !== 'operation-endpoint')
       || typeof artifact.checksum !== 'string'
       || !/^[a-f0-9]{64}$/.test(artifact.checksum)
       || !Array.isArray(artifact.panelIds)
@@ -101,6 +103,35 @@ function pluginPreparationInputs(server: unknown): readonly PanelPluginPreparati
   })
 }
 
+function joinedRoutePath(...values: readonly string[]): string {
+  const segments = values.flatMap(value => value.split('/').filter(Boolean))
+  return segments.length === 0 ? '/' : `/${segments.join('/')}`
+}
+
+function panelRoutes(server: unknown, panelId: string, panelPath: string): NonNullable<DiscoveredPanelPath['routes']> {
+  if (!isRecord(server) || !Array.isArray(server.routes)) return []
+  const routeDomain = typeof server.routeDomain === 'string' ? server.routeDomain : null
+  const routePrefix = typeof server.routePrefix === 'string' ? server.routePrefix : ''
+  return server.routes.map((value) => {
+    if (!isRecord(value)
+      || !['DELETE', 'GET', 'PATCH', 'POST', 'PUT'].includes(String(value.method))
+      || typeof value.path !== 'string'
+      || !['authenticated', 'authenticated-tenant', 'public', 'tenant'].includes(String(value.scope))) {
+      throw new Error(`[Holo Panels] Panel ${panelId} has invalid custom route metadata.`)
+    }
+    const scope = value.scope as 'authenticated' | 'authenticated-tenant' | 'public' | 'tenant'
+    const tenantScoped = scope === 'tenant' || scope === 'authenticated-tenant'
+    return {
+      domain: tenantScoped ? routeDomain : null,
+      method: value.method as 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
+      scope,
+      source: tenantScoped && !routeDomain
+        ? joinedRoutePath(panelPath, routePrefix, ':tenant', value.path)
+        : joinedRoutePath(panelPath, value.path),
+    }
+  })
+}
+
 function extensionTypeIds(plugins: readonly PanelPluginPreparationInput[]): readonly ExtensionTypeId[] {
   return plugins.flatMap(plugin => plugin.contributions.flatMap(contribution => contribution.kind === 'extension'
     ? [contribution.registration.typeId]
@@ -147,7 +178,7 @@ export const preparer = defineHoloProjectPreparer({
 
       const panels = result.definitions
         .filter(definition => definition.kind === 'panel')
-        .map((definition) => {
+        .map((definition): DiscoveredPanelPath => {
           const clientPath = definition.client.path
           const path = typeof clientPath === 'string' ? clientPath : definition.route
           if (!path) {
@@ -157,8 +188,44 @@ export const preparer = defineHoloProjectPreparer({
               { path: definition.projectPath, exportName: definition.exportName },
             )
           }
-          return { id: definition.id, path }
+          const brandingName = definition.client.brandingName
+          const darkMode = definition.client.darkMode
+          const emailChangeVerificationPath = definition.client.emailChangeVerificationPath
+          const emailVerificationPath = definition.client.emailVerificationPath
+          const emailVerificationVerifyPath = definition.client.emailVerificationVerifyPath
+          const forgotPasswordPath = definition.client.forgotPasswordPath
+          const loginPath = definition.client.loginPath
+          const mfaChallengePath = definition.client.mfaChallengePath
+          const mfaEnrollmentPath = definition.client.mfaEnrollmentPath
+          const mfaRecoveryCodesPath = definition.client.mfaRecoveryCodesPath
+          const passwordResetPath = definition.client.passwordResetPath
+          const profilePath = definition.client.profilePath
+          const registrationPath = definition.client.registrationPath
+          const unresolvedThemeColors = definition.client.themeColors
+          const themeColors = unresolvedThemeColors && typeof unresolvedThemeColors === 'object' && !Array.isArray(unresolvedThemeColors)
+            ? Object.fromEntries(Object.entries(unresolvedThemeColors).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+            : undefined
+          return {
+            ...(typeof brandingName === 'string' ? { brandingName } : {}),
+            ...(darkMode === 'dark' || darkMode === 'light' || darkMode === 'system' ? { darkMode } : {}),
+            ...(typeof emailChangeVerificationPath === 'string' ? { emailChangeVerificationPath } : {}),
+            ...(typeof emailVerificationPath === 'string' ? { emailVerificationPath } : {}),
+            ...(typeof emailVerificationVerifyPath === 'string' ? { emailVerificationVerifyPath } : {}),
+            ...(typeof forgotPasswordPath === 'string' ? { forgotPasswordPath } : {}),
+            id: definition.id,
+            ...(typeof loginPath === 'string' ? { loginPath } : {}),
+            ...(typeof mfaChallengePath === 'string' ? { mfaChallengePath } : {}),
+            ...(typeof mfaEnrollmentPath === 'string' ? { mfaEnrollmentPath } : {}),
+            ...(typeof mfaRecoveryCodesPath === 'string' ? { mfaRecoveryCodesPath } : {}),
+            path,
+            ...(typeof passwordResetPath === 'string' ? { passwordResetPath } : {}),
+            ...(typeof profilePath === 'string' ? { profilePath } : {}),
+            ...(typeof registrationPath === 'string' ? { registrationPath } : {}),
+            routes: panelRoutes(definition.server, definition.id, path),
+            ...(themeColors && Object.keys(themeColors).length > 0 ? { themeColors } : {}),
+          }
         })
+      const directories = await resolveFrameworkProjectDirectories(activeFramework, context.projectRoot)
       const preparedPlugins = await preparePanelPlugins({
         framework: rendererFramework(activeFramework),
         plugins: pluginInputs,
@@ -168,6 +235,7 @@ export const preparer = defineHoloProjectPreparer({
       const ownershipPath = resolve(context.pluginGeneratedRoot, 'framework-artifacts.json')
       const previousOwnership = parseFrameworkOwnership(await readOptional(ownershipPath))
       const preliminary = planFrameworkArtifacts({
+        directories,
         framework: activeFramework,
         panels,
         ...(previousOwnership ? { previousOwnership } : {}),
@@ -178,6 +246,7 @@ export const preparer = defineHoloProjectPreparer({
       }))))
         .filter((artifact): artifact is { path: string; contents: string } => artifact.contents !== undefined)
       const plan = planFrameworkArtifacts({
+        directories,
         framework: activeFramework,
         panels,
         existingArtifacts,

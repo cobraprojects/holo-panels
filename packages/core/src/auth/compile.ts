@@ -5,11 +5,13 @@ import type {
   PanelAuthPageConfiguration,
   PanelAuthPathManifest,
   PanelEmailVerificationPageConfiguration,
+  PanelEmailChangeVerificationPageConfiguration,
   PanelLoginPageConfiguration,
   PanelLogoutPageConfiguration,
   PanelMultiFactorManifest,
   PanelMultiFactorPageConfiguration,
   PanelPasswordResetManifest,
+  PanelRegistrationPageConfiguration,
 } from './contracts'
 
 type RouteNormalizer = (value: string, label: string) => string
@@ -67,6 +69,19 @@ function compilePasswordReset(
   }
 }
 
+function compileEmailVerification(
+  configuration: PanelEmailVerificationPageConfiguration | null,
+  panelPath: string,
+  route: RouteNormalizer,
+): CompiledPanelAuth<unknown>['manifest']['emailVerification'] {
+  if (configuration === null) return null
+  return Object.freeze({
+    path: route(configuration.path ?? 'verify-email', 'Panel email verification prompt path'),
+    redirectTo: route(configuration.redirectTo ?? panelPath, 'Panel email verification redirect'),
+    verificationPath: route(configuration.verificationPath ?? 'email/verify', 'Panel email verification path'),
+  })
+}
+
 function profileFields(fields: readonly string[]): readonly string[] {
   if (fields.length === 0 || fields.some(field => !PROFILE_FIELD.test(field)) || new Set(fields).size !== fields.length) {
     throw new Error('Panel profile fields require unique stable field names')
@@ -93,6 +108,12 @@ export function compilePanelAuth<
   const emailVerification: PanelEmailVerificationPageConfiguration | null = configuration.emailVerification
     ? configuration.emailVerification === true ? {} : configuration.emailVerification
     : null
+  const emailChangeVerification: PanelEmailChangeVerificationPageConfiguration | null = configuration.emailChangeVerification
+    ? configuration.emailChangeVerification === true ? {} : configuration.emailChangeVerification
+    : null
+  const registration: PanelRegistrationPageConfiguration | null = configuration.registration
+    ? configuration.registration === true ? {} : configuration.registration
+    : null
   const multiFactor: PanelMultiFactorPageConfiguration | null = configuration.multiFactor
     ? configuration.multiFactor === true ? {} : configuration.multiFactor
     : null
@@ -100,8 +121,8 @@ export function compilePanelAuth<
   const profileConfiguration = configuration.profile || null
   const profile = profileConfiguration === null
     ? null
-    : Object.freeze({ path: options.route(profileConfiguration.path ?? 'profile', 'Panel profile path') })
-  const serverProfile: CompiledPanelProfileServer<TActor> | null = profileConfiguration === null
+    : Object.freeze({ path: options.route(profileConfiguration === true ? 'profile' : profileConfiguration.path ?? 'profile', 'Panel profile path') })
+  const serverProfile: CompiledPanelProfileServer<TActor> | null = profileConfiguration === null || profileConfiguration === true
     ? null
     : {
         fields: profileFields(profileConfiguration.fields),
@@ -114,7 +135,8 @@ export function compilePanelAuth<
       }
   return Object.freeze({
     manifest: Object.freeze({
-      emailVerification: pathManifest(emailVerification, 'verify-email', options.panelPath, options.route, 'Panel email verification'),
+      emailChangeVerification: pathManifest(emailChangeVerification, 'verify-email-change', options.panelPath, options.route, 'Panel email change verification'),
+      emailVerification: compileEmailVerification(emailVerification, options.panelPath, options.route),
       login: pathManifest(login, 'login', options.panelPath, options.route, 'Panel login'),
       logout: pathManifest(
         logout,
@@ -126,6 +148,8 @@ export function compilePanelAuth<
       multiFactor: compileMultiFactor(multiFactor, options.panelPath, options.route),
       passwordReset: passwordReset.manifest,
       profile,
+      registration: pathManifest(registration, 'register', options.panelPath, options.route, 'Panel registration'),
+      revealablePasswords: configuration.revealablePasswords ?? true,
     }),
     server: Object.freeze({ passwordBroker: passwordReset.broker, profile: serverProfile === null ? null : Object.freeze(serverProfile) }),
   })

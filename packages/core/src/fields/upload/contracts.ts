@@ -42,6 +42,14 @@ export interface StoredUploadDescriptor extends Omit<TemporaryUploadDescriptor, 
   readonly state: 'stored'
 }
 
+export interface FinalizedUploadResult {
+  readonly disk: string
+  readonly mimeType: string
+  readonly name: string
+  readonly path: string
+  readonly size: number
+}
+
 export interface UploadAuthorizationRequest extends UploadActorContext {
   readonly operation: UploadOperation
   readonly uploadId?: string

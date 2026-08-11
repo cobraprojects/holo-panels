@@ -183,8 +183,27 @@ describe('P9-B panel runtime', () => {
     expect(panel.route).toBe('/control/admin')
     expect(panel.guardName).toBe('staff')
     expect(panel.compileDiscoveryDefinition()).toMatchObject({ client: { path: '/control/admin' }, default: true, discover: { pages: 'custom-pages' }, route: '/control/admin' })
-    expect(panel.compileDiscoveryDefinition().client).toEqual({ path: '/control/admin' })
+    expect(panel.compileDiscoveryDefinition().client).toEqual({ brandingName: 'Control', darkMode: 'system', path: '/control/admin', simplePageMaxContentWidth: 'lg', themeColors: {} })
     expect(panel.compile().manifest.branding.name).toBe('Control')
+  })
+
+  it('accepts a named token theme and rejects stylesheet injection values', () => {
+    const panel = definePanel('admin', Actor).theme({
+      colorScheme: 'dark',
+      name: 'Ocean',
+      tokens: { 'color-primary': '#00a8cc', 'font-sans': 'Inter, sans-serif' },
+    }).compile()
+
+    expect(panel.manifest.theme).toMatchObject({
+      darkMode: 'dark',
+      name: 'Ocean',
+      tokens: { 'color-primary': '#00a8cc', 'font-sans': 'Inter, sans-serif' },
+    })
+    expect(() => definePanel('unsafe').theme({
+      colorScheme: 'light',
+      name: 'Unsafe',
+      tokens: { 'color-primary': 'red; background: black' },
+    })).toThrow('unsafe value')
   })
 
   it('shares one Holo Auth guard resolution for same-guard bootstrap while checking access independently', async () => {
@@ -217,7 +236,7 @@ describe('P9-B panel runtime', () => {
   })
 
   it('runs the fixed panel access policy for every operation and rejects unauthenticated or denied actors', async () => {
-    const operations: readonly PanelOperation[] = ['action', 'bootstrap', 'form-submit', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload']
+    const operations: readonly PanelOperation[] = ['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload']
     const checked: PanelOperation[] = []
     const panel = definePanel('admin', Actor).guard('staff').access(context => {
       checked.push(context.operation)
@@ -242,8 +261,8 @@ describe('P9-B panel runtime', () => {
       .path('/control')
       .presentActor(value => ({ id: value.id, role: value.role }))
       .branding({ favicon: '/assets/favicon.svg', logo: 'https://cdn.example.test/logo.svg', name: ' Control ' })
-      .navigation([{ badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: 'posts', sort: 0 }])
-      .userMenu([{ icon: null, id: 'profile', label: 'Profile', path: '/control/profile' }])
+      .navigationItems([{ badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: 'posts', sort: 0 }])
+      .userMenuItems([{ icon: null, id: 'profile', label: 'Profile', path: '/control/profile' }])
       .compile()
     const payload = (await new PanelRuntime(auth({ web: actor }).facade, [panel]).bootstrap(['admin'], signal))[0]
 
@@ -251,9 +270,9 @@ describe('P9-B panel runtime', () => {
     expect(JSON.stringify(payload)).not.toContain('session-secret')
     expect(payload?.manifest.navigation[0]?.path).toBe('/control/posts')
     expect(payload?.manifest.userMenu[0]?.path).toBe('/control/profile')
-    expect(definePanel('safe', Actor).compile().server.presentActor({ id: 1, role: 'admin' })).toEqual({})
-    expect(() => definePanel('unsafe-nav').path('/admin').navigation([{ badge: null, group: null, icon: null, id: 'escape', label: 'Escape', parent: null, path: '/vendor', sort: 0 }]).compile()).toThrow('fixed panel path')
-    expect(() => definePanel('unsafe-menu').userMenu([{ icon: null, id: 'escape', label: 'Escape', path: '../vendor' }]).compile()).toThrow('safe panel route')
+    await expect(definePanel('safe', Actor).compile().server.presentActor({ id: 1, role: 'admin' })).resolves.toEqual({})
+    expect(() => definePanel('unsafe-nav').path('/admin').navigationItems([{ badge: null, group: null, icon: null, id: 'escape', label: 'Escape', parent: null, path: '/vendor', sort: 0 }]).compile()).toThrow('fixed panel path')
+    expect(() => definePanel('unsafe-menu').userMenuItems([{ icon: null, id: 'escape', label: 'Escape', path: '../vendor' }]).compile()).toThrow('safe panel route')
     expect(() => definePanel('unsafe-brand').branding({ logo: 'javascript:alert(1)' })).toThrow('absolute path or HTTPS')
   })
 

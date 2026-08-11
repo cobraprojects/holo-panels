@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -18,7 +19,11 @@ const examples = Object.freeze([
   Object.freeze({ framework: 'sveltekit', directory: 'example-sveltekit', panelsAdapter: '@holo-js/panels-sveltekit', panelsRenderer: '@holo-js/panels-svelte' }),
 ])
 
-export const nextOperationRoutePath = 'app/%5Fholo/panels/[panelId]/[operation]/route.ts'
+export const nextOperationRoutePath = 'app/holo/panels/[panelId]/[operation]/route.ts'
+
+function managedArtifact(body) {
+  return `// @holo-panels-managed sha256:${createHash('sha256').update(body).digest('hex')}\n${body}`
+}
 
 const catalogDependencies = new Set([
   '@eslint/js',
@@ -128,25 +133,28 @@ function adaptManifest(source, example) {
     scripts.prepare = 'svelte-kit sync'
   }
 
-  const integrationDependencies = example.framework === 'sveltekit'
-    ? {
+  const integrationDependencies = {
+    '@holo-js/authorization': 'catalog:',
+    ...(example.framework === 'sveltekit'
+      ? {
         '@holo-js/auth': 'catalog:',
         '@holo-js/forms': 'catalog:',
         '@holo-js/notifications': 'catalog:',
         '@holo-js/session': 'catalog:',
         '@holo-js/validation': 'catalog:',
       }
-    : example.framework === 'next'
-      ? {
+      : example.framework === 'next'
+        ? {
           '@holo-js/auth': 'catalog:',
           '@holo-js/notifications': 'catalog:',
           '@holo-js/session': 'catalog:',
         }
-      : {
+        : {
           '@holo-js/auth': 'catalog:',
           '@holo-js/notifications': 'catalog:',
           '@holo-js/session': 'catalog:',
-        }
+        }),
+  }
   const dependencies = Object.fromEntries(Object.entries({
     ...useCatalogVersions(source.dependencies),
     ...integrationDependencies,
@@ -169,7 +177,23 @@ function adaptManifest(source, example) {
   }
 }
 
+async function activatePanelsPlugin(destination) {
+  const path = join(destination, 'config/app.ts')
+  const contents = await readFile(path, 'utf8')
+  if (contents.includes("'@holo-js/panels'")) return
+  const plugins = /plugins\s*:\s*\[([\s\S]*?)\]/u
+  const updated = plugins.test(contents)
+    ? contents.replace(plugins, (_match, entries) => `plugins: ['@holo-js/panels',${entries.trim() ? ` ${entries.trim()}` : ''}]`)
+    : contents.replace('export default defineAppConfig({', "export default defineAppConfig({\n  plugins: ['@holo-js/panels'],")
+  if (updated === contents) throw new Error(`Unable to activate @holo-js/panels in ${path}`)
+  await writeFile(path, updated)
+}
+
 async function adaptFrameworkFiles(destination, example) {
+  await activatePanelsPlugin(destination)
+  if (example.framework === 'nuxt') {
+    await writeFile(join(destination, 'app/app.vue'), '<template>\n  <NuxtPage />\n</template>\n')
+  }
   if (example.framework === 'next') {
     const path = join(destination, 'tsconfig.json')
     const config = JSON.parse(await readFile(path, 'utf8'))
@@ -206,6 +230,23 @@ async function adaptFrameworkFiles(destination, example) {
     ]
     config.exclude = ['node_modules']
     await writeFile(path, `${JSON.stringify(config, null, 2)}\n`)
+    const operationRoute = join(destination, nextOperationRoutePath)
+    await mkdir(dirname(operationRoute), { recursive: true })
+    const operationBody = [
+      "import { createGeneratedNextPanelsRuntime, createPanelOperationRoute } from '@holo-js/panels-next'",
+      "import serverRegistry from '../../../../../.holo-js/generated/panels/server-registry'",
+      '',
+      'const runtime = createGeneratedNextPanelsRuntime(serverRegistry)',
+      "const route = createPanelOperationRoute({ panelIds: ['admin'], runtime })",
+      '',
+      'export const DELETE = route.DELETE',
+      'export const GET = route.GET',
+      'export const PATCH = route.PATCH',
+      'export const POST = route.POST',
+      'export const PUT = route.PUT',
+      '',
+    ].join('\n')
+    await writeFile(operationRoute, managedArtifact(operationBody))
     await writeFile(join(destination, 'next.config.ts'), [
       "import type { NextConfig } from 'next'",
       "import { withHolo } from '@holo-js/adapter-next/config'",
@@ -275,7 +316,7 @@ async function adaptFrameworkFiles(destination, example) {
       '',
       'const csrf = csrfProtection()',
       '',
-      "export const handle: Handle = input => input.event.url.pathname.startsWith('/_holo/panels/')",
+      "export const handle: Handle = input => input.event.url.pathname.startsWith('/holo/panels/')",
       '  ? input.resolve(input.event)',
       '  : csrf(input)',
       '',

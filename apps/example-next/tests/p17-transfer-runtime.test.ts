@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import PostExporter from '../server/admin/exports/PostExporter'
 import PostImporter from '../server/admin/imports/PostImporter'
-import { AdminActor } from '../server/admin/pages/posts/access'
-import { createAdminPanelsRuntime } from '../server/admin/runtime'
 
-const actor = Object.assign(new AdminActor(), { id: 1, role: 'admin' })
+const actor = {
+  createdAt: new Date(),
+  email: 'admin@example.test',
+  id: 'admin-1',
+  name: 'Admin',
+  password: 'hidden',
+  role: 'admin',
+  tenantId: 'tenant-acme',
+  updatedAt: new Date(),
+}
 const context = {
   actor,
   guard: 'web',
@@ -16,10 +23,7 @@ const context = {
 }
 
 describe('Next P17 transfer runtime', () => {
-  it('registers the app-owned Post import and export definitions', async () => {
-    const registry = createAdminPanelsRuntime({ auth: { guard: () => ({ provider: async () => 'web', user: async () => actor }) } }).registry
-    expect(await registry['admin:import:post-import']?.()).toBe(PostImporter)
-    expect(await registry['admin:export:post-export']?.()).toBe(PostExporter)
+  it('compiles the Post import and export definitions against the inferred resource', () => {
     expect(PostImporter.compile().client).toMatchObject({ id: 'post-import', resourceId: 'posts' })
     expect(PostExporter.compile().client).toMatchObject({ id: 'post-export', resourceId: 'posts' })
   })

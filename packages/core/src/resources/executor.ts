@@ -1,16 +1,19 @@
 import { DB } from '@holo-js/db'
-import { forUser } from '@holo-js/authorization'
+import { TableQueryExecutor, type HoloTableQuery, type TableQueryColumnDefinition, type TableQueryFilterDefinition, type TableQueryState } from '../tables/query'
 import type {
   ResourceAuthorization,
   ResourceDefinition,
   ResourceExecutionContext,
   ResourceIdentifier,
   ResourceModel,
+  ResourceModelDefinition,
   ResourceParentRegistry,
   ResourceQuery,
   ResourceRecord,
   ResourceTransaction,
 } from './contracts'
+import { serializeResourceRecord } from './resource-serialization'
+import { authorizeHoloPolicy } from './holo-authorization'
 
 export class ResourceRecordNotFoundError extends Error {
   constructor() {
@@ -26,13 +29,13 @@ export class ResourceInputError extends Error {
   }
 }
 
-function createHoloAuthorization<TModel, TRecord extends object, TActor extends object>(): ResourceAuthorization<TModel, TRecord, TActor> {
+function createHoloAuthorization<TModel, TRecord extends object, TActor extends object>(strict: boolean): ResourceAuthorization<TModel, TRecord, TActor> {
   return {
     async authorizeClass(actor, operation, model): Promise<void> {
-      await forUser(actor).authorize(operation, model as TModel & { readonly definition: { readonly name: string }, query(): { first(): Promise<object | undefined>, firstOrFail(): Promise<object> } })
+      await authorizeHoloPolicy(actor, operation, model as TModel & { readonly definition: { readonly name: string }, query(): { first(): Promise<object | undefined>, firstOrFail(): Promise<object> } }, strict)
     },
     async authorizeRecord(actor, operation, record): Promise<void> {
-      await forUser(actor).authorize(operation, record)
+      await authorizeHoloPolicy(actor, operation, record, strict)
     },
   }
 }
@@ -56,12 +59,47 @@ export interface ResourceNestedExecution<TActor extends object, TTenant> {
 export interface ResourceExecutorOptions<TModel, TRecord extends object, TActor extends object, TTenant> {
   readonly authorization?: ResourceAuthorization<TModel, TRecord, TActor>
   readonly nested?: ResourceNestedExecution<TActor, TTenant>
+  readonly strictAuthorization?: boolean
   readonly transaction?: ResourceTransaction
 }
 
 export interface ResourceMutationResult<TRecord> {
   readonly record: TRecord
   readonly redirect: string | null
+}
+
+export interface ResourceTableResult {
+  readonly hasMore: boolean
+  readonly page: number
+  readonly perPage: number
+  readonly records: readonly Readonly<Record<string, unknown>>[]
+  readonly total: number
+}
+
+function tableMember(value: object | undefined, key: string): readonly object[] {
+  if (!value || !(key in value)) return Object.freeze([])
+  const member = Reflect.get(value, key)
+  return Array.isArray(member) ? member.filter(item => item && typeof item === 'object') : Object.freeze([])
+}
+
+function camelCaseColumn(column: string): string {
+  return column.replace(/_([a-z0-9])/gu, (_match, character: string) => character.toUpperCase())
+}
+
+function modelTenantBindings(
+  definition: ResourceModelDefinition,
+  bindings: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const columns = definition.table?.columns
+  if (!columns) return bindings
+  const normalized: Record<string, unknown> = {}
+  for (const [binding, value] of Object.entries(bindings)) {
+    const attribute: string = binding in columns ? binding : camelCaseColumn(binding)
+    if (!(attribute in columns)) throw new Error(`Tenant binding "${binding}" does not match model "${definition.name}".`)
+    if (attribute in normalized && normalized[attribute] !== value) throw new Error(`Tenant binding "${binding}" conflicts on model "${definition.name}".`)
+    normalized[attribute] = value
+  }
+  return Object.freeze(normalized)
 }
 
 export class ResourceExecutor<
@@ -83,9 +121,20 @@ export class ResourceExecutor<
     options: ResourceExecutorOptions<TModel, TRecord, TActor, TTenant> = {},
   ) {
     this.#definition = definition
-    this.#authorization = options.authorization ?? createHoloAuthorization<TModel, TRecord, TActor>()
+    this.#authorization = options.authorization ?? createHoloAuthorization<TModel, TRecord, TActor>(options.strictAuthorization ?? false)
     this.#nestedExecution = options.nested
     this.#transaction = options.transaction ?? createHoloTransaction(definition.model)
+  }
+
+  async authorizeCreate(context: ResourceExecutionContext<TActor, TTenant>): Promise<void> {
+    this.assertTenantScope(context)
+    if (this.#definition.singular !== null) throw new Error('Singular resources do not support create operations.')
+    await this.#authorization.authorizeClass(context.actor, 'create', this.#definition.model)
+    await this.resolveNestedParent(context)
+  }
+
+  async authorizeUpdate(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<void> {
+    await this.resolveAuthorized(id, 'update', context)
   }
 
   async create(input: TInput, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceMutationResult<TRecord>> {
@@ -97,7 +146,7 @@ export class ResourceExecutor<
       await this.resolveNestedParent(context)
       const clientInput = await this.prepareInput(input, context)
       const bindings = await this.#definition.createBindings?.(context) ?? {}
-      const tenantBindings = this.#definition.shared ? {} : context.tenantBindings ?? {}
+      const tenantBindings = this.#definition.shared ? {} : modelTenantBindings(this.#definition.model.definition, context.tenantBindings ?? {})
       const prepared = { ...clientInput, ...bindings, ...tenantBindings } as TInput
       await this.#definition.lifecycle.beforeCreate?.(prepared, context)
       await this.#definition.lifecycle.beforeSave?.(prepared, context)
@@ -131,6 +180,76 @@ export class ResourceExecutor<
     })
   }
 
+  async list(context: ResourceExecutionContext<TActor, TTenant>): Promise<readonly Readonly<Record<string, unknown>>[]> {
+    await this.#authorization.authorizeClass(context.actor, 'viewAny', this.#definition.model)
+    if (context.signal.aborted) throw context.signal.reason
+    let query = await this.createScopedQuery(context, false)
+    const eagerLoads = this.tableEagerLoads()
+    const queryWithRelations = query as TQuery & { with?(relations: readonly string[]): TQuery }
+    if (eagerLoads.length > 0 && queryWithRelations.with) query = queryWithRelations.with(eagerLoads)
+    const listQuery = query as TQuery & { get?(): Promise<readonly TRecord[]> }
+    if (!listQuery.get) throw new Error(`Resource "${this.#definition.id}" does not support collection queries.`)
+    const records = await listQuery.get()
+    return Object.freeze(await Promise.all(records.map(async record => {
+      await this.#authorization.authorizeRecord(context.actor, 'view', record)
+      return this.serializeRecord(record)
+    })))
+  }
+
+  async table(state: TableQueryState, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceTableResult> {
+    await this.#authorization.authorizeClass(context.actor, 'viewAny', this.#definition.model)
+    if (context.signal.aborted) throw context.signal.reason
+    const scoped = await this.createScopedQuery(context, false)
+    type RuntimeTableQuery = HoloTableQuery<RuntimeTableQuery, TRecord>
+    const query = scoped as unknown as RuntimeTableQuery
+    const columns: Record<string, TableQueryColumnDefinition> = {}
+    const filters: Record<string, TableQueryFilterDefinition> = {}
+    for (const column of tableMember(this.#definition.table, 'serverColumns')) {
+      const manifestValue = Reflect.get(column, 'manifest')
+      const manifest = manifestValue && typeof manifestValue === 'object' ? manifestValue : column
+      const path = Reflect.get(manifest, 'path')
+      if (typeof path !== 'string') continue
+      const relation = path.includes('.') ? path.split('.')[0] : undefined
+      columns[path] = Object.freeze({
+        column: path,
+        ...(relation ? { relation } : {}),
+        searchable: Reflect.get(manifest, 'searchable') === true,
+        sortable: Reflect.get(manifest, 'sortable') === true,
+      })
+      filters[path] = Object.freeze({ column: path, operators: Object.freeze(['=' as const]) })
+    }
+    for (const filter of tableMember(this.#definition.table, 'serverFilters')) {
+      const definitions = Reflect.get(filter, 'queryDefinitions')
+      if (!definitions || typeof definitions !== 'object' || Array.isArray(definitions)) continue
+      for (const [id, value] of Object.entries(definitions)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+        const column = Reflect.get(value, 'column')
+        const operators = Reflect.get(value, 'operators')
+        if (typeof column !== 'string' || !Array.isArray(operators)) continue
+        filters[id] = value as TableQueryFilterDefinition
+      }
+    }
+    const executor = new TableQueryExecutor<RuntimeTableQuery, TRecord, ResourceExecutionContext<TActor, TTenant>>({
+      applyResourceScope: value => value,
+      applyTenantScope: value => value,
+      columns: Object.freeze(columns),
+      createQuery: () => query,
+      eagerLoads: this.tableEagerLoads(),
+      filters: Object.freeze(filters),
+      primaryKey: this.#definition.model.definition.primaryKey,
+    })
+    const result = await executor.execute(state, context)
+    const records = Object.freeze(await Promise.all(result.records.map(async (record) => {
+      await this.#authorization.authorizeRecord(context.actor, 'view', record)
+      return this.serializeRecord(record)
+    })))
+    const page = 'page' in result ? result.page : 1
+    const perPage = 'perPage' in result ? result.perPage : records.length
+    const total = 'total' in result && typeof result.total === 'number' ? result.total : records.length
+    const hasMore = 'hasMore' in result ? result.hasMore : false
+    return Object.freeze({ hasMore, page, perPage, records, total })
+  }
+
   async restore(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceMutationResult<TRecord>> {
     this.assertMutable()
     if (!this.#definition.softDeletes) throw new Error('This resource does not support restoration.')
@@ -143,11 +262,40 @@ export class ResourceExecutor<
     })
   }
 
+  async resolveActionRecord(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<TRecord | null> {
+    try {
+      return await this.resolveAuthorized(id, 'view', context)
+    } catch (error) {
+      if (error instanceof ResourceRecordNotFoundError) return null
+      throw error
+    }
+  }
+
+  runInTransaction<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
+    return this.#transaction.run(operation)
+  }
+
   async serialize(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<Readonly<Record<string, unknown>>> {
     const record = await this.resolveAuthorized(id, 'view', context)
-    const serialized: Record<string, unknown> = { ...record.toJSON() }
+    return this.serializeRecord(record)
+  }
+
+  private serializeRecord(record: TRecord): Readonly<Record<string, unknown>> {
+    const serialized: Record<string, unknown> = { ...serializeResourceRecord(record) }
     for (const hidden of this.#definition.model.definition.hidden ?? []) delete serialized[hidden]
     return serialized
+  }
+
+  private tableEagerLoads(): readonly string[] {
+    const table = this.#definition.table
+    if (!table || !('serverColumns' in table) || !Array.isArray(table.serverColumns)) return Object.freeze([])
+    const relations = table.serverColumns.flatMap(column => {
+      if (!column || typeof column !== 'object' || !('manifest' in column) || !column.manifest || typeof column.manifest !== 'object') return []
+      const path = Reflect.get(column.manifest, 'path')
+      if (typeof path !== 'string' || !path.includes('.')) return []
+      return [path.split('.')[0]!]
+    })
+    return Object.freeze([...new Set(relations)].sort())
   }
 
   async update(id: ResourceIdentifier, input: TInput, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceMutationResult<TRecord>> {

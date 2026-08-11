@@ -15,6 +15,7 @@
   "dependencies": {
     "@holo-js/adapter-next": "catalog:",
     "@holo-js/auth": "catalog:",
+    "@holo-js/authorization": "catalog:",
     "@holo-js/cli": "catalog:",
     "@holo-js/config": "catalog:",
     "@holo-js/core": "catalog:",

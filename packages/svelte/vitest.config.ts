@@ -1,4 +1,3 @@
-import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 
@@ -6,10 +5,7 @@ export default defineConfig({
   optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
   plugins: [svelte()],
   resolve: {
-    alias: [
-      { find: /^svelte\/internal\/client$/u, replacement: resolve(import.meta.dirname, 'node_modules/svelte/src/internal/client/index.js') },
-      { find: /^svelte$/u, replacement: resolve(import.meta.dirname, 'node_modules/svelte/src/index-client.js') },
-    ],
+    conditions: ['browser'],
     dedupe: ['svelte'],
   },
   ssr: {

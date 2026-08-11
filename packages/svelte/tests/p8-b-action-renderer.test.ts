@@ -63,9 +63,9 @@ beforeAll(async () => {
     plugins: [svelte()],
     resolve: {
       alias: [
-        { find: /^svelte\/server$/u, replacement: resolve(process.cwd(), 'node_modules/svelte/src/server/index.js') },
-        { find: /^svelte\/internal\/server$/u, replacement: resolve(process.cwd(), 'node_modules/svelte/src/internal/server/index.js') },
-        { find: /^svelte$/u, replacement: resolve(process.cwd(), 'node_modules/svelte/src/index-server.js') },
+        { find: /^svelte\/server$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/server/index.js') },
+        { find: /^svelte\/internal\/server$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/internal/server/index.js') },
+        { find: /^svelte$/u, replacement: resolve(process.cwd(), '../../node_modules/svelte/src/index-server.js') },
       ],
       dedupe: ['svelte'],
     },

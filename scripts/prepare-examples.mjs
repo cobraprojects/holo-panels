@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -32,8 +33,13 @@ async function runHoloCommand(example, command) {
   })
 }
 
-export async function prepareExamples(runCommand = runHoloCommand) {
+async function prepareExampleDirectory(example) {
+  await mkdir(resolve(repositoryRoot, 'apps', example, 'storage'), { recursive: true })
+}
+
+export async function prepareExamples(runCommand = runHoloCommand, prepareDirectory = prepareExampleDirectory) {
   for (const example of examples) {
+    await prepareDirectory(example)
     await runCommand(example, 'prepare')
     await runCommand(example, 'migrate')
     console.log(`Prepared generated Holo and Panels metadata for ${example}`)

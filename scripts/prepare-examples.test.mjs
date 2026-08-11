@@ -5,11 +5,15 @@ import { prepareExamples } from './prepare-examples.mjs'
 describe('example metadata preparation', () => {
   it('prepares discovery before migrating every framework example', async () => {
     const calls = []
+    const directories = []
 
     await prepareExamples(async (example, command) => {
       calls.push([example, command])
+    }, async (example) => {
+      directories.push(example)
     })
 
+    assert.deepEqual(directories, ['example-next', 'example-nuxt', 'example-sveltekit'])
     assert.deepEqual(calls, [
       ['example-next', 'prepare'],
       ['example-next', 'migrate'],

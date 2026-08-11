@@ -2,7 +2,6 @@ import { createGeneratedResourcePage, generatedResourcePageManifests, type JsonO
 import { createGeneratedNextPanelsRuntime, type NextPanelOperationInput, type NextPanelsRuntime } from '@holo-js/panels-next'
 import serverRegistry from '../.holo-js/generated/panels/server-registry'
 import PostResource from '../server/admin/resources/posts/PostResource'
-import '../server/policies/PostPolicy'
 
 const pageKeys = Object.freeze([
   'admin:page:posts',

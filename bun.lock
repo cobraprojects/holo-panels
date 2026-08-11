@@ -405,6 +405,7 @@
         "@holo-js/panels-ui": "workspace:*",
       },
       "devDependencies": {
+        "@holo-js/core": "catalog:",
         "@holo-js/db": "catalog:",
         "@holo-js/notifications": "catalog:",
         "@holo-js/panels-react": "workspace:*",

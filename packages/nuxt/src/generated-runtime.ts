@@ -182,6 +182,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
 export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegistry): NuxtPanelRuntime<object> {
   return Object.freeze({
     async execute(context: NuxtPanelOperationContext<object>) {
+      await context.getApp()
       if (context.operation === 'bootstrap' || context.operation === 'page-data') return { data: await pagePayload(context, registry) }
       if (context.operation === 'notification') {
         const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)

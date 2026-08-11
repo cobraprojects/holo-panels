@@ -184,6 +184,7 @@ async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, reg
 }
 
 async function resourceOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
+  await input.holo.getProject()
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw Object.assign(new Error('Resource input is invalid'), { status: 422 })
   const resourceId = input.payload.resourceId
   if (typeof resourceId !== 'string') throw Object.assign(new Error('Resource ID is required'), { status: 422 })
@@ -209,6 +210,7 @@ async function resourceOperation(input: PanelOperationInput<object>, registry: S
 }
 
 async function uploadOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
+  await input.holo.getProject()
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw Object.assign(new Error('Upload input is invalid'), { status: 422 })
   const resourceId = input.payload.resourceId
   if (typeof resourceId !== 'string') throw Object.assign(new Error('Resource ID is required'), { status: 422 })
@@ -239,6 +241,7 @@ async function uploadOperation(input: PanelOperationInput<object>, registry: Sve
 }
 
 async function globalSearchOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
+  await input.holo.getProject()
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload) || typeof input.payload.term !== 'string') {
     throw Object.assign(new Error('Search term is required'), { status: 422 })
   }
@@ -283,7 +286,10 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
       action: (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       'form-submit': (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       'global-search': (input: PanelOperationInput<object>) => globalSearchOperation(input, serverRegistry),
-      notification: async (input: PanelOperationInput<object>) => ({ data: toJsonValue(await executePanelDatabaseNotificationOperation({ panel: await discoveredPanel(serverRegistry, input.panelId), payload: input.payload, scope: input.scope })) }),
+      notification: async (input: PanelOperationInput<object>) => {
+        await input.holo.getProject()
+        return { data: toJsonValue(await executePanelDatabaseNotificationOperation({ panel: await discoveredPanel(serverRegistry, input.panelId), payload: input.payload, scope: input.scope })) }
+      },
       options: (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       'table-data': (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       upload: (input: PanelOperationInput<object>) => uploadOperation(input, serverRegistry),

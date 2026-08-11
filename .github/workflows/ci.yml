@@ -49,6 +49,9 @@ jobs:
       - name: Install Holo Panels
         working-directory: holo-panels
         run: bun install --frozen-lockfile
+      - name: Link compatible Holo-JS packages
+        working-directory: holo-panels
+        run: bun run link:holo
       - name: Validate Holo Panels
         working-directory: holo-panels
         run: bun run validate

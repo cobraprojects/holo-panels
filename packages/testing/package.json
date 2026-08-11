@@ -75,6 +75,7 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@holo-js/core": "catalog:",
     "@holo-js/db": "catalog:",
     "@holo-js/notifications": "catalog:",
     "@holo-js/queue": "catalog:",

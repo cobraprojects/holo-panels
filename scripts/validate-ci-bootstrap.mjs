@@ -24,6 +24,7 @@ const requiredWorkflowText = [
   'bun install --frozen-lockfile --ignore-scripts',
   'npm rebuild better-sqlite3',
   'node ../holo-panels/scripts/build-compatible-holo.mjs',
+  'run: bun run link:holo',
   'run: bun run validate',
 ]
 
@@ -47,6 +48,7 @@ const requiredReleaseWorkflowText = [
   'bun install --frozen-lockfile --ignore-scripts',
   'npm rebuild better-sqlite3',
   'node ../holo-panels/scripts/build-compatible-holo.mjs',
+  'run: bun run link:holo',
   'run: bun run release',
 ]
 

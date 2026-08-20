@@ -26,6 +26,7 @@
     "@holo-js/kernel": "catalog:",
     "@holo-js/notifications": "catalog:",
     "@holo-js/panels": "workspace:*",
+    "@holo-js/panels-resources": "workspace:*",
     "@holo-js/panels-sveltekit": "workspace:*",
     "@holo-js/security": "catalog:",
     "@holo-js/session": "catalog:",

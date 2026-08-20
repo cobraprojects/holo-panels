@@ -177,9 +177,14 @@ describe('Vue renderer parity', () => {
     expect(container.querySelector('a')).toBeNull()
     expect(container.querySelector('img')).toBeNull()
     expect(container.querySelector('[onerror]')).toBeNull()
-    container.querySelector<HTMLButtonElement>('button[aria-label="Copy title"]')?.click()
+    const copyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Copy title"]')
+    expect(copyButton?.classList.contains('hp-table-copy')).toBe(true)
+    expect(copyButton?.querySelector('[data-icon="copy"]')).not.toBeNull()
+    expect(copyButton?.textContent).toBe('')
+    copyButton?.click()
     await nextTick()
     expect(writeText).toHaveBeenCalledWith('[<img src…]')
+    await vi.waitFor(() => expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Copied'))
   })
 
   it('renders custom columns through the shared extension registry', () => {

@@ -2,8 +2,10 @@ import {
   Component,
   Children,
   cloneElement,
+  createContext,
   createElement,
   isValidElement,
+  useContext,
   useId,
   useState,
   type AnchorHTMLAttributes,
@@ -20,6 +22,17 @@ type Tone = 'danger' | 'info' | 'neutral' | 'success' | 'warning'
 
 function classes(...values: readonly (string | false | null | undefined)[]): string {
   return values.filter(Boolean).join(' ')
+}
+
+const PanelsPortalContext = createContext<HTMLElement | null>(null)
+
+export interface PanelsPortalProviderProps {
+  readonly children?: ReactNode
+  readonly container: HTMLElement | null
+}
+
+export function PanelsPortalProvider({ children, container }: PanelsPortalProviderProps): ReactNode {
+  return <PanelsPortalContext.Provider value={container}>{children}</PanelsPortalContext.Provider>
 }
 
 export interface PanelsButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -126,13 +139,14 @@ export interface PanelsDropdownProps {
 }
 
 export function PanelsDropdown({ ariaLabel, items, label, searchable = false }: PanelsDropdownProps): ReactNode {
+  const portalContainer = useContext(PanelsPortalContext)
   const [search, setSearch] = useState('')
   const visibleItems = search
     ? items.filter(item => (item.textValue ?? (typeof item.label === 'string' ? item.label : '')).toLocaleLowerCase().includes(search.toLocaleLowerCase()))
     : items
   return <DropdownMenu.Root>
     <DropdownMenu.Trigger asChild><button aria-label={ariaLabel} className="hp-dropdown-trigger" data-panels-component="dropdown" data-slot="dropdown-menu-trigger" type="button">{label}<ChevronDown aria-hidden="true" /></button></DropdownMenu.Trigger>
-    <DropdownMenu.Portal>
+    <DropdownMenu.Portal container={portalContainer ?? undefined}>
       <DropdownMenu.Content className="hp-dropdown" data-holo-panel="" data-panels-component="dropdown" data-slot="dropdown-menu-content" sideOffset={6}>
         {searchable ? <input aria-label="Search tenants" data-slot="input" onChange={event => setSearch(event.currentTarget.value)} placeholder="Search tenants…" value={search} /> : null}
         {visibleItems.map(item => <DropdownMenu.Item
@@ -155,8 +169,9 @@ interface DialogProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 function DialogSurface({ children, className, labelledBy, onClose, open, ...props }: DialogProps): ReactNode {
+  const portalContainer = useContext(PanelsPortalContext)
   return <Dialog.Root onOpenChange={value => { if (!value) onClose() }} open={open}>
-    <Dialog.Portal>
+    <Dialog.Portal container={portalContainer ?? undefined}>
       <Dialog.Overlay className="hp-dialog-overlay" data-holo-panel="" data-slot="dialog-overlay" />
       <Dialog.Content {...props} aria-labelledby={labelledBy} aria-modal="true" className={className} data-holo-panel="" data-slot="dialog-content">
         <Dialog.Title className="hp-visually-hidden">Dialog</Dialog.Title>

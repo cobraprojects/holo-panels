@@ -1302,6 +1302,14 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
     const registration = definition.manifest.auth?.registration
     return Object.freeze({
       client: {
+        appearance: {
+          colors: definition.manifest.theme.colors,
+          density: definition.manifest.theme.density,
+          fontFamily: definition.manifest.theme.fontFamily,
+          monoFontFamily: definition.manifest.theme.monoFontFamily ?? null,
+          serifFontFamily: definition.manifest.theme.serifFontFamily ?? null,
+          tokens: definition.manifest.theme.tokens ?? {},
+        },
         brandingName: definition.manifest.branding.name,
         darkMode: definition.manifest.theme.darkMode,
         ...(emailChangeVerification ? { emailChangeVerificationPath: emailChangeVerification.path } : {}),

@@ -295,6 +295,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
   const infolist = objectValue(value.infolist)
   const table = objectValue(value.table)
   const labels = objectValue(value.labels)
+  const configuredRoutes = objectValue(value.routes)
   if (!form || !table || !labels || !pagePath) return null
   const id = stringValue(value.id)
   const routeKey = stringValue(value.routeKey)
@@ -345,7 +346,11 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
     recordId,
     recordActions: value.actions ?? [],
     routeKey,
-    routes: { create: `${basePath}/create`, edit: `${basePath}/:record/edit`, view: `${basePath}/:record` },
+    routes: {
+      create: configuredRoutes ? localPath(configuredRoutes.create) : `${basePath}/create`,
+      edit: configuredRoutes ? localPath(configuredRoutes.edit) : `${basePath}/:record/edit`,
+      view: configuredRoutes ? localPath(configuredRoutes.view) : `${basePath}/:record`,
+    },
     saveLabel: labels.save ?? null,
   }
 }

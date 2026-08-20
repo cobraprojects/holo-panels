@@ -12,7 +12,7 @@ export type RecordPath<TRecord> = TRecord extends AtomicValue
             ? TKey
             : TRecord[TKey] extends readonly (infer TItem)[]
               ? TKey | `${TKey}.${number}` | `${TKey}.${number}.${RecordPath<TItem>}`
-              : TKey | `${TKey}.${RecordPath<TRecord[TKey]>}`
+              : TKey | `${TKey}.${RecordPath<NonNullable<TRecord[TKey]>>}`
         }[keyof TRecord & string]
       : never
 

@@ -1,7 +1,8 @@
 import { createClientRelationLayout, type ClientRelationManager, type ClientRelationRecord, type JsonValue, type RelationOperation } from '@holo-js/panels-client'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { ShadcnButton, ShadcnInput, ShadcnSelect, ShadcnTable, ShadcnTextarea } from '../internal-ui'
+import { ShadcnButton, ShadcnInput, ShadcnSelect, ShadcnTextarea } from '../internal-ui'
 import { PanelsButton, PanelsModal } from '../primitives'
+import { TablePresentation, type TablePresentationColumn, type TablePresentationPlacement } from '../tables/presentation'
 import type { ReactRelationManagerRendererProps } from './types'
 
 const managerOperations: readonly RelationOperation[] = ['create', 'associate', 'attach']
@@ -41,12 +42,35 @@ function RelationPanel({ manager, onMount, operationsEnabled }: {
 }): ReactNode {
   const managerActions = operationsEnabled ? managerOperations.filter(operation => manager.operations.includes(operation)) : []
   const recordActions = operationsEnabled ? recordOperations.filter(operation => manager.operations.includes(operation)) : []
-  return <section aria-label={manager.label} className="hp-relation-manager" data-relation-manager={manager.id}>
-    <header><h3>{manager.label}</h3>{manager.badge !== null ? <span className="hp-relation-badge">{manager.badge}</span> : null}</header>
-    {managerActions.length > 0 ? <div className="hp-relation-actions">{managerActions.map(operation => <OperationButton key={operation} manager={manager} onMount={onMount} operation={operation} />)}</div> : null}
+  const columns: readonly TablePresentationColumn<ClientRelationRecord>[] = manager.columns.map(column => ({
+    header: column.label,
+    key: column.key,
+    label: column.label,
+    render: record => display(record.values[column.key]),
+  }))
+  const trailing: TablePresentationPlacement<ClientRelationRecord> | undefined = recordActions.length > 0
+    ? {
+        header: 'Actions',
+        label: 'Actions',
+        render: record => <div aria-label={`Actions for ${manager.label.toLocaleLowerCase()} record ${String(record.id)}`} className="hp-relation-row-actions" data-slot="relation-row-actions" role="group">{recordActions.map(operation => <OperationButton key={operation} manager={manager} onMount={onMount} operation={operation} record={record} />)}</div>,
+      }
+    : undefined
+  return <section aria-label={manager.label} className="hp-relation-manager" data-empty={manager.records.length === 0 || undefined} data-relation-manager={manager.id}>
+    <header className="hp-relation-manager-header" data-slot="relation-manager-header">
+      <h3 className="hp-relation-manager-title" data-slot="relation-manager-title">{manager.label}</h3>
+      {manager.badge !== null ? <span aria-label={`${String(manager.badge)} ${manager.label.toLocaleLowerCase()}`} className="hp-relation-badge hp-relation-manager-count" data-slot="relation-manager-count">{manager.badge}</span> : null}
+    </header>
+    {managerActions.length > 0 ? <div aria-label={`${manager.label} actions`} className="hp-relation-actions hp-relation-toolbar" data-slot="relation-toolbar" role="group">{managerActions.map(operation => <OperationButton key={operation} manager={manager} onMount={onMount} operation={operation} />)}</div> : null}
     {manager.records.length === 0
-      ? <p className="hp-relation-empty">{manager.emptyMessage ?? `No ${manager.label.toLocaleLowerCase()} found.`}</p>
-      : <ShadcnTable><caption>{manager.label}</caption><thead><tr>{manager.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}{recordActions.length > 0 ? <th scope="col">Actions</th> : null}</tr></thead><tbody>{manager.records.map(record => <tr key={record.id}>{manager.columns.map(column => <td key={column.key}>{display(record.values[column.key])}</td>)}{recordActions.length > 0 ? <td>{recordActions.map(operation => <OperationButton key={operation} manager={manager} onMount={onMount} operation={operation} record={record} />)}</td> : null}</tr>)}</tbody></ShadcnTable>}
+      ? <p className="hp-relation-empty hp-relation-loading-empty" data-slot="relation-loading-empty" role="status">{manager.emptyMessage ?? `No ${manager.label.toLocaleLowerCase()} found.`}</p>
+      : <TablePresentation
+          caption={manager.label}
+          columns={columns}
+          containerClassName="hp-relation-table-overflow"
+          getRowKey={record => record.id}
+          records={manager.records}
+          trailing={trailing}
+        />}
   </section>
 }
 
@@ -85,10 +109,12 @@ function RelationOperationModal({ loadOptions, mounted, onClose, onOperation }: 
   }, [loadOptions, mounted.manager.id, optionSearch, selectsRecord])
   if (mounted.operation === 'view') {
     return <PanelsModal labelledBy={headingId} onClose={onClose} open>
-      <article className="hp-relation-operation-form">
-        <header><h2 id={headingId}>View {mounted.manager.label.toLocaleLowerCase()}</h2></header>
-        <dl className="hp-infolist">{mounted.manager.columns.map(column => <div key={column.key}><dt>{column.label}</dt><dd>{display(mounted.record?.values[column.key])}</dd></div>)}</dl>
-        <footer><PanelsButton onClick={onClose} type="button">Close</PanelsButton></footer>
+      <article className="hp-relation-dialog hp-relation-operation-form" data-slot="relation-dialog">
+        <header className="hp-relation-dialog-header" data-slot="relation-dialog-header"><h2 id={headingId}>View {mounted.manager.label.toLocaleLowerCase()}</h2></header>
+        <div className="hp-relation-dialog-body hp-relation-operation-form" data-slot="relation-dialog-body">
+          <dl className="hp-infolist">{mounted.manager.columns.map(column => <div key={column.key}><dt>{column.label}</dt><dd>{display(mounted.record?.values[column.key])}</dd></div>)}</dl>
+        </div>
+        <footer className="hp-relation-dialog-footer" data-slot="relation-dialog-footer"><PanelsButton onClick={onClose} type="button">Close</PanelsButton></footer>
       </article>
     </PanelsModal>
   }
@@ -112,18 +138,21 @@ function RelationOperationModal({ loadOptions, mounted, onClose, onOperation }: 
     }
   }
   return <PanelsModal labelledBy={headingId} onClose={onClose} open>
-    <form className="hp-relation-operation-form" onSubmit={event => void submit(event)}>
-      <header><h2 id={headingId}>{operationLabel(mounted.operation)} {mounted.manager.label.toLocaleLowerCase()}</h2><p>{destructive ? 'This action changes the relationship immediately.' : `Complete the fields below to ${mounted.operation} this relationship.`}</p></header>
-      {selectsRecord ? loadOptions
-        ? <label><span>Related record</span><ShadcnInput aria-label="Search related records" autoFocus placeholder="Search…" value={optionSearch} onChange={event => setOptionSearch(event.currentTarget.value)} /><ShadcnSelect aria-label="Related record" required value={String(relatedId)} onChange={event => setRelatedId(options.find(option => String(option.value) === event.currentTarget.value)?.value ?? '')}><option value="">Select a record</option>{options.map(option => <option key={option.value} value={String(option.value)}>{option.label}</option>)}</ShadcnSelect></label>
-        : <label><span>Related record ID</span><ShadcnInput autoFocus required value={relatedId} onChange={event => setRelatedId(event.currentTarget.value)} /></label> : null}
-      {fields.map(field => <label key={field.id}><span>{field.label}</span>{field.type === 'textarea'
-        ? <ShadcnTextarea required={field.required} value={String(values[field.id] ?? '')} onChange={event => { const value = event.currentTarget.value; setValues(current => ({ ...current, [field.id]: value })) }} />
-        : field.type === 'toggle'
-          ? <ShadcnInput checked={values[field.id] === true} type="checkbox" onChange={event => { const checked = event.currentTarget.checked; setValues(current => ({ ...current, [field.id]: checked })) }} />
-          : <ShadcnInput required={field.required} type={field.type === 'number' ? 'number' : field.type === 'date-time' ? 'datetime-local' : 'text'} value={String(values[field.id] ?? '')} onChange={event => { const value = field.type === 'number' ? event.currentTarget.valueAsNumber : event.currentTarget.value; setValues(current => ({ ...current, [field.id]: value })) }} />}</label>)}
-      {error ? <p role="alert">{error}</p> : null}
-      <footer><PanelsButton disabled={submitting} onClick={onClose} type="button">Cancel</PanelsButton><PanelsButton disabled={submitting} tone={destructive ? 'danger' : 'neutral'} type="submit">{submitting ? 'Working…' : operationLabel(mounted.operation)}</PanelsButton></footer>
+    <form aria-busy={submitting} className="hp-relation-dialog hp-relation-operation-form" data-pending={submitting || undefined} data-slot="relation-dialog" onSubmit={event => void submit(event)}>
+      <header className="hp-relation-dialog-header" data-slot="relation-dialog-header"><h2 id={headingId}>{operationLabel(mounted.operation)} {mounted.manager.label.toLocaleLowerCase()}</h2><p>{destructive ? 'This action changes the relationship immediately.' : `Complete the fields below to ${mounted.operation} this relationship.`}</p></header>
+      <div className="hp-relation-dialog-body hp-relation-operation-form" data-slot="relation-dialog-body">
+        {selectsRecord ? loadOptions
+          ? <label><span>Related record</span><ShadcnInput aria-label="Search related records" autoFocus placeholder="Search…" value={optionSearch} onChange={event => setOptionSearch(event.currentTarget.value)} /><ShadcnSelect aria-label="Related record" required value={String(relatedId)} onChange={event => setRelatedId(options.find(option => String(option.value) === event.currentTarget.value)?.value ?? '')}><option value="">Select a record</option>{options.map(option => <option key={option.value} value={String(option.value)}>{option.label}</option>)}</ShadcnSelect></label>
+          : <label><span>Related record ID</span><ShadcnInput autoFocus required value={relatedId} onChange={event => setRelatedId(event.currentTarget.value)} /></label> : null}
+        {fields.map(field => <label key={field.id}><span>{field.label}</span>{field.type === 'textarea'
+          ? <ShadcnTextarea required={field.required} value={String(values[field.id] ?? '')} onChange={event => { const value = event.currentTarget.value; setValues(current => ({ ...current, [field.id]: value })) }} />
+          : field.type === 'toggle'
+            ? <ShadcnInput checked={values[field.id] === true} type="checkbox" onChange={event => { const checked = event.currentTarget.checked; setValues(current => ({ ...current, [field.id]: checked })) }} />
+            : <ShadcnInput required={field.required} type={field.type === 'number' ? 'number' : field.type === 'date-time' ? 'datetime-local' : 'text'} value={String(values[field.id] ?? '')} onChange={event => { const value = field.type === 'number' ? event.currentTarget.valueAsNumber : event.currentTarget.value; setValues(current => ({ ...current, [field.id]: value })) }} />}</label>)}
+        {submitting ? <p aria-live="polite" className="hp-relation-dialog-pending hp-visually-hidden" data-slot="relation-dialog-pending" role="status">{operationLabel(mounted.operation)} in progress</p> : null}
+        {error ? <p className="hp-relation-dialog-error" data-slot="relation-dialog-error" role="alert">{error}</p> : null}
+      </div>
+      <footer className="hp-relation-dialog-footer" data-slot="relation-dialog-footer"><PanelsButton disabled={submitting} onClick={onClose} type="button">Cancel</PanelsButton><PanelsButton aria-label={submitting ? `${operationLabel(mounted.operation)} in progress` : undefined} data-pending={submitting || undefined} disabled={submitting} tone={destructive ? 'danger' : 'neutral'} type="submit">{submitting ? 'Working…' : operationLabel(mounted.operation)}</PanelsButton></footer>
     </form>
   </PanelsModal>
 }

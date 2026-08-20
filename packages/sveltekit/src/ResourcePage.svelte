@@ -500,8 +500,8 @@
   <div role="alert">Resource page metadata is unavailable.</div>
 {:else if pageType === 'list'}
   <div class="hp-resource-page">
-    {#if createRoute && data.page.manifest.actions.header.includes(`${resource.id}.create`)}
-      <div class="hp-resource-toolbar"><a class="hp-button hp-button-primary" href={createRoute}>{resource.createLabel}</a></div>
+    {#if createRoute && resource.recordActions.some(action => action.kind === 'create' && data.page.manifest.actions.header.includes(action.id))}
+      <div class="hp-resource-toolbar"><a class="hp-button hp-button-primary" href={createRoute}>{resource.recordActions.find(action => action.kind === 'create')?.label ?? resource.createLabel}</a></div>
     {/if}
   <SvelteTableRenderer table={{
     actions: rowActions,
@@ -552,6 +552,17 @@
   }} />
   </div>
 {:else if pageType === 'create' || pageType === 'edit'}
+  {#if pageType === 'edit' && currentRouteIdentifier !== ''}
+    <div class="hp-resource-toolbar">
+      {#each resource.recordActions.filter(action => action.visible && data.page.manifest.actions.header.includes(action.id)) as action (action.id)}
+        {#if action.kind === 'view' && resource.routes.view}
+          <a class="hp-button" href={resourceRoute(resource.routes.view, encodedRouteIdentifier(currentRouteIdentifier))}>{action.label}</a>
+        {:else if action.kind !== 'edit' && action.kind !== 'create'}
+          <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[currentRouteIdentifier]} store={actionStore} />
+        {/if}
+      {/each}
+    </div>
+  {/if}
   <form class="hp-resource-form" data-slot="card" onsubmit={(event) => { event.preventDefault(); void submit() }}>
     {#each resource.fields as definition (definition.path)}
       <FieldRenderer {definition} {form} collectionStore={collectionStores.get(definition.path)} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} uploadStore={uploadStores.get(definition.path)} />
@@ -566,10 +577,10 @@
       <EntryRenderer panelId={data.panel.manifest.id} store={entryStore(definition, record)} />
     {/each}
   </div>
-  {#if editRoute && data.page.manifest.actions.header.includes(`${resource.id}.edit`)}
-    <div class="hp-form-actions"><a class="hp-button" href={editRoute}>Edit {resource.label}</a></div>
+  {#if editRoute && resource.recordActions.some(action => action.kind === 'edit' && data.page.manifest.actions.header.includes(action.id))}
+    <div class="hp-form-actions"><a class="hp-button" href={editRoute}>{resource.recordActions.find(action => action.kind === 'edit')?.label ?? `Edit ${resource.label}`}</a></div>
   {/if}
-  {#each resource.recordActions.filter(action => action.mount === 'record' && action.visible) as action (action.id)}
+  {#each resource.recordActions.filter(action => action.mount === 'record' && action.visible && action.kind !== 'edit' && action.kind !== 'view' && action.kind !== 'create') as action (action.id)}
     <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} store={actionStore} />
   {/each}
   {#if relations.length > 0}<SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation }} />{/if}

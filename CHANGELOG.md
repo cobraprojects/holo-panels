@@ -2,7 +2,7 @@
 
 All notable changes to the Holo Panels workspace are recorded here. Holo Panels packages release in lockstep, so one entry applies to the complete `@holo-js/panels` package family.
 
-The newest published prerelease is `0.1.0-next.0`. All 14 packages are available from npm with the `next` tag.
+The newest published prerelease is `0.1.0-next.0`. All 21 packages are available from npm with the `next` tag.
 
 This prerelease accepts every stable Holo-JS version at or above `0.3.9`. Holo-JS `0.3.9` was not published, so packed minimum-version compatibility is validated against Holo-JS `0.3.10`, and the clean registry lifecycle is validated against published Holo-JS `0.3.11`.
 
@@ -12,13 +12,16 @@ This prerelease accepts every stable Holo-JS version at or above `0.3.9`. Holo-J
 
 - Filament-shaped per-panel providers covering routing, authentication, branding, layout, navigation, resources, global search, notifications, tenancy, runtime behavior, errors, assets, plugins, and render hooks.
 - Inferred resource schemas whose form fields, table columns, infolist entries, relation paths, and dot notation derive from Holo model metadata without application-authored helper types.
+- Filament-style resource and relation-manager classes with protected `model` and `relationship` properties, host-scoped component factories, reusable actions, and generated type bindings for prepare, build, and live development.
 - Isolated shadcn-family React, Vue, and Svelte panel interfaces with light, dark, and system modes, configurable panel colors, responsive navigation, user menus, actions, bulk actions, filters, pagination, search, notifications, and theme overrides.
 
 ### Changed
 
 - Example applications now use only final public panel providers and inferred resource APIs; internal registries, routes, auth pages, and framework wiring are generated managed artifacts.
+- Resource and relation-manager generators now emit the final class API with normal imports and no bound base classes, destructured component aliases, explicit record types, or repeated model columns.
 - Next.js, Nuxt, and SvelteKit preparation respects each framework's configured application, page, route, and server directories as well as panel-specific paths and login routes.
 - Absent Holo model policies allow resource access after panel and tenant checks; explicit policies and optional Shield permissions remain authoritative when configured.
+- Adopted an intentionally quieter visual baseline while preserving the public theming boundary: `PanelBuilder` appearance methods, semantic `--holo-*` variables, `--hp-*` palette aliases, and renderer-emitted `hp-*` and `data-slot` hooks.
 
 ### Fixed
 
@@ -30,7 +33,7 @@ This prerelease accepts every stable Holo-JS version at or above `0.3.9`. Holo-J
 
 ### Validation
 
-- All 14 package builds and strict typechecks, 412 behavior suites with 1,036 tests, ESLint, architecture and dependency validation, exact 161-topic Filament parity, coverage diagnostics, packed independent consumers, packed plugin consumers, and packed P0-C lifecycles pass.
+- All 21 package builds and strict typechecks, 412 behavior suites with 1,036 tests, ESLint, architecture and dependency validation, exact 161-topic Filament parity, coverage diagnostics, packed independent consumers, packed plugin consumers, and packed P0-C lifecycles pass.
 - All 60 production-browser journeys pass across Next.js, Nuxt, and SvelteKit.
 - Registry validation remains pending until this lockstep candidate is published; the older `0.1.0-next.0` registry package does not contain the fingerprinted plugin stylesheet behavior added by this release.
 

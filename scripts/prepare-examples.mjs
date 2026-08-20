@@ -40,8 +40,8 @@ async function prepareExampleDirectory(example) {
 export async function prepareExamples(runCommand = runHoloCommand, prepareDirectory = prepareExampleDirectory) {
   for (const example of examples) {
     await prepareDirectory(example)
-    await runCommand(example, 'prepare')
     await runCommand(example, 'migrate')
+    await runCommand(example, 'prepare')
     console.log(`Prepared generated Holo and Panels metadata for ${example}`)
   }
 }

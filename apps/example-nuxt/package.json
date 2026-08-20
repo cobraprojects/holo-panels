@@ -26,6 +26,7 @@
     "@holo-js/notifications": "catalog:",
     "@holo-js/panels": "workspace:*",
     "@holo-js/panels-nuxt": "workspace:*",
+    "@holo-js/panels-resources": "workspace:*",
     "@holo-js/security": "catalog:",
     "@holo-js/session": "catalog:",
     "esbuild": "catalog:",

@@ -170,6 +170,13 @@ holo-panels/
 ├── packages/
 │   ├── panels/
 │   ├── core/
+│   ├── schemas/
+│   ├── actions/
+│   ├── forms/
+│   ├── tables/
+│   ├── infolists/
+│   ├── notifications/
+│   ├── resources/
 │   ├── client/
 │   ├── ui/
 │   ├── react/
@@ -202,7 +209,14 @@ The repository root package is private. Shared dependency versions live in the r
 | Directory | Package | Responsibility |
 |---|---|---|
 | `packages/panels` | `@holo-js/panels` | Umbrella package, public re-exports, Holo plugin manifest, runtime boot entry, normal user install target |
-| `packages/core` | `@holo-js/panels-core` | Fluent builders, immutable definitions, protocols, registries, resolvers, panels, resources, schemas, server execution contracts |
+| `packages/core` | `@holo-js/panels-core` | Immutable protocol definitions, registries, resolvers, execution engines, and server contracts |
+| `packages/schemas` | `@holo-js/panels-schemas` | Shared typed schema container and layout components used by forms, infolists, actions, pages, and tables |
+| `packages/actions` | `@holo-js/panels-actions` | Reusable typed actions, action groups, built-in CRUD actions, modal schemas, and execution contracts |
+| `packages/forms` | `@holo-js/panels-forms` | Typed form fields and field-specific fluent configuration |
+| `packages/tables` | `@holo-js/panels-tables` | Typed tables, columns, filters, groups, summaries, record actions, header actions, and toolbar actions |
+| `packages/infolists` | `@holo-js/panels-infolists` | Typed read-only entry schemas |
+| `packages/notifications` | `@holo-js/panels-notifications` | Fluent notifications that accept the shared action contracts |
+| `packages/resources` | `@holo-js/panels-resources` | Resource classes, CRUD page classes, relation managers, model inference, and runtime compilation |
 | `packages/client` | `@holo-js/panels-client` | Framework-neutral form/table/page state engines, dependency graph, transport, cache, optimistic state, public client plugin contracts |
 | `packages/ui` | `@holo-js/panels-ui` | Design tokens, icons, semantic CSS, accessibility contracts, component presentation contracts, no framework runtime |
 | `packages/react` | `@holo-js/panels-react` | React renderers and React custom-component registration |
@@ -220,23 +234,23 @@ The repository root package is private. Shared dependency versions live in the r
 The allowed dependency graph is:
 
 ```text
-panels-ui                panels-core
-    │                    │      │
-    └──────┐       panels-client│
-           │          │         │
-       react/vue/svelte│         │
-           │          │         │
-       next/nuxt/sveltekit       │
-                   │             │
-panels-cli ────────┴─────────────┘
-panels-shield ───────────────────┘
-panels-testing ───────> core/client/renderers
-panels umbrella ──────> core/cli/ui
+schemas ───────────────> core
+forms ─────────────────> schemas/core
+actions ───────────────> schemas/core
+tables ────────────────> actions/schemas/core
+infolists ─────────────> schemas/core
+notifications ─────────> actions/core
+resources ─────────────> actions/notifications/schemas/tables/core
+panels umbrella ───────> public domain packages/core/cli/client/ui
+renderers ─────────────> client/core/ui
+framework adapters ────> matching renderer
+shield/testing ────────> their declared core/client/renderer boundaries
 ```
 
 Rules:
 
 - `panels-core` must not depend on a UI framework package.
+- Public resource composition must use the domain packages. The umbrella package must not expose a second resource, schema, table, form, infolist, action, relation-manager, or notification builder family.
 - `panels-client` must not depend on React, Vue, Svelte, Next, Nuxt, or SvelteKit.
 - Renderer packages must not contain database queries, authorization decisions, or persistence.
 - Framework adapter packages may depend only on the matching renderer.
@@ -391,17 +405,13 @@ export default definePanel('admin')
   .default()
   .path('/admin')
   .guard('admin')
-  .discoverResources()
-  .discoverPages()
-  .discoverWidgets()
-  .discoverClusters()
   .globalSearch()
   .databaseNotifications()
   .databaseNotificationsPolling('30s')
   .plugin(shield())
 ```
 
-Discovery methods without arguments scan conventional directories relative to the panel file. They may accept an explicit panel-relative directory. Explicit `.resources()`, `.pages()`, `.widgets()`, and `.clusters()` registration remains supported.
+Holo discovers conventional resource, page, widget, and cluster directories relative to the panel file. Discovery methods accept explicit panel-relative directories for non-conventional layouts. Explicit `.resources()`, `.pages()`, `.widgets()`, and `.clusters()` registration remains supported.
 
 ### 6.1 Filament-shaped panel configuration parity
 
@@ -423,7 +433,7 @@ The public panel builder preserves Filament 5 method names and chaining semantic
 - [x] A panel may omit login, registration, password reset, profile, or every built-in authentication page independently. A panel without a built-in login may use external authentication; guest access must be explicit and tested.
 - [x] Every configuration family has immutable compilation tests, precise TypeScript inference tests, and identical observable Next, Nuxt, and SvelteKit acceptance behavior.
 
-Evidence: revalidated on 2026-08-11 through immutable panel compilation and public type-inference suites, the exact 161-topic Filament 5 parity validator with no deferred rows, all 14 package behavior suites, and the production Next, Nuxt, and SvelteKit browser matrix. Each example owns only its Filament-shaped panel provider and inferred resources; generated registries, framework routes, auth pages, tenancy handlers, and renderer wiring remain internal managed artifacts.
+Evidence: revalidated on 2026-08-11 through immutable panel compilation and public type-inference suites, the exact 161-topic Filament 5 parity validator with no deferred rows, all package behavior suites, and the production Next, Nuxt, and SvelteKit browser matrix. Each example owns only its Filament-shaped panel provider and inferred resources; generated registries, framework routes, auth pages, tenancy handlers, and renderer wiring remain internal managed artifacts.
 
 ## 7. Fluent API and definition rules
 
@@ -734,17 +744,45 @@ Deleting, restoring, and force deleting must follow model soft-delete capabiliti
 ### 13.1 Resource composition
 
 ```ts
-export default defineResource(Post)
-  .recordTitle('title')
-  .navigationLabel('Posts')
-  .navigationIcon('document-text')
-  .form(PostForm)
-  .infolist(PostInfolist)
-  .table(PostsTable)
-  .discoverPages()
-  .discoverRelationManagers()
-  .discoverWidgets()
+export default class PostResource extends Resource {
+  protected static override model = Post
+  static override recordTitleAttribute = this.attribute('title')
+  static override navigationLabel = 'Posts'
+  static override navigationIcon = 'document-text'
+
+  static form = this.configureForm(schema => schema.components(field => [
+    field.textInput('title').required(),
+  ]))
+
+  static infolist = this.configureInfolist(schema => schema.components(entry => [
+    entry.text('title'),
+  ]))
+
+  static table = this.configureTable(table => table
+    .columns(column => [
+      column.text('title').searchable().sortable(),
+    ])
+    .recordActions(action => [
+      action.view(),
+      action.edit(),
+      action.delete(),
+    ])
+  )
+
+  static getPages() {
+    return {
+      index: ListPosts.route('/'),
+      create: CreatePost.route('/create'),
+      view: ViewPost.route('/{record}'),
+      edit: EditPost.route('/{record}/edit'),
+    }
+  }
+}
 ```
+
+The user-facing resource API follows Filament 5's class and package composition. `Schema`, `Action`, `Table`, `Notification`, form fields, infolist entries, resource pages, and relation managers are independent public package types. The same `Action` instance type can be mounted in pages, tables, notifications, schemas, and other action hosts. Relation managers configure the same `Table` and `Schema` classes as resources.
+
+The protected static `model` property is the only model declaration on a resource. A relation manager declares only its protected static `relationship` property; its owner model and related record type come from the parent resource. Holo Panels generates resource and relation-manager registry augmentations under `.holo-js/generated/panels` during `holo prepare`, `holo build`, and the live `holo dev` watcher. Those bindings infer concrete fields, loaded relation paths, callback records, form values, action payloads, actor, tenant, and transfer fields. User-facing resource code must not declare record aliases, pass generic arguments, annotate callbacks, or repeat migration columns to recover types. Bound fields, columns, entries, filters, actions, pages, and relation managers must provide autocomplete and reject invalid paths directly at their call sites.
 
 Resources support:
 
@@ -1053,6 +1091,7 @@ Holo Panels preparation generates under the application's existing `.holo-js/gen
 ├── clusters.ts
 ├── navigation.ts
 ├── permissions.ts
+├── resource-type-bindings.d.ts
 ├── types.d.ts
 ├── framework-artifacts.json
 └── registry.json
@@ -2229,12 +2268,12 @@ Parallel lanes: documentation, security/performance audit, examples, and release
 ### P17-A: documentation
 
 - [x] Publish installation and first-panel guides. Evidence: `docs/installation.md` and `docs/first-panel.md` have validated paths, commands, and framework examples.
-- [x] Document every package and public subpath. Evidence: `docs/package-reference.md` covers all 14 packages and 39 public entries/conditional targets against built declarations.
+- [x] Document every package and public subpath. Evidence: `docs/package-reference.md` covers all 21 packages and 46 public entries/conditional targets against built declarations.
 - [x] Document panels, resources, schemas, forms, reactivity, dependent selects, tables, infolists, actions, relation managers, pages, widgets, notifications, search, Shield, tenancy, imports, exports, styling, plugins, custom components, testing, deployment, and upgrades. Evidence: `docs/features.md`, `docs/security.md`, and `docs/testing-deployment-upgrades.md` distinguish available, partial, internal, and pending behavior.
 - [x] Include Next, Nuxt, and SvelteKit examples where framework wiring differs. Evidence: `docs/first-panel.md`, `docs/features.md`, and `docs/multiple-panels-and-guards.md` link the validated framework fixtures.
 - [x] Document server/client resolver boundaries and security implications. Evidence: `docs/features.md`, `docs/security.md`, and `docs/threat-model.md` document projection, serialization, transport, and trust boundaries.
 - [x] Document multiple panels using same and different guards. Evidence: `docs/multiple-panels-and-guards.md` covers same-guard reuse and different-guard isolation against current tests.
-- [x] Generate searchable API references and a feature parity page. Evidence: `scripts/generate-api-reference.ts` deterministically indexes 14 packages, 39 public entries, 32 declaration entrypoints, and 2,738 exports into `docs/api-reference.md`; `docs/filament-5-parity.md` classifies every official Filament 5 topic.
+- [x] Generate searchable API references and a feature parity page. Evidence: `scripts/generate-api-reference.ts` deterministically indexes 21 packages, 46 public entries, 39 declaration entrypoints, and 3,264 exports into `docs/api-reference.md`; `docs/filament-5-parity.md` classifies every official Filament 5 topic.
 - [x] Validate every referenced command, file path, and API against built packages. Evidence: documentation link checks pass, package APIs were checked against generated declarations, and documented commands match root/package scripts.
 
 ### P17-B: examples and acceptance
@@ -2257,7 +2296,7 @@ Parallel lanes: documentation, security/performance audit, examples, and release
 ### P17-D: release
 
 - [x] Verify lockstep versions and peer compatibility with supported Holo-JS versions. Revalidated on 2026-08-11: all 14 Holo Panels candidates and lockfile workspace entries are `0.1.0-next.1`; every Holo dependency and peer consistently uses `>=0.3.9`, accepting every later stable Holo-JS release without per-version Panels edits. Holo-JS `0.3.9` was never published, so executable minimum-version validation begins at published `0.3.10`; dependency policies, resolved release manifests, clean tarball consumers, isolated optional-peer consumers, and compatibility-floor tests pass.
-- [x] Run full typecheck, lint, tests, coverage diagnostics, architecture checks, package builds, packed smoke tests, and example acceptance. Revalidated on 2026-08-11: all 14 package builds/typechecks and 412 behavior suites with 1,036 tests, ESLint, architecture and dependency policies, conditional exports, exact 161-topic parity with no deferred rows, coverage diagnostics, packed P0-C lifecycles, packed independent/framework/plugin consumers, three production builds, 60 browser journeys, and API-reference freshness passed.
+- [x] Run full typecheck, lint, tests, coverage diagnostics, architecture checks, package builds, packed smoke tests, and example acceptance. Revalidated on 2026-08-11: all 21 package builds/typechecks and 412 behavior suites with 1,036 tests, ESLint, architecture and dependency policies, conditional exports, exact 161-topic parity with no deferred rows, coverage diagnostics, packed P0-C lifecycles, packed independent/framework/plugin consumers, three production builds, 60 browser journeys, and API-reference freshness passed.
 - [x] Publish prerelease packages and test installation from the registry. Evidence: the protected npm release published all 14 Holo Panels packages at `0.1.0-next.0` with the `next` tag on 2026-08-04. The adjacent Holo-JS resolver fix was published across the 46-package lockstep `0.3.11` release from commit `0d074287272b769cda83fe4886c2127c96c9c529`, with 46 matching Git tags and registry versions. `bun run test:registry-release` then bootstrapped the published Holo CLI and exact Panels prerelease into clean, non-workspace Next, Nuxt, and SvelteKit applications and passed plugin activation, preparation, panel/resource generation, adapter selection, Shield, idempotency, and safe uninstall for all three frameworks.
 - [x] Publish migration/upgrade guide and changelog. Evidence: `docs/testing-deployment-upgrades.md` documents clean installation, generated artifacts, deployment, lockstep releases, safe upgrades, migrations, and uninstall; `CHANGELOG.md` records the published `0.1.0-next.0` package family, compatibility evidence, and registry acceptance.
 - [x] Release `@holo-js/panels` and its workspace family. Evidence: GitHub release run `30908409841` published all 14 public packages at `0.1.0-next.0` with the `next` tag; registry verification observed every version and tag, the staged queue was empty, and the subsequent three-framework registry lifecycle passed.

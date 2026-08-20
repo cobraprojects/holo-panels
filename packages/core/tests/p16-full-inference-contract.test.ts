@@ -27,6 +27,7 @@ import {
   type PageBuilder,
   type PanelPluginBuilder,
   type ResourceExecutionContext,
+  type ResourceCompositionTypes,
   type StatsWidgetData,
   type WidgetBuilder,
 } from '../src'
@@ -231,13 +232,19 @@ describe('complete public value-source inference contract', () => {
     const expression = clientExpression(Boolean, { operator: 'equals', operands: [1, 1] })
     const namedResolver = clientResolver(String, 'format.slug', 'Post Title')
 
-    const importer = defineImporter('posts-import', posts)
+    class PostsResource {
+      declare readonly resourceCompositionTypes: ResourceCompositionTypes<Awaited<ReturnType<typeof PostModel.create>>, Actor, Tenant>
+      static model = PostModel
+      static getSlug(): string { return posts.id }
+    }
+
+    const importer = defineImporter('posts-import', PostsResource)
       .authorize(context => {
         expectTypeOf(context.actor).toEqualTypeOf<Actor>()
         expectTypeOf(context.tenant).toEqualTypeOf<Tenant>()
         return true
       })
-    const exporter = defineExporter('posts-export', posts)
+    const exporter = defineExporter('posts-export', PostsResource)
       .computed('tenant', context => {
         expectTypeOf(context.actor).toEqualTypeOf<Actor>()
         expectTypeOf(context.records[0]?.title).toEqualTypeOf<string | undefined>()

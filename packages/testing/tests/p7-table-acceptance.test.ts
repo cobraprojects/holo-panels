@@ -2,6 +2,10 @@ import { Window } from 'happy-dom'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { TableAcceptanceFixture } from '../src/table-acceptance/contracts'
 import { runTableAcceptanceJourney } from '../src/table-acceptance/journey'
+import { paginationRange as reactPaginationRange } from '../../react/src/tables/helpers'
+import { paginationRange as sveltePaginationRange } from '../../svelte/src/tables/helpers'
+import { paginationRange as vuePaginationRange } from '../../vue/src/tables/helpers'
+import { loadExampleExport } from './load-example'
 
 const browser = new Window({ url: 'http://localhost/' })
 let fixtures: readonly [string, TableAcceptanceFixture][] = []
@@ -34,20 +38,40 @@ beforeAll(async () => {
   for (const [key, value] of Object.entries(exposed)) Reflect.set(globalThis, key, value)
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   const [next, nuxt, svelteKit] = await Promise.all([
-    import('../../../apps/example-next/tests/p7-table-acceptance-next'),
-    import('../../../apps/example-nuxt/tests/p7-table-acceptance-nuxt'),
-    import('../../../apps/example-sveltekit/tests/p7-table-acceptance-sveltekit'),
+    loadExampleExport<TableAcceptanceFixture>('next', 'p7-table-acceptance-next', 'nextTableAcceptanceFixture'),
+    loadExampleExport<TableAcceptanceFixture>('nuxt', 'p7-table-acceptance-nuxt', 'nuxtTableAcceptanceFixture'),
+    loadExampleExport<TableAcceptanceFixture>('sveltekit', 'p7-table-acceptance-sveltekit', 'svelteKitTableAcceptanceFixture'),
   ])
   fixtures = [
-    ['Next', next.nextTableAcceptanceFixture],
-    ['Nuxt', nuxt.nuxtTableAcceptanceFixture],
-    ['SvelteKit', svelteKit.svelteKitTableAcceptanceFixture],
+    ['Next', next],
+    ['Nuxt', nuxt],
+    ['SvelteKit', svelteKit],
   ]
 })
 
 afterAll(async () => browser.close())
 
 describe('P7 table phase-gate acceptance', () => {
+  it('keeps one deterministic pagination range contract across renderers', () => {
+    const cases = [
+      { current: 1, expected: [1], total: 1 },
+      { current: 3, expected: [1, 2, 3, 4, 5, 6, 7], total: 7 },
+      { current: 1, expected: [1, 2, 3, 4, 5, 'ellipsis', 10], total: 10 },
+      { current: 4, expected: [1, 2, 3, 4, 5, 'ellipsis', 10], total: 10 },
+      { current: 5, expected: [1, 'ellipsis', 4, 5, 6, 'ellipsis', 10], total: 10 },
+      { current: 7, expected: [1, 'ellipsis', 6, 7, 8, 9, 10], total: 10 },
+      { current: 10, expected: [1, 'ellipsis', 6, 7, 8, 9, 10], total: 10 },
+      { current: 99, expected: [1, 'ellipsis', 6, 7, 8, 9, 10], total: 10 },
+    ] as const
+    const implementations = [reactPaginationRange, vuePaginationRange, sveltePaginationRange]
+
+    for (const implementation of implementations) {
+      for (const testCase of cases) {
+        expect(implementation(testCase.current, testCase.total)).toEqual(testCase.expected)
+      }
+    }
+  })
+
   it('runs the identical observable table journey through every example renderer', async () => {
     expect(fixtures).toHaveLength(3)
     for (const [name, fixture] of fixtures) {
@@ -61,6 +85,10 @@ describe('P7 table phase-gate acceptance', () => {
       expect(report.render.markup, name).toContain('role="region"')
       expect(report.render.markup, name).toContain('tabindex="0"')
       expect(report.render.markup, name).toContain('aria-sort="none"')
+      expect(report.render.markup, name).toContain('aria-busy="false"')
+      expect(report.render.markup, name).toContain('aria-live="polite"')
+      expect(report.render.markup, name).toContain('data-slot="table-pagination"')
+      expect(report.render.markup, name).toContain('hp-table-pagination-info')
       expect(report.render.markup, name).toContain('Omar')
       expect(report.render.markup, name).toContain('Draft count')
       expect(report.render.markup, name).toContain('Total posts')

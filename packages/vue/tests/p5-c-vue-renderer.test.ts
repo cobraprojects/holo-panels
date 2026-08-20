@@ -9,6 +9,7 @@ import {
   PanelsInputWrapper,
   PanelsModal,
   PanelsPagination,
+  PanelsPortalProvider,
   PanelsTabs,
   PanelsToastViewport,
   VueRelationManagerRenderer,
@@ -164,6 +165,30 @@ describe('Vue shell observable contract', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull()
   })
 
+  it('targets a panel-scoped portal container when one is provided', async () => {
+    const portal = document.createElement('div')
+    portal.dataset.panelPortal = ''
+    document.body.append(portal)
+    const Fixture = defineComponent(() => () => h(PanelsPortalProvider, { container: portal }, {
+      default: () => h('main', [
+        h(PanelsDropdown, {
+          items: [{ id: 'profile', label: 'Profile' }],
+          label: 'Account',
+          open: true,
+        }),
+        h(PanelsModal, { open: true, title: 'Confirm' }),
+      ]),
+    }))
+    const container = mount(Fixture)
+    await nextTick()
+
+    expect(container.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull()
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(portal.querySelector('[data-slot="dropdown-menu-content"]')).not.toBeNull()
+    expect(portal.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull()
+    expect(portal.querySelector('[role="dialog"]')).not.toBeNull()
+  })
+
   it('opens an uncontrolled dropdown when the open prop is omitted', async () => {
     const selectedItem = ref<string>()
     const Fixture = defineComponent(() => () => h(PanelsDropdown, {
@@ -209,12 +234,19 @@ describe('Vue relation selection', () => {
       onOperation,
     } }))
     const container = mount(Fixture)
+    expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
     container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-footer"]')).not.toBeNull()
     if (select) {
       select.value = 'tag-typescript'
       select.dispatchEvent(new Event('change', { bubbles: true }))
@@ -235,12 +267,31 @@ describe('Vue relation selection', () => {
     } }))
     const container = mount(Fixture)
 
+    expect(container.querySelector('[data-slot="table-container"]')).not.toBeNull()
+    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-table-responsive')).toBe(true)
+    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-relation-table-overflow')).toBe(true)
+    expect(container.querySelector('td[data-label="Name"]')?.textContent).toBe('TypeScript')
+    expect(container.querySelector('.hp-table-row-actions [data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
     container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
     await nextTick()
 
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript')
     expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
     expect(onOperation).not.toHaveBeenCalled()
+  })
+
+  it('omits relation action structure when no operations are configured', () => {
+    const Fixture = defineComponent(() => () => h(VueRelationManagerRenderer, { relations: {
+      managers: [{ badge: 1, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: [], presentation: 'inline', records: [{ id: 'tag-typescript', values: { name: 'TypeScript' } }], url: null, visible: true }],
+    } }))
+    const container = mount(Fixture)
+
+    const table = container.querySelector('[data-panels-component="data-table"]')
+    expect(table).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-toolbar"]')).toBeNull()
+    expect(table?.querySelector('th:last-child')?.textContent).toBe('Name')
+    expect(table?.querySelector('td[data-label="Actions"]')).toBeNull()
+    expect(table?.querySelector('.hp-table-row-actions')).toBeNull()
   })
 })
 

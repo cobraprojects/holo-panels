@@ -1,5 +1,6 @@
 import { ShadcnButton, ShadcnInput, ShadcnTable } from '../internal-ui'
 import { safeExternalUrl } from '@holo-js/panels-client'
+import { panelColorAppearance } from '@holo-js/panels-ui'
 import {
   defineComponent,
   h,
@@ -61,14 +62,14 @@ function finitePoints(series: VueChartSeries): readonly number[] {
   return series.points.map(point => point.value).filter(Number.isFinite)
 }
 
-function sparkline(values: readonly number[], label: string, color: string | null): VNode | null {
+function sparkline(values: readonly number[], label: string): VNode | null {
   if (values.length === 0) return null
   const minimum = Math.min(...values)
   const range = Math.max(...values) - minimum || 1
   const denominator = Math.max(values.length - 1, 1)
   const points = values.map((value, index) => `${(index / denominator) * 100},${24 - ((value - minimum) / range) * 24}`).join(' ')
   return h('svg', { 'aria-label': label, class: 'hp-widget-sparkline', role: 'img', viewBox: '0 0 100 24' }, [
-    h('polyline', { fill: 'none', points, stroke: color ?? 'currentColor', 'stroke-width': 2 }),
+    h('polyline', { fill: 'none', points, stroke: 'currentColor', 'stroke-width': 2 }),
   ])
 }
 
@@ -79,16 +80,22 @@ function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAc
     h('strong', { class: 'hp-widget-stat__value' }, String(stat.value)),
     stat.description ? h('span', { class: 'hp-widget-stat__description' }, stat.description) : null,
     stat.trend ? h('span', { class: `hp-widget-stat__trend hp-widget-stat__trend--${stat.trend}` }, `Trend: ${stat.trend}`) : null,
-    sparkline(stat.chart, `${stat.label} trend`, stat.color),
+    sparkline(stat.chart, `${stat.label} trend`),
   ]
   const url = safeExternalUrl(stat.url)
-  if (url) return h('a', { class: 'hp-widget-stat', href: url, style: stat.color ? { '--hp-widget-color': stat.color } : undefined }, content)
-  if (stat.action && onAction) return h(ShadcnButton, {
+  const appearance = panelColorAppearance(stat.color)
+  const attributes = {
     class: 'hp-widget-stat',
+    'data-color': appearance.attribute,
+    style: appearance.custom ? { '--hp-widget-color': appearance.custom } : undefined,
+  }
+  if (url) return h('a', { ...attributes, href: url }, content)
+  if (stat.action && onAction) return h(ShadcnButton, {
+    ...attributes,
     type: 'button',
     onClick: () => void onAction(stat.action!, stat),
   }, content)
-  return h('div', { class: 'hp-widget-stat', style: stat.color ? { '--hp-widget-color': stat.color } : undefined }, content)
+  return h('div', attributes, content)
 }
 
 function renderStats(data: VueStatsWidgetData, props: VueWidgetRendererProps): VNodeChild {

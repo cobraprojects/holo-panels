@@ -9,6 +9,7 @@ export * from './widgets'
 export * from './notifications'
 export * from './schemas'
 export * from './extensions'
+export * from './portal'
 export { createExtensionTypeId } from '@holo-js/panels-core'
 export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
 export {

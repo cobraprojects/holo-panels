@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { prepareExamples } from './prepare-examples.mjs'
 
 describe('example metadata preparation', () => {
-  it('prepares discovery before migrating every framework example', async () => {
+  it('migrates schema metadata before preparing discovery for every framework example', async () => {
     const calls = []
     const directories = []
 
@@ -15,12 +15,12 @@ describe('example metadata preparation', () => {
 
     assert.deepEqual(directories, ['example-next', 'example-nuxt', 'example-sveltekit'])
     assert.deepEqual(calls, [
-      ['example-next', 'prepare'],
       ['example-next', 'migrate'],
-      ['example-nuxt', 'prepare'],
+      ['example-next', 'prepare'],
       ['example-nuxt', 'migrate'],
-      ['example-sveltekit', 'prepare'],
+      ['example-nuxt', 'prepare'],
       ['example-sveltekit', 'migrate'],
+      ['example-sveltekit', 'prepare'],
     ])
   })
 
@@ -38,7 +38,6 @@ describe('example metadata preparation', () => {
     )
 
     assert.deepEqual(calls, [
-      ['example-next', 'prepare'],
       ['example-next', 'migrate'],
     ])
   })

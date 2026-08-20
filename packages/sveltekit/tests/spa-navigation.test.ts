@@ -79,6 +79,91 @@ describe('SvelteKit panel SPA navigation', () => {
     await unmount(component)
   })
 
+  it('targets a panel-scoped portal with configured appearance', async () => {
+    const current = pageData()
+    const configured: PanelPageData = {
+      ...current,
+      panel: {
+        ...current.panel,
+        manifest: {
+          ...current.panel.manifest,
+          theme: { ...current.panel.manifest.theme, colors: { primary: '#123456' }, density: 'compact' },
+        },
+      },
+    }
+    const container = document.createElement('div')
+    container.dir = 'rtl'
+    document.body.append(container)
+    const component = mount(PanelPage, { props: { data: configured }, target: container })
+    await tick()
+
+    const portal = document.body.querySelector<HTMLElement>('.hp-panel-portal[data-panel="admin"]')
+    expect(portal?.dataset.theme).toBe('system')
+    expect(portal?.dataset.density).toBe('compact')
+    expect(portal?.dir).toBe('rtl')
+    expect(portal?.style.getPropertyValue('--holo-color-primary')).toBe('#123456')
+
+    container.querySelector<HTMLButtonElement>('[data-slot="dropdown-menu-trigger"]')?.click()
+    await tick()
+    expect(portal?.querySelector('[data-slot="dropdown-menu-content"]')).not.toBeNull()
+
+    await unmount(component)
+    expect(document.body.contains(portal)).toBe(false)
+    container.remove()
+  })
+
+  it('tracks the shared mobile breakpoint and cleans up its media listener', async () => {
+    let mobileListener: EventListener | undefined
+    const mediaQueryState = {
+      addEventListener: vi.fn((_type: string, listener: EventListener) => { mobileListener = listener }),
+      dispatchEvent: vi.fn(),
+      matches: true,
+      media: '(width <= 48rem)',
+      onchange: null,
+      removeEventListener: vi.fn(),
+    }
+    const mediaQuery = mediaQueryState as unknown as MediaQueryList
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockReturnValue(mediaQuery)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mount(PanelPage, { props: { data: pageData() }, target: container })
+    await tick()
+
+    const toggle = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-toggle')
+    const sidebar = container.querySelector<HTMLElement>('.hp-panel-sidebar')
+    const backdrop = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-backdrop')
+    expect(matchMedia).toHaveBeenCalledWith('(width <= 48rem)')
+    expect(mediaQueryState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+    expect(sidebar?.getAttribute('aria-hidden')).toBe('true')
+    expect(sidebar?.hasAttribute('inert')).toBe(true)
+
+    mediaQueryState.matches = false
+    mobileListener?.(new Event('change'))
+    await tick()
+    expect(sidebar?.hasAttribute('aria-hidden')).toBe(false)
+    expect(sidebar?.hasAttribute('inert')).toBe(false)
+
+    mediaQueryState.matches = true
+    mobileListener?.(new Event('change'))
+    await tick()
+    toggle?.click()
+    await tick()
+    expect(backdrop?.hidden).toBe(false)
+    expect(sidebar?.hasAttribute('inert')).toBe(false)
+
+    backdrop?.focus()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await tick()
+    await Promise.resolve()
+    expect(backdrop?.hidden).toBe(true)
+    expect(document.activeElement).toBe(toggle)
+
+    await unmount(component)
+    expect(mediaQueryState.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+    container.remove()
+    matchMedia.mockRestore()
+  })
+
   it('redirects successful resource creates using the configured Filament destination', async () => {
     document.cookie = 'XSRF-TOKEN=signed; path=/'
     const current = pageData()

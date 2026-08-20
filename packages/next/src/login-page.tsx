@@ -1,10 +1,12 @@
 'use client'
 
-import { executePanelLogin, panelContentWidthValue, panelThemeVariables } from '@holo-js/panels-react'
+import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-react'
 import { useState, type CSSProperties, type FormEvent } from 'react'
+import { nextPanelAuthAppearanceVariables, type NextPanelAuthAppearance } from './auth-appearance'
 import { ShadcnButton, ShadcnCard, ShadcnCardContent, ShadcnCardHeader, ShadcnIcon, ShadcnInput, ShadcnLabel } from './internal-ui'
 
 export interface NextPanelLoginPageProps {
+  readonly appearance?: NextPanelAuthAppearance
   readonly brandName: string
   readonly forgotPasswordPath?: string
   readonly panelId: string
@@ -19,7 +21,7 @@ function cookie(name: string): string {
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : ''
 }
 
-export function NextPanelLoginPage({ brandName, forgotPasswordPath, panelId, registrationPath, simplePageMaxContentWidth, theme = 'system', themeColors }: NextPanelLoginPageProps) {
+export function NextPanelLoginPage({ appearance, brandName, forgotPasswordPath, panelId, registrationPath, simplePageMaxContentWidth, theme = 'system', themeColors }: NextPanelLoginPageProps) {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
@@ -44,8 +46,8 @@ export function NextPanelLoginPage({ brandName, forgotPasswordPath, panelId, reg
     }
   }
 
-  const style = { ...panelThemeVariables({ colors: themeColors }), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
-  return <main className="hp-auth-page" data-holo-panel data-theme={theme} style={style}>
+  const style = { ...nextPanelAuthAppearanceVariables(appearance, themeColors), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
+  return <main className="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={style}>
     <ShadcnCard className="hp-auth-card">
       <ShadcnCardHeader><span className="hp-auth-brand-mark"><ShadcnIcon name="key" /></span><div><p>Administration</p><h1>{brandName}</h1><span>Sign in to your account</span></div></ShadcnCardHeader>
       <ShadcnCardContent>

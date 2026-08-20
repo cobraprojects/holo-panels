@@ -9,14 +9,14 @@ For package and subpath details, see the [package reference](package-reference.m
 | Area | Status | Current supported surface | Important limitation |
 |---|---|---|---|
 | Panels and shell | Available | `definePanel`, `PanelRuntime`, `PanelShellStore`, branding/navigation/theme, auth/MFA, tenancy, defaults, and render slots | Native framework handlers remain responsible for fixed route integration and secure cookie effects. |
-| Resources and CRUD | Available | `defineResource`, `ResourceDefinition`, `ResourceExecutor`, built-in list/create/view/edit pages | Application supplies Holo model, validation, persistence, policies, and runtime registration. |
-| Schemas and layouts | Available | `defineSchema`, public React/Vue/Svelte schema renderers, layouts, custom components, traversal, patches, and scoped slots | Server callbacks remain outside compiled client manifests. |
+| Resources and CRUD | Available | `Resource`, `ListRecords`, `CreateRecord`, `ViewRecord`, `EditRecord`, `RelationManager`, and `ResourceExecutor` | Application supplies Holo model, validation, persistence, policies, and runtime registration. |
+| Schemas and layouts | Available | `Schema`, public React/Vue/Svelte schema renderers, layouts, custom components, traversal, patches, and scoped slots | Server callbacks remain outside compiled client manifests. |
 | Forms | Available | Typed field builders, `FormStore`, reactive dependencies, validation/error state, uploads | Server validation remains authoritative. |
 | Dependent options | Available | `OptionStore`, option identities/cache keys, searchable/preloaded/dependent choice-field definitions | Application option transports must authorize and tenant-scope queries. |
 | Tables | Available | Columns, filters, grouping, summaries, `TableQueryExecutor`, `TableStateStore` | Custom query hooks must preserve scopes and bounds. |
 | Infolists | Available | Text, icon, boolean, image, color, code, key-value, repeatable, and custom entries, shared schema leaves, layouts, slots, visibility, and safe rich content | Application-defined rich-content renderers remain trusted code and require their own sanitizer policy. |
 | Actions | Available | Source-inferred built-in/view/custom actions, groups, `ActionEngine`, `ClientActionStore`, complete modal/slide-over presentation, lifecycle hooks, notifications, and rate limiting | Application-defined handlers remain responsible for domain invariants and durable external side effects. |
-| Relation managers | Available | `RelationManagerBuilder`, `RelationManagerExecutor`, attach/detach/associate/dissociate/create/edit/view/delete operations | Application persistence and policy callbacks remain required. |
+| Relation managers | Available | `RelationManager`, the shared `Table`, `Schema`, and `Action` APIs, plus scoped attach/detach/associate/dissociate/create/edit/view/delete execution | Application persistence and policy callbacks remain required. |
 | Pages | Available | Built-in/custom pages, extension renderers, configured variants, singular resources, and nested resources | Every loader and operation still requires server authorization. |
 | Navigation and clusters | Available | Navigation seed/resolution, clusters, responsive shell/navigation stores | Visibility is not authorization. |
 | Global search | Available | Server search definitions/engine and `GlobalSearchStore` | Every search resource needs policy and tenant scopes. |
@@ -54,19 +54,21 @@ Authentication and tenancy are compiled server-only capabilities. Login/logout, 
 
 ## Resources, CRUD, and pages
 
-[`ResourceDefinition`](../packages/panels/src/definitions.ts) is the umbrella fluent definition marker used by discovery. The lower-level [`ResourceBuilder`](../packages/core/src/resources/builder.ts) and [`ResourceExecutor`](../packages/core/src/resources/executor.ts) provide typed model attributes, navigation/search metadata, Holo policy calls, authoritative validation, scoped lookup, transactions, lifecycle hooks, and hidden-field removal.
+Resources extend [`Resource`](../packages/resources/src/index.ts) and identify their Holo model with `protected static override model = Post`. Relation managers extend `RelationManager` and identify only the parent model relation with `protected static override relationship = 'comments'`. Holo Panels generates the resource-to-model and relation-manager bindings under `.holo-js/generated/panels`, so fields, loaded relation paths, callback records, form values, actions, and table state are inferred without record aliases, generic arguments, callback annotations, or duplicate model columns.
 
-The page builders exported from `@holo-js/panels` are:
+Forms, infolists, tables, and actions use host-scoped callbacks such as `this.configureForm(schema => ...)`, `this.configureTable(table => ...)`, and `PostResource.actions(action => ...)`. The callback factories provide autocomplete for the current model and reject invalid paths at the call site. Static `form`, `infolist`, `table`, `getPages()`, `getRelations()`, and `getWidgets()` hooks compose the independent public packages. The lower-level [`ResourceExecutor`](../packages/core/src/resources/executor.ts) provides Holo policy calls, authoritative validation, scoped lookup, transactions, lifecycle hooks, and hidden-field removal.
 
-- `defineListPage`
-- `defineCreatePage`
-- `defineViewPage`
-- `defineEditPage`
-- `defineCustomPage`
-- `defineSingularPage`
-- `defineRelatedRecordPage`
+Resource page classes exported from `@holo-js/panels` are:
 
-Pages support access, visibility, routes, labels, navigation, breadcrumbs, layout slots, data resolution, and actions through [`PageBuilder`](../packages/core/src/pages/page.ts). `preparePageRoutes` checks deterministic route conflicts.
+- `ListRecords`
+- `CreateRecord`
+- `ViewRecord`
+- `EditRecord`
+- `ManageRecords`
+- `ManageRelatedRecords`
+- `Page`
+
+Pages register deterministic routes with `PageClass.route(path)` and expose typed header/footer actions and widgets. `preparePageRoutes` checks route conflicts.
 
 The [Next](../apps/example-next/server/admin/resources/posts/PostResource.ts), [Nuxt](../apps/example-nuxt/server/admin/resources/posts/PostResource.ts), and [SvelteKit](../apps/example-sveltekit/server/admin/resources/posts/PostResource.ts) examples exercise the same completed P17 product contract, including tenant-scoped resources, authentication and MFA, relations, widgets, notifications, imports, exports, and public blog behavior.
 
@@ -74,7 +76,7 @@ Singular resources reject list/create behavior and resolve one scoped authorized
 
 ## Schemas and layout
 
-The public schema entrypoint provides `defineSchema` plus these layout helpers:
+The public schema entrypoint provides `Schema` plus layout components such as `Section`, `Grid`, `Fieldset`, `Tabs`, `Tab`, `Wizard`, and `WizardStep`.
 
 - `section`, `grid`, `fieldset`, `group`, and `split`
 - `tabs` and `tab`
@@ -90,14 +92,14 @@ React, Vue, and Svelte export their general schema renderers from package roots.
 
 ### Field families
 
-Public form builders in [`fields`](../packages/core/src/fields) are exported by `@holo-js/panels` and cover:
+Public form classes in [`@holo-js/panels-forms`](../packages/forms/src/index.ts) are exported by `@holo-js/panels` and cover:
 
 - text input, textarea, checkbox, toggle, radio, date/time, hidden, slider, color, and slug;
 - select, multiselect, checkbox list, and toggle buttons;
 - key-value, tags, repeater, rich editor, Markdown editor, and builder blocks;
 - temporary upload and media field definitions.
 
-Use the inference-first factories exported from `@holo-js/panels`, including `fields(schema)`, `choiceFields(schema)`, `collectionFields(schema)`, and `uploadFields(schema)`. They derive paths and values from the supplied schema without generic arguments. The lower-level package remains available to plugin authors, but application definitions normally import these factories from the umbrella package.
+Inside a resource, fields are created through the inferred callback factory: `schema.components(field => [field.textInput('title')])`. Invalid paths and incompatible value types fail during typechecking, fluent methods preserve the concrete field subtype, and callbacks retain the concrete record and field value types. No model type argument is written by the application.
 
 ### Client state
 
@@ -121,26 +123,26 @@ The resolver APIs intentionally distinguish execution locations:
 
 ## Tables
 
-The table surface has four layers:
+The public table surface has four layers:
 
 1. Column builders: text, icon, image, color, boolean, checkbox, toggle, select, text input, and custom columns.
 2. Filter builders: boolean, select, relationship select, ternary, date range, trashed, custom schema, and advanced query filters.
 3. Query execution: pagination, sorting, filters, relationship search, aggregates, authorization scope, tenant scope, and bounded selection.
 4. Client state: `TableStateStore`, URL query serialization/restoration, selection, grouping, polling, filter mode, and stale-request cancellation.
 
-Grouping and summaries expose `groupBy`, `GroupingState`, `summariesFor`, `SummaryBuilder`, page summaries, full-query summaries, and driver-normalized aggregates. Inline-editable columns use `executeInlineColumnEdit` with configured action execution rather than direct client persistence.
+Tables place the shared action contract through `recordActions()`, `headerActions()`, `toolbarActions()`, and `emptyStateActions()`. Grouping and summaries expose `Group`, `GroupingState`, `Summarizer`, page summaries, full-query summaries, and driver-normalized aggregates. Inline-editable columns use configured action execution rather than direct client persistence.
 
 Renderer packages expose their framework table renderers and extension registries from their roots. Custom columns and extension filters use the same generated registry pipeline as built-ins; the packed money plugin proves a custom column in all three renderer families.
 
 ## Infolists
 
-Infolist entry builders exported from `@holo-js/panels` include `TextEntry`, `IconEntry`, `BooleanEntry`, `ImageEntry`, `ColorEntry`, `CodeEntry`, `KeyValueInfolistEntry`, and `RepeatableEntry`. `entriesFor(recordSource)` derives the record type and creates built-in or custom entries through the same registry model without manual generic arguments.
+Infolist entry classes exported from `@holo-js/panels` include `TextEntry`, `IconEntry`, `ImageEntry`, `ColorEntry`, `CodeEntry`, `KeyValueEntry`, and `RepeatableEntry`. They compose in the same `Schema<TRecord>` used by resource forms and action modals.
 
 Entry resolution supports direct record paths, relation paths, formatted scalar/JSON presentation, copying, actions, safe URL handling, responsive layout, attributes, ordered slots, visibility, safe Markdown, and sanitizer-bound rich content. Entry, filter, and widget leaves compose through the shared schema tree, and every renderer resolves custom entries through the same generated registry contract.
 
 ## Actions
 
-`defineAction` is a customizable fluent action builder. The umbrella package also exports `actionsFor(sources)`, while resource definitions expose `.actions(actions => [...])` so record, input, actor, tenant, and service callback types flow from the resource without generic arguments or callback annotations. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
+`this.action(action => action.make('publish'))` creates a resource action with its record, input, actor, tenant, services, and modal field types inferred from the resource model. `PostResource.actions(action => [action.create()])` creates page actions, while table callbacks expose the same factory through `recordActions`, `headerActions`, `toolbarActions`, and `emptyStateActions`. The same action instance can be injected into pages, tables, notifications, and action modals. Create, view, edit, delete, restore, force-delete, replicate, import, export, bulk actions, and action groups use that contract. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
 
 Server execution validates the mounted action, bounds bulk record IDs, reauthorizes, validates modal data, checks record versions, uses configured transactions, and returns a bounded effect set. A hidden or disabled action is not an authorization decision.
 
@@ -148,7 +150,7 @@ React, Vue, and Svelte render grouped triggers and complete modal or slide-over 
 
 ## Relation managers
 
-`defineRelationManager` creates a discoverable definition marker. The public `RelationManagerBuilder` and `RelationManagerExecutor` support:
+Relation managers extend `RelationManager`, declare `protected static override relationship = 'comments'`, and configure the normal schema and table through `this.configureForm(...)`, `this.configureInfolist(...)`, and `this.configureTable(...)`. The owner and related record types are generated from the parent resource and its Holo relation, so application code writes no generic arguments. The server `RelationManagerExecutor` supports:
 
 - `attach`, `detach`, `associate`, and `dissociate`;
 - related record `create`, `view`, `edit`, and `delete`;
@@ -182,7 +184,7 @@ Widgets have server visibility, authorization, and data callbacks. The client `W
 
 ## Notifications
 
-`panelNotification` builds a notification presentation and `PanelNotification` integrates with Holo Notifications delivery. Toast effects are consumed by `ClientToastStore`.
+`Notification.make()` builds a fluent notification with status, title, body, duration, persistence, icon/color, shared actions, and `send()`, `sendToDatabase()`, or `broadcast()` delivery methods. `PanelNotification` integrates with Holo Notifications delivery, and toast effects are consumed by `ClientToastStore`.
 
 Database notifications use `databaseNotificationPayload`, `PanelNotificationInbox`, `holoNotificationStore`, and `executePanelDatabaseNotificationOperation`. The client exposes `ClientNotificationInboxStore`, `createPanelNotificationTransport`, and `fluxNotificationRealtime`. Records are scoped by recipient, guard, panel, tenant, and payload version; mutations enumerate visible IDs before applying changes.
 
@@ -368,8 +370,11 @@ This compact index points to currently exported symbols. The generated declarati
 | `createPanelPage` | Next adapter | Next catch-all page |
 | `createPanelPageLoad` | SvelteKit adapter | SvelteKit server load |
 | `definePanel` | umbrella/core | Panel builder |
-| `defineResource` | umbrella | Discoverable resource definition |
-| `defineSchema` | umbrella/core | Typed schema builder |
+| `Resource` | umbrella/resources | Model-derived resource class |
+| `Schema` | umbrella/schemas | Typed shared schema |
+| `Table` | umbrella/tables | Typed table and action positions |
+| `Action` | umbrella/actions | Reusable action contract |
+| `Notification` | umbrella/notifications | Fluent notification and delivery API |
 | `shield` | Shield | Optional panel plugin |
 | `usePanelPage` | Nuxt adapter | Nuxt page resolution composable |
 

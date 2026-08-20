@@ -20,6 +20,7 @@ The complete architecture, phased task breakdown, acceptance criteria, parallel-
 
 - [Install Holo Panels](docs/installation.md)
 - [Create your first panel](docs/first-panel.md)
+- [Theme and customize a panel](docs/theming.md)
 - [Packages and public subpaths](docs/package-reference.md)
 - [Searchable API reference](docs/api-reference.md)
 - [Features and framework integration](docs/features.md)

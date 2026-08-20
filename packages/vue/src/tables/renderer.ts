@@ -1,6 +1,6 @@
-import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect, ShadcnTable } from '../internal-ui'
+import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect } from '../internal-ui'
 import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
-import { ChevronDown, ChevronLeft, ChevronRight, Columns3, ListFilter } from 'lucide-vue-next'
+import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, Search } from 'lucide-vue-next'
 import {
   computed,
   defineComponent,
@@ -17,17 +17,15 @@ import {
   type VNode,
   type VNodeChild,
 } from 'vue'
-import { displayValue, pages, recordValue, visibleColumns } from './helpers'
+import { displayValue, pages, paginationRange, perPageOptions, recordValue, visibleColumns } from './helpers'
 import { PanelsModal } from '../primitives'
-import { VueTableColumnPresentation } from './presentation'
+import { VueTableColumnPresentation, VueTablePresentation, type VueTablePresentationProps } from './presentation'
 import type {
   VueTableAction,
   VueTableColumn,
   VueCustomFilterProps,
   VueTableFilter,
-  VueTableGroup,
   VueTableRendererProps,
-  VueTableSummary,
   VueFilterCollectionSlotProps,
 } from './types'
 
@@ -493,60 +491,6 @@ function tableFilters(
   return [trigger, h(PanelsModal, { open: open.value, title: 'Filters', onClose: () => { open.value = false } }, { default: () => [content] })]
 }
 
-function summaryRows(columnCount: number, summaries: readonly VueTableSummary[]): VNode | null {
-  if (summaries.length === 0) return null
-  return h('tfoot', summaries.map(summary => h('tr', { class: 'hp-table-total-summary', key: summary.id }, [
-    h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, ['Total · ', summary.label, ': ', summary.value]),
-  ])))
-}
-
-function tableRecords(
-  table: RuntimeTable,
-  columns: readonly VueTableColumn<Record<string, unknown>>[],
-  records: readonly Record<string, unknown>[],
-  group?: VueTableGroup<Record<string, unknown>>,
-  onToggleGroup?: () => void,
-  selectable = false,
-): VNodeChild[] {
-  const nodes: VNodeChild[] = []
-  const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
-  if (group) {
-    nodes.push(h('tr', { class: 'hp-table-group', key: `group-${group.key}` }, [
-      h('th', { colspan: columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0), scope: 'rowgroup' }, [
-        group.collapsible
-          ? h(ShadcnButton, { 'aria-expanded': !group.collapsed, type: 'button', onClick: onToggleGroup }, () => [h(ChevronDown, { 'aria-hidden': 'true' }), h('span', group.title), h('span', { class: 'hp-table-group-count' }, records.length)])
-          : group.title,
-        group.description ? h('small', group.description) : null,
-      ]),
-    ]))
-  }
-  if (!group?.collapsed) {
-    for (const record of records) {
-      const recordId = table.getRecordId(record)
-      nodes.push(h('tr', { key: String(recordId) }, [
-        selectable ? h('td', { 'data-label': 'Select' }, [h(ShadcnInput, {
-          'aria-label': `Select record ${String(recordId)}`,
-          checked: table.store.isSelected(recordId),
-          type: 'checkbox',
-          onChange: (event: Event) => table.store.selectRecord(recordId, eventTarget<HTMLInputElement>(event).checked),
-        })]) : null,
-        ...columns.map(column => h('td', {
-          'data-label': column.manifest.label ?? column.manifest.path,
-          key: column.manifest.path,
-          style: { textAlign: column.manifest.alignment },
-        }, [h(InlineTableCell, { column, record, table })])),
-        rowActions.length > 0 ? h('td', { class: 'hp-table-row-actions', 'data-label': 'Actions' }, rowActions.map(action => h(TableActionButton, { action, key: action.id, record, table }))) : null,
-      ]))
-    }
-  }
-  for (const summary of group?.summaries ?? []) {
-    nodes.push(h('tr', { class: 'hp-table-group-summary', key: `${group?.key}-${summary.id}` }, [
-      h('th', { colspan: columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0), scope: 'row' }, [group?.title, ' subtotal · ', summary.label, ': ', summary.value]),
-    ]))
-  }
-  return nodes
-}
-
 export const VueTableRenderer = defineComponent({
   name: 'VueTableRenderer',
   props: {
@@ -575,11 +519,13 @@ export const VueTableRenderer = defineComponent({
       const recordIds = snapshot.records.map(table.getRecordId)
       const selectedOnPage = recordIds.length > 0 && recordIds.every(recordId => table.store.isSelected(recordId))
       const pageCount = pages(snapshot.total, snapshot.perPage)
+      const paginationItems = paginationRange(snapshot.page, pageCount)
+      const paginationFrom = snapshot.total === 0 ? 0 : (snapshot.page - 1) * snapshot.perPage + 1
+      const paginationTo = Math.min(snapshot.page * snapshot.perPage, snapshot.total)
       const headerActions = table.actions?.filter(action => action.scope === 'header') ?? []
       const bulkActions = table.actions?.filter(action => action.scope === 'bulk') ?? []
       const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
       const selectable = bulkActions.length > 0 || (table.transfers?.some(transfer => transfer.kind === 'export') ?? false)
-      const columnCount = columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0)
       const hasSelection = selectable && (snapshot.selection.mode === 'all-matching' || snapshot.selection.selectedRecordIds.length > 0)
       const currentColumns = snapshot.visibleColumns.length > 0
         ? new Set(snapshot.visibleColumns)
@@ -590,19 +536,81 @@ export const VueTableRenderer = defineComponent({
         table.store.setSort([{ column: column.manifest.path, direction: active?.direction === 'asc' ? 'desc' : 'asc' }])
         notifyQueryChange(table.onQueryChange)
       }
-      const groups = table.groups && table.groups.length > 0 ? table.groups.flatMap(group => tableRecords(
-        table,
-        columns,
-        group.records,
-        { ...group, collapsed: collapsedGroups.value.has(group.key) },
-        () => toggleGroup(group.key),
-        selectable,
-      )) : undefined
+      const tablePresentation: VueTablePresentationProps<RuntimeRecord> = {
+        ariaLabel: `${table.caption} data`,
+        caption: table.caption,
+        columns: columns.map(column => {
+          const active = snapshot.sort.find(item => item.column === column.manifest.path)
+          const label = column.manifest.label ?? column.manifest.path
+          return {
+            alignment: column.manifest.alignment,
+            ariaSort: active?.direction === 'asc' ? 'ascending' : active?.direction === 'desc' ? 'descending' : 'none',
+            header: column.manifest.sortable
+              ? h(ShadcnButton, {
+                  class: 'hp-table-sort',
+                  'data-sorted': active?.direction,
+                  type: 'button',
+                  onClick: () => sort(column),
+                }, () => [label, h(active?.direction === 'asc' ? ChevronUp : active?.direction === 'desc' ? ChevronDown : ArrowUpDown, {
+                  'aria-hidden': 'true',
+                  'data-icon': active?.direction === 'asc' ? 'chevron-up' : active?.direction === 'desc' ? 'chevron-down' : 'sort',
+                  'data-slot': 'icon',
+                })])
+              : label,
+            key: column.manifest.path,
+            label,
+            width: column.manifest.width,
+            wrap: column.manifest.wrap,
+            render(record: RuntimeRecord): VNodeChild {
+              return h(InlineTableCell, { column, record, table })
+            },
+          }
+        }),
+        ...(table.groups && table.groups.length > 0 ? { groups: table.groups.map(group => ({
+          collapsed: collapsedGroups.value.has(group.key),
+          collapsible: group.collapsible,
+          description: group.description ?? undefined,
+          key: group.key,
+          onToggle: () => toggleGroup(group.key),
+          records: group.records,
+          summaries: group.summaries,
+          title: group.title,
+        })) } : {}),
+        ...(selectable ? { leading: {
+          header: h(ShadcnInput, {
+            'aria-label': 'Select page',
+            checked: selectedOnPage,
+            type: 'checkbox',
+            onChange: (event: Event) => table.store.selectPage(recordIds, eventTarget<HTMLInputElement>(event).checked),
+          }),
+          label: 'Select',
+          render(record: RuntimeRecord): VNodeChild {
+            const recordId = table.getRecordId(record)
+            return h(ShadcnInput, {
+              'aria-label': `Select record ${String(recordId)}`,
+              checked: table.store.isSelected(recordId),
+              type: 'checkbox',
+              onChange: (event: Event) => table.store.selectRecord(recordId, eventTarget<HTMLInputElement>(event).checked),
+            })
+          },
+        } } : {}),
+        records: snapshot.records,
+        rowKey: record => table.getRecordId(record),
+        summaries: table.summaries,
+        ...(rowActions.length > 0 ? { trailing: {
+          header: 'Actions',
+          label: 'Actions',
+          render(record: RuntimeRecord): VNodeChild {
+            return rowActions.map(action => h(TableActionButton, { action, key: action.id, record, table }))
+          },
+        } } : {}),
+      }
       const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen)
       const children: VNodeChild[] = [
         h('h2', { id: captionId }, table.caption),
         h('div', { class: 'hp-table-toolbar' }, [
-          h('label', ['Search', h(ShadcnInput, {
+          h('label', [h(Search, { 'aria-hidden': 'true' }), h('span', { class: 'hp-visually-hidden' }, 'Search'), h(ShadcnInput, {
+            placeholder: 'Search records…',
             type: 'search',
             value: snapshot.search,
             onInput: (event: Event) => {
@@ -645,60 +653,71 @@ export const VueTableRenderer = defineComponent({
         snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
           ? h(ShadcnButton, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
           : null,
-        snapshot.error ? h('div', { role: 'alert' }, [h('strong', 'Unable to load table'), h('span', snapshot.error.message)]) : null,
-        snapshot.loading ? h('div', { 'aria-live': 'polite', role: 'status' }, 'Loading records…') : null,
+        snapshot.error ? h('div', { class: 'hp-table-error', 'data-slot': 'table-error', role: 'alert' }, [h('strong', 'Unable to load table'), h('span', snapshot.error.message)]) : null,
+        snapshot.loading ? h('div', { 'aria-live': 'polite', class: 'hp-table-loading', 'data-slot': 'table-loading', role: 'status' }, 'Loading records…') : null,
         !snapshot.loading && !snapshot.error && snapshot.records.length === 0
-          ? h('div', { class: 'hp-table-empty' }, table.emptyMessage ?? 'No records found.')
+          ? h('div', { class: 'hp-table-empty', 'data-slot': 'table-empty' }, table.emptyMessage ?? 'No records found.')
           : null,
-        snapshot.records.length > 0 ? h('div', { 'aria-label': `${table.caption} data`, class: 'hp-table-responsive', 'data-slot': 'table-container', role: 'region', tabindex: 0 }, [
-          h(ShadcnTable, null, () => [
-            h('caption', { class: 'hp-visually-hidden' }, table.caption),
-            h('thead', [h('tr', [
-              selectable ? h('th', { scope: 'col' }, [h(ShadcnInput, {
-                'aria-label': 'Select page',
-                checked: selectedOnPage,
-                type: 'checkbox',
-                onChange: (event: Event) => table.store.selectPage(recordIds, eventTarget<HTMLInputElement>(event).checked),
-              })]) : null,
-              ...columns.map(column => {
-                const active = snapshot.sort.find(item => item.column === column.manifest.path)
-                return h('th', {
-                  'aria-sort': active?.direction === 'asc' ? 'ascending' : active?.direction === 'desc' ? 'descending' : 'none',
-                  key: column.manifest.path,
-                  scope: 'col',
-                }, [column.manifest.sortable
-                  ? h(ShadcnButton, { type: 'button', onClick: () => sort(column) }, () => column.manifest.label ?? column.manifest.path)
-                  : column.manifest.label ?? column.manifest.path])
-              }),
-              rowActions.length > 0 ? h('th', { scope: 'col' }, 'Actions') : null,
-            ])]),
-            h('tbody', groups ?? tableRecords(table, columns, snapshot.records, undefined, undefined, selectable)),
-            summaryRows(columnCount, table.summaries ?? []),
+        snapshot.records.length > 0 ? h(VueTablePresentation, { presentation: tablePresentation }) : null,
+        h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination', 'data-slot': 'table-pagination' }, [
+          h('span', { 'aria-live': 'polite', class: 'hp-table-pagination-info' }, [
+            'Showing ', h('strong', String(paginationFrom)), ' to ', h('strong', String(paginationTo)), ' of ', h('strong', String(snapshot.total)), ' results',
           ]),
-        ]) : null,
-        h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination' }, [
-          h(ShadcnButton, {
-            'aria-label': 'Previous page',
-            disabled: snapshot.page <= 1 || snapshot.loading,
-            type: 'button',
-            onClick: () => {
-              table.store.setPage(snapshot.page - 1)
-              notifyQueryChange(table.onQueryChange)
-            },
-          }, () => [h(ChevronLeft, { 'aria-hidden': 'true' }), 'Previous']),
-          h('span', { 'aria-live': 'polite' }, `Page ${snapshot.page} of ${pageCount}`),
-          h(ShadcnButton, {
-            'aria-label': 'Next page',
-            disabled: snapshot.page >= pageCount || snapshot.loading,
-            type: 'button',
-            onClick: () => {
-              table.store.setPage(snapshot.page + 1)
-              notifyQueryChange(table.onQueryChange)
-            },
-          }, () => ['Next', h(ChevronRight, { 'aria-hidden': 'true' })]),
+          typeof table.store.setPerPage === 'function' ? h('label', { class: 'hp-table-pagination-per-page' }, [
+            h(ShadcnSelect, {
+              'aria-label': 'Results per page',
+              disabled: snapshot.loading,
+              value: String(snapshot.perPage),
+              onChange: (event: Event) => {
+                table.store.setPerPage?.(Number(eventTarget<HTMLSelectElement>(event).value))
+                notifyQueryChange(table.onQueryChange)
+              },
+            }, () => perPageOptions(snapshot.perPage).map(value => h('option', { key: value, value: String(value) }, String(value)))),
+            h('span', 'per page'),
+          ]) : null,
+          h('span', { class: 'hp-table-pagination-pages' }, [
+            h(ShadcnButton, {
+              'aria-label': 'Previous page',
+              disabled: snapshot.page <= 1 || snapshot.loading,
+              type: 'button',
+              onClick: () => {
+                table.store.setPage(snapshot.page - 1)
+                notifyQueryChange(table.onQueryChange)
+              },
+            }, () => [h(ChevronLeft, { 'aria-hidden': 'true' })]),
+            ...paginationItems.map((item, index) => item === 'ellipsis'
+              ? h('span', { 'aria-hidden': 'true', class: 'hp-table-pagination-ellipsis', key: `ellipsis-${index}` }, '…')
+              : h(ShadcnButton, {
+                  'aria-current': item === snapshot.page ? 'page' : undefined,
+                  'aria-label': `Page ${item}`,
+                  'data-active': item === snapshot.page ? 'true' : undefined,
+                  disabled: snapshot.loading,
+                  key: item,
+                  type: 'button',
+                  onClick: () => {
+                    table.store.setPage(item)
+                    notifyQueryChange(table.onQueryChange)
+                  },
+                }, () => [String(item)])),
+            h(ShadcnButton, {
+              'aria-label': 'Next page',
+              disabled: snapshot.page >= pageCount || snapshot.loading,
+              type: 'button',
+              onClick: () => {
+                table.store.setPage(snapshot.page + 1)
+                notifyQueryChange(table.onQueryChange)
+              },
+            }, () => [h(ChevronRight, { 'aria-hidden': 'true' })]),
+          ]),
         ]),
       ]
-      return h('section', { 'aria-labelledby': captionId, class: 'hp-table-view', 'data-panels-component': 'table' }, children)
+      return h('section', {
+        'aria-busy': snapshot.loading,
+        'aria-labelledby': captionId,
+        class: 'hp-table-view',
+        'data-panels-component': 'table',
+        'data-state': snapshot.error ? 'error' : snapshot.loading ? 'loading' : snapshot.records.length === 0 ? 'empty' : 'ready',
+      }, children)
     }
   },
 })

@@ -183,7 +183,7 @@ describe('P9-B panel runtime', () => {
     expect(panel.route).toBe('/control/admin')
     expect(panel.guardName).toBe('staff')
     expect(panel.compileDiscoveryDefinition()).toMatchObject({ client: { path: '/control/admin' }, default: true, discover: { pages: 'custom-pages' }, route: '/control/admin' })
-    expect(panel.compileDiscoveryDefinition().client).toEqual({ brandingName: 'Control', darkMode: 'system', path: '/control/admin', simplePageMaxContentWidth: 'lg', themeColors: {} })
+    expect(panel.compileDiscoveryDefinition().client).toEqual({ appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} }, brandingName: 'Control', darkMode: 'system', path: '/control/admin', simplePageMaxContentWidth: 'lg', themeColors: {} })
     expect(panel.compile().manifest.branding.name).toBe('Control')
   })
 

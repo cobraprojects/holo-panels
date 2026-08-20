@@ -292,7 +292,7 @@ if (requirePackedSmoke) {
       .map(packageName => `await import('${nodeImportSpecifier(packageName)}')`)
       .join('\n'))
     await writeFile(join(standaloneRoot, 'inference.ts'), `import { column as databaseColumn, defineGeneratedTable, defineModel } from '@holo-js/db'
-import { column, defineResource, field } from '@holo-js/panels'
+import { Resource } from '@holo-js/panels'
 
 const posts = defineGeneratedTable('posts', {
   id: databaseColumn.string().primaryKey(),
@@ -300,20 +300,70 @@ const posts = defineGeneratedTable('posts', {
   title: databaseColumn.string(),
 })
 
-const Post = defineModel(posts, { fillable: ['published', 'title'], guarded: ['id'], timestamps: false })
+export const Post = defineModel(posts, { fillable: ['published', 'title'], guarded: ['id'], timestamps: false })
 
-defineResource(Post)
-  .form([field.text('title').required(), field.boolean('published')])
-  .table([column.text('title').sortable(), column.boolean('published')])
+declare module '@holo-js/panels-resources' {
+  interface ResourceTypeRegistry {
+    readonly 'inference#PostResource': {
+      readonly model: typeof import('./inference').Post
+      readonly resource: typeof import('./inference').PostResource
+    }
+    readonly 'inference#InvalidFormComponentTypeResource': {
+      readonly model: typeof import('./inference').Post
+      readonly resource: typeof import('./inference').InvalidFormComponentTypeResource
+    }
+    readonly 'inference#InvalidFormComponentPathResource': {
+      readonly model: typeof import('./inference').Post
+      readonly resource: typeof import('./inference').InvalidFormComponentPathResource
+    }
+    readonly 'inference#InvalidColumnTypeResource': {
+      readonly model: typeof import('./inference').Post
+      readonly resource: typeof import('./inference').InvalidColumnTypeResource
+    }
+    readonly 'inference#InvalidColumnPathResource': {
+      readonly model: typeof import('./inference').Post
+      readonly resource: typeof import('./inference').InvalidColumnPathResource
+    }
+  }
+}
 
-// @ts-expect-error title is not boolean
-defineResource(Post).form([field.boolean('title')])
-// @ts-expect-error missing is not a model attribute
-defineResource(Post).form([field.text('missing')])
-// @ts-expect-error title is not boolean
-defineResource(Post).table([column.boolean('title')])
-// @ts-expect-error missing is not a model attribute
-defineResource(Post).table([column.text('missing')])
+export class PostResource extends Resource {
+  protected static override model = Post
+
+  static form = this.configureForm(schema => schema.components(field => [
+    field.textInput('title').required(),
+    field.toggle('published'),
+  ]))
+
+  static table = this.configureTable(table => table.columns(column => [
+    column.text('title').sortable(),
+    column.toggle('published'),
+  ]))
+}
+
+export class InvalidFormComponentTypeResource extends Resource {
+  protected static override model = Post
+  // @ts-expect-error title is not boolean
+  static form = this.configureForm(schema => schema.components(field => [field.toggle('title')]))
+}
+
+export class InvalidFormComponentPathResource extends Resource {
+  protected static override model = Post
+  // @ts-expect-error missing is not a model attribute
+  static form = this.configureForm(schema => schema.components(field => [field.textInput('missing')]))
+}
+
+export class InvalidColumnTypeResource extends Resource {
+  protected static override model = Post
+  // @ts-expect-error title is not boolean
+  static table = this.configureTable(table => table.columns(column => [column.toggle('title')]))
+}
+
+export class InvalidColumnPathResource extends Resource {
+  protected static override model = Post
+  // @ts-expect-error missing is not a model attribute
+  static table = this.configureTable(table => table.columns(column => [column.text('missing')]))
+}
 `)
     await writeFile(join(standaloneRoot, 'tsconfig.json'), JSON.stringify({
       compilerOptions: {

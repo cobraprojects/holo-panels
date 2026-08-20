@@ -11,6 +11,7 @@ export {
   PanelsLoadingIndicator,
   PanelsModal,
   PanelsPagination,
+  PanelsPortalProvider,
   PanelsSection,
   PanelsSlideOver,
   PanelsTab,

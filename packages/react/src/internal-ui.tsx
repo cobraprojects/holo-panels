@@ -6,20 +6,27 @@ import {
   type TableHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
-import { Archive, Check, Circle, Download, Eye, Pencil, Play, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react'
+import { Archive, Bell, Check, ChevronDown, ChevronUp, ChevronsUpDown, Circle, Copy, Download, Eye, LogOut, Pencil, Play, Plus, RotateCcw, Trash2, Upload, User, X } from 'lucide-react'
 
 const icons = Object.freeze({
   archive: Archive,
+  bell: Bell,
   check: Check,
+  'chevron-down': ChevronDown,
+  'chevron-up': ChevronUp,
   circle: Circle,
   close: X,
+  copy: Copy,
   delete: Trash2,
   download: Download,
   edit: Pencil,
+  'log-out': LogOut,
   play: Play,
   plus: Plus,
   restore: RotateCcw,
+  sort: ChevronsUpDown,
   upload: Upload,
+  user: User,
   view: Eye,
 })
 

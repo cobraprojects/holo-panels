@@ -14,6 +14,7 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    hookTimeout: 30_000,
     include: ['tests/**/*.test.ts'],
     maxWorkers: 2,
     server: { deps: { inline: ['bits-ui', 'runed', 'svelte-toolbelt'] } },

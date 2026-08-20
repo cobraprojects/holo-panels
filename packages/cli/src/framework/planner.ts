@@ -61,12 +61,20 @@ function normalizePanel(panel: DiscoveredPanelPath): DiscoveredPanelPath {
   const mfaRecoveryCodesPath = normalizeAuthPath(panel.mfaRecoveryCodesPath, 'multi-factor recovery codes')
   const passwordResetPath = normalizeAuthPath(panel.passwordResetPath, 'password reset')
   const profilePath = normalizeAuthPath(panel.profilePath, 'profile')
+  const appearance = panel.appearance
+    ? Object.freeze({
+        ...panel.appearance,
+        ...(panel.appearance.colors ? { colors: Object.freeze({ ...panel.appearance.colors }) } : {}),
+        ...(panel.appearance.tokens ? { tokens: Object.freeze({ ...panel.appearance.tokens }) } : {}),
+      })
+    : undefined
   const routes = (panel.routes ?? []).map((route) => {
     const routeSegments = route.source.split('/').filter(Boolean)
     if (routeSegments.some(segment => !PANEL_ROUTE_SEGMENT_PATTERN.test(segment))) throw new Error(`[Holo Panels] Invalid custom route for panel "${panel.id}": ${route.source}.`)
     return Object.freeze({ ...route, source: joinedRoutePath(routeSegments) })
   })
   return Object.freeze({
+    ...(appearance ? { appearance } : {}),
     ...(panel.brandingName ? { brandingName: panel.brandingName } : {}),
     ...(panel.darkMode ? { darkMode: panel.darkMode } : {}),
     ...(emailChangeVerificationPath ? { emailChangeVerificationPath } : {}),

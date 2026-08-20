@@ -1,4 +1,5 @@
 export {
+  type DiscoveredPanelAppearance,
   type DiscoveredPanelPath,
   type ExistingFrameworkArtifact,
   type FrameworkArtifactConflict,

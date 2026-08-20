@@ -68,10 +68,27 @@ export interface GeneratedPanelArtifact {
   readonly contents: string
 }
 
+export interface DiscoveredResourceTypeBinding {
+  readonly exportName: string
+  readonly modelName: string
+  readonly projectPath: string
+  readonly tableName: string
+}
+
+export interface DiscoveredRelationManagerTypeBinding {
+  readonly exportName: string
+  readonly ownerResourceExportName: string
+  readonly ownerResourceProjectPath: string
+  readonly projectPath: string
+  readonly relationship: string
+}
+
 export interface DiscoveryResult {
   readonly definitions: readonly DiscoveredDefinition[]
   readonly artifacts: readonly GeneratedPanelArtifact[]
   readonly changedArtifacts: readonly GeneratedPanelArtifact[]
   readonly invalidatedPaths: readonly string[]
+  readonly relationManagerTypeBindings: readonly DiscoveredRelationManagerTypeBinding[]
+  readonly resourceTypeBindings: readonly DiscoveredResourceTypeBinding[]
   readonly watchRoots: readonly string[]
 }

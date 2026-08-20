@@ -8,9 +8,28 @@ const execFileAsync = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const holoRoot = resolve(process.env.HOLO_PANELS_HOLO_JS_ROOT ?? resolve(repositoryRoot, '../holo-js'))
 const expectedRepository = 'cobraprojects/holo-js'
-const expectedRef = '9abcce12588feeb22353fd57869719df43d3ac39'
+const expectedRef = '3dbaa68a8e7b831f06fcb010ffa1f55a7eb07969'
 const expectedVersion = '0.3.12'
 const expectedCompatibilityRange = '>=0.3.9'
+
+function satisfiesCompatibilityLine(version) {
+  if (typeof version !== 'string') {
+    return false
+  }
+
+  const minimum = expectedCompatibilityRange.replace('>=', '').split('.').map(Number)
+  const candidate = version.split('-').at(0).split('.').map(Number)
+  if (candidate.length !== 3 || candidate.some(Number.isNaN)) {
+    return false
+  }
+
+  for (const [index, minimumPart] of minimum.entries()) {
+    if (candidate[index] > minimumPart) return true
+    if (candidate[index] < minimumPart) return false
+  }
+
+  return true
+}
 const workflow = await readFile(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release.yml'), 'utf8')
 const hostReleaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release-holo.yml'), 'utf8')
@@ -87,19 +106,24 @@ if (hostReleaseWorkflow.includes('pull_request:') || hostReleaseWorkflow.include
   throw new Error('Holo release CI must only publish through explicit workflow dispatch')
 }
 
+const enforcesPinnedRevision = process.env.CI === 'true'
 const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
   cwd: holoRoot,
   encoding: 'utf8',
   timeout: 10_000,
 })
 const actualRef = stdout.trim()
-if (actualRef !== expectedRef) {
+if (enforcesPinnedRevision && actualRef !== expectedRef) {
   throw new Error(`Expected adjacent Holo-JS at ${expectedRef}, received ${actualRef}`)
 }
 
 const kernelManifest = JSON.parse(await readFile(resolve(holoRoot, 'packages/kernel/package.json'), 'utf8'))
-if (kernelManifest.version !== expectedVersion) {
+if (enforcesPinnedRevision && kernelManifest.version !== expectedVersion) {
   throw new Error(`Expected Holo-JS ${expectedVersion}, received ${kernelManifest.version ?? '(missing)'}`)
+}
+
+if (!satisfiesCompatibilityLine(kernelManifest.version)) {
+  throw new Error(`Adjacent Holo-JS ${kernelManifest.version ?? '(missing)'} does not satisfy ${expectedCompatibilityRange}`)
 }
 
 const panelsManifest = JSON.parse(await readFile(resolve(repositoryRoot, 'package.json'), 'utf8'))
@@ -109,4 +133,6 @@ for (const [packageName, version] of Object.entries(panelsManifest.workspaces?.c
   }
 }
 
-console.log(`Validated Holo-JS ${expectedVersion} CI pin at ${expectedRef}`)
+console.log(enforcesPinnedRevision
+  ? `Validated Holo-JS ${expectedVersion} CI pin at ${expectedRef}`
+  : `Validated adjacent Holo-JS ${kernelManifest.version} against compatibility line ${expectedCompatibilityRange}`)

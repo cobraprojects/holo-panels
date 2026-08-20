@@ -12,20 +12,18 @@ import {
   type ReactNode,
 } from 'react'
 import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
-import { ChevronDown, ChevronLeft, ChevronRight, Columns3, ListFilter, X } from 'lucide-react'
-import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect, ShadcnTable } from '../internal-ui'
+import { ChevronLeft, ChevronRight, Columns3, ListFilter, Search, X } from 'lucide-react'
+import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect } from '../internal-ui'
 import { PanelsModal } from '../primitives'
 import { useTableStore } from '../store'
-import { displayValue, pages, recordValue, visibleColumns } from './helpers'
-import { ReactTableColumnPresentation } from './presentation'
+import { displayValue, pages, paginationRange, perPageOptions, recordValue, visibleColumns } from './helpers'
+import { ReactTableColumnPresentation, TablePresentation, type TablePresentationColumn, type TablePresentationGroup, type TablePresentationPlacement } from './presentation'
 import type {
   ReactTableAction,
   ReactTableColumn,
   ReactTableFilter,
   ReactCustomFilterProps,
-  ReactTableGroup,
   ReactTableRendererProps,
-  ReactTableSummary,
   ReactFilterCollectionSlotProps,
 } from './types'
 
@@ -430,37 +428,6 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
   return <span><ShadcnInput aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} onChange={event => setValue(event.currentTarget.value)} onKeyDown={keyDown} ref={input} value={value} />{error ? <span role="alert">{error}</span> : null}</span>
 }
 
-function SummaryRows({ columnCount, summaries }: { readonly columnCount: number, readonly summaries: readonly ReactTableSummary[] }): ReactNode {
-  if (summaries.length === 0) return null
-  return <tfoot>{summaries.map(summary => <tr className="hp-table-total-summary" key={summary.id}><th colSpan={Math.max(1, columnCount)} scope="row">Total · {summary.label}: {summary.value}</th></tr>)}</tfoot>
-}
-
-function Records<TRecord extends object, TRecordId extends TableRecordId>({ columns, group, onToggleGroup, props, records, selectable }: {
-  readonly columns: readonly ReactTableColumn<TRecord>[]
-  readonly group?: ReactTableGroup<TRecord>
-  readonly onToggleGroup?: () => void
-  readonly props: ReactTableRendererProps<TRecord, TRecordId>
-  readonly records: readonly TRecord[]
-  readonly selectable: boolean
-}): ReactNode {
-  const rowActions = props.actions?.filter(action => action.scope === 'row') ?? []
-  const columnCount = columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0)
-  return <Fragment>
-    {group ? <tr className="hp-table-group"><th colSpan={columnCount} scope="rowgroup">{group.collapsible
-      ? <ShadcnButton aria-expanded={!group.collapsed} onClick={onToggleGroup} type="button"><ChevronDown aria-hidden="true" /><span>{group.title}</span><span className="hp-table-group-count">{records.length}</span></ShadcnButton>
-      : group.title}{group.description ? <small>{group.description}</small> : null}</th></tr> : null}
-    {!group?.collapsed ? records.map(record => {
-      const recordId = props.getRecordId(record)
-      return <tr key={String(recordId)}>
-        {selectable ? <td data-label="Select"><ShadcnInput aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} onChange={event => props.store.selectRecord(recordId, event.currentTarget.checked)} type="checkbox" /></td> : null}
-        {columns.map(column => <td data-label={column.manifest.label ?? column.manifest.path} key={column.manifest.path} style={{ textAlign: column.manifest.alignment, whiteSpace: column.manifest.wrap ? undefined : 'nowrap', width: column.manifest.width ?? undefined }}><InlineCell column={column} props={props} record={record} /></td>)}
-        {rowActions.length > 0 ? <td className="hp-table-row-actions" data-label="Actions">{rowActions.map(action => <ActionButton action={action} key={action.id} props={props} record={record} />)}</td> : null}
-      </tr>
-    }) : null}
-    {group?.summaries?.map(summary => <tr className="hp-table-group-summary" key={`${group.key}-${summary.id}`}><th colSpan={columnCount} scope="row">{group.title} subtotal · {summary.label}: {summary.value}</th></tr>)}
-  </Fragment>
-}
-
 export function ReactTableRenderer<TRecord extends object, TRecordId extends TableRecordId>(
   props: ReactTableRendererProps<TRecord, TRecordId>,
 ): ReactNode {
@@ -470,12 +437,14 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
   const recordIds = state.records.map(props.getRecordId)
   const selectedOnPage = recordIds.length > 0 && recordIds.every(recordId => props.store.isSelected(recordId))
   const pageCount = pages(state.total, state.perPage)
+  const paginationItems = paginationRange(state.page, pageCount)
+  const paginationFrom = state.total === 0 ? 0 : (state.page - 1) * state.perPage + 1
+  const paginationTo = Math.min(state.page * state.perPage, state.total)
   const headerActions = props.actions?.filter(action => action.scope === 'header') ?? []
   const bulkActions = props.actions?.filter(action => action.scope === 'bulk') ?? []
   const selectable = bulkActions.length > 0 || (props.transfers?.some(transfer => transfer.kind === 'export') ?? false)
   const hasSelection = selectable && (state.selection.mode === 'all-matching' || state.selection.selectedRecordIds.length > 0)
   const rowActions = props.actions?.filter(action => action.scope === 'row') ?? []
-  const columnCount = columns.length + (selectable ? 1 : 0) + (rowActions.length > 0 ? 1 : 0)
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
     () => new Set(props.groups?.filter(group => group.collapsed).map(group => group.key)),
   )
@@ -485,13 +454,56 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     props.store.setSort([{ column: column.manifest.path, direction: active?.direction === 'asc' ? 'desc' : 'asc' }])
     notifyQueryChange(props.onQueryChange)
   }
-  return <section aria-labelledby={captionId} className="hp-table-view" data-panels-component="table">
+  const presentationColumns: readonly TablePresentationColumn<TRecord>[] = columns.map(column => {
+    const direction = state.sort.find(item => item.column === column.manifest.path)?.direction
+    const label = column.manifest.label ?? column.manifest.path
+    return {
+      alignment: column.manifest.alignment,
+      ariaSort: direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none',
+      header: column.manifest.sortable
+        ? <ShadcnButton className="hp-table-sort" data-sorted={direction ?? undefined} onClick={() => sort(column)} type="button">{label}<ShadcnIcon name={direction === 'asc' ? 'chevron-up' : direction === 'desc' ? 'chevron-down' : 'sort'} /></ShadcnButton>
+        : label,
+      key: column.manifest.path,
+      label,
+      render: record => <InlineCell column={column} props={props} record={record} />,
+      width: column.manifest.width,
+      wrap: column.manifest.wrap,
+    }
+  })
+  const leading: TablePresentationPlacement<TRecord> | undefined = selectable
+    ? {
+        header: <ShadcnInput aria-label="Select page" checked={selectedOnPage} onChange={event => props.store.selectPage(recordIds, event.currentTarget.checked)} type="checkbox" />,
+        label: 'Select',
+        render: record => {
+          const recordId = props.getRecordId(record)
+          return <ShadcnInput aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} onChange={event => props.store.selectRecord(recordId, event.currentTarget.checked)} type="checkbox" />
+        },
+      }
+    : undefined
+  const trailing: TablePresentationPlacement<TRecord> | undefined = rowActions.length > 0
+    ? {
+        header: 'Actions',
+        label: 'Actions',
+        render: record => rowActions.map(action => <ActionButton action={action} key={action.id} props={props} record={record} />),
+      }
+    : undefined
+  const presentationGroups: readonly TablePresentationGroup<TRecord>[] | undefined = props.groups?.map(group => ({
+    ...group,
+    collapsed: collapsedGroups.has(group.key),
+    onToggle: () => setCollapsedGroups(current => {
+      const next = new Set(current)
+      if (next.has(group.key)) next.delete(group.key)
+      else next.add(group.key)
+      return next
+    }),
+  }))
+  return <section aria-busy={state.loading} aria-labelledby={captionId} className="hp-table-view" data-panels-component="table" data-state={state.error ? 'error' : state.loading ? 'loading' : state.records.length === 0 ? 'empty' : 'ready'}>
     <h2 id={captionId}>{props.caption}</h2>
     <div className="hp-table-toolbar">
-      <label>Search<ShadcnInput onChange={(event: ChangeEvent<HTMLInputElement>) => {
+      <label><Search aria-hidden="true" /><span className="hp-visually-hidden">Search</span><ShadcnInput onChange={(event: ChangeEvent<HTMLInputElement>) => {
         props.store.setSearch(event.currentTarget.value)
         notifyQueryChange(props.onQueryChange)
-      }} type="search" value={state.search} /></label>
+      }} placeholder="Search records…" type="search" value={state.search} /></label>
       <ColumnManager props={props} />
       <TableFilters filters={props.filters ?? []} props={props} />
       {props.transfers?.map(manifest => <TransferAction key={manifest.id} manifest={manifest} props={props} />)}
@@ -505,48 +517,54 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     {state.selection.mode === 'explicit' && selectedOnPage && state.total > recordIds.length
       ? <ShadcnButton onClick={() => props.store.selectAllMatching()} type="button">Select all {state.total} matching records</ShadcnButton>
       : null}
-    {state.error ? <div role="alert"><strong>Unable to load table</strong><span>{state.error.message}</span></div> : null}
-    {state.loading ? <div aria-live="polite" role="status">Loading records…</div> : null}
-    {!state.loading && !state.error && state.records.length === 0 ? <div className="hp-table-empty">{props.emptyMessage ?? 'No records found.'}</div> : null}
-    {state.records.length > 0 ? <div className="hp-table-responsive" data-slot="table-container" role="region" aria-label={`${props.caption} data`} tabIndex={0}>
-      <ShadcnTable>
-        <caption className="hp-visually-hidden">{props.caption}</caption>
-        <thead><tr>
-          {selectable ? <th scope="col"><ShadcnInput aria-label="Select page" checked={selectedOnPage} onChange={event => props.store.selectPage(recordIds, event.currentTarget.checked)} type="checkbox" /></th> : null}
-          {columns.map(column => <th aria-sort={state.sort.find(item => item.column === column.manifest.path)?.direction === 'asc' ? 'ascending' : state.sort.find(item => item.column === column.manifest.path)?.direction === 'desc' ? 'descending' : 'none'} key={column.manifest.path} scope="col">
-            {column.manifest.sortable ? <ShadcnButton onClick={() => sort(column)} type="button">{column.manifest.label ?? column.manifest.path}</ShadcnButton> : column.manifest.label ?? column.manifest.path}
-          </th>)}
-          {rowActions.length > 0 ? <th scope="col">Actions</th> : null}
-        </tr></thead>
-        <tbody>{props.groups
-          ? props.groups.map(group => <Records
-              columns={columns}
-              group={{ ...group, collapsed: collapsedGroups.has(group.key) }}
-              key={group.key}
-              onToggleGroup={() => setCollapsedGroups(current => {
-                const next = new Set(current)
-                if (next.has(group.key)) next.delete(group.key)
-                else next.add(group.key)
-                return next
-              })}
-              props={props}
-              records={group.records}
-              selectable={selectable}
-            />)
-          : <Records columns={columns} props={props} records={state.records} selectable={selectable} />}</tbody>
-        <SummaryRows columnCount={columnCount} summaries={props.summaries ?? []} />
-      </ShadcnTable>
-    </div> : null}
-    <nav aria-label="Table pagination" className="hp-table-pagination">
-      <ShadcnButton aria-label="Previous page" disabled={state.page <= 1 || state.loading} onClick={() => {
-        props.store.setPage(state.page - 1)
-        notifyQueryChange(props.onQueryChange)
-      }} type="button"><ChevronLeft aria-hidden="true" />Previous</ShadcnButton>
-      <span aria-live="polite">Page <strong>{state.page}</strong> of {pageCount}</span>
-      <ShadcnButton aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
-        props.store.setPage(state.page + 1)
-        notifyQueryChange(props.onQueryChange)
-      }} type="button">Next<ChevronRight aria-hidden="true" /></ShadcnButton>
+    {state.error ? <div className="hp-table-error" data-slot="table-error" role="alert"><strong>Unable to load table</strong><span>{state.error.message}</span></div> : null}
+    {state.loading ? <div aria-live="polite" className="hp-table-loading" data-slot="table-loading" role="status">Loading records…</div> : null}
+    {!state.loading && !state.error && state.records.length === 0 ? <div className="hp-table-empty" data-slot="table-empty">{props.emptyMessage ?? 'No records found.'}</div> : null}
+    {state.records.length > 0 ? <TablePresentation
+      caption={props.caption}
+      columns={presentationColumns}
+      getRowKey={record => props.getRecordId(record)}
+      groups={presentationGroups}
+      leading={leading}
+      records={state.records}
+      summaries={props.summaries}
+      trailing={trailing}
+    /> : null}
+    <nav aria-label="Table pagination" className="hp-table-pagination" data-slot="table-pagination">
+      <span aria-live="polite" className="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{state.total}</strong> results</span>
+      <label className="hp-table-pagination-per-page">
+        <ShadcnSelect aria-label="Results per page" disabled={state.loading} onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+          props.store.setPerPage(Number(event.currentTarget.value))
+          notifyQueryChange(props.onQueryChange)
+        }} value={state.perPage}>
+          {perPageOptions(state.perPage).map(value => <option key={value} value={value}>{value}</option>)}
+        </ShadcnSelect>
+        <span>per page</span>
+      </label>
+      <span className="hp-table-pagination-pages">
+        <ShadcnButton aria-label="Previous page" disabled={state.page <= 1 || state.loading} onClick={() => {
+          props.store.setPage(state.page - 1)
+          notifyQueryChange(props.onQueryChange)
+        }} type="button"><ChevronLeft aria-hidden="true" /></ShadcnButton>
+        {paginationItems.map((item, index) => item === 'ellipsis'
+          ? <span aria-hidden="true" className="hp-table-pagination-ellipsis" key={`ellipsis-${index}`}>…</span>
+          : <ShadcnButton
+              aria-current={item === state.page ? 'page' : undefined}
+              aria-label={`Page ${item}`}
+              data-active={item === state.page ? 'true' : undefined}
+              disabled={state.loading}
+              key={item}
+              onClick={() => {
+                props.store.setPage(item)
+                notifyQueryChange(props.onQueryChange)
+              }}
+              type="button"
+            >{item}</ShadcnButton>)}
+        <ShadcnButton aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
+          props.store.setPage(state.page + 1)
+          notifyQueryChange(props.onQueryChange)
+        }} type="button"><ChevronRight aria-hidden="true" /></ShadcnButton>
+      </span>
     </nav>
   </section>
 }

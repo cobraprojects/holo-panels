@@ -82,7 +82,7 @@ describe('P12 Vue widget renderer', () => {
     const stats = new WidgetStoreFixture('ready', {
       stats: [
         { action: null, chart: [12, 18, 15], color: '#336699', description: 'This month', icon: 'currency', id: 'revenue', label: 'Revenue', trend: 'up', url: '/reports', value: '$18k' },
-        { action: 'orders.open', chart: [], color: null, description: null, icon: null, id: 'orders', label: 'Orders', trend: 'neutral', url: null, value: 42 },
+        { action: 'orders.open', chart: [], color: 'success', description: null, icon: null, id: 'orders', label: 'Orders', trend: 'neutral', url: null, value: 42 },
       ],
     })
     const chart = new WidgetStoreFixture('ready', {
@@ -102,6 +102,12 @@ describe('P12 Vue widget renderer', () => {
     expect(container.querySelector('[data-widget-id="sales"] a')?.getAttribute('href')).toBe('/reports')
     expect(container.querySelector('[data-icon="currency"]')).not.toBeNull()
     expect(container.querySelector('.hp-widget-stat__trend')?.textContent).toBe('Trend: up')
+    const renderedStats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
+    expect(renderedStats[0]?.dataset.color).toBe('#336699')
+    expect(renderedStats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('#336699')
+    expect(renderedStats[1]?.dataset.color).toBe('success')
+    expect(renderedStats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('')
+    expect(container.querySelector('.hp-widget-sparkline polyline')?.getAttribute('stroke')).toBe('currentColor')
     expect(container.querySelector('.hp-widget-sparkline')?.getAttribute('aria-label')).toBe('Revenue trend')
     Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('Orders'))?.click()
     expect(action).toHaveBeenCalledWith('orders.open', expect.objectContaining({ id: 'orders' }))

@@ -4,7 +4,7 @@ import Media from '../../models/Media'
 import Post from '../../models/Post'
 
 export default defineStatsWidget('content-overview')
-  .heading('Content overview')
+  .heading('Publishing metrics')
   .description('Tenant-scoped publishing activity')
   .columnSpan('full')
   .poll(30_000)

@@ -11,6 +11,7 @@ export {
   printFrameworkArtifactConflicts,
 } from './framework'
 export type {
+  DiscoveredPanelAppearance,
   DiscoveredPanelPath,
   ExistingFrameworkArtifact,
   FrameworkArtifactConflict,
@@ -35,6 +36,8 @@ export type {
   DiscoveryModuleLoader,
   DiscoveryResult,
   GeneratedPanelArtifact,
+  DiscoveredRelationManagerTypeBinding,
+  DiscoveredResourceTypeBinding,
 } from './discovery'
 export {
   PANEL_ARTIFACT_NAMES,

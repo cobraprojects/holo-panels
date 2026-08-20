@@ -30,3 +30,22 @@ export function visibleColumns<TRecord extends object, TRecordId extends TableRe
 export function pages(total: number, perPage: number): number {
   return Math.max(1, Math.ceil(total / perPage))
 }
+
+const standardPerPageOptions = [5, 10, 25, 50, 100] as const
+
+export function perPageOptions(current: number): readonly number[] {
+  return standardPerPageOptions.some(value => value === current)
+    ? standardPerPageOptions
+    : [...standardPerPageOptions, current].sort((left, right) => left - right)
+}
+
+export type PaginationRangeItem = number | 'ellipsis'
+
+export function paginationRange(currentPage: number, totalPages: number): readonly PaginationRangeItem[] {
+  const total = Math.max(1, Math.floor(totalPages))
+  const current = Math.min(total, Math.max(1, Math.floor(currentPage)))
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, 'ellipsis', total]
+  if (current >= total - 3) return [1, 'ellipsis', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total]
+}

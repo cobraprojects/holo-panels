@@ -1,0 +1,36 @@
+{
+  "name": "@holo-js/panels-resources",
+  "version": "0.1.0-next.1",
+  "description": "Resources, resource pages, and relation managers for Holo Panels",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --passWithNoTests --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-actions": "workspace:*",
+    "@holo-js/panels-core": "workspace:*",
+    "@holo-js/panels-forms": "workspace:*",
+    "@holo-js/panels-infolists": "workspace:*",
+    "@holo-js/panels-notifications": "workspace:*",
+    "@holo-js/panels-schemas": "workspace:*",
+    "@holo-js/panels-tables": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

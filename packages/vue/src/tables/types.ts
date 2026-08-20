@@ -145,6 +145,7 @@ export interface VueTableStore<TRecord extends object, TRecordId extends TableRe
   selectionPayload(): TableSelectionPayload<TRecordId>
   setFilter(filterId: string, value: JsonValue): void
   setPage(page: number): void
+  setPerPage?(perPage: number): void
   setSearch(search: string): void
   setSort(sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[]): void
   setVisibleColumns(columns: readonly string[]): void

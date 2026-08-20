@@ -159,6 +159,7 @@ function adaptManifest(source, example) {
     ...useCatalogVersions(source.dependencies),
     ...integrationDependencies,
     '@holo-js/panels': 'workspace:*',
+    '@holo-js/panels-resources': 'workspace:*',
     [example.panelsAdapter]: 'workspace:*',
   }).sort(([left], [right]) => left.localeCompare(right)))
   const devDependencies = Object.fromEntries(Object.entries({

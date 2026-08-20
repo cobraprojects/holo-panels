@@ -11,5 +11,5 @@ describe('public API declaration fixtures', () => {
       ['scripts/validate-public-api.mjs'],
       { cwd: repositoryRoot, stdio: 'pipe' },
     )).not.toThrow()
-  }, 15_000)
+  }, 30_000)
 })

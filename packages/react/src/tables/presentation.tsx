@@ -1,8 +1,121 @@
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type AriaAttributes, type CSSProperties, type Key, type ReactNode } from 'react'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
-import { ShadcnButton, ShadcnInput } from '../internal-ui'
+import { ChevronDown } from 'lucide-react'
+import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnTable } from '../internal-ui'
 import type { ComponentRegistry } from '../registry'
 import type { ReactCustomColumnProps, ReactTableColumn, ReactTableColumnPath, ReactTableColumnValue } from './types'
+
+export interface TablePresentationColumn<TRecord extends object> {
+  readonly alignment?: CSSProperties['textAlign']
+  readonly ariaSort?: AriaAttributes['aria-sort']
+  readonly header: ReactNode
+  readonly key: string
+  readonly label: string
+  readonly render: (record: Readonly<TRecord>) => ReactNode
+  readonly width?: number | string | null
+  readonly wrap?: boolean
+}
+
+export interface TablePresentationPlacement<TRecord extends object> {
+  readonly cellClassName?: string
+  readonly header: ReactNode
+  readonly label: string
+  readonly render: (record: Readonly<TRecord>) => ReactNode
+}
+
+export interface TablePresentationSummary {
+  readonly id: string
+  readonly label: string
+  readonly value: ReactNode
+}
+
+export interface TablePresentationGroup<TRecord extends object> {
+  readonly collapsed?: boolean
+  readonly collapsible?: boolean
+  readonly description?: ReactNode
+  readonly key: string
+  readonly onToggle?: () => void
+  readonly records: readonly TRecord[]
+  readonly summaries?: readonly TablePresentationSummary[]
+  readonly title: string
+}
+
+export interface TablePresentationProps<TRecord extends object> {
+  readonly caption: string
+  readonly columns: readonly TablePresentationColumn<TRecord>[]
+  readonly containerClassName?: string
+  readonly getRowKey: (record: Readonly<TRecord>) => Key
+  readonly groups?: readonly TablePresentationGroup<TRecord>[]
+  readonly leading?: TablePresentationPlacement<TRecord>
+  readonly records?: readonly TRecord[]
+  readonly regionLabel?: string
+  readonly summaries?: readonly TablePresentationSummary[]
+  readonly trailing?: TablePresentationPlacement<TRecord>
+}
+
+function classNames(...values: readonly (string | undefined)[]): string {
+  return values.filter(Boolean).join(' ')
+}
+
+/** Pure semantic table markup shared by resource and relation renderers. */
+export function TablePresentation<TRecord extends object>({
+  caption,
+  columns,
+  containerClassName,
+  getRowKey,
+  groups,
+  leading,
+  records = [],
+  regionLabel = `${caption} data`,
+  summaries = [],
+  trailing,
+}: TablePresentationProps<TRecord>): ReactNode {
+  const columnCount = columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0)
+  const row = (record: TRecord): ReactNode => <tr key={getRowKey(record)}>
+    {leading ? <td className={leading.cellClassName} data-label={leading.label}>{leading.render(record)}</td> : null}
+    {columns.map(column => <td
+      data-label={column.label}
+      key={column.key}
+      style={{
+        textAlign: column.alignment,
+        whiteSpace: column.wrap === false ? 'nowrap' : undefined,
+        width: column.width ?? undefined,
+      }}
+    >{column.render(record)}</td>)}
+    {trailing ? <td className={classNames('hp-table-row-actions', trailing.cellClassName)} data-label={trailing.label}>{trailing.render(record)}</td> : null}
+  </tr>
+  const body = groups && groups.length > 0
+    ? groups.map(group => <Fragment key={group.key}>
+        <tr className="hp-table-group"><th colSpan={columnCount} scope="rowgroup">
+          {group.collapsible
+            ? <ShadcnButton aria-expanded={!group.collapsed} onClick={group.onToggle} type="button"><ChevronDown aria-hidden="true" /><span>{group.title}</span><span className="hp-table-group-count">{group.records.length}</span></ShadcnButton>
+            : group.title}
+          {group.description ? <small>{group.description}</small> : null}
+        </th></tr>
+        {!group.collapsed ? group.records.map(row) : null}
+        {group.summaries?.map(summary => <tr className="hp-table-group-summary" key={`${group.key}-${summary.id}`}><th colSpan={columnCount} scope="row">{group.title} subtotal · {summary.label}: {summary.value}</th></tr>)}
+      </Fragment>)
+    : records.map(row)
+  return <div
+    aria-label={regionLabel}
+    className={classNames('hp-table-responsive', containerClassName)}
+    data-panels-component="data-table"
+    data-slot="table-container"
+    role="region"
+    tabIndex={0}
+  >
+    <ShadcnTable>
+      <caption className="hp-visually-hidden">{caption}</caption>
+      <thead><tr>
+        {leading ? <th scope="col">{leading.header}</th> : null}
+        {columns.map(column => <th aria-sort={column.ariaSort} key={column.key} scope="col" style={{ textAlign: column.alignment }}>{column.header}</th>)}
+        {trailing ? <th scope="col">{trailing.header}</th> : null}
+      </tr></thead>
+      <tbody>{body}</tbody>
+      {summaries.length > 0 ? <tfoot>{summaries.map(summary => <tr className="hp-table-total-summary" key={summary.id}><th colSpan={Math.max(1, columnCount)} scope="row">Total · {summary.label}: {summary.value}</th></tr>)}</tfoot> : null}
+    </ShadcnTable>
+  </div>
+}
 
 type Formatter = Readonly<Record<string, unknown>> & { readonly kind: string }
 
@@ -197,7 +310,7 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
       setCopyStatus('Copy failed')
     }
   }
-  return <span title={typeof tooltip === 'string' ? tooltip : undefined}>{actionable}{column.manifest.copyable && !column.manifest.inlineEditor
-    ? <ShadcnButton aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} onClick={() => void copy()} type="button">Copy</ShadcnButton>
+  return <span className="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{actionable}{column.manifest.copyable && !column.manifest.inlineEditor
+    ? <ShadcnButton aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} className="hp-table-copy" onClick={() => void copy()} type="button"><ShadcnIcon name="copy" /></ShadcnButton>
     : null}<span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>{actionError ? <span role="alert">{actionError}</span> : null}</span>
 }

@@ -1,6 +1,16 @@
 export type FrameworkId = 'next' | 'nuxt' | 'sveltekit'
 
+export type DiscoveredPanelAppearance = {
+  readonly colors?: Readonly<Record<string, string>>
+  readonly density?: 'comfortable' | 'compact'
+  readonly fontFamily?: string | null
+  readonly monoFontFamily?: string | null
+  readonly serifFontFamily?: string | null
+  readonly tokens?: Readonly<Record<string, string>>
+}
+
 export type DiscoveredPanelPath = {
+  readonly appearance?: DiscoveredPanelAppearance
   readonly brandingName?: string
   readonly darkMode?: 'dark' | 'light' | 'system'
   readonly emailChangeVerificationPath?: string

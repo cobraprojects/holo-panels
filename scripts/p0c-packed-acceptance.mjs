@@ -403,6 +403,14 @@ async function installRegistryPanels(projectRoot) {
   await run(npmExecutable, ['install', '--no-audit', '--no-fund'], projectRoot)
 }
 
+function replaceFixtureAnchor(source, anchor, replacement) {
+  if (!source.includes(anchor)) {
+    throw new Error(`Scaffolded fixture source no longer contains the expected anchor: ${JSON.stringify(anchor)}`)
+  }
+
+  return source.replace(anchor, replacement)
+}
+
 async function runHolo(projectRoot, packageManagerEnvironment, ...args) {
   const packedCliPath = join(projectRoot, 'node_modules/@holo-js/cli/dist/bin/holo.mjs')
   return await run(bunExecutable, [packedCliPath, ...args], projectRoot, packageManagerEnvironment)
@@ -433,12 +441,16 @@ async function validateGeneratedPanelArtifacts(projectRoot, packageManagerEnviro
   await runHolo(projectRoot, packageManagerEnvironment, 'make:panel', 'admin', '--path', '/admin', '--default')
   const panelPath = join(projectRoot, 'server/admin/AdminPanel.ts')
   const panelSource = await readFile(panelPath, 'utf8')
-  await writeFile(panelPath, panelSource
-    .replace(
-      "import { definePanel } from '@holo-js/panels'\n",
-      "import { definePanel } from '@holo-js/panels'\nimport { moneyPlugin } from '@holo-js/panels-plugin-money'\n",
-    )
-    .replace('.discoverClusters()\n', '.discoverClusters()\n  .plugin(moneyPlugin)\n'))
+  const panelWithMoneyImport = replaceFixtureAnchor(
+    panelSource,
+    "import { definePanel } from '@holo-js/panels'\n",
+    "import { definePanel } from '@holo-js/panels'\nimport { moneyPlugin } from '@holo-js/panels-plugin-money'\n",
+  )
+  await writeFile(panelPath, replaceFixtureAnchor(
+    panelWithMoneyImport,
+    '  .login()\n',
+    '  .login()\n  .plugin(moneyPlugin)\n',
+  ))
   await runHolo(projectRoot, packageManagerEnvironment, 'make:resource', 'Post', '--panel', 'admin')
   await runHolo(projectRoot, packageManagerEnvironment, 'prepare')
   await writeFile(join(projectRoot, 'tsconfig.panels.json'), `${JSON.stringify({

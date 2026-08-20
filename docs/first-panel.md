@@ -19,10 +19,6 @@ export default definePanel('admin')
   .default()
   .path('/admin')
   .guard('web')
-  .discoverResources()
-  .discoverPages()
-  .discoverWidgets()
-  .discoverClusters()
 ```
 
 Use the name of a guard that is already configured by Holo Auth. Panel page and operation requests are authenticated and authorized on the server; hiding navigation or controls is not authorization.
@@ -147,7 +143,11 @@ holo make:resource Post --panel admin --generate
 
 This creates `server/admin/resources/posts/PostResource.ts` and relation-manager definitions found in model metadata. Add `--split` to place form and table descriptors in separate schema/table files.
 
-Without `--generate`, the resource generator creates safe placeholder `name` form and table fields for you to edit. Existing targets are never overwritten unless `--force` names each exact generated project-relative file.
+The generated resource extends `Resource` and declares `protected static override model = Post`. Generated relation managers extend `RelationManager` and declare only `protected static override relationship = 'comments'`. Form fields, table columns, relation paths, and callback records are inferred from the migration-generated Holo model registry. Do not copy columns into the model or add generic arguments to resource components.
+
+`holo prepare` and `holo build` regenerate `.holo-js/generated/panels/resource-type-bindings.d.ts`. `holo dev` watches resource and relation-manager files and updates the same binding when files are created, changed, renamed, or deleted.
+
+Without `--generate`, the resource generator creates empty, type-safe form and table definitions for you to fill through autocomplete. Existing targets are never overwritten unless `--force` names each exact generated project-relative file.
 
 A generated resource definition does not create application authorization, tenant scopes, page loaders, persistence operation routing, or the adapter runtime handlers. Add those server concerns explicitly. The framework examples contain complete Post resource journeys:
 

@@ -262,6 +262,50 @@ declare module '@holo-js/panels-sveltekit' {
     expect(login?.contents).toContain('screen-sm')
   })
 
+  it('imports the Vue stylesheet in every generated Nuxt panel and authentication page', () => {
+    const plan = planFrameworkArtifacts({
+      framework: 'nuxt',
+      panels: [{ id: 'admin', loginPath: '/admin/login', mfaChallengePath: '/admin/mfa', path: '/admin', profilePath: '/admin/profile' }],
+    })
+    const pages = plan.writes.filter(write => write.path.endsWith('.vue'))
+
+    expect(pages).toHaveLength(4)
+    expect(pages.every(page => page.contents.includes("import '@holo-js/panels-vue/style.css'"))).toBe(true)
+  })
+
+  it.each(['next', 'nuxt', 'sveltekit'] as const)('emits complete appearance props for generated %s authentication routes', (framework) => {
+    const plan = planFrameworkArtifacts({
+      framework,
+      panels: [{
+        appearance: {
+          colors: { primary: '#123456' },
+          density: 'compact',
+          fontFamily: 'Panel Sans',
+          monoFontFamily: 'Panel Mono',
+          serifFontFamily: 'Panel Serif',
+          tokens: { 'radius-lg': '1.25rem' },
+        },
+        id: 'admin',
+        loginPath: '/admin/login',
+        path: '/admin',
+        profilePath: '/admin/profile',
+      }],
+    })
+    const authPages = plan.writes.filter(write => write.kind === 'auth-page')
+
+    expect(authPages).toHaveLength(2)
+    for (const page of authPages) {
+      expect(page.contents).toContain('appearance')
+      expect(page.contents).toContain('#123456')
+      expect(page.contents).toContain('compact')
+      expect(page.contents).toContain('Panel Sans')
+      expect(page.contents).toContain('Panel Mono')
+      expect(page.contents).toContain('Panel Serif')
+      expect(page.contents).toContain('radius-lg')
+      if (framework === 'nuxt') expect(page.contents).toContain(' as const')
+    }
+  })
+
   it.each([
     ['next', { pages: 'src/app', server: 'src/app' }, ['src/app/cp/join/page.tsx', 'src/app/cp/password/request/page.tsx', 'src/app/cp/password/reset/page.tsx', 'src/app/cp/verify/prompt/page.tsx', 'src/app/cp/verify/confirm/page.tsx', 'src/app/cp/mfa/page.tsx', 'src/app/cp/profile/page.tsx', 'src/app/cp/profile/mfa/page.tsx', 'src/app/cp/profile/mfa/recovery/page.tsx']],
     ['nuxt', { pages: 'app/pages', server: 'server' }, ['app/pages/cp/join.vue', 'app/pages/cp/password/request.vue', 'app/pages/cp/password/reset.vue', 'app/pages/cp/verify/prompt.vue', 'app/pages/cp/verify/confirm.vue', 'app/pages/cp/mfa.vue', 'app/pages/cp/profile/index.vue', 'app/pages/cp/profile/mfa/index.vue', 'app/pages/cp/profile/mfa/recovery.vue']],

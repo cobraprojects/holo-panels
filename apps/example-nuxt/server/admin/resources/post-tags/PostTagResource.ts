@@ -1,15 +1,18 @@
-import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
+import { Resource } from '@holo-js/panels'
 import PostTag from '../../../models/PostTag'
 
-const form = defineSchema(PostTag).fields(field => [field.text('postId').required(), field.text('tagId').required()])
-const table = defineTable(PostTag).columns(column => [column.text('postId'), column.text('tagId')])
+export default class PostTagResource extends Resource {
+  protected static override model = PostTag
+  static override navigationGroup = 'Content'
+  static override navigationIcon = 'link'
+  static override navigationLabel = 'Post tags'
+  static override navigationSort = 35
+  static override recordTitleAttribute = this.attribute('id')
+  static override routeKeyName = this.attribute('id')
+  static override slug = 'post-tags'
 
-export default defineResource(PostTag)
-  .tenantScope((query, context) => query.where('tenantId', context.tenant))
-  .createBindings(context => ({ id: crypto.randomUUID(), tenantId: context.tenant }))
-  .recordTitle('postId')
-  .routeKey('id')
-  .navigation({ group: 'Content', icon: 'link', label: 'Post tags', sort: 35 })
-  .discoverPages()
-  .form(form)
-  .table(table)
+  static form = this.configureForm(schema => schema.components(field => [field.textInput('postId').required(), field.textInput('tagId').required()]))
+  static table = this.configureTable(table => table.columns(column => [column.text('postId'), column.text('tagId')]))
+  static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))
+  static scopeQueryToTenant = this.configureQuery((query, context) => query.where('tenantId', context.tenant))
+}

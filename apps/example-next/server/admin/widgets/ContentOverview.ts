@@ -3,7 +3,7 @@ import Comment from '../../models/Comment'
 import Post from '../../models/Post'
 
 export default defineStatsWidget('content-overview')
-  .heading('Content overview')
+  .heading('Publishing metrics')
   .description('Tenant-scoped publishing totals')
   .columnSpan('full')
   .poll(30_000)

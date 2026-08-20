@@ -6,7 +6,7 @@ import {
 } from '../../fixtures/example-domain'
 
 export default defineStatsWidget('content-overview')
-  .heading('Content overview')
+  .heading('Publishing metrics')
   .description('Tenant-scoped publishing and moderation totals')
   .columnSpan('full')
   .poll(30_000)

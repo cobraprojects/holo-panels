@@ -30,6 +30,7 @@ export default defineConfig({
       {
         test: {
           environment: 'node',
+          fileParallelism: false,
           include: [
             'tests/contracts.test.ts',
             'tests/p9-example-phase-gate.test.ts',
@@ -38,6 +39,7 @@ export default defineConfig({
             'tests/p15-transfer-phase-gate.test.ts',
           ],
           name: 'server',
+          sequence: { groupOrder: 1 },
         },
       },
       {

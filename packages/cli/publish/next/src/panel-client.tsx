@@ -12,6 +12,7 @@ import {
   PanelShellStore,
   PanelsAvatar,
   PanelsDropdown,
+  PanelsPortalProvider,
   panelConfigurationVariables,
   PanelsTransport,
   PROTOCOL_VERSION,
@@ -33,7 +34,7 @@ import {
   type ReactNotificationInboxTriggerProps,
   type ReactWidgetManifest,
 } from '@holo-js/panels-react'
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { NextPanelClientProps } from './contracts'
 import { ShadcnButton, ShadcnIcon, ShadcnInput } from './internal-ui'
 
@@ -122,7 +123,7 @@ function PanelGlobalSearch({ configuration, panelId }: {
     globalThis.addEventListener('keydown', shortcut)
     return () => globalThis.removeEventListener('keydown', shortcut)
   }, [store])
-  return <div className="hp-global-search" data-slot="command" role="search">
+  return <div className="hp-global-search hp-panel-topbar-center" data-slot="command" role="search">
     <label><span className="hp-sr-only">Global search</span><ShadcnIcon className="hp-global-search-icon" name="search" /><ShadcnInput aria-controls="hp-global-search-results" aria-expanded={state.open} data-panel-global-search="" data-slot="command-input" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') store.move(event.key === 'ArrowDown' ? 1 : -1)
       if (event.key === 'Enter') {
@@ -218,6 +219,14 @@ function actorLabel(actor: JsonObject): string {
   return 'Account'
 }
 
+function actorAvatarUrl(actor: JsonObject): string | null {
+  for (const key of ['avatarUrl', 'avatar_url', 'avatar', 'image']) {
+    const value = actor[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
 type PanelNavigationItem = NextPanelClientProps['payload']['bootstrap']['manifest']['navigation'][number]
 type PanelColorMode = 'light' | 'dark' | 'system'
 
@@ -243,14 +252,15 @@ function orderedNavigation(items: readonly PanelNavigationItem[]): readonly Read
   return ordered
 }
 
-function NavigationLink({ activeId, depth, icons, item, onNavigate }: {
+function NavigationLink({ activeId, depth, icons, item, mode, onNavigate }: {
   readonly activeId: string | null
   readonly depth: number
   readonly icons?: JsonObject
   readonly item: PanelNavigationItem
+  readonly mode: 'sidebar' | 'topbar'
   readonly onNavigate: () => void
 }): ReactNode {
-  return <a aria-current={item.id === activeId ? 'page' : undefined} data-parent={item.parent ?? undefined} data-slot="sidebar-menu-button" href={item.path} onClick={onNavigate} style={{ '--hp-navigation-depth': depth } as CSSProperties}><PanelGlyph name={configuredIcon(icons, item.icon)} /><span>{item.label}</span>{item.badge ? <span className="hp-panel-badge" data-slot="sidebar-menu-badge">{item.badge}</span> : null}</a>
+  return <a aria-current={item.id === activeId ? 'page' : undefined} data-parent={item.parent ?? undefined} data-slot="sidebar-menu-button" href={item.path} onClick={onNavigate} style={{ '--hp-navigation-depth': depth } as CSSProperties} title={mode === 'sidebar' ? item.label : undefined}><PanelGlyph name={configuredIcon(icons, item.icon)} /><span>{item.label}</span>{item.badge ? <span className="hp-panel-badge" data-slot="sidebar-menu-badge">{item.badge}</span> : null}</a>
 }
 
 function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mode, onNavigate }: {
@@ -272,12 +282,12 @@ function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mo
     })
   }
   const ordered = orderedNavigation(items)
-  if (mode === 'topbar') return ordered.map(({ depth, item }) => <NavigationLink activeId={activeId} depth={depth} icons={icons} item={item} key={item.id} onNavigate={onNavigate} />)
+  if (mode === 'topbar') return ordered.map(({ depth, item }) => <NavigationLink activeId={activeId} depth={depth} icons={icons} item={item} key={item.id} mode={mode} onNavigate={onNavigate} />)
   const rendered: ReactNode[] = []
   for (let index = 0; index < ordered.length;) {
     const current = ordered[index]!
     if (!current.item.group) {
-      rendered.push(<NavigationLink activeId={activeId} depth={current.depth} icons={icons} item={current.item} key={current.item.id} onNavigate={onNavigate} />)
+      rendered.push(<NavigationLink activeId={activeId} depth={current.depth} icons={icons} item={current.item} key={current.item.id} mode={mode} onNavigate={onNavigate} />)
       index += 1
       continue
     }
@@ -289,10 +299,10 @@ function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mo
     }
     const configuration = groups?.find(candidate => candidate.label === group)
     const collapsible = collapsibleGroups !== false && configuration?.collapsible !== false
-    const links = grouped.map(({ depth, item }) => <NavigationLink activeId={activeId} depth={depth} icons={icons} item={item} key={item.id} onNavigate={onNavigate} />)
+    const links = grouped.map(({ depth, item }) => <NavigationLink activeId={activeId} depth={depth} icons={icons} item={item} key={item.id} mode={mode} onNavigate={onNavigate} />)
     rendered.push(collapsible
-      ? <details className="hp-panel-navigation-section" key={group} open={!collapsedGroups.has(group)}><summary className="hp-panel-navigation-group" onClick={(event) => { event.preventDefault(); toggleGroup(group) }}>{group}</summary>{links}</details>
-      : <section className="hp-panel-navigation-section" key={group}><div className="hp-panel-navigation-group">{group}</div>{links}</section>)
+      ? <details className="hp-panel-navigation-section" key={group} open={!collapsedGroups.has(group)}><summary className="hp-panel-navigation-group" onClick={(event) => { event.preventDefault(); toggleGroup(group) }} title={group}>{group}</summary>{links}</details>
+      : <section className="hp-panel-navigation-section" key={group}><div className="hp-panel-navigation-group" title={group}>{group}</div>{links}</section>)
   }
   return rendered
 }
@@ -381,15 +391,62 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
   const body = payload.page.manifest.body
   const [navigationOpen, setNavigationOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileNavigation, setMobileNavigation] = useState(false)
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
+  const navigationToggle = useRef<HTMLButtonElement>(null)
   const [colorMode, setColorMode] = useState<PanelColorMode>(manifest.theme.darkMode)
   const accountLabel = actorLabel(payload.bootstrap.actor)
+  const avatarUrl = actorAvatarUrl(payload.bootstrap.actor)
+  const navigationId = `hp-panel-navigation-${state.panelId}`
+  const dismissMobileNavigation = useCallback((): void => {
+    setNavigationOpen(false)
+    globalThis.queueMicrotask(() => navigationToggle.current?.focus())
+  }, [])
+  useEffect(() => {
+    const mobileQuery = globalThis.matchMedia('(width <= 48rem)')
+    const update = (): void => setMobileNavigation(mobileQuery.matches)
+    update()
+    mobileQuery.addEventListener('change', update)
+    return () => mobileQuery.removeEventListener('change', update)
+  }, [])
+  useEffect(() => {
+    if (!mobileNavigation || !navigationOpen) return
+    const dismissOnEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      dismissMobileNavigation()
+    }
+    globalThis.addEventListener('keydown', dismissOnEscape)
+    return () => globalThis.removeEventListener('keydown', dismissOnEscape)
+  }, [dismissMobileNavigation, mobileNavigation, navigationOpen])
+  useEffect(() => {
+    const container = globalThis.document.createElement('div')
+    container.className = 'hp-panel-portal-host'
+    const owner = shell.current ?? globalThis.document.documentElement
+    container.dir = owner.closest<HTMLElement>('[dir="rtl"], [dir="ltr"]')?.dir
+      ?? globalThis.getComputedStyle(owner).direction
+    globalThis.document.body.append(container)
+    setPortalContainer(container)
+    return () => {
+      setPortalContainer(current => current === container ? null : current)
+      container.remove()
+    }
+  }, [state.panelId])
+  useEffect(() => {
+    if (!portalContainer) return
+    portalContainer.dataset.holoPanel = ''
+    portalContainer.dataset.panel = state.panelId
+    portalContainer.dataset.theme = colorMode
+    portalContainer.dataset.density = manifest.theme.density
+    portalContainer.removeAttribute('style')
+    for (const [name, value] of Object.entries(panelConfigurationVariables(manifest))) portalContainer.style.setProperty(name, value)
+  }, [colorMode, manifest, portalContainer, state.panelId])
   useEffect(() => {
     const stored = globalThis.localStorage?.getItem(`holo-panels:${state.panelId}:color-mode`) ?? null
     if (isPanelColorMode(stored)) setColorMode(stored)
   }, [state.panelId])
   const toggleNavigation = (): void => {
-    const mobile = typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(max-width: 48rem)').matches
-    if (mobile || manifest.navigationMode === 'topbar') {
+    if (mobileNavigation || manifest.navigationMode === 'topbar') {
       setNavigationOpen(open => !open)
       return
     }
@@ -410,16 +467,32 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     ...manifest.userMenu.map(item => ({ icon: configuredIcon(manifest.icons, item.icon), id: item.id, label: item.label, onSelect: () => browserNavigate(item.path) })),
     ...(manifest.auth?.logout ? [{ icon: 'log-out', id: 'panel-logout', label: 'Sign out', onSelect: () => { void executePanelAuthRequest({ csrfToken: '', operation: 'logout', panelId: state.panelId, payload: {} }).then(result => { if (result.ok) globalThis.location.assign(result.url ?? manifest.auth?.login?.path ?? manifest.path) }) } }] : []),
   ]
-  return <div ref={shell} className="hp-panel hp-panel-shell" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-slot="sidebar-wrapper" data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
+  return <PanelsPortalProvider container={portalContainer}><div ref={shell} className="hp-panel hp-panel-shell" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-slot="sidebar-wrapper" data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
     {manifest.assets?.map(asset => asset.type === 'css'
       ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" />
       : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
-    {manifest.layout?.topbar === false ? null : TopbarComponent ? <TopbarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <header className="hp-panel-header" data-slot="panel-header">{manifest.navigationEnabled === false ? null : <ShadcnButton aria-expanded={navigationOpen || !sidebarCollapsed} aria-label="Toggle navigation" className="hp-panel-navigation-toggle" data-slot="button" data-variant="ghost" onClick={toggleNavigation} type="button"><ShadcnIcon name="menu" /></ShadcnButton>}<a className="hp-panel-brand" data-slot="panel-brand" href={manifest.routing?.homeUrl ?? manifest.path}>{manifest.branding.logo ? <img alt="" src={manifest.branding.logo} /> : <span aria-hidden="true" className="hp-panel-brand-mark">H</span>}<strong>{manifest.branding.name}</strong></a>{manifest.navigationEnabled !== false && manifest.navigationMode === 'topbar' ? <nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation--topbar" data-open={navigationOpen ? 'true' : 'false'}><NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav> : null}{manifest.globalSearch ? <PanelGlobalSearch configuration={manifest.globalSearchConfiguration} panelId={state.panelId} /> : null}<div className="hp-panel-header-actions"><ReactTenantSwitcher onSwitched={() => globalThis.location.reload()} store={store} transport={resolvedTenantTransport} />{notificationConfiguration?.placement === 'topbar' ? notificationTrigger : null}{manifest.userMenuEnabled === false ? null : <PanelsDropdown items={userMenu} label={<span className="hp-panel-user-trigger">{AvatarComponent ? <AvatarComponent actor={payload.bootstrap.actor} label={accountLabel} /> : <PanelsAvatar alt={accountLabel} fallback={accountLabel.slice(0, 2).toUpperCase()} />}<span className="hp-panel-user-label">{accountLabel}</span></span>} />}</div></header>}
-    {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <aside className="hp-panel-sidebar" data-open={navigationOpen ? 'true' : 'false'} data-slot="sidebar"><nav aria-label="Panel navigation" className="hp-panel-navigation" data-slot="sidebar-content"><NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => setNavigationOpen(false)} />{notificationConfiguration?.placement === 'sidebar' ? notificationTrigger : null}</nav></aside> : null}
+    {manifest.layout?.topbar === false ? null : TopbarComponent ? <TopbarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <header className="hp-panel-header" data-slot="panel-header">
+      {manifest.navigationEnabled === false ? null : <ShadcnButton aria-controls={manifest.navigationMode === 'topbar' || !SidebarComponent ? navigationId : undefined} aria-expanded={mobileNavigation ? navigationOpen : !sidebarCollapsed} aria-label="Toggle navigation" className="hp-panel-navigation-toggle hp-panel-topbar-start-action" data-slot="button" data-variant="ghost" onClick={toggleNavigation} ref={navigationToggle} type="button"><ShadcnIcon name="menu" /></ShadcnButton>}
+      <a className={`hp-panel-brand hp-panel-topbar-start${manifest.navigationMode === 'sidebar' ? ' hp-panel-navigation-header' : ''}`} data-slot="panel-brand" href={manifest.routing?.homeUrl ?? manifest.path}>{manifest.branding.logo ? <img alt="" src={manifest.branding.logo} /> : <span aria-hidden="true" className="hp-panel-brand-mark">H</span>}<strong>{manifest.branding.name}</strong></a>
+      {manifest.navigationEnabled !== false && manifest.navigationMode === 'topbar' ? <nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation--topbar hp-panel-navigation-body hp-panel-topbar-center" data-open={navigationOpen ? 'true' : 'false'} id={navigationId}><NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav> : null}
+      {manifest.globalSearch ? <PanelGlobalSearch configuration={manifest.globalSearchConfiguration} panelId={state.panelId} /> : null}
+      <div className="hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact">
+        {payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <div className="hp-panel-tenant-action hp-panel-action--compact"><ReactTenantSwitcher onSwitched={() => globalThis.location.reload()} store={store} transport={resolvedTenantTransport} /></div> : null}
+        {notificationConfiguration?.placement === 'topbar' ? <div className="hp-panel-notification-action hp-panel-action--compact">{notificationTrigger}</div> : null}
+        {manifest.userMenuEnabled === false ? null : <div className="hp-panel-user-action hp-panel-action--compact"><PanelsDropdown ariaLabel="Account menu" items={userMenu} label={<span className="hp-panel-user-trigger">{AvatarComponent ? <AvatarComponent actor={payload.bootstrap.actor} label={accountLabel} /> : avatarUrl ? <PanelsAvatar alt={accountLabel} src={avatarUrl} /> : <span aria-hidden="true" className="hp-avatar hp-panel-user-avatar hp-panel-user-glyph" data-slot="avatar-fallback"><ShadcnIcon name="user" /></span>}<span className="hp-panel-user-label">{accountLabel}</span></span>} /></div>}
+      </div>
+    </header>}
+    {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? <>
+      <button aria-hidden={!mobileNavigation || !navigationOpen ? 'true' : undefined} aria-label="Close navigation" className="hp-panel-navigation-backdrop" data-open={navigationOpen ? 'true' : 'false'} data-slot="navigation-backdrop" hidden={!mobileNavigation || !navigationOpen} onClick={dismissMobileNavigation} tabIndex={-1} type="button" />
+      {SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <aside aria-hidden={mobileNavigation && !navigationOpen ? 'true' : undefined} className="hp-panel-sidebar" data-open={navigationOpen ? 'true' : 'false'} data-slot="sidebar" id={navigationId} inert={mobileNavigation && !navigationOpen ? true : undefined}>
+        <nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation-body" data-open={navigationOpen ? 'true' : 'false'} data-slot="sidebar-content"><NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => setNavigationOpen(false)} /></nav>
+        {notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-navigation-footer hp-panel-actions--compact"><div className="hp-panel-notification-action hp-panel-action--compact">{notificationTrigger}</div></div> : null}
+      </aside>}
+    </> : null}
     <main className="hp-panel-content" data-slot="sidebar-inset">
       {manifest.layout?.breadcrumbs !== false && payload.page.breadcrumbs.length > 0 ? <nav aria-label="Breadcrumbs" className="hp-panel-breadcrumbs"><ol>{payload.page.breadcrumbs.map(item => <li key={item.path}><a href={item.path}>{item.label}</a></li>)}</ol></nav> : null}
-      <header className="hp-panel-page-header" data-slot="page-header"><div><h1>{payload.page.heading ?? payload.page.title}</h1>{payload.page.subheading ? <p>{payload.page.subheading}</p> : null}</div></header>
-      <section className="hp-panel-page" data-page={payload.page.manifest.id} data-slot="page">
+      <header className="hp-panel-page-header hp-panel-main-header" data-slot="page-header"><div><h1>{payload.page.heading ?? payload.page.title}</h1>{payload.page.subheading ? <p>{payload.page.subheading}</p> : null}</div></header>
+      <section className="hp-panel-page hp-panel-main-body" data-page={payload.page.manifest.id} data-slot="page">
         <ResolvedWidgetGrid label="Page header widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.header} />
         {body?.component === 'resource-page'
           ? <Suspense fallback={<div aria-busy="true">Loading resource…</div>}><LazyResourcePage createRedirect={manifest.runtime?.resourceCreatePageRedirect ?? 'edit'} data={payload.page.data} editRedirect={manifest.runtime?.resourceEditPageRedirect ?? null} effects={effects} panelId={state.panelId} panelPath={manifest.path} properties={body.properties} readOnlyRelations={manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true} registry={registry} unsavedChangesAlerts={manifest.runtime?.unsavedChangesAlerts ?? false} /></Suspense>
@@ -428,5 +501,5 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
       </section>
     </main>
     <ReactToastViewport navigate={browserNavigate} store={toastStore} />
-  </div>
+  </div></PanelsPortalProvider>
 }

@@ -36,9 +36,16 @@
     "test": "vitest --run --passWithNoTests --reporter=json"
   },
   "dependencies": {
+    "@holo-js/panels-actions": "workspace:*",
     "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
     "@holo-js/panels-cli": "workspace:*",
+    "@holo-js/panels-forms": "workspace:*",
+    "@holo-js/panels-infolists": "workspace:*",
+    "@holo-js/panels-notifications": "workspace:*",
+    "@holo-js/panels-resources": "workspace:*",
+    "@holo-js/panels-schemas": "workspace:*",
+    "@holo-js/panels-tables": "workspace:*",
     "@holo-js/panels-ui": "workspace:*"
   },
   "peerDependencies": {

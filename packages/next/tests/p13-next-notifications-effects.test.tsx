@@ -117,9 +117,9 @@ function operationRequest(): Request {
   })
 }
 
-function viewProperties(): JsonObject {
-  const body = nextPanelAcceptanceFixture.pages[2]?.manifest.body
-  if (body?.component !== 'resource-page') throw new Error('The acceptance view page is missing its resource manifest.')
+function editProperties(): JsonObject {
+  const body = nextPanelAcceptanceFixture.pages[3]?.manifest.body
+  if (body?.component !== 'resource-page') throw new Error('The acceptance edit page is missing its resource manifest.')
   return body.properties
 }
 
@@ -255,8 +255,8 @@ describe('Next notification and effect integration', () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
-    await act(async () => root.render(<NextPanelResourcePage data={{ record: { id: 1, slug: 'first-post', title: 'First post' } }} effects={effects} panelId="admin" panelPath="/admin" properties={viewProperties()} />))
-    await click(container, 'Delete post')
+    await act(async () => root.render(<NextPanelResourcePage data={{ record: { id: 1, slug: 'first-post', title: 'First post' } }} effects={effects} panelId="admin" panelPath="/admin" properties={editProperties()} />))
+    await click(container, 'Delete')
     await click(container, 'Confirm')
     await click(container, 'Run action')
     expect(order).toEqual(['toast', 'redirect'])

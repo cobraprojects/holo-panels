@@ -1,4 +1,5 @@
 <script lang="ts" generics="TRecord extends object">
+  import Copy from 'lucide-svelte/icons/copy'
   import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
   import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
@@ -31,8 +32,12 @@
     : null)
 
   async function copy(): Promise<void> {
+    if (!globalThis.navigator?.clipboard) {
+      copyStatus = 'Copy unavailable'
+      return
+    }
     try {
-      await globalThis.navigator?.clipboard?.writeText(formatted)
+      await globalThis.navigator.clipboard.writeText(formatted)
       copyStatus = 'Copied'
     } catch {
       copyStatus = 'Copy failed'
@@ -72,7 +77,7 @@
 {/snippet}
 
 {#if column.manifest.copyable && !column.manifest.inlineEditor}
-  <span title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}<Button type="button" aria-label="Copy {column.manifest.label ?? column.manifest.path}" onclick={() => void copy()}>Copy</Button><span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span></span>
+  <span class="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}<Button class="hp-table-copy" type="button" aria-label="Copy {column.manifest.label ?? column.manifest.path}" onclick={() => void copy()}><Copy aria-hidden="true" data-icon="copy" data-slot="icon" /></Button><span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span></span>
 {:else}
   <span title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}</span>
 {/if}

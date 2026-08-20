@@ -103,12 +103,20 @@ afterEach(() => {
 describe('P12 Svelte widget and dashboard renderer', () => {
   it('renders stats and charts with action, trend, SVG, and accessible table semantics', () => {
     const container = renderDashboard([
-      widget('growth', 'stats', { stats: [{ action: 'reports.open', chart: [4, 7, 9], color: 'success', description: 'This month', icon: 'arrow-up', id: 'revenue', label: 'Revenue', trend: 'up', url: '/reports', value: '$12k' }] }),
+      widget('growth', 'stats', { stats: [
+        { action: 'reports.open', chart: [4, 7, 9], color: 'success', description: 'This month', icon: 'arrow-up', id: 'revenue', label: 'Revenue', trend: 'up', url: '/reports', value: '$12k' },
+        { action: null, chart: [], color: '#123456', description: null, icon: null, id: 'orders', label: 'Orders', trend: null, url: null, value: 42 },
+      ] }),
       widget('revenue', 'chart', { description: 'Revenue for each month', series: [{ color: '#2563eb', id: 'net', label: 'Net', points: [{ label: 'Jan', value: 10 }, { label: 'Feb', value: 18 }] }], summary: 'Monthly revenue', type: 'line' }),
     ])
 
     expect(container.querySelector('dl')?.textContent).toMatch(/Revenue\s+\$12k/u)
     expect(container.querySelector('[aria-label="Trend up"]')?.textContent).toBe('↑')
+    const stats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
+    expect(stats[0]?.dataset.color).toBe('success')
+    expect(stats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('')
+    expect(stats[1]?.dataset.color).toBe('#123456')
+    expect(stats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('#123456')
     expect(container.querySelector('[data-action="reports.open"]')).not.toBeNull()
     expect(container.querySelector('a')?.getAttribute('href')).toBe('/reports')
     expect(container.querySelector('[data-chart-geometry="line"] polyline')?.getAttribute('points')).toContain('100,2')

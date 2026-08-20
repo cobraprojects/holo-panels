@@ -57,13 +57,16 @@ export const VueToastViewport = defineComponent({
     onUnmounted(unsubscribe)
     return (): VNode => h('section', { 'aria-label': 'Notifications', class: 'hp-notification-toasts', 'data-placement': props.placement }, [
       h('div', { 'aria-atomic': 'true', 'aria-live': 'polite', class: 'hp-visually-hidden', role: 'status' }, state.value.liveMessage),
-      h('ol', { 'aria-label': 'Notification queue' }, state.value.items.map(toast => h('li', { 'data-color': toast.color ?? undefined, 'data-persistent': toast.persistent || undefined, 'data-status': toast.status, key: toast.id }, [
-        h('article', { 'aria-labelledby': `${toast.id}-toast-title` }, [
-          toast.icon ? h('span', { 'aria-hidden': 'true', 'data-icon': toast.icon }) : null,
-          h('h2', { id: `${toast.id}-toast-title` }, toast.title),
-          toast.body ? h('p', toast.body) : null,
-          h('div', toast.actions.map(actionValue).filter(action => action !== null).map(action => toastAction(action, toast, props))),
-          toast.closeable ? h(ShadcnButton, { 'aria-label': `Close ${toast.title}`, onClick: () => props.store.dismiss(toast.id), type: 'button' }, '×') : null,
+      h('ol', { 'aria-label': 'Notification queue', class: 'hp-notification-toast-list', 'data-slot': 'notification-toast-list' }, state.value.items.map(toast => h('li', { 'data-color': toast.color ?? undefined, 'data-persistent': toast.persistent || undefined, 'data-status': toast.status, key: toast.id }, [
+        h('article', { 'aria-labelledby': `${toast.id}-toast-title`, class: 'hp-notification-toast', 'data-slot': 'notification-toast' }, [
+          h('span', { 'aria-hidden': 'true', class: 'hp-notification-toast-accent', 'data-color': toast.color ?? undefined, 'data-slot': 'notification-toast-accent' }),
+          toast.icon ? h('span', { 'aria-hidden': 'true', class: 'hp-notification-toast-icon', 'data-icon': toast.icon, 'data-slot': 'notification-toast-icon' }) : null,
+          h('div', { class: 'hp-notification-toast-content', 'data-slot': 'notification-toast-content' }, [
+            h('h2', { class: 'hp-notification-toast-title', id: `${toast.id}-toast-title` }, toast.title),
+            toast.body ? h('p', { class: 'hp-notification-toast-body' }, toast.body) : null,
+          ]),
+          h('div', { 'aria-label': `${toast.title} actions`, class: 'hp-notification-toast-actions', 'data-slot': 'notification-toast-actions', role: 'group' }, toast.actions.map(actionValue).filter(action => action !== null).map(action => toastAction(action, toast, props))),
+          toast.closeable ? h(ShadcnButton, { 'aria-label': `Close ${toast.title}`, class: 'hp-notification-toast-close', onClick: () => props.store.dismiss(toast.id), type: 'button' }, '×') : null,
         ]),
       ]))),
     ])
@@ -78,7 +81,7 @@ function notificationActions(item: VueDatabaseNotification, controls: VueNotific
     if (action.kind === 'mark-unread') return h(ShadcnButton, { key: action.id, onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, action.label)
     return h(ShadcnButton, { key: action.id, onClick: () => ignoreFailure(controls.delete()), type: 'button' }, action.label)
   })
-  return h('div', { class: 'hp-notification-actions' }, [
+  return h('div', { 'aria-label': `${item.presentation.title} actions`, class: 'hp-notification-actions', 'data-slot': 'notification-actions', role: 'group' }, [
     ...actions,
     item.read
       ? h(ShadcnButton, { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, 'Mark unread')
@@ -88,11 +91,13 @@ function notificationActions(item: VueDatabaseNotification, controls: VueNotific
 }
 
 function defaultNotification(item: VueDatabaseNotification, controls: VueNotificationControls, navigate?: (url: string) => void): VNode {
-  return h('article', { 'aria-labelledby': `${item.id}-notification-title` }, [
-    item.presentation.icon ? h('span', { 'aria-hidden': 'true', 'data-icon': item.presentation.icon }) : null,
-    h('h3', { id: `${item.id}-notification-title` }, item.presentation.title),
-    item.presentation.body ? h('p', item.presentation.body) : null,
-    h('time', { datetime: item.createdAt }, item.createdAt),
+  return h('article', { 'aria-labelledby': `${item.id}-notification-title`, class: 'hp-notification-item-content', 'data-slot': 'notification-item-content' }, [
+    item.presentation.icon ? h('span', { 'aria-hidden': 'true', class: 'hp-notification-item-icon', 'data-icon': item.presentation.icon, 'data-slot': 'notification-item-icon' }) : null,
+    h('div', { class: 'hp-notification-item-copy' }, [
+      h('h3', { class: 'hp-notification-item-title', 'data-slot': 'notification-item-title', id: `${item.id}-notification-title` }, item.presentation.title),
+      item.presentation.body ? h('p', { class: 'hp-notification-item-body', 'data-slot': 'notification-item-body' }, item.presentation.body) : null,
+      h('time', { class: 'hp-notification-item-time', 'data-slot': 'notification-item-time', datetime: item.createdAt }, item.createdAt),
+    ]),
     notificationActions(item, controls, navigate),
   ])
 }
@@ -125,19 +130,23 @@ export const VueNotificationInbox = defineComponent({
           ? props.registry.resolve(rendererName, props.panelId, `notification "${item.id}"`)
           : null
         const content = Custom ? h(Custom, { controls, notification: item } satisfies VueCustomNotificationProps) : defaultNotification(item, controls, props.navigate)
-        return h('li', { 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, key: item.id }, [content])
+        return h('li', { class: 'hp-notification-item', 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, 'data-slot': 'notification-item', key: item.id }, [content])
       })
       return h('section', { 'aria-busy': state.value.loading, 'aria-label': 'Notification inbox', class: 'hp-notification-inbox', 'data-placement': props.placement }, [
-        h('header', [h('h2', 'Notifications'), h('span', { 'aria-label': `${state.value.unread} unread` }, state.value.unread), h(ShadcnButton, { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), type: 'button' }, 'Mark all read')]),
-        state.value.error ? h('p', { role: 'alert' }, state.value.error) : null,
-        state.value.loading ? h('p', { 'aria-live': 'polite', role: 'status' }, 'Loading notifications') : null,
-        !state.value.loading && items.length === 0 ? h('p', props.emptyMessage) : null,
-        h('ol', items),
-        h('nav', { 'aria-label': 'Notification pagination' }, [
+        h('header', { class: 'hp-notification-inbox-header', 'data-slot': 'notification-inbox-header' }, [
+          h('h2', { class: 'hp-notification-inbox-title', 'data-slot': 'notification-inbox-title' }, 'Notifications'),
+          state.value.unread > 0 ? h('span', { 'aria-label': `${state.value.unread} unread`, class: 'hp-notification-inbox-count hp-notification-unread-badge', 'data-slot': 'notification-inbox-count' }, state.value.unread) : null,
+          h(ShadcnButton, { class: 'hp-notification-mark-all', disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), type: 'button' }, 'Mark all read'),
+        ]),
+        state.value.error ? h('p', { class: 'hp-notification-error', 'data-slot': 'notification-error', role: 'alert' }, state.value.error) : null,
+        state.value.loading ? h('p', { 'aria-live': 'polite', class: 'hp-notification-loading', 'data-slot': 'notification-loading', role: 'status' }, 'Loading notifications') : null,
+        !state.value.loading && items.length === 0 ? h('p', { class: 'hp-notification-empty', 'data-slot': 'notification-empty', role: 'status' }, props.emptyMessage) : null,
+        items.length > 0 ? h('ol', { class: 'hp-notification-list', 'data-slot': 'notification-list' }, items) : null,
+        pages > 1 ? h('nav', { 'aria-label': 'Notification pagination', class: 'hp-notification-pagination', 'data-slot': 'notification-pagination' }, [
           h(ShadcnButton, { 'aria-label': 'Previous notification page', disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button' }, 'Previous'),
           h('span', `Page ${state.value.page} of ${pages}`),
           h(ShadcnButton, { 'aria-label': 'Next notification page', disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button' }, 'Next'),
-        ]),
+        ]) : null,
       ])
     }
   },

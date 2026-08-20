@@ -1,0 +1,34 @@
+{
+  "name": "@holo-js/panels-forms",
+  "version": "0.1.0-next.1",
+  "description": "Form components for Holo Panels schemas",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest --run --passWithNoTests --reporter=json"
+  },
+  "dependencies": {
+    "@holo-js/panels-core": "workspace:*",
+    "@holo-js/panels-schemas": "workspace:*"
+  },
+  "peerDependencies": {
+    "@holo-js/forms": "catalog:"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

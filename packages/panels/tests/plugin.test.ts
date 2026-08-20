@@ -86,6 +86,7 @@ describe('Holo Panels plugin', () => {
       'framework-artifacts.json',
       'panel-routes.json',
       'registry.json',
+      'resource-type-bindings.d.ts',
     ])
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'registry.json')?.contents)
       .toBe('{\n  "version": 1,\n  "definitions": []\n}\n')

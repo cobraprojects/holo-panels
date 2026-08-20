@@ -57,14 +57,17 @@ export function ReactToastViewport({ navigate, placement = 'top', store }: React
   )
   return <section aria-label="Notifications" className="hp-notification-toasts" data-placement={placement}>
     <div aria-atomic="true" aria-live="polite" className="hp-visually-hidden" role="status">{state.liveMessage}</div>
-    <ol aria-label="Notification queue">
+    <ol aria-label="Notification queue" className="hp-notification-toast-list" data-slot="notification-toast-list">
       {state.items.map(toast => <li data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} key={toast.id}>
-        <article aria-labelledby={`${toast.id}-toast-title`}>
-          {toast.icon ? <span aria-hidden="true" data-icon={toast.icon} /> : null}
-          <h2 id={`${toast.id}-toast-title`}>{toast.title}</h2>
-          {toast.body ? <p>{toast.body}</p> : null}
-          <div>{toast.actions.map(actionValue).filter(action => action !== null).map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</div>
-          {toast.closeable ? <ShadcnButton aria-label={`Close ${toast.title}`} onClick={() => store.dismiss(toast.id)} type="button">×</ShadcnButton> : null}
+        <article aria-labelledby={`${toast.id}-toast-title`} className="hp-notification-toast" data-slot="notification-toast">
+          <span aria-hidden="true" className="hp-notification-toast-accent" data-color={toast.color ?? undefined} data-slot="notification-toast-accent" />
+          {toast.icon ? <span aria-hidden="true" className="hp-notification-toast-icon" data-icon={toast.icon} data-slot="notification-toast-icon" /> : null}
+          <div className="hp-notification-toast-content" data-slot="notification-toast-content">
+            <h2 className="hp-notification-toast-title" id={`${toast.id}-toast-title`}>{toast.title}</h2>
+            {toast.body ? <p className="hp-notification-toast-body">{toast.body}</p> : null}
+          </div>
+          <div aria-label={`${toast.title} actions`} className="hp-notification-toast-actions" data-slot="notification-toast-actions" role="group">{toast.actions.map(actionValue).filter(action => action !== null).map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</div>
+          {toast.closeable ? <ShadcnButton aria-label={`Close ${toast.title}`} className="hp-notification-toast-close" onClick={() => store.dismiss(toast.id)} type="button">×</ShadcnButton> : null}
         </article>
       </li>)}
     </ol>
@@ -77,7 +80,7 @@ function NotificationActions({ controls, item, navigate }: {
   readonly navigate?: (url: string) => void
 }): ReactNode {
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null)
-  return <div className="hp-notification-actions">
+  return <div aria-label={`${item.presentation.title} actions`} className="hp-notification-actions" data-slot="notification-actions" role="group">
     {actions.map(action => {
       const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
       if (url) return <a href={url} key={action.id} onClick={navigate ? event => { event.preventDefault(); navigate(url) } : undefined}>{action.label}</a>
@@ -112,11 +115,15 @@ export function ReactNotificationInbox({
   }, [store])
   const pages = Math.max(1, Math.ceil(state.total / state.pageSize))
   return <section aria-busy={state.loading} aria-label="Notification inbox" className="hp-notification-inbox" data-placement={placement}>
-    <header><h2>Notifications</h2><span aria-label={`${state.unread} unread`}>{state.unread}</span><ShadcnButton disabled={state.unread === 0} onClick={() => ignoreFailure(store.markAllRead())} type="button">Mark all read</ShadcnButton></header>
-    {state.error ? <p role="alert">{state.error}</p> : null}
-    {state.loading ? <p aria-live="polite" role="status">Loading notifications</p> : null}
-    {!state.loading && state.items.length === 0 ? <p>{emptyMessage}</p> : null}
-    <ol>{state.items.map(item => {
+    <header className="hp-notification-inbox-header" data-slot="notification-inbox-header">
+      <h2 className="hp-notification-inbox-title" data-slot="notification-inbox-title">Notifications</h2>
+      {state.unread > 0 ? <span aria-label={`${state.unread} unread`} className="hp-notification-inbox-count hp-notification-unread-badge" data-slot="notification-inbox-count">{state.unread}</span> : null}
+      <ShadcnButton className="hp-notification-mark-all" disabled={state.unread === 0} onClick={() => ignoreFailure(store.markAllRead())} type="button">Mark all read</ShadcnButton>
+    </header>
+    {state.error ? <p className="hp-notification-error" data-slot="notification-error" role="alert">{state.error}</p> : null}
+    {state.loading ? <p aria-live="polite" className="hp-notification-loading" data-slot="notification-loading" role="status">Loading notifications</p> : null}
+    {!state.loading && state.items.length === 0 ? <p className="hp-notification-empty" data-slot="notification-empty" role="status">{emptyMessage}</p> : null}
+    {state.items.length > 0 ? <ol className="hp-notification-list" data-slot="notification-list">{state.items.map(item => {
       const controls: ReactNotificationControls = {
         delete: () => store.delete([item.id]),
         markRead: () => store.markRead([item.id]),
@@ -126,20 +133,22 @@ export function ReactNotificationInbox({
       const Custom = registry?.has(rendererName, panelId)
         ? registry.resolve<ReactCustomNotificationProps>(rendererName, panelId, `notification "${item.id}"`)
         : null
-      return <li data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} key={item.id}>
-        {Custom ? <Custom controls={controls} notification={item} /> : <article aria-labelledby={`${item.id}-notification-title`}>
-          {item.presentation.icon ? <span aria-hidden="true" data-icon={item.presentation.icon} /> : null}
-          <h3 id={`${item.id}-notification-title`}>{item.presentation.title}</h3>
-          {item.presentation.body ? <p>{item.presentation.body}</p> : null}
-          <time dateTime={item.createdAt}>{item.createdAt}</time>
+      return <li className="hp-notification-item" data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} data-slot="notification-item" key={item.id}>
+        {Custom ? <Custom controls={controls} notification={item} /> : <article aria-labelledby={`${item.id}-notification-title`} className="hp-notification-item-content" data-slot="notification-item-content">
+          {item.presentation.icon ? <span aria-hidden="true" className="hp-notification-item-icon" data-icon={item.presentation.icon} data-slot="notification-item-icon" /> : null}
+          <div className="hp-notification-item-copy">
+            <h3 className="hp-notification-item-title" data-slot="notification-item-title" id={`${item.id}-notification-title`}>{item.presentation.title}</h3>
+            {item.presentation.body ? <p className="hp-notification-item-body" data-slot="notification-item-body">{item.presentation.body}</p> : null}
+            <time className="hp-notification-item-time" data-slot="notification-item-time" dateTime={item.createdAt}>{item.createdAt}</time>
+          </div>
           <NotificationActions controls={controls} item={item} navigate={navigate} />
         </article>}
       </li>
-    })}</ol>
-    <nav aria-label="Notification pagination">
+    })}</ol> : null}
+    {pages > 1 ? <nav aria-label="Notification pagination" className="hp-notification-pagination" data-slot="notification-pagination">
       <ShadcnButton aria-label="Previous notification page" disabled={state.page <= 1} onClick={() => ignoreFailure(store.load(state.page - 1))} type="button">Previous</ShadcnButton>
       <span>Page {state.page} of {pages}</span>
       <ShadcnButton aria-label="Next notification page" disabled={state.page >= pages} onClick={() => ignoreFailure(store.load(state.page + 1))} type="button">Next</ShadcnButton>
-    </nav>
+    </nav> : null}
   </section>
 }

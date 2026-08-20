@@ -8,6 +8,7 @@
     }
   },
   "include": [
+    "../../apps/example-nuxt/.holo-js/generated/**/*.d.ts",
     "src/**/*",
     "tests/**/*",
     "vitest.config.ts",

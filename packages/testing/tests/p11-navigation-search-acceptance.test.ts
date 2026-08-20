@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { nextNavigationSearchAcceptanceFixture } from '../../../apps/example-next/tests/p11-navigation-search-acceptance-next'
-import { nuxtNavigationSearchAcceptanceFixture } from '../../../apps/example-nuxt/tests/p11-navigation-search-acceptance-nuxt'
-import { svelteKitNavigationSearchAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p11-navigation-search-acceptance-sveltekit'
 import { runNavigationSearchAcceptanceJourney } from '../src/navigation-search-acceptance'
+import { loadExampleExport } from './load-example'
+
+type NavigationSearchAcceptanceFixture = Parameters<typeof runNavigationSearchAcceptanceJourney>[0]
+
+const [nextNavigationSearchAcceptanceFixture, nuxtNavigationSearchAcceptanceFixture, svelteKitNavigationSearchAcceptanceFixture] = await Promise.all([
+  loadExampleExport<NavigationSearchAcceptanceFixture>('next', 'p11-navigation-search-acceptance-next', 'nextNavigationSearchAcceptanceFixture'),
+  loadExampleExport<NavigationSearchAcceptanceFixture>('nuxt', 'p11-navigation-search-acceptance-nuxt', 'nuxtNavigationSearchAcceptanceFixture'),
+  loadExampleExport<NavigationSearchAcceptanceFixture>('sveltekit', 'p11-navigation-search-acceptance-sveltekit', 'svelteKitNavigationSearchAcceptanceFixture'),
+])
 
 describe('P11 navigation and global-search phase gate', () => {
   it('renders and exercises the same authorized navigation and search journey in every example app', async () => {

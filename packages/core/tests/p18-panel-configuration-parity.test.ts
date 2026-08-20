@@ -242,7 +242,15 @@ describe('Filament-shaped panel configuration', () => {
       runtime: { broadcasting: false, databaseTransactions: true, resourceCreatePageRedirect: 'view', resourceEditPageRedirect: 'index', spa: true, spaPrefetching: true, strictAuthorization: true, unsavedChangesAlerts: true },
       theme: { darkMode: 'dark', fontFamily: 'Inter', monoFontFamily: 'JetBrains Mono', serifFontFamily: 'Source Serif' },
     })
-    expect(definePanel('admin').colors({ primary: '#7c3aed' }).compileDiscoveryDefinition().client).toMatchObject({
+    expect(definePanel('admin').colors({ primary: '#7c3aed' }).font('Inter').monoFont('JetBrains Mono').serifFont('Source Serif').theme({ density: 'compact', tokens: { 'radius-lg': '1rem' } }).compileDiscoveryDefinition().client).toMatchObject({
+      appearance: {
+        colors: { primary: '#7c3aed' },
+        density: 'compact',
+        fontFamily: 'Inter',
+        monoFontFamily: 'JetBrains Mono',
+        serifFontFamily: 'Source Serif',
+        tokens: { 'radius-lg': '1rem' },
+      },
       simplePageMaxContentWidth: 'lg',
       themeColors: { primary: '#7c3aed' },
     })

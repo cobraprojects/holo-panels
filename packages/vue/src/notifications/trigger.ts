@@ -1,4 +1,4 @@
-import { ShadcnButton } from '../internal-ui'
+import { ShadcnButton, ShadcnIcon } from '../internal-ui'
 import { defineComponent, h, onMounted, onUnmounted, shallowRef, useId, type PropType, type VNode } from 'vue'
 import { VueNotificationInbox } from './renderer'
 import type { VueNotificationInboxTriggerProps } from './types'
@@ -46,17 +46,20 @@ export const VueNotificationInboxTrigger = defineComponent({
     })
     return (): VNode => {
       const resolvedLabel = props.label.trim() || 'Notifications'
+      const accessibleLabel = state.value.unread > 0 ? `${resolvedLabel}, ${state.value.unread} unread` : resolvedLabel
       const inboxPlacement = props.placement === 'topbar' ? 'dropdown' : 'sidebar'
       return h('div', { class: 'hp-notification-inbox-trigger', 'data-placement': props.placement, ref: container }, [
         h(ShadcnButton, {
           'aria-controls': inboxId,
           'aria-expanded': String(open.value),
+          'aria-label': accessibleLabel,
           class: 'hp-notification-inbox-trigger-button',
           onClick: () => { activated.value = true; open.value = !open.value },
+          title: resolvedLabel,
           type: 'button',
         }, [
-          h('span', resolvedLabel),
-          h('span', { 'aria-label': `${state.value.unread} unread notifications`, class: 'hp-notification-inbox-trigger-badge' }, state.value.unread),
+          ShadcnIcon('bell'),
+          state.value.unread > 0 ? h('span', { 'aria-hidden': 'true', class: 'hp-notification-inbox-trigger-badge' }, state.value.unread) : null,
         ]),
         h('div', { class: 'hp-notification-inbox-trigger-content', hidden: !open.value, id: inboxId }, [
           activated.value ? h(VueNotificationInbox, {

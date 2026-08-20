@@ -21,6 +21,13 @@ The umbrella Holo plugin contributes the Holo security dependency, its command m
 |---|---|---|
 | `@holo-js/panels` | `.`, `./server`, `./plugin`, `./package.json` | Application-facing definitions, explicit server definitions, selected core/client APIs, and the Holo plugin definition. |
 | `@holo-js/panels-core` | `.`, `./server`, `./transfers` | Framework-neutral builders, immutable definitions, protocols, server execution contracts, registries, and domain services; its root export has a browser-safe condition. |
+| `@holo-js/panels-schemas` | `.` | Shared typed schemas and layout components. |
+| `@holo-js/panels-actions` | `.` | Reusable actions, action groups, CRUD actions, modal schemas, and execution contracts. |
+| `@holo-js/panels-forms` | `.` | Typed form fields used by schemas, resources, pages, actions, and table filters. |
+| `@holo-js/panels-tables` | `.` | Typed tables, columns, filters, groups, summaries, and table action positions. |
+| `@holo-js/panels-infolists` | `.` | Typed read-only entries and infolist schemas. |
+| `@holo-js/panels-notifications` | `.` | Fluent notifications with shared actions and delivery methods. |
+| `@holo-js/panels-resources` | `.` | Model-bound resource classes, inferred CRUD pages, relation managers, and package component scopes. |
 | `@holo-js/panels-client` | `.` | Framework-neutral client stores, transport, effects, options, uploads, navigation, relations, notifications, and widgets; its root export has a browser-safe condition. |
 | `@holo-js/panels-ui` | `.`, `./style.css` | Design tokens, icons, accessibility/conformance data, and shared semantic CSS. |
 | `@holo-js/panels-react` | `.`, `./server`, `./style.css` | React primitives and renderers for fields, tables, actions, entries, relations, navigation, widgets, and notifications. |
@@ -40,15 +47,15 @@ The manifest and declaration evidence for this table is linked in the package se
 
 ### `@holo-js/panels`
 
-The root entrypoint is the normal application import. Its generated declarations expose fluent panel/resource/schema definitions; fields, tables, actions, pages, relations, notifications, widgets, and tenancy contracts; selected server executors; and selected client stores.
+The root entrypoint is the normal application import. It re-exports the public domain packages so an application can use the same schema, action, table, notification, and resource types everywhere.
 
 ```ts
 import {
+  ListRecords,
+  Notification,
+  RelationManager,
+  Resource,
   definePanel,
-  defineResource,
-  field,
-  grid,
-  section,
 } from '@holo-js/panels'
 ```
 
@@ -59,6 +66,16 @@ Evidence: [manifest](../packages/panels/package.json), [root declarations](../pa
 The generated `commands`, `runtime`, `migrations`, and `prepare` modules are deliberately not package exports. Holo loads them through the plugin definition.
 
 ## Framework-neutral packages
+
+### Public composition packages
+
+`@holo-js/panels-schemas` owns `Schema` and the layout components shared across public features. `@holo-js/panels-forms`, `@holo-js/panels-infolists`, and `@holo-js/panels-tables` add typed fields, entries, columns, filters, groups, and summaries without creating separate schema systems.
+
+`@holo-js/panels-actions` owns the single action contract. The same `Action` can be mounted as a resource-page action, table record/header/toolbar action, modal action, or notification action. Built-in actions include create, view, edit, delete, replicate, restore, force-delete, import, export, and their supported bulk forms.
+
+`@holo-js/panels-notifications` exposes `Notification.make()`, status helpers, duration and persistence configuration, shared actions, and delivery methods. `@holo-js/panels-resources` exposes `Resource`, CRUD page classes, and `RelationManager`. A resource declares `protected static override model = Post`; a relation manager declares `protected static override relationship = 'comments'`. Generated registry augmentations infer fields, relation paths, callbacks, actions, schemas, and tables without user-written generic arguments, record aliases, or duplicated migration columns. Relation managers configure the normal `Schema` and `Table` classes.
+
+Evidence: [schemas](../packages/schemas/package.json), [actions](../packages/actions/package.json), [forms](../packages/forms/package.json), [tables](../packages/tables/package.json), [infolists](../packages/infolists/package.json), [notifications](../packages/notifications/package.json), [resources](../packages/resources/package.json).
 
 ### `@holo-js/panels-core`
 
@@ -76,7 +93,7 @@ Evidence: [manifest](../packages/client/package.json), [declarations](../package
 
 ### `@holo-js/panels-ui`
 
-The root entrypoint exposes theme tokens, icon registration, shell primitive names, keyboard/accessibility patterns, and component conformance fixtures. Import `@holo-js/panels-ui/style.css` for the published framework-neutral stylesheet.
+The root entrypoint exposes theme tokens, icon registration, shell primitive names, keyboard/accessibility patterns, and component conformance fixtures. Import `@holo-js/panels-ui/style.css` for the published framework-neutral stylesheet. Use the [panel theming contract](theming.md) instead of copying or forking that stylesheet.
 
 Evidence: [manifest](../packages/ui/package.json), [declarations](../packages/ui/dist/index.d.ts).
 

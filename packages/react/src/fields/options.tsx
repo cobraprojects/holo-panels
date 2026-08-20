@@ -56,7 +56,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
       type="search"
       value={state.search}
     /> : null}
-    {property(props.context, 'paginated', true) ? <nav aria-label={`${props.context.definition.label ?? 'Option'} pages`}>
+    {property(props.context, 'paginated', true) && (state.page > 1 || state.hasMore) ? <nav aria-label={`${props.context.definition.label ?? 'Option'} pages`}>
       <ShadcnButton disabled={state.page <= 1 || state.loading} onClick={() => void optionStore.load(state.search, state.page - 1)} type="button">Previous</ShadcnButton>
       <span aria-live="polite">Page {state.page}</span>
       <ShadcnButton disabled={!state.hasMore || state.loading} onClick={() => void optionStore.load(state.search, state.page + 1)} type="button">Next</ShadcnButton>

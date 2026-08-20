@@ -144,6 +144,7 @@ export interface SvelteTableStore<TRecord extends object, TRecordId extends Tabl
   selectionPayload(): TableSelectionPayload<TRecordId>
   setFilter(filterId: string, value: JsonValue): void
   setPage(page: number): void
+  setPerPage?(perPage: number): void
   setSearch(search: string): void
   setSort(sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[]): void
   setVisibleColumns(columns: readonly string[]): void

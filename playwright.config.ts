@@ -15,24 +15,32 @@ const selectedExamples = new Set(
 const exampleUrl = (example: keyof typeof examples): string => `http://${host}:${examples[example].port}`
 
 export default defineConfig({
-  expect: { timeout: 5_000 },
+  expect: {
+    timeout: 5_000,
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+    },
+  },
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: true,
   outputDir: 'tests/e2e/test-results',
+  snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{projectName}/{platform}/{arg}{ext}',
   projects: [
     {
       name: 'next',
-      testMatch: ['**/framework-shell.spec.ts', '**/public-blog.spec.ts', '**/admin-journeys.spec.ts'],
+      testMatch: ['**/framework-shell.spec.ts', '**/public-blog.spec.ts', '**/admin-journeys.spec.ts', '**/visual-regression.spec.ts'],
       use: { ...devices['Desktop Chrome'], baseURL: exampleUrl('next') },
     },
     {
       name: 'nuxt',
-      testMatch: ['**/framework-shell.spec.ts', '**/public-blog.spec.ts', '**/admin-journeys.spec.ts'],
+      testMatch: ['**/framework-shell.spec.ts', '**/public-blog.spec.ts', '**/admin-journeys.spec.ts', '**/visual-regression.spec.ts'],
       use: { ...devices['Desktop Chrome'], baseURL: exampleUrl('nuxt') },
     },
     {
       name: 'sveltekit',
-      testMatch: ['**/framework-shell.spec.ts', '**/public-blog.spec.ts', '**/admin-journeys.spec.ts'],
+      testMatch: ['**/framework-shell.spec.ts', '**/public-blog.spec.ts', '**/admin-journeys.spec.ts', '**/visual-regression.spec.ts'],
       use: { ...devices['Desktop Chrome'], baseURL: exampleUrl('sveltekit') },
     },
   ].filter(project => selectedExamples.has(project.name as keyof typeof examples)),

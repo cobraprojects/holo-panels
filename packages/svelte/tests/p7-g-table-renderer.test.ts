@@ -7,7 +7,7 @@ import type { Component, flushSync, hydrate, mount, unmount } from 'svelte'
 import type { render } from 'svelte/server'
 import { createServer, type ViteDevServer } from 'vite'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { SvelteTableColumn, SvelteTableRendererProps } from '../src/tables/types'
+import type { SvelteTableColumn, SvelteTableRendererProps, SvelteTableStore } from '../src/tables/types'
 import { SvelteComponentRegistry } from '../src/registry'
 import P7GTableFixture from './P7GTableFixture.svelte'
 import P7GRatingFilter from './P7GRatingFilter.svelte'
@@ -68,10 +68,11 @@ let hydrateClient: typeof hydrate
 let mountClient: typeof mount
 let unmountClient: typeof unmount
 
-function createStore(options: { readonly filterMode?: 'deferred' | 'live', readonly records?: readonly Post[], readonly total?: number } = {}): TableStateStore<Post, number> {
+function createStore(options: { readonly filterMode?: 'deferred' | 'live', readonly perPage?: number, readonly records?: readonly Post[], readonly total?: number } = {}): TableStateStore<Post, number> {
   return new TableStateStore<Post, number>({
     filterMode: options.filterMode,
     panelId: 'admin',
+    perPage: options.perPage,
     records: options.records ?? records,
     tableId: 'posts',
     total: options.total ?? 4,
@@ -79,7 +80,7 @@ function createStore(options: { readonly filterMode?: 'deferred' | 'live', reado
   })
 }
 
-function baseTable(store: TableStateStore<Post, number>): TableProps {
+function baseTable(store: SvelteTableStore<Post, number>): TableProps {
   return {
     caption: 'Posts',
     columns,
@@ -236,8 +237,57 @@ describe('P7-G Svelte table renderer', () => {
     expect(region?.getAttribute('tabindex')).toBe('0')
     expect(container.querySelector('th[scope="col"]')).not.toBeNull()
     expect(container.querySelector('td[data-label="Title"]')?.textContent).toBe('First')
+    const statusCell = container.querySelector<HTMLElement>('td[data-label="Status"]')
+    expect(statusCell?.style.width).toBe('120px')
+    expect(statusCell?.style.whiteSpace).toBe('nowrap')
     expect(container.querySelector('input[aria-label="Select page"]')).toBeNull()
     expect(container.querySelector('nav[aria-label="Table pagination"]')).not.toBeNull()
+  })
+
+  it('renders deterministic accessible pagination and locks its controls while loading', () => {
+    const store = createStore({ total: 250 })
+    const container = mountTable(baseTable(store))
+
+    store.setPage(5)
+    flushClient()
+    expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('section')?.getAttribute('data-state')).toBe('loading')
+    expect(container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')?.disabled).toBe(true)
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>('.hp-table-pagination-pages button')).every(button => button.disabled)).toBe(true)
+
+    store.applyData({ queryVersion: store.snapshot.queryVersion, records, total: 250 })
+    flushClient()
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>('.hp-table-pagination-pages button[aria-label^="Page "]')).map(button => button.textContent)).toEqual(['1', '4', '5', '6', '10'])
+    expect(container.querySelector('button[aria-current="page"]')?.textContent).toBe('5')
+    expect(container.querySelector('.hp-table-pagination-info')?.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('preserves arbitrary page sizes and supports legacy stores without page-size mutation', () => {
+    const store = createStore({ perPage: 37, total: 250 })
+    const container = mountTable(baseTable(store))
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')
+
+    expect(select?.value).toBe('37')
+    expect(Array.from(select?.options ?? []).map(option => option.value)).toContain('37')
+
+    const legacyStore = new Proxy(store, {
+      get(target, property) {
+        if (property === 'setPerPage') return undefined
+        const value: unknown = Reflect.get(target, property, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as SvelteTableStore<Post, number>
+    const legacyContainer = mountTable(baseTable(legacyStore))
+    expect(legacyContainer.querySelector('select[aria-label="Results per page"]')).toBeNull()
+  })
+
+  it('reports an accessible zero-result range', () => {
+    const container = mountTable(baseTable(createStore({ records: [], total: 0 })))
+
+    expect(container.querySelector('.hp-table-pagination-info')?.textContent).toBe('Showing 0 to 0 of 0 results')
+    expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('false')
+    expect(container.querySelector('section')?.getAttribute('data-state')).toBe('empty')
+    expect(container.querySelector('[data-slot="table-empty"]')).not.toBeNull()
   })
 
   it('supports search, sorting, deferred filters, column visibility, and pagination', () => {
@@ -266,11 +316,15 @@ describe('P7-G Svelte table renderer', () => {
     container.querySelector<HTMLButtonElement>('.hp-column-manager > button')?.click()
     flushClient()
     const status = Array.from(container.querySelectorAll<HTMLInputElement>('.hp-column-manager input')).find(input => input.parentElement?.textContent?.includes('Status'))
+    expect(status?.parentElement?.getAttribute('role')).toBe('menuitemcheckbox')
+    expect(status?.parentElement?.getAttribute('aria-checked')).toBe('true')
     status?.click()
     flushClient()
+    expect(status?.parentElement?.getAttribute('aria-checked')).toBe('false')
     expect(store.snapshot.visibleColumns).toEqual(['title'])
 
     store.applyData({ queryVersion: store.snapshot.queryVersion, records, total: 60 })
+    flushClient()
     container.querySelector<HTMLButtonElement>('button[aria-label="Next page"]')?.click()
     flushClient()
     expect(store.snapshot.page).toBe(2)

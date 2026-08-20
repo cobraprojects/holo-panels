@@ -46,15 +46,13 @@ import {
   type TransferStoredArtifact,
 } from '@holo-js/panels-core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { nextTransferAcceptanceFixture } from '../../../apps/example-next/tests/p15-transfer-acceptance-next'
-import { nuxtTransferAcceptanceFixture } from '../../../apps/example-nuxt/tests/p15-transfer-acceptance-nuxt'
-import { svelteKitTransferAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p15-transfer-acceptance-sveltekit'
 import { MemoryTransferStore } from '../../core/tests/helpers/transfer-store'
 import { ImportExecutor } from '../../core/src/imports/executor'
 import { compileImportMapping } from '../../core/src/imports/mapping'
 import { defineHoloTransferQueueJob, HoloTransferQueueAdapter } from '../../core/src/transfers/holo-queue'
 import { TransferOperationLifecycle } from '../../core/src/transfers/lifecycle'
 import { finalizeTransferExportParts, persistTransferExportPart } from '../../core/src/transfers/parts'
+import { loadExampleExport } from './load-example'
 
 interface Actor {
   readonly id: string
@@ -80,10 +78,20 @@ interface Scope {
   readonly tenant: Tenant
 }
 
+interface TransferAcceptanceFixture {
+  readonly exporterId: string
+  readonly framework: string
+  readonly importerId: string
+}
+
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 const now = new Date('2026-07-29T12:00:00.000Z')
-const fixtures = [nextTransferAcceptanceFixture, nuxtTransferAcceptanceFixture, svelteKitTransferAcceptanceFixture]
+const fixtures = await Promise.all([
+  loadExampleExport<TransferAcceptanceFixture>('next', 'p15-transfer-acceptance-next', 'nextTransferAcceptanceFixture'),
+  loadExampleExport<TransferAcceptanceFixture>('nuxt', 'p15-transfer-acceptance-nuxt', 'nuxtTransferAcceptanceFixture'),
+  loadExampleExport<TransferAcceptanceFixture>('sveltekit', 'p15-transfer-acceptance-sveltekit', 'svelteKitTransferAcceptanceFixture'),
+])
 
 function notificationStore(records: Map<string, NotificationRecord>): NotificationStore {
   return {

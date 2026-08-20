@@ -1,5 +1,6 @@
-import { executePanelLogin, panelContentWidthValue, panelThemeVariables } from '@holo-js/panels-vue'
-import { defineComponent, h, ref } from 'vue'
+import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-vue'
+import { defineComponent, h, ref, type PropType } from 'vue'
+import { nuxtPanelAuthAppearanceVariables, type NuxtPanelAuthAppearance } from './auth-appearance'
 import { ShadcnButton, ShadcnIcon, ShadcnInput } from './internal-ui'
 
 function cookie(name: string): string {
@@ -10,6 +11,7 @@ function cookie(name: string): string {
 export const PanelLoginPage = defineComponent({
   name: 'PanelLoginPage',
   props: {
+    appearance: { default: undefined, type: Object as PropType<NuxtPanelAuthAppearance> },
     brandName: { required: true, type: String },
     forgotPasswordPath: { default: undefined, type: String },
     panelId: { required: true, type: String },
@@ -41,7 +43,7 @@ export const PanelLoginPage = defineComponent({
         pending.value = false
       }
     }
-    return () => h('main', { class: 'hp-auth-page', 'data-holo-panel': '', 'data-theme': props.theme, style: { ...panelThemeVariables({ colors: props.themeColors as Readonly<Record<string, unknown>> | undefined }), ...(props.simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(props.simplePageMaxContentWidth) } : {}) } }, [
+    return () => h('main', { class: 'hp-auth-page', 'data-density': props.appearance?.density, 'data-holo-panel': '', 'data-theme': props.theme, style: { ...nuxtPanelAuthAppearanceVariables(props.appearance, props.themeColors as Readonly<Record<string, string>> | undefined), ...(props.simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(props.simplePageMaxContentWidth) } : {}) } }, [
       h('section', { class: 'hp-auth-card', 'data-slot': 'card' }, [
         h('div', { 'data-slot': 'card-header' }, [h('span', { class: 'hp-auth-brand-mark' }, [ShadcnIcon('key')]), h('div', [h('p', 'Administration'), h('h1', props.brandName), h('span', 'Sign in to your account')])]),
         h('div', { 'data-slot': 'card-content' }, [

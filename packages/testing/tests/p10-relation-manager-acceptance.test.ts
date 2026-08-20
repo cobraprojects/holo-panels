@@ -8,10 +8,16 @@ import {
   type RelationPersistence,
 } from '@holo-js/panels-core'
 import { describe, expect, it } from 'vitest'
-import { nextRelationAcceptanceFixture } from '../../../apps/example-next/tests/p10-relation-acceptance-next'
-import { nuxtRelationAcceptanceFixture } from '../../../apps/example-nuxt/tests/p10-relation-acceptance-nuxt'
-import { svelteKitRelationAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p10-relation-acceptance-sveltekit'
 import { runRelationAcceptanceJourney } from '../src/relation-acceptance'
+import { loadExampleExport } from './load-example'
+
+type RelationAcceptanceFixture = Parameters<typeof runRelationAcceptanceJourney>[0]
+
+const [nextRelationAcceptanceFixture, nuxtRelationAcceptanceFixture, svelteKitRelationAcceptanceFixture] = await Promise.all([
+  loadExampleExport<RelationAcceptanceFixture>('next', 'p10-relation-acceptance-next', 'nextRelationAcceptanceFixture'),
+  loadExampleExport<RelationAcceptanceFixture>('nuxt', 'p10-relation-acceptance-nuxt', 'nuxtRelationAcceptanceFixture'),
+  loadExampleExport<RelationAcceptanceFixture>('sveltekit', 'p10-relation-acceptance-sveltekit', 'svelteKitRelationAcceptanceFixture'),
+])
 
 interface Owner {
   readonly id: number
@@ -165,6 +171,11 @@ describe('P10 relation-manager phase gate', () => {
       expect(report.framework).toBe(fixture.framework)
       expect(report.render.ssrStable).toBe(true)
       expect(report.render.markup).toContain('data-panels-component="relation-managers"')
+      expect(report.render.markup).toContain('data-panels-component="data-table"')
+      expect(report.render.markup).toContain('hp-table-responsive')
+      expect(report.render.markup).toContain('hp-relation-table-overflow')
+      expect(report.render.markup).toContain('hp-table-row-actions')
+      expect(report.render.markup).toContain('data-label="Comment"')
       expect(report.render.markup).toContain('First comment')
       expect(report.render.markup).toContain('TypeScript')
       expect(report.render.markup).toContain('role="tablist"')

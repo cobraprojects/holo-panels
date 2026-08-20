@@ -48,10 +48,10 @@ export function isDiscoverableDefinition(value: unknown): value is DiscoverableD
 }
 
 export function isDiscoverableBuilder(value: unknown): value is DiscoverableBuilder {
-  return isRecord(value)
-    && value.discoveryMarker === DISCOVERY_MARKER
-    && isDiscoverableKind(value.kind)
-    && typeof value.compileDiscoveryDefinition === 'function'
+  return (isRecord(value) || typeof value === 'function')
+    && Reflect.get(value, 'discoveryMarker') === DISCOVERY_MARKER
+    && isDiscoverableKind(Reflect.get(value, 'kind'))
+    && typeof Reflect.get(value, 'compileDiscoveryDefinition') === 'function'
 }
 
 function isDefinitionKind<TKind extends DiscoverableKind>(

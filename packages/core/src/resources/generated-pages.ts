@@ -649,7 +649,37 @@ function jsonObject(value: object): JsonObject {
   return serialized
 }
 
-function resourceProperties(definition: RuntimeDefinition): JsonObject {
+function explicitResourcePages(definition: RuntimeDefinition): readonly object[] {
+  return (definition.pages ?? []).filter(page => ['create', 'edit', 'list', 'view'].includes(String(Reflect.get(page, 'pageType'))))
+}
+
+function resourcePageActions(definition: RuntimeDefinition, pageType: PageType): readonly object[] {
+  const page = explicitResourcePages(definition).find(candidate => Reflect.get(candidate, 'pageType') === pageType)
+  if (!page) return []
+  const actions = Reflect.get(page, 'actions')
+  if (Array.isArray(actions)) return actions.filter((action: unknown): action is object => typeof action === 'object' && action !== null)
+  if (!actions || typeof actions !== 'object') return []
+  const header = Reflect.get(actions, 'header')
+  const footer = Reflect.get(actions, 'footer')
+  return [...(Array.isArray(header) ? header : []), ...(Array.isArray(footer) ? footer : [])]
+}
+
+function resourceRoutes(definition: RuntimeDefinition, basePath: string): JsonObject {
+  const pages = explicitResourcePages(definition)
+  if (pages.length === 0) {
+    return { create: `${basePath}/create`, edit: `${basePath}/:record/edit`, view: `${basePath}/:record` }
+  }
+  const entries = pages.flatMap((page) => {
+    const pageType = Reflect.get(page, 'pageType')
+    const path = Reflect.get(page, 'path')
+    if (!['create', 'edit', 'view'].includes(String(pageType)) || typeof path !== 'string') return []
+    const suffix = path === '/' ? '' : `/${path.replace(/^\/+|\/+$/gu, '').replaceAll('{record}', ':record')}`
+    return [[String(pageType), `${basePath}${suffix}`] as const]
+  })
+  return Object.fromEntries(entries) as JsonObject
+}
+
+function resourceProperties(definition: RuntimeDefinition, pageType: PageType, basePath: string): JsonObject {
   const form = definition.form
   const table = definition.table
   const slug = resourceSlug(definition)
@@ -706,7 +736,11 @@ function resourceProperties(definition: RuntimeDefinition): JsonObject {
   const singular = singularize(plural)
   const canDelete = capabilities.delete
   const configuredActions = (definition.actions ?? []).map(action => actionManifestSeed(action))
-  const recordActions = configuredActions.filter(action => action.mount === 'record')
+  const hasExplicitPages = explicitResourcePages(definition).length > 0
+  const pageActions = resourcePageActions(definition, pageType).map(action => 'manifest' in action && typeof action.manifest === 'function'
+    ? action.manifest('record') as ActionManifest
+    : actionManifestSeed(action))
+  const recordActions = hasExplicitPages ? pageActions : configuredActions.filter(action => action.mount === 'record')
   const tableActions = configuredActions.flatMap(action => {
     const scope = action.mount === 'bulk' ? 'bulk' : action.mount === 'page' ? 'header' : action.mount === 'record' ? 'row' : null
     return scope ? [{ color: action.color, confirmation: action.confirmation, icon: action.icon, id: action.id, kind: action.kind, label: action.label, removesRecord: false, scope }] : []
@@ -730,11 +764,13 @@ function resourceProperties(definition: RuntimeDefinition): JsonObject {
       type: String(Reflect.get(entry, 'type') ?? 'text'),
     }
   })
+  const explicitPages = explicitResourcePages(definition)
+  const configuredTableActions = arrayMember(table, 'actions')
   const properties = {
     resource: {
       actions: [
         ...recordActions,
-        ...(canDelete
+        ...(explicitPages.length === 0 && canDelete
           ? [{ badge: null, color: null, confirmation: `Delete this ${singular.toLowerCase()}?`, disabled: false, icon: null, id: 'delete-record', kind: 'delete', label: `Delete ${singular.toLowerCase()}`, modal: null, mount: 'record', size: 'medium', tooltip: null, type: 'delete', visible: true }]
           : []),
       ],
@@ -756,9 +792,10 @@ function resourceProperties(definition: RuntimeDefinition): JsonObject {
       recordTitle: definition.recordTitle ?? 'id',
       recordId: resourcePrimaryKey(definition),
       routeKey: definition.routeKey ?? 'id',
+      routes: resourceRoutes(definition, basePath),
       slug,
       table: {
-        actions: [
+        actions: configuredTableActions.length > 0 || explicitPages.length > 0 ? configuredTableActions : [
           { id: 'view-record', kind: 'view', label: 'View', removesRecord: false, scope: 'row' },
           { id: 'edit-record', kind: 'edit', label: 'Edit', removesRecord: false, scope: 'row' },
           ...(canDelete ? [{ id: 'delete-record', kind: 'delete', label: 'Delete', removesRecord: true, scope: 'row' }] : []),
@@ -790,12 +827,14 @@ function pageManifest(
   const navigation = definition.navigation ?? {}
   const plural = typeof navigation.label === 'string' ? navigation.label : label(slug)
   const widgetIds = resourceWidgetIds(definition)
+  const explicitPage = explicitResourcePages(definition).find(page => Reflect.get(page, 'pageType') === pageType)
+  const explicitActions = explicitPage ? resourcePageActions(definition, pageType) : []
   return Object.freeze({
     actions: {
       footer: [],
-      header: pageType === 'list' ? [`${definition.id}.create`] : [],
+      header: explicitPage ? explicitActions.map((action: object) => String(Reflect.get(action, 'id'))) : pageType === 'list' ? [`${definition.id}.create`] : [],
     },
-    body: { component: 'resource-page', properties: { ...resourceProperties(definition), operation: pageType } },
+    body: { component: 'resource-page', properties: { ...resourceProperties(definition, pageType, listPath), operation: pageType } },
     id,
     navigation: pageType === 'list'
       ? {
@@ -818,6 +857,18 @@ function pageManifest(
 
 export function generatedResourcePageManifests(options: GeneratedResourcePageOptions): readonly PageManifest[] {
   const definition = resourceDefinition(options.resource)
+  const explicitPages = explicitResourcePages(definition)
+  if (explicitPages.length > 0) {
+    return Object.freeze(explicitPages.map((page) => {
+      const pageType = Reflect.get(page, 'pageType') as PageType
+      const manifest = pageManifest(definition, options.panelPath, pageType)
+      const path = String(Reflect.get(page, 'path'))
+      const suffix = path === '/' ? '' : `/${path.replace(/^\/+|\/+$/gu, '').replaceAll('{record}', ':record')}`
+      const slug = resourceSlug(definition)
+      const listPath = `${options.panelPath === '/' ? '' : options.panelPath}/${slug}`
+      return Object.freeze({ ...manifest, path: `${listPath}${suffix}` })
+    }))
+  }
   const pageTypes: readonly PageType[] = definition.singular !== null && typeof definition.singular !== 'undefined'
     ? ['singular']
     : (definition.capabilities?.delete ?? true) ? ['list', 'create', 'view', 'edit'] : ['list', 'view']

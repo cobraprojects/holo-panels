@@ -15,6 +15,7 @@ import {
   PanelsDropdown,
   PanelsLink,
   PanelsLoadingIndicator,
+  PanelsPortalProvider,
   PanelsTransport,
   PanelShellStore,
   panelConfigurationVariables,
@@ -55,7 +56,7 @@ import {
   type VueWidgetManifest,
   type UploadPolicy,
 } from '@holo-js/panels-vue'
-import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, type Component, type PropType, type VNode } from 'vue'
+import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, watchEffect, type Component, type PropType, type VNode } from 'vue'
 import type { NuxtPanelPage, NuxtPanelPageData, PanelPageProps } from './contracts'
 import { ShadcnButton, ShadcnIcon, ShadcnInput } from './internal-ui'
 
@@ -115,6 +116,7 @@ interface ResourceRenderSchema {
   readonly recordActions: readonly ClientActionManifest[]
   readonly resourceId: string
   readonly routeKey: string
+  readonly routes: Readonly<{ create: string | null, edit: string | null, view: string | null }>
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -230,6 +232,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
         recordActions: Array.isArray(generated.actions) ? generated.actions : [],
         resourceId: generated.id,
         routeKey: generated.routeKey,
+        routes: isObject(generated.routes) ? generated.routes : {},
       }
     : page.schema
   if (!isObject(schema) || schema.kind !== 'resource' || typeof schema.resourceId !== 'string' || typeof schema.basePath !== 'string' || !schema.basePath.startsWith('/') || !isPath(schema.routeKey) || !isPath(schema.recordTitle)) {
@@ -240,8 +243,12 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
   }
   if (!schema.fields.every(item => isObject(item) && isPath(item.path) && typeof item.type === 'string')) throw new Error('Resource render schema fields are invalid')
   if (!schema.columns.every(item => isObject(item) && isObject(item.manifest) && isPath(item.manifest.path) && typeof item.manifest.type === 'string')) throw new Error('Resource render schema columns are invalid')
+  const routes = isObject(schema.routes) ? schema.routes : {}
   return {
-    actions: schema.actions as unknown as readonly ResourceAction[],
+    actions: (schema.actions as unknown as readonly ResourceAction[]).map((action) => {
+      const path = action.kind === 'edit' || action.kind === 'view' ? routes[action.kind] : null
+      return { ...action, ...(typeof path === 'string' ? { path } : {}) }
+    }),
     basePath: schema.basePath.replace(/\/+$/gu, ''),
     columns: schema.columns as unknown as readonly VueTableColumn<ResourceRecord>[],
     entries: (Array.isArray(schema.entries) ? schema.entries : schema.fields) as JsonObject[],
@@ -255,6 +262,11 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
     recordActions: (Array.isArray(schema.recordActions) ? schema.recordActions : schema.actions).flatMap(item => clientAction(item) ?? []),
     resourceId: schema.resourceId,
     routeKey: schema.routeKey,
+    routes: {
+      create: typeof routes.create === 'string' ? routes.create : null,
+      edit: typeof routes.edit === 'string' ? routes.edit : null,
+      view: typeof routes.view === 'string' ? routes.view : null,
+    },
   }
 }
 
@@ -590,7 +602,7 @@ function recordId(record: Readonly<ResourceRecord>, routeKey: string): number | 
 
 function actionLocation(schema: ResourceRenderSchema, action: ResourceAction, routeValue: number | string): string {
   const encoded = encodeURIComponent(String(routeValue))
-  if (action.path) return action.path.replaceAll('{record}', encoded)
+  if (action.path) return action.path.replaceAll('{record}', encoded).replaceAll(':record', encoded)
   const recordPath = `${schema.basePath}/${encoded}`
   return action.kind === 'edit' ? `${recordPath}/edit` : recordPath
 }
@@ -636,7 +648,8 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}?${store.toQueryString()}`)
     })
   }
-  return h('div', { class: 'hp-resource-page' }, [h('div', { class: 'hp-resource-toolbar' }, [h(PanelsLink, { class: 'hp-button hp-button-primary', href: `${schema.basePath}/create` }, () => 'Create')]), h(VueTableRenderer, {
+  const createAction = schema.recordActions.find(action => action.kind === 'create' && action.visible)
+  return h('div', { class: 'hp-resource-page' }, [createAction && schema.routes.create ? h('div', { class: 'hp-resource-toolbar' }, [h(PanelsLink, { class: 'hp-button hp-button-primary', href: schema.routes.create }, () => createAction.label)]) : null, h(VueTableRenderer, {
     table: {
       actionTransport: {
         async execute(request: { readonly actionId: string, readonly recordId?: number | string }) {
@@ -673,9 +686,9 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
 
 function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: boolean, registry: ComponentRegistry, schema: ResourceRenderSchema, runtime: PanelPageRuntime): VNode {
   const record = recordFrom(page)
-  const editAction = schema.actions.find(action => action.kind === 'edit')
+  const editAction = schema.recordActions.find(action => action.kind === 'edit')
   const routeValue = record ? recordId(record, schema.routeKey) : null
-  const actions = schema.recordActions.filter(action => action.mount === 'record' && action.visible)
+  const actions = schema.recordActions.filter(action => action.mount === 'record' && action.visible && !['create', 'edit', 'view'].includes(action.kind))
   const relations = relationManagers(page.data.relations)
   const store = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
@@ -713,7 +726,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
   return h('section', { class: 'hp-resource-view', 'data-resource-crud': 'view' }, [
-    editAction && routeValue !== null ? h('div', { class: 'hp-form-actions' }, [h(PanelsLink, { class: 'hp-button', href: actionLocation(schema, editAction, routeValue) }, () => editAction.label)]) : null,
+    editAction && schema.routes.edit && routeValue !== null ? h('div', { class: 'hp-form-actions' }, [h(PanelsLink, { class: 'hp-button', href: schema.routes.edit.replace(':record', encodeURIComponent(String(routeValue))) }, () => editAction.label)]) : null,
     h('div', { class: 'hp-infolist' }, record ? schema.entries.map(entry => h(VueEntryRenderer, { entry: { panelId, store: entryStore(entry, record) } })) : []),
     ...actions.map(action => h(VueActionRenderer, { action, panelId, recordIds: routeValue === null ? [] : [routeValue], store })),
     relations.length > 0 ? h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation } }) : null,
@@ -770,6 +783,14 @@ function actorLabel(actor: JsonObject): string {
   return 'Account'
 }
 
+function actorAvatarUrl(actor: JsonObject): string | null {
+  for (const key of ['avatarUrl', 'avatar_url', 'avatar', 'image']) {
+    const value = actor[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
 type PanelNavigationItem = NuxtPanelPage['bootstrap']['manifest']['navigation'][number]
 
 function orderedNavigation(items: readonly PanelNavigationItem[]): readonly Readonly<{ readonly depth: number, readonly item: PanelNavigationItem }>[] {
@@ -790,7 +811,7 @@ function orderedNavigation(items: readonly PanelNavigationItem[]): readonly Read
   return ordered
 }
 
-function navigationLink(item: PanelNavigationItem, depth: number, activePath: string, close: () => void): VNode {
+function navigationLink(item: PanelNavigationItem, depth: number, activePath: string, mode: 'sidebar' | 'topbar', close: () => void): VNode {
   return h(PanelsLink, {
     current: activePath === item.path || activePath.startsWith(`${item.path}/`),
     'data-slot': 'sidebar-menu-button',
@@ -798,10 +819,11 @@ function navigationLink(item: PanelNavigationItem, depth: number, activePath: st
     key: item.id,
     onClick: close,
     style: { '--hp-navigation-depth': depth },
+    title: mode === 'sidebar' ? item.label : undefined,
   }, () => [item.icon ? navigationIcon(item.icon) : null, h('span', item.label), item.badge ? h('span', { class: 'hp-panel-badge' }, item.badge) : null])
 }
 
-function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boolean, close: () => void): VNode {
+function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boolean, id: string, close: () => void): VNode {
   const activePath = page.path.split(/[?]/u, 1)[0] ?? page.path
   const ordered = orderedNavigation(page.bootstrap.manifest.navigation.map(item => ({
     ...item,
@@ -809,12 +831,12 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
   })))
   const items: VNode[] = []
   if (mode === 'topbar') {
-    for (const { depth, item } of ordered) items.push(navigationLink(item, depth, activePath, close))
+    for (const { depth, item } of ordered) items.push(navigationLink(item, depth, activePath, mode, close))
   } else {
     for (let index = 0; index < ordered.length;) {
       const current = ordered[index]!
       if (!current.item.group) {
-        items.push(navigationLink(current.item, current.depth, activePath, close))
+        items.push(navigationLink(current.item, current.depth, activePath, mode, close))
         index += 1
         continue
       }
@@ -822,17 +844,18 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
       const grouped: VNode[] = []
       while (index < ordered.length && ordered[index]!.item.group === group) {
         const entry = ordered[index]!
-        grouped.push(navigationLink(entry.item, entry.depth, activePath, close))
+        grouped.push(navigationLink(entry.item, entry.depth, activePath, mode, close))
         index += 1
       }
       const configuration = page.bootstrap.manifest.navigationGroups?.find(candidate => candidate.label === group)
       const collapsible = page.bootstrap.manifest.layout?.collapsibleNavigationGroups !== false && configuration?.collapsible !== false
       if (!collapsible) {
-        items.push(h('section', { class: 'hp-panel-navigation-section', key: group }, [h('div', { class: 'hp-panel-navigation-group' }, group), ...grouped]))
+        items.push(h('section', { class: 'hp-panel-navigation-section', key: group }, [h('div', { class: 'hp-panel-navigation-group', title: group }, group), ...grouped]))
         continue
       }
       items.push(h('details', { class: 'hp-panel-navigation-section', key: group, open: true }, [h('summary', {
         class: 'hp-panel-navigation-group',
+        title: group,
         onClick: (event: MouseEvent) => {
           event.preventDefault()
           const details = (event.currentTarget as HTMLElement).parentElement
@@ -841,7 +864,7 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
       }, group), ...grouped]))
     }
   }
-  return h('nav', { 'aria-label': 'Panel navigation', class: ['hp-panel-navigation', mode === 'topbar' ? 'hp-panel-navigation--topbar' : null], 'data-open': open ? 'true' : 'false', 'data-slot': mode === 'sidebar' ? 'sidebar' : 'navigation-menu' }, items)
+  return h('nav', { 'aria-label': 'Panel navigation', class: ['hp-panel-navigation', 'hp-panel-navigation-body', mode === 'topbar' ? 'hp-panel-navigation--topbar hp-panel-topbar-center' : null], 'data-open': open ? 'true' : 'false', 'data-slot': mode === 'sidebar' ? 'sidebar-content' : 'navigation-menu', id }, items)
 }
 
 function pageBody(page: NuxtPanelPage, registry: ComponentRegistry, resolveResource: PanelPageProps['resolveResource'], runtime: PanelPageRuntime): VNode {
@@ -926,8 +949,16 @@ export const PanelPage = defineComponent({
     })() : null
     const toastStore = new ClientToastStore()
     const viewportWidth = ref(1280)
+    const mobileNavigation = ref(false)
     const navigationOpen = ref(false)
     const sidebarCollapsed = ref(false)
+    const portalContainer = ref<HTMLElement | null>(null)
+    const navigationId = `hp-panel-navigation-${panelId}`
+    const navigationToggleId = `hp-panel-navigation-toggle-${panelId}`
+    const dismissMobileNavigation = (): void => {
+      navigationOpen.value = false
+      window.queueMicrotask(() => window.document.getElementById(navigationToggleId)?.focus())
+    }
     const colorMode = ref<PanelColorMode>(panelColorMode(props.page.bootstrap.manifest.theme.darkMode))
     const widgetStore = (widget: NuxtPanelPage['widgets']['header'][number]): WidgetStore => new WidgetStore(
       widget.manifest,
@@ -954,6 +985,7 @@ export const PanelPage = defineComponent({
     }) : null
     const searchState = ref(searchStore?.snapshot ?? null)
     let unsubscribeSearch: (() => void) | undefined
+    let unregisterMobileQuery: (() => void) | undefined
     let unregisterResize: (() => void) | undefined
     let unregisterSearchShortcut: (() => void) | undefined
     let unregisterSpa: (() => void) | undefined
@@ -968,7 +1000,26 @@ export const PanelPage = defineComponent({
       redirect: async effect => browserNavigate(effect.url, effect.replace),
       refresh: async effect => dispatchPanelEvent('holo-panels:refresh', { panelId, target: effect.target ?? 'page' }),
     })
+    watchEffect(() => {
+      const container = portalContainer.value
+      if (!container) return
+      container.dataset.holoPanel = ''
+      container.dataset.panel = panelId
+      container.dataset.theme = colorMode.value
+      container.dataset.density = props.page.bootstrap.manifest.theme.density
+      container.removeAttribute('style')
+      for (const [name, value] of Object.entries(panelConfigurationVariables(props.page.bootstrap.manifest))) {
+        container.style.setProperty(name, value)
+      }
+    })
     onMounted(() => {
+      const portal = window.document.createElement('div')
+      portal.className = 'hp-panel-portal-host'
+      const owner = shellElement.value ?? window.document.documentElement
+      portal.dir = owner.closest<HTMLElement>('[dir="rtl"], [dir="ltr"]')?.dir
+        ?? window.getComputedStyle(owner).direction
+      window.document.body.append(portal)
+      portalContainer.value = portal
       ready.value = true
       const storedColorMode = window.localStorage.getItem(`holo-panels:${panelId}:color-mode`)
       if (isPanelColorMode(storedColorMode)) colorMode.value = storedColorMode
@@ -976,7 +1027,17 @@ export const PanelPage = defineComponent({
       updateWidth()
       window.addEventListener('resize', updateWidth)
       unregisterResize = () => window.removeEventListener('resize', updateWidth)
+      const mobileQuery = window.matchMedia('(width <= 48rem)')
+      const updateMobileNavigation = (): void => { mobileNavigation.value = mobileQuery.matches }
+      updateMobileNavigation()
+      mobileQuery.addEventListener('change', updateMobileNavigation)
+      unregisterMobileQuery = () => mobileQuery.removeEventListener('change', updateMobileNavigation)
       const searchShortcut = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape' && mobileNavigation.value && navigationOpen.value) {
+          event.preventDefault()
+          dismissMobileNavigation()
+          return
+        }
         if (!searchStore?.shortcut(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey })) return
         event.preventDefault()
         window.document.querySelector<HTMLInputElement>('[data-panel-global-search]')?.focus()
@@ -1024,15 +1085,19 @@ export const PanelPage = defineComponent({
       if (disposed) return
       disposed = true
       unsubscribeSearch?.()
+      unregisterMobileQuery?.()
       unregisterResize?.()
       unregisterSearchShortcut?.()
       unregisterSpa?.()
+      portalContainer.value?.remove()
+      portalContainer.value = null
       effects.dispose()
     })
 
     return (): VNode => {
       const { bootstrap, page } = props.page
       const account = actorLabel(bootstrap.actor)
+      const avatarUrl = actorAvatarUrl(bootstrap.actor)
       const themeMenuItems = bootstrap.manifest.theme.switcher === false ? [] : [
         { id: 'panel-theme-light', label: `${colorMode.value === 'light' ? '✓ ' : ''}Light theme` },
         { id: 'panel-theme-dark', label: `${colorMode.value === 'dark' ? '✓ ' : ''}Dark theme` },
@@ -1054,7 +1119,7 @@ export const PanelPage = defineComponent({
             store: inboxStore,
           } satisfies VueNotificationInboxTriggerProps)
         : null
-      const globalSearch = searchStore && searchState.value ? h('div', { class: 'hp-global-search', 'data-slot': 'command', role: 'search' }, [
+      const globalSearch = searchStore && searchState.value ? h('div', { class: 'hp-global-search hp-panel-topbar-center', 'data-slot': 'command', role: 'search' }, [
         h('label', [h('span', { class: 'hp-sr-only' }, 'Global search'), ShadcnIcon('search', 'hp-global-search-icon'), h(ShadcnInput, {
           'aria-controls': 'hp-global-search-results',
           'aria-expanded': searchState.value.open,
@@ -1077,14 +1142,15 @@ export const PanelPage = defineComponent({
         h('ul', { 'data-slot': 'command-list', id: 'hp-global-search-results', role: 'listbox' }, searchState.value.results.map((result, index) => h('li', { 'aria-selected': index === searchState.value?.selectedIndex, 'data-slot': 'command-item', key: `${result.resourceId}:${result.id}`, role: 'option' }, [h('a', { href: result.url }, result.title)]))),
       ]) : null
       const toggleNavigation = (): void => {
-        if (viewportWidth.value <= 768 || bootstrap.manifest.navigationMode === 'topbar') {
+        if (mobileNavigation.value || bootstrap.manifest.navigationMode === 'topbar') {
           navigationOpen.value = !navigationOpen.value
           return
         }
         if (bootstrap.manifest.sidebarCollapsible) sidebarCollapsed.value = !sidebarCollapsed.value
       }
       return h(PanelsErrorBoundary, {}, {
-        default: () => h('div', {
+        default: () => h(PanelsPortalProvider, { container: portalContainer.value }, {
+          default: () => h('div', {
           'aria-busy': ready.value ? undefined : 'true',
           class: ['hp-panel', 'hp-panel-shell', `hp-panel--${bootstrap.manifest.navigationMode}`],
           'data-holo-panel': '',
@@ -1094,6 +1160,7 @@ export const PanelPage = defineComponent({
           'data-theme': colorMode.value,
           'data-density': bootstrap.manifest.theme.density,
           'data-navigation': bootstrap.manifest.navigationMode,
+          'data-navigation-open': navigationOpen.value ? 'true' : 'false',
           'data-sidebar-collapsed': sidebarCollapsed.value ? 'true' : 'false',
           'data-sidebar-collapsible': bootstrap.manifest.sidebarCollapsible ? 'true' : 'false',
           'data-sidebar-fully-collapsible': bootstrap.manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false',
@@ -1111,16 +1178,20 @@ export const PanelPage = defineComponent({
             manifest: bootstrap.manifest,
             page,
           } satisfies PanelChromeComponentProps<typeof page>) : h('header', { class: 'hp-panel-header' }, [
-            bootstrap.manifest.navigationEnabled === false ? null : h(ShadcnButton, { 'aria-expanded': navigationOpen.value || !sidebarCollapsed.value, 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle', 'data-variant': 'ghost', onClick: toggleNavigation, type: 'button' }, () => ShadcnIcon('menu')),
-            h(PanelsLink, { class: 'hp-panel-brand', href: bootstrap.manifest.routing?.homeUrl ?? bootstrap.manifest.path }, () => [bootstrap.manifest.branding.logo ? h('img', { alt: '', src: bootstrap.manifest.branding.logo }) : h('span', { 'aria-hidden': 'true', class: 'hp-panel-brand-mark' }, 'H'), h('strong', bootstrap.manifest.branding.name)]),
-            bootstrap.manifest.navigationEnabled !== false && bootstrap.manifest.navigationMode === 'topbar' ? navigation(props.page, 'topbar', navigationOpen.value, () => { navigationOpen.value = false }) : null,
+            bootstrap.manifest.navigationEnabled === false ? null : h(ShadcnButton, { 'aria-controls': bootstrap.manifest.navigationMode === 'topbar' || !SidebarComponent ? navigationId : undefined, 'aria-expanded': mobileNavigation.value ? navigationOpen.value : !sidebarCollapsed.value, 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', 'data-variant': 'ghost', id: navigationToggleId, onClick: toggleNavigation, type: 'button' }, () => ShadcnIcon('menu')),
+            h(PanelsLink, { class: ['hp-panel-brand', 'hp-panel-topbar-start', bootstrap.manifest.navigationMode === 'sidebar' ? 'hp-panel-navigation-header' : null], href: bootstrap.manifest.routing?.homeUrl ?? bootstrap.manifest.path }, () => [bootstrap.manifest.branding.logo ? h('img', { alt: '', src: bootstrap.manifest.branding.logo }) : h('span', { 'aria-hidden': 'true', class: 'hp-panel-brand-mark' }, 'H'), h('strong', bootstrap.manifest.branding.name)]),
+            bootstrap.manifest.navigationEnabled !== false && bootstrap.manifest.navigationMode === 'topbar' ? navigation(props.page, 'topbar', navigationOpen.value, navigationId, () => { navigationOpen.value = false }) : null,
             globalSearch,
-            h('div', { class: 'hp-panel-header-actions' }, [
-              tenantShell ? h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } }) : null,
-              configuration?.placement === 'topbar' ? notificationTrigger : null,
-              bootstrap.manifest.userMenuEnabled === false ? null : h('div', { class: 'hp-panel-user-trigger' }, [
-                AvatarComponent ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps) : h(PanelsAvatar, { alt: account, fallback: account.slice(0, 2).toUpperCase() }),
-                h(PanelsDropdown, { items: userMenuItems, label: account, onSelect: (id: string) => {
+            h('div', { class: 'hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact' }, [
+              tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action hp-panel-action--compact' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
+              configuration?.placement === 'topbar' ? h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger]) : null,
+              bootstrap.manifest.userMenuEnabled === false ? null : h('div', { class: 'hp-panel-user-trigger hp-panel-user-action hp-panel-action--compact' }, [
+                AvatarComponent
+                  ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps)
+                  : avatarUrl
+                    ? h(PanelsAvatar, { alt: account, src: avatarUrl })
+                    : h('span', { 'aria-hidden': 'true', class: 'hp-avatar hp-panel-user-avatar hp-panel-user-glyph', 'data-slot': 'avatar-fallback' }, [ShadcnIcon('user')]),
+                h(PanelsDropdown, { ariaLabel: 'Account menu', items: userMenuItems, label: account, onSelect: (id: string) => {
                   const mode = id.replace('panel-theme-', '')
                   if (isPanelColorMode(mode)) {
                     colorMode.value = mode
@@ -1144,20 +1215,29 @@ export const PanelPage = defineComponent({
             ]),
           ]),
           bootstrap.manifest.navigationEnabled !== false && bootstrap.manifest.navigationMode === 'sidebar'
-            ? SidebarComponent
-              ? h(SidebarComponent, { actor: props.page.bootstrap.actor, manifest: bootstrap.manifest, page } satisfies PanelChromeComponentProps<typeof page>)
-              : navigation(props.page, 'sidebar', navigationOpen.value, () => { navigationOpen.value = false })
+            ? [
+                h('button', { 'aria-hidden': !mobileNavigation.value || !navigationOpen.value ? 'true' : undefined, 'aria-label': 'Close navigation', class: 'hp-panel-navigation-backdrop', 'data-open': navigationOpen.value ? 'true' : 'false', 'data-slot': 'navigation-backdrop', hidden: !mobileNavigation.value || !navigationOpen.value, onClick: dismissMobileNavigation, tabindex: -1, type: 'button' }),
+                SidebarComponent
+                  ? h(SidebarComponent, { actor: props.page.bootstrap.actor, manifest: bootstrap.manifest, page } satisfies PanelChromeComponentProps<typeof page>)
+                  : h('aside', { 'aria-hidden': mobileNavigation.value && !navigationOpen.value ? 'true' : undefined, class: 'hp-panel-sidebar', 'data-open': navigationOpen.value ? 'true' : 'false', 'data-slot': 'sidebar', inert: mobileNavigation.value && !navigationOpen.value ? '' : undefined }, [
+                      navigation(props.page, 'sidebar', navigationOpen.value, navigationId, () => { navigationOpen.value = false }),
+                      configuration?.placement === 'sidebar' ? h('div', { class: 'hp-panel-navigation-footer hp-panel-actions--compact' }, [h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger])]) : null,
+                    ]),
+                SidebarComponent && configuration?.placement === 'sidebar' ? h('div', { class: 'hp-panel-navigation-footer hp-panel-actions--compact' }, [h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger])]) : null,
+              ]
             : null,
-          configuration?.placement === 'sidebar' ? notificationTrigger : null,
           h('main', { class: 'hp-panel-content', 'data-slot': 'sidebar-inset' }, [
             bootstrap.manifest.layout?.breadcrumbs === false ? null : h('nav', { 'aria-label': 'Breadcrumbs', class: 'hp-panel-breadcrumbs' }, [h('ol', page.breadcrumbs.map((item, index) => h('li', { key: `${item.path}:${index}` }, [h(PanelsLink, { href: item.path }, () => item.label)])))]),
-            h('header', { class: 'hp-panel-page-header' }, [h('div', [h('h1', page.heading ?? page.title), page.subheading ? h('p', page.subheading) : null])]),
-            headerWidgets.length > 0 ? h(VueDashboardRenderer, { dashboard: { dashboardId: `${page.manifest.id}-header`, label: 'Page header widgets', viewportWidth: viewportWidth.value, widgets: headerWidgets } }) : null,
-            pageBody(props.page, registry, props.resolveResource, { effects, transport }),
-            footerWidgets.length > 0 ? h(VueDashboardRenderer, { dashboard: { dashboardId: `${page.manifest.id}-footer`, label: 'Page footer widgets', viewportWidth: viewportWidth.value, widgets: footerWidgets } }) : null,
+            h('header', { class: 'hp-panel-page-header hp-panel-main-header' }, [h('div', [h('h1', page.heading ?? page.title), page.subheading ? h('p', page.subheading) : null])]),
+            h('div', { class: 'hp-panel-main-body' }, [
+              headerWidgets.length > 0 ? h(VueDashboardRenderer, { dashboard: { dashboardId: `${page.manifest.id}-header`, label: 'Page header widgets', viewportWidth: viewportWidth.value, widgets: headerWidgets } }) : null,
+              pageBody(props.page, registry, props.resolveResource, { effects, transport }),
+              footerWidgets.length > 0 ? h(VueDashboardRenderer, { dashboard: { dashboardId: `${page.manifest.id}-footer`, label: 'Page footer widgets', viewportWidth: viewportWidth.value, widgets: footerWidgets } }) : null,
+            ]),
           ]),
           h(VueToastViewport, { navigate: browserNavigate, store: toastStore }),
         ]),
+        }),
         fallback: () => h('section', { role: 'alert', 'data-panels-error': '500' }, [h('h1', 'Panel unavailable')]),
       })
     }

@@ -11,7 +11,7 @@ import { renderToString } from 'vue/server-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { VueTableRenderer } from '../src/tables/renderer'
 import { createComponentRegistry } from '../src/registry'
-import type { VueCustomFilterProps, VueTableColumn, VueTableRendererProps } from '../src/tables/types'
+import type { VueCustomFilterProps, VueTableColumn, VueTableRendererProps, VueTableStore } from '../src/tables/types'
 
 interface Post {
   readonly id: number
@@ -60,10 +60,11 @@ const columns: readonly VueTableColumn<Post>[] = [
 
 const mounted: Array<{ readonly app: App, readonly container: HTMLElement }> = []
 
-function createStore(options: { readonly filterMode?: 'deferred' | 'live', readonly records?: readonly Post[], readonly total?: number } = {}): TableStateStore<Post, number> {
+function createStore(options: { readonly filterMode?: 'deferred' | 'live', readonly perPage?: number, readonly records?: readonly Post[], readonly total?: number } = {}): TableStateStore<Post, number> {
   return new TableStateStore<Post, number>({
     filterMode: options.filterMode,
     panelId: 'admin',
+    perPage: options.perPage,
     records: options.records ?? records,
     tableId: 'posts',
     total: options.total ?? 4,
@@ -218,12 +219,59 @@ describe('P7-F Vue table renderer', () => {
     const region = container.querySelector('[role="region"]')
 
     expect(container.querySelector('[data-panels-component="table"]')).not.toBeNull()
+    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-table-responsive')).toBe(true)
     expect(container.querySelector('table caption')?.textContent).toBe('Posts')
     expect(region?.getAttribute('aria-label')).toBe('Posts data')
     expect(region?.getAttribute('tabindex')).toBe('0')
     expect(container.querySelector('th[scope="col"]')).not.toBeNull()
     expect(container.querySelector('td[data-label="Title"]')?.textContent).toBe('First')
     expect(container.querySelector('nav[aria-label="Table pagination"]')).not.toBeNull()
+  })
+
+  it('renders deterministic accessible pagination and locks its controls while loading', async () => {
+    const store = createStore({ total: 250 })
+    const container = mountTable(baseProps(store))
+
+    store.setPage(5)
+    await nextTick()
+    expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('section')?.getAttribute('data-state')).toBe('loading')
+    expect(container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')?.disabled).toBe(true)
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>('.hp-table-pagination-pages button')).every(button => button.disabled)).toBe(true)
+
+    store.applyData({ queryVersion: store.snapshot.queryVersion, records, total: 250 })
+    await nextTick()
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>('.hp-table-pagination-pages button[aria-label^="Page "]')).map(button => button.textContent)).toEqual(['1', '4', '5', '6', '10'])
+    expect(container.querySelector('button[aria-current="page"]')?.textContent).toBe('5')
+    expect(container.querySelector('.hp-table-pagination-info')?.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('preserves arbitrary page sizes and supports legacy stores without page-size mutation', () => {
+    const store = createStore({ perPage: 37, total: 250 })
+    const container = mountTable(baseProps(store))
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')
+
+    expect(select?.value).toBe('37')
+    expect(Array.from(select?.options ?? []).map(option => option.value)).toContain('37')
+
+    const legacyStore = new Proxy(store, {
+      get(target, property) {
+        if (property === 'setPerPage') return undefined
+        const value: unknown = Reflect.get(target, property, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as VueTableStore<Post, number>
+    const legacyContainer = mountTable({ ...baseProps(store), store: legacyStore })
+    expect(legacyContainer.querySelector('select[aria-label="Results per page"]')).toBeNull()
+  })
+
+  it('reports an accessible zero-result range', () => {
+    const container = mountTable(baseProps(createStore({ records: [], total: 0 })))
+
+    expect(container.querySelector('.hp-table-pagination-info')?.textContent).toBe('Showing 0 to 0 of 0 results')
+    expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('false')
+    expect(container.querySelector('section')?.getAttribute('data-state')).toBe('empty')
+    expect(container.querySelector('[data-slot="table-empty"]')).not.toBeNull()
   })
 
   it('binds search, sorting, live and deferred filters, column visibility, and pagination to TableStateStore', async () => {

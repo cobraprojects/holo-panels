@@ -60,10 +60,11 @@ const columns: readonly ReactTableColumn<Post>[] = [
 
 const roots: Array<{ readonly container: HTMLDivElement, readonly unmount: () => void }> = []
 
-function createStore(options: { readonly filterMode?: 'deferred' | 'live', readonly records?: readonly Post[], readonly total?: number, readonly visibleColumns?: readonly string[] } = {}): TableStateStore<Post, number> {
+function createStore(options: { readonly filterMode?: 'deferred' | 'live', readonly perPage?: number, readonly records?: readonly Post[], readonly total?: number, readonly visibleColumns?: readonly string[] } = {}): TableStateStore<Post, number> {
   return new TableStateStore<Post, number>({
     filterMode: options.filterMode,
     panelId: 'admin',
+    perPage: options.perPage,
     records: options.records ?? records,
     tableId: 'posts',
     total: options.total ?? 4,
@@ -201,6 +202,8 @@ describe('P7-E React table renderer', () => {
     const region = container.querySelector('[role="region"]')
 
     expect(container.querySelector('[data-panels-component="table"]')).not.toBeNull()
+    expect(region?.getAttribute('data-panels-component')).toBe('data-table')
+    expect(region?.classList.contains('hp-table-responsive')).toBe(true)
     expect(container.querySelector('table caption')?.textContent).toBe('Posts')
     expect(region?.getAttribute('aria-label')).toBe('Posts data')
     expect(region?.getAttribute('tabindex')).toBe('0')
@@ -208,6 +211,40 @@ describe('P7-E React table renderer', () => {
     expect(container.querySelector('td[data-label="Title"]')?.textContent).toBe('First')
     expect(container.querySelector('input[aria-label="Select page"]')).toBeNull()
     expect(container.querySelector('nav[aria-label="Table pagination"]')).not.toBeNull()
+  })
+
+  it('renders deterministic accessible pagination and locks its controls while loading', () => {
+    const store = createStore({ total: 250 })
+    const container = mount(baseProps(store))
+
+    act(() => store.setPage(5))
+    expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('section')?.getAttribute('data-state')).toBe('loading')
+    expect(container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')?.disabled).toBe(true)
+    expect([...container.querySelectorAll<HTMLButtonElement>('.hp-table-pagination-pages button')].every(button => button.disabled)).toBe(true)
+
+    act(() => store.applyData({ queryVersion: store.snapshot.queryVersion, records, total: 250 }))
+    expect([...container.querySelectorAll<HTMLButtonElement>('.hp-table-pagination-pages button[aria-label^="Page "]')].map(button => button.textContent)).toEqual(['1', '4', '5', '6', '10'])
+    expect(container.querySelector('button[aria-current="page"]')?.textContent).toBe('5')
+    expect(container.querySelector('.hp-table-pagination-info')?.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('preserves an arbitrary valid per-page value in the selector', () => {
+    const store = createStore({ perPage: 37, total: 250 })
+    const container = mount(baseProps(store))
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')
+
+    expect(select?.value).toBe('37')
+    expect([...select?.options ?? []].map(option => option.value)).toContain('37')
+  })
+
+  it('reports an accessible zero-result range', () => {
+    const container = mount(baseProps(createStore({ records: [], total: 0 })))
+
+    expect(container.querySelector('.hp-table-pagination-info')?.textContent).toBe('Showing 0 to 0 of 0 results')
+    expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('false')
+    expect(container.querySelector('section')?.getAttribute('data-state')).toBe('empty')
+    expect(container.querySelector('[data-slot="table-empty"]')).not.toBeNull()
   })
 
   it('renders built-in column semantics and formatter manifests without unsafe HTML or URLs', async () => {

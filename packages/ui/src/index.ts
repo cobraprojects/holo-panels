@@ -1,4 +1,5 @@
 export * from './accessibility'
+export * from './colors'
 export * from './conformance'
 export * from './icons'
 export * from './tokens'

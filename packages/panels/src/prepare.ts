@@ -5,6 +5,7 @@ import {
   PanelsDiscoveryError,
   createProjectDiscoveryModuleLoader,
   planFrameworkArtifacts,
+  type DiscoveredPanelAppearance,
   type DiscoveredPanelPath,
   type FrameworkArtifactManifest,
   type FrameworkId,
@@ -21,12 +22,18 @@ import {
 } from '@holo-js/kernel'
 import { resolveFrameworkProjectDirectories } from './framework-project-directories'
 import { preparePanelPlugins, type PanelPluginPreparationInput } from './plugin-preparation'
+import { renderResourceTypeBindings } from './resource-type-bindings'
 
 const compilers = new Map<string, DiscoveryCompiler>()
 const frameworkIds = new Set<string>(['next', 'nuxt', 'sveltekit'])
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stringRecord(value: unknown): Readonly<Record<string, string>> | undefined {
+  if (!isRecord(value)) return undefined
+  return Object.freeze(Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')))
 }
 
 function parseFrameworkOwnership(contents: string | undefined): FrameworkArtifactManifest | undefined {
@@ -162,6 +169,12 @@ export const preparer = defineHoloProjectPreparer({
 
     try {
       const result = await compiler.compile(context.run.kind === 'incremental' ? context.run.changes : [])
+      const resourceTypeBindings = await renderResourceTypeBindings(
+        context.projectRoot,
+        result.resourceTypeBindings,
+        result.relationManagerTypeBindings,
+      )
+      const discoveryArtifacts = [...result.artifacts, resourceTypeBindings]
       const activeFramework = frameworkId(context.framework?.id)
       const pluginInputs = result.definitions
         .filter(definition => definition.kind === 'panel')
@@ -171,7 +184,7 @@ export const preparer = defineHoloProjectPreparer({
         if (pluginInputs.length > 0) throw new Error('[Holo Panels] Installed panel plugins require a detected framework during preparation.')
         return {
           kind: 'prepared',
-          generatedArtifacts: result.artifacts,
+          generatedArtifacts: discoveryArtifacts,
           watch: { roots: result.watchRoots },
         } as const
       }
@@ -201,11 +214,25 @@ export const preparer = defineHoloProjectPreparer({
           const passwordResetPath = definition.client.passwordResetPath
           const profilePath = definition.client.profilePath
           const registrationPath = definition.client.registrationPath
-          const unresolvedThemeColors = definition.client.themeColors
-          const themeColors = unresolvedThemeColors && typeof unresolvedThemeColors === 'object' && !Array.isArray(unresolvedThemeColors)
-            ? Object.fromEntries(Object.entries(unresolvedThemeColors).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+          const simplePageMaxContentWidth = definition.client.simplePageMaxContentWidth
+          const unresolvedAppearance = definition.client.appearance
+          const appearance: DiscoveredPanelAppearance | undefined = isRecord(unresolvedAppearance)
+            ? (() => {
+                const colors = stringRecord(unresolvedAppearance.colors)
+                const tokens = stringRecord(unresolvedAppearance.tokens)
+                return {
+                  ...(colors ? { colors } : {}),
+                  ...(unresolvedAppearance.density === 'comfortable' || unresolvedAppearance.density === 'compact' ? { density: unresolvedAppearance.density } : {}),
+                  ...(typeof unresolvedAppearance.fontFamily === 'string' || unresolvedAppearance.fontFamily === null ? { fontFamily: unresolvedAppearance.fontFamily } : {}),
+                  ...(typeof unresolvedAppearance.monoFontFamily === 'string' || unresolvedAppearance.monoFontFamily === null ? { monoFontFamily: unresolvedAppearance.monoFontFamily } : {}),
+                  ...(typeof unresolvedAppearance.serifFontFamily === 'string' || unresolvedAppearance.serifFontFamily === null ? { serifFontFamily: unresolvedAppearance.serifFontFamily } : {}),
+                  ...(tokens ? { tokens } : {}),
+                }
+              })()
             : undefined
+          const themeColors = stringRecord(definition.client.themeColors)
           return {
+            ...(appearance ? { appearance } : {}),
             ...(typeof brandingName === 'string' ? { brandingName } : {}),
             ...(darkMode === 'dark' || darkMode === 'light' || darkMode === 'system' ? { darkMode } : {}),
             ...(typeof emailChangeVerificationPath === 'string' ? { emailChangeVerificationPath } : {}),
@@ -222,6 +249,7 @@ export const preparer = defineHoloProjectPreparer({
             ...(typeof profilePath === 'string' ? { profilePath } : {}),
             ...(typeof registrationPath === 'string' ? { registrationPath } : {}),
             routes: panelRoutes(definition.server, definition.id, path),
+            ...(typeof simplePageMaxContentWidth === 'string' ? { simplePageMaxContentWidth } : {}),
             ...(themeColors && Object.keys(themeColors).length > 0 ? { themeColors } : {}),
           }
         })
@@ -263,7 +291,7 @@ export const preparer = defineHoloProjectPreparer({
         })),
         ...preparedPlugins.managedArtifacts,
       ].sort((left, right) => left.path.localeCompare(right.path))
-      const generatedArtifacts = result.artifacts.map(artifact => artifact.path === 'framework-artifacts.json'
+      const generatedArtifacts = discoveryArtifacts.map(artifact => artifact.path === 'framework-artifacts.json'
         ? { path: artifact.path, contents: `${JSON.stringify(plan.ownership, null, 2)}\n` }
         : artifact)
       generatedArtifacts.push(

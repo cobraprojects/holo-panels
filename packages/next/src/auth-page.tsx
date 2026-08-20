@@ -1,12 +1,14 @@
 'use client'
 
-import { executePanelAuthRequest, panelContentWidthValue, panelThemeVariables } from '@holo-js/panels-react'
+import { executePanelAuthRequest, panelContentWidthValue } from '@holo-js/panels-react'
 import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { nextPanelAuthAppearanceVariables, type NextPanelAuthAppearance } from './auth-appearance'
 import { ShadcnButton, ShadcnCard, ShadcnCardContent, ShadcnCardHeader, ShadcnIcon, ShadcnInput, ShadcnLabel, ShadcnSelect } from './internal-ui'
 
 export type NextPanelAuthPageType = 'email-verification' | 'email-verification-verify' | 'mfa-challenge' | 'password-reset-request' | 'password-reset' | 'registration'
 
 export interface NextPanelAuthPageProps {
+  readonly appearance?: NextPanelAuthAppearance
   readonly brandName: string
   readonly loginPath?: string
   readonly panelId: string
@@ -52,12 +54,12 @@ function request(type: NextPanelAuthPageType, data: FormData): { readonly operat
   return { operation: 'registration', payload: { credentials: { email: String(data.get('email') ?? ''), name: String(data.get('name') ?? ''), password, passwordConfirmation } } }
 }
 
-export function NextPanelAuthPage({ brandName, loginPath, panelId, simplePageMaxContentWidth, theme = 'system', themeColors, type }: NextPanelAuthPageProps) {
+export function NextPanelAuthPage({ appearance, brandName, loginPath, panelId, simplePageMaxContentWidth, theme = 'system', themeColors, type }: NextPanelAuthPageProps) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const [title, description] = pageText[type]
-  const style = { ...panelThemeVariables({ colors: themeColors }), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
+  const style = { ...nextPanelAuthAppearanceVariables(appearance, themeColors), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
@@ -81,7 +83,7 @@ export function NextPanelAuthPage({ brandName, loginPath, panelId, simplePageMax
     }
   }
 
-  return <main className="hp-auth-page" data-holo-panel data-theme={theme} style={style}>
+  return <main className="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={style}>
     <ShadcnCard className="hp-auth-card">
       <ShadcnCardHeader><span className="hp-auth-brand-mark"><ShadcnIcon name={type === 'registration' ? 'user' : 'key'} /></span><div><p>{brandName}</p><h1>{title}</h1><span>{description}</span></div></ShadcnCardHeader>
       <ShadcnCardContent><form onSubmit={submit}>{fields(type, panelId)}{error ? <p className="hp-auth-error" role="alert">{error}</p> : null}{message ? <p className="hp-auth-success" role="status">{message}</p> : null}<ShadcnButton className="hp-button hp-button-primary" disabled={pending} type="submit">{pending ? 'Please wait…' : type === 'email-verification' ? 'Resend verification email' : type === 'email-verification-verify' ? 'Verify email' : type === 'mfa-challenge' ? 'Verify' : 'Continue'}</ShadcnButton></form>{loginPath ? <p className="hp-auth-footer"><a href={loginPath}>Back to sign in</a></p> : null}</ShadcnCardContent>

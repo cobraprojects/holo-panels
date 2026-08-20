@@ -1,19 +1,15 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
 import { belongsTo, column as databaseColumn, defineGeneratedTable, defineModel } from '@holo-js/db'
-import { ResourceBuilder } from '@holo-js/panels-core'
+import { CreateRecord, EditRecord, ListRecords, RelationManager, Resource, ViewRecord } from '@holo-js/panels-resources'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
-  callout,
-  column,
-  definePanel,
+  configureNotificationSender,
   defineColumn,
   defineCustomPage,
   defineField,
-  defineRelationManager,
-  defineResource,
-  defineSchema,
-  defineTable,
-  field,
-  schemaComponentsFor,
+  definePanel,
+  generatedResourcePageManifests,
+  Notification,
+  type ResourceRecordFor,
   type PanelDefinition,
 } from '../src/index'
 
@@ -32,10 +28,210 @@ const Post = defineModel(posts, {
   fillable: ['authorId', 'published', 'title'],
   relations: { author: belongsTo(() => Author, 'authorId') },
 })
-type PostRecord = Awaited<ReturnType<typeof Post.create>>
+type PostRecord = ResourceRecordFor<typeof Post>
 
-describe('generated definition APIs', () => {
-  it('builds discoverable fluent panel definitions', () => {
+function typecheckOnly(): boolean { return false }
+
+class ListPosts extends ListRecords {
+  static override get resource() { return PostResource }
+
+  protected override getHeaderActions() {
+    return PostResource.actions(action => [action.create().label('New post')])
+  }
+}
+
+class CreatePost extends CreateRecord {
+  static override get resource() { return PostResource }
+}
+
+class EditPost extends EditRecord {
+  static override get resource() { return PostResource }
+
+  protected override getHeaderActions() {
+    return PostResource.actions(action => [action.view(), action.delete().requiresConfirmation()])
+  }
+}
+
+class ViewPost extends ViewRecord {
+  static override get resource() { return PostResource }
+
+  protected override getHeaderActions() {
+    return PostResource.actions(action => [action.edit()])
+  }
+}
+
+class PostResource extends Resource {
+  protected static override model = Post
+  static override recordTitleAttribute = this.attribute('title')
+
+  static form = this.configureForm(schema => schema.components(field => [
+    field.textInput('title')
+      .required()
+      .maxLength(120)
+      .disabled(({ get, record, set }) => {
+        expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
+        expectTypeOf(get('published')).toEqualTypeOf<boolean | undefined>()
+        set('published', true)
+        return false
+      }),
+    field.checkbox('published'),
+  ]))
+
+  static table = this.configureTable(table => table
+    .columns(column => [
+      column.text('title').searchable().sortable(),
+      column.text('author.name'),
+    ])
+    .recordActions(action => [
+      action.view(),
+      action.edit(),
+      action.delete(),
+    ])
+    .toolbarActions(action => [
+      action.group([
+        action.deleteBulk(),
+      ]),
+    ])
+  )
+
+  static publishAction = this.action(action => action.make('publish')
+    .authorize(({ record }) => {
+      expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
+      return record !== null
+    })
+    .schema(field => [
+      field.textInput('title'),
+    ])
+    .action((_data, { record, selectedRecords }) => {
+      expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
+      expectTypeOf(selectedRecords).toEqualTypeOf<readonly PostRecord[]>()
+      return record?.title
+    }))
+
+  static invalidForm = typecheckOnly()
+    ? this.configureForm(schema => schema.components(field => [
+        // @ts-expect-error missing is not a Post field
+        field.textInput('missing'),
+        // @ts-expect-error title is not a boolean field
+        field.checkbox('title'),
+      ]))
+    : undefined
+
+  static invalidTable = typecheckOnly()
+    ? this.configureTable(table => table.columns(column => [
+        // @ts-expect-error missing is not a loaded author field
+        column.text('author.missing'),
+      ]))
+    : undefined
+
+  static getPages() {
+    return {
+      index: ListPosts.route('/'),
+      create: CreatePost.route('/create'),
+      view: ViewPost.route('/{record}'),
+      edit: EditPost.route('/{record}/edit'),
+    }
+  }
+}
+
+declare module '@holo-js/panels-resources' {
+  interface ResourceTypeRegistry {
+    readonly post: { readonly model: typeof Post, readonly resource: typeof PostResource }
+  }
+}
+
+class AuthorRelationManager extends RelationManager {
+  protected static override relationship = 'author'
+
+  static form = this.configureForm(schema => schema.components(field => [
+    field.textInput('name'),
+  ]))
+
+  static table = this.configureTable(table => table
+    .columns(column => [column.text('name')])
+    .recordActions(action => [action.edit(), action.delete()])
+  )
+}
+
+declare module '@holo-js/panels-resources' {
+  interface RelationManagerTypeRegistry {
+    readonly author: {
+      readonly manager: typeof AuthorRelationManager
+      readonly ownerModel: typeof Post
+      readonly relationship: 'author'
+    }
+  }
+}
+
+describe('Filament 5-shaped public API', () => {
+  it('compiles resource pages and explicit page and table actions', () => {
+    const pages = generatedResourcePageManifests({ panelPath: '/admin', resource: PostResource })
+    const listResource = pages[0]?.body?.properties.resource
+    const editResource = pages[3]?.body?.properties.resource
+
+    expect(pages.map(page => [page.pageType, page.path, page.actions.header])).toEqual([
+      ['list', '/admin/posts', ['create']],
+      ['create', '/admin/posts/create', []],
+      ['view', '/admin/posts/:record', ['edit']],
+      ['edit', '/admin/posts/:record/edit', ['view', 'delete']],
+    ])
+    expect(listResource && typeof listResource === 'object' && !Array.isArray(listResource) ? listResource.table : null).toMatchObject({
+      actions: [
+        expect.objectContaining({ id: 'view', scope: 'row' }),
+        expect.objectContaining({ id: 'edit', scope: 'row' }),
+        expect.objectContaining({ id: 'delete', scope: 'row' }),
+        expect.objectContaining({ id: 'delete', scope: 'bulk' }),
+      ],
+    })
+    expect(editResource && typeof editResource === 'object' && !Array.isArray(editResource) ? editResource.actions : null).toEqual([
+      expect.objectContaining({ id: 'view', kind: 'view' }),
+      expect.objectContaining({ confirmation: 'Are you sure?', id: 'delete', kind: 'delete' }),
+    ])
+  })
+
+  it('uses one inferred action type in tables, pages, modal schemas, and notifications', async () => {
+    const action = PostResource.publishAction
+
+    const sent: object[] = []
+    configureNotificationSender({ send: notification => { sent.push(notification) } })
+    await Notification.make('published')
+      .title('Published')
+      .success()
+      .actions([action])
+      .send()
+
+    expect(action.manifest('row')).toMatchObject({ id: 'publish', scope: 'row' })
+    expect(sent).toEqual([expect.objectContaining({
+      actions: [expect.objectContaining({ id: 'publish', scope: 'notification' })],
+      id: 'published',
+      status: 'success',
+      title: 'Published',
+    })])
+    configureNotificationSender(null)
+  })
+
+  it('uses the normal schema, table, and action implementations in relation managers', () => {
+    expect(AuthorRelationManager.compile()).toMatchObject({
+      actions: [expect.objectContaining({ id: 'edit' }), expect.objectContaining({ id: 'delete' })],
+      relationName: 'author',
+      table: expect.any(Object),
+    })
+  })
+
+  it('rejects invalid model fields and preserves fluent subtype methods', () => {
+    expect(PostResource.invalidForm).toBeUndefined()
+    expect(PostResource.invalidTable).toBeUndefined()
+    expect(PostResource.compile()).toMatchObject({
+      form: expect.any(Object),
+      table: expect.any(Object),
+    })
+  })
+
+  it('keeps panel and custom-component definitions independent from resource packages', () => {
+    class RendererContext {
+      readonly locale = 'en'
+    }
+
     const panel = definePanel('admin')
       .default()
       .path('/admin')
@@ -44,231 +240,22 @@ describe('generated definition APIs', () => {
       .discoverPages()
       .discoverWidgets()
       .discoverClusters()
-
-    expectTypeOf(panel).toEqualTypeOf<PanelDefinition>()
-    expect(panel.compileDiscoveryDefinition()).toMatchObject({
-      discoveryMarker: '@holo-js/panels/discovery/v1',
-      kind: 'panel',
-      navigationKeys: [],
-      id: 'admin',
-      route: '/admin',
-      default: true,
-      discover: {
-        clusters: 'clusters',
-        pages: 'pages',
-        resources: 'resources',
-        widgets: 'widgets',
-      },
-      client: { path: '/admin' },
-      server: { plugins: [] },
+    const page = defineCustomPage('overview').loader(context => {
+      expectTypeOf(context.actor.name).toEqualTypeOf<string | undefined>()
+      return { loaded: true }
     })
-    expect(panel.guardName).toBe('admin')
-  })
-
-  it('infers Holo authentication and tenant context without definition type sources', () => {
-    const page = defineCustomPage('overview')
-      .loader(context => {
-        expectTypeOf(context.actor.name).toEqualTypeOf<string | undefined>()
-        expectTypeOf(context.tenant).toEqualTypeOf<string>()
-        return { loaded: true }
-      })
-
-    expect(page.compileDiscoveryDefinition().id).toBe('overview')
-  })
-
-  it('preserves concrete model fields through compact and split resource definitions', () => {
-    const compact = defineResource(Post)
-      .form([
-        field.text('title').required(),
-        field.boolean('published'),
-      ])
-      .table([
-        column.text('title'),
-        column.boolean('published'),
-      ])
-      .shared()
-    const schema = defineSchema(Post).fields([field.text('title')])
-    const table = defineTable(Post).columns([column.text('title')])
-    const split = defineResource(Post).form(schema).table(table).shared()
-    const splitDefinition = split.compile()
-
-    expect(compact.compileDiscoveryDefinition().id).toBe('posts')
-    expect(splitDefinition.form).toEqual(schema.compile())
-    expect(splitDefinition.table).toEqual(table.compile())
-    expect(defineRelationManager('comments', Post).kind).toBe('relation-manager')
-  })
-
-  it('infers every model-bound field and relation column path from the Holo model', () => {
-    const uploadPolicy = {
-      acceptedExtensions: ['txt'],
-      acceptedMimeTypes: ['text/plain'],
-      directory: 'panels/uploads',
-      disk: 'local',
-      expiresInSeconds: 300,
-      imageOnly: false,
-      maximumFiles: 1,
-      maximumSize: 1024,
-      private: true,
-    } as const
-    const schema = defineSchema(Post).fields(field => [
-      field.text('title').required(),
-      field.checkbox('published'),
-      field.select('authorId'),
-      field.file('title', uploadPolicy),
-    ])
-    const table = defineTable(Post)
-      .columns(column => [
-        column.text('title').searchable(),
-        column.boolean('published'),
-        column.text('author.name').label('Author'),
-      ])
-      .filters(filter => [filter.boolean('published', 'published').label('Published')])
-      .deferFilters()
-      .groups(group => [group.group('published', 'published').collapsible()])
-      .summaries(summary => [summary.count('posts-count').label('Posts')])
-    const invalidDefinitions = (): void => {
-      defineSchema(Post).fields(field => [
-        // @ts-expect-error missing is not a model field
-        field.text('missing'),
-      ])
-      defineTable(Post).columns(column => [
-        // @ts-expect-error author.missing is not a related model path
-        column.text('author.missing'),
-      ])
-      defineTable(Post).filters(filter => [
-        // @ts-expect-error missing is not a model field
-        filter.select('missing', 'missing'),
-      ])
-    }
-
-    expectTypeOf(invalidDefinitions).toBeFunction()
-    expect(schema.compile().fields).toEqual([
-      expect.objectContaining({ path: 'title', required: true, type: 'text' }),
-      expect.objectContaining({ path: 'published', type: 'checkbox' }),
-      expect.objectContaining({ path: 'authorId', type: 'select' }),
-      expect.objectContaining({ path: 'title', properties: { uploadPolicy: { ...uploadPolicy, conversions: [] } }, type: 'panels:field:upload' }),
-    ])
-    expect(table.compile().columns).toEqual([
-      expect.objectContaining({ path: 'title', searchable: true, type: 'text' }),
-      expect.objectContaining({ path: 'published', type: 'boolean' }),
-      expect.objectContaining({ label: 'Author', path: 'author.name', type: 'text' }),
-    ])
-    expect(table.compile()).toMatchObject({
-      filterMode: 'deferred',
-      filters: [expect.objectContaining({ id: 'published', type: 'boolean' })],
-      groups: [expect.objectContaining({ id: 'published', path: 'published' })],
-      summaries: [expect.objectContaining({ id: 'posts-count', kind: 'count' })],
-    })
-  })
-
-  it('rejects missing and value-incompatible compact components', () => {
-    const invalidDefinitions = (): void => {
-      // @ts-expect-error title is a string attribute
-      defineResource(Post).form([field.boolean('title')])
-      // @ts-expect-error published is a boolean attribute
-      defineResource(Post).table([column.text('published')])
-      // @ts-expect-error missing is not a model attribute
-      defineResource(Post).form([field.text('missing')])
-      // @ts-expect-error missing is not a model attribute
-      defineSchema(Post).fields([field.text('missing')])
-    }
-
-    expectTypeOf(invalidDefinitions).toBeFunction()
-
-    expect(field.text('title').label('Title').helperText('Public title').placeholder('Write a title').required()).toMatchObject({
-      helperTextValue: 'Public title',
-      labelValue: 'Title',
-      placeholderValue: 'Write a title',
-      requiredState: true,
-    })
-    expect(column.text('title').label('Title').searchable().sortable().toggleable()).toMatchObject({
-      labelValue: 'Title',
-      searchableState: true,
-      sortableState: true,
-      toggleableState: true,
-    })
-  })
-
-  it('preserves resource subclasses across fluent configuration', () => {
-    class PostResource extends ResourceBuilder<
-      typeof Post,
-      PostRecord,
-      ReturnType<typeof Post.query>,
-      Partial<ReturnType<PostRecord['toJSON']>>,
-      object,
-      unknown,
-      false
-    > {
-      custom(): this {
-        return this
-      }
-    }
-
-    const resource = new PostResource(Post).shared().navigationLabel('Posts').custom()
-
-    expect(resource).toBeInstanceOf(PostResource)
-    expect(resource.compile().navigation.label).toBe('Posts')
-  })
-
-  it('builds customizable generated definitions', () => {
-    class RendererContext {
-      readonly locale = 'en'
-    }
-
     const customField = defineField('rating', Number, RendererContext)
       .label('Rating')
       .renderer('app:field:rating')
       .properties({ maximum: 5 })
-      .visible((value, context) => {
-        expectTypeOf(value).toEqualTypeOf<number>()
-        expectTypeOf(context).toEqualTypeOf<RendererContext>()
-        return value >= 0 && context.locale.length > 0
-      })
+      .visible((value, context) => value >= 0 && context.locale.length > 0)
       .compile()
     const customColumn = defineColumn('rating').label('Rating').renderer('app:column:rating').compile()
 
-    expect(customField).toMatchObject({
-      definitionKind: 'field',
-      id: 'rating',
-      label: 'Rating',
-      properties: { maximum: 5 },
-      renderer: 'app:field:rating',
-    })
+    expectTypeOf(panel).toEqualTypeOf<PanelDefinition>()
+    expect(panel.compileDiscoveryDefinition()).toMatchObject({ id: 'admin', kind: 'panel', route: '/admin' })
+    expect(page.compileDiscoveryDefinition().id).toBe('overview')
+    expect(customField).toMatchObject({ definitionKind: 'field', id: 'rating', properties: { maximum: 5 } })
     expect(customColumn.label).toBe('Rating')
-  })
-
-  it('infers resource action records and input from the resource model', () => {
-    const resource = defineResource(Post)
-      .actions(actions => [
-        actions.action('publish')
-          .authorize(context => {
-            expectTypeOf(context.record).toEqualTypeOf<PostRecord | null>()
-            expectTypeOf(context.actor.name).toEqualTypeOf<string | undefined>()
-            expectTypeOf(context.tenant).toEqualTypeOf<string>()
-            return context.record !== null
-          })
-          .action((input, context) => {
-            expectTypeOf(input.title).toEqualTypeOf<string | undefined>()
-            expectTypeOf(context.record).toEqualTypeOf<PostRecord | null>()
-            return { published: true }
-          }),
-      ])
-      .shared()
-
-    expect(resource.compile().actions[0]?.id).toBe('publish')
-  })
-
-  it('preserves generated resource schemas while exposing named compiled schemas', () => {
-    const generated = defineSchema(Post).fields([field.text('title')])
-    const components = schemaComponentsFor(Post)
-    const compiled = defineSchema('post-form', Post)
-      .components([components.callout().key('notice').heading('Review')])
-      .compile()
-
-    expect(generated.components).toHaveLength(1)
-    expect(compiled.components[0]).toMatchObject({
-      id: 'post-form.notice',
-      kind: 'callout',
-    })
   })
 })

@@ -2,7 +2,7 @@ import { createGeneratedResourcePage, generatedResourcePageManifests } from '@ho
 import type { NuxtPanelRuntime } from '@holo-js/panels-nuxt'
 import { createGeneratedNuxtPanelsRuntime } from '@holo-js/panels-nuxt/server'
 import type {} from '../.holo-js/generated/auth'
-import type {} from '../.holo-js/generated/schema.generated'
+import '../.holo-js/generated/schema.generated'
 import serverRegistry from '../.holo-js/generated/panels/server-registry'
 import PostResource from '../server/admin/resources/posts/PostResource'
 

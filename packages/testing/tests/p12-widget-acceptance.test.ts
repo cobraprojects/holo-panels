@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { nextWidgetAcceptanceFixture } from '../../../apps/example-next/tests/p12-widget-acceptance-next'
-import { nuxtWidgetAcceptanceFixture } from '../../../apps/example-nuxt/tests/p12-widget-acceptance-nuxt'
-import { svelteKitWidgetAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p12-widget-acceptance-sveltekit'
 import { runWidgetAcceptanceJourney } from '../src/widget-acceptance'
+import { loadExampleExport } from './load-example'
+
+type WidgetAcceptanceFixture = Parameters<typeof runWidgetAcceptanceJourney>[0]
+
+const [nextWidgetAcceptanceFixture, nuxtWidgetAcceptanceFixture, svelteKitWidgetAcceptanceFixture] = await Promise.all([
+  loadExampleExport<WidgetAcceptanceFixture>('next', 'p12-widget-acceptance-next', 'nextWidgetAcceptanceFixture'),
+  loadExampleExport<WidgetAcceptanceFixture>('nuxt', 'p12-widget-acceptance-nuxt', 'nuxtWidgetAcceptanceFixture'),
+  loadExampleExport<WidgetAcceptanceFixture>('sveltekit', 'p12-widget-acceptance-sveltekit', 'svelteKitWidgetAcceptanceFixture'),
+])
 
 describe('P12 widgets and dashboards phase gate', () => {
   it('renders stats, chart, table, and custom widgets on dashboards and resource pages in every example app', async () => {

@@ -30,4 +30,6 @@ export {
   type DiscoveryModuleLoader,
   type DiscoveryResult,
   type GeneratedPanelArtifact,
+  type DiscoveredRelationManagerTypeBinding,
+  type DiscoveredResourceTypeBinding,
 } from './types'

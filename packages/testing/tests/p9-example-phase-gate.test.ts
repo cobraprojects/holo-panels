@@ -1,15 +1,35 @@
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { initializeHoloAdapterProject, resetHoloRuntime, type HoloAdapterProject } from '@holo-js/core'
+import { createSvelteKitHoloHelpers } from '../../../../holo-js/packages/adapter-sveltekit'
+import { initializeHoloAdapterProject, resetHoloRuntime, type HoloAdapterProject } from '../../../../holo-js/packages/core'
+import type { CompiledPageDefinition } from '@holo-js/panels-core'
 import type { JsonObject, PanelAuthenticatedScope } from '@holo-js/panels-svelte'
 import type { NextPanelsRuntime } from '../../next/src/contracts'
 import { resolveNextPanelPage } from '../../next/src/runtime'
-import type { NuxtPanelOperationContext } from '../../nuxt/src/contracts'
-import type { PanelOperationInput, PanelPageResolutionInput, SvelteKitPanelEvent } from '../../sveltekit/src/contracts'
-import { nextPanelAcceptanceFixture } from '../../../apps/example-next/tests/p9-panel-acceptance-next'
-import { nuxtPanelAcceptanceFixture } from '../../../apps/example-nuxt/tests/p9-panel-acceptance-nuxt'
-import { svelteKitPanelAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p9-panel-acceptance-sveltekit'
+import type { NuxtPanelOperationContext, NuxtPanelRuntime } from '../../nuxt/src/contracts'
+import type { PanelOperationInput, PanelPageResolutionInput, SvelteKitPanelEvent, SvelteKitPanelRegistry } from '../../sveltekit/src/contracts'
+import { loadExampleExport, loadExampleSchema } from './load-example'
+
+interface PanelAcceptanceFixture {
+  readonly pages: readonly CompiledPageDefinition<JsonObject, object, unknown, object>[]
+}
+
+interface NextPanelAcceptanceFixture extends PanelAcceptanceFixture {
+  createRuntime(overrides: {
+    readonly auth?: NextPanelsRuntime['auth']
+    readonly resolveServices?: NextPanelsRuntime['resolveServices']
+    readonly resolveTenant?: NextPanelsRuntime['resolveTenant']
+  }): Promise<NextPanelsRuntime>
+}
+
+interface NuxtPanelAcceptanceFixture extends PanelAcceptanceFixture {
+  loadRuntime(): Promise<NuxtPanelRuntime>
+}
+
+interface SvelteKitPanelAcceptanceFixture extends PanelAcceptanceFixture {
+  loadRegistry(): Promise<SvelteKitPanelRegistry>
+}
 
 interface StoredPost extends Record<string, unknown> {
   category: string
@@ -33,9 +53,9 @@ interface TestRecord {
 
 function createPersistence(definition?: object): { readonly create: (values: Readonly<Record<string, unknown>>) => Promise<TestRecord>, readonly query: () => object, readonly records: StoredPost[] } {
   const records: StoredPost[] = [
-    { category: 'news', city: 'Cairo', id: 1, slug: 'first-post', tenantId: 'tenant-a', title: 'First post' },
-    { category: 'engineering', city: 'London', id: 2, slug: 'engineering-notes', tenantId: 'tenant-a', title: 'Engineering notes' },
-    { category: 'news', city: 'New York', id: 3, slug: 'other-tenant', tenantId: 'tenant-b', title: 'Other tenant' },
+    { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', tenantId: 'tenant-a', title: 'First post' },
+    { category: 'Guides', city: 'Giza', id: 2, slug: 'engineering-notes', tenantId: 'tenant-a', title: 'Engineering notes' },
+    { category: 'News', city: 'Alexandria', id: 3, slug: 'other-tenant', tenantId: 'tenant-b', title: 'Other tenant' },
   ]
   const wrap = (stored: StoredPost): TestRecord => ({
     ...(definition ? { definition } : {}),
@@ -198,7 +218,13 @@ afterEach(async () => {
 
 describe('P9 example phase gate', () => {
   it('loads the generated Post List/Create/View/Edit definitions in every example', async () => {
-    for (const fixture of [nextPanelAcceptanceFixture, nuxtPanelAcceptanceFixture, svelteKitPanelAcceptanceFixture]) {
+    await Promise.all(['next', 'nuxt', 'sveltekit'].map(framework => loadExampleSchema(framework as 'next' | 'nuxt' | 'sveltekit')))
+    const fixtures = await Promise.all([
+      loadExampleExport<NextPanelAcceptanceFixture>('next', 'p9-panel-acceptance-next', 'nextPanelAcceptanceFixture'),
+      loadExampleExport<NuxtPanelAcceptanceFixture>('nuxt', 'p9-panel-acceptance-nuxt', 'nuxtPanelAcceptanceFixture'),
+      loadExampleExport<SvelteKitPanelAcceptanceFixture>('sveltekit', 'p9-panel-acceptance-sveltekit', 'svelteKitPanelAcceptanceFixture'),
+    ])
+    for (const fixture of fixtures) {
       expect(fixture.pages.map(page => page.manifest.pageType)).toEqual(['list', 'create', 'view', 'edit'])
       expect(fixture.pages.map(page => page.manifest.path)).toEqual([
         '/admin/posts',
@@ -216,19 +242,21 @@ describe('P9 example phase gate', () => {
   })
 
   it('executes Next create, list, view, edit, delete, and tenant isolation through the exported example runtime and page resolver', async () => {
+    await loadExampleSchema('next')
     const modelPath = pathToFileURL(resolve(process.cwd(), '../../apps/example-next/server/models/Post.ts')).href
     const userModelPath = pathToFileURL(resolve(process.cwd(), '../../apps/example-next/server/models/User.ts')).href
     const records = await mockPersistence(modelPath, '~/server/models/Post')
     await mockPersistence(userModelPath, '~/server/models/User')
     await initializeHoloAdapterProject(resolve(process.cwd(), '../../apps/example-next'), { processEnv: { ...process.env, DB_URL: ':memory:' } })
     await configureTestDatabase()
+    const nextPanelAcceptanceFixture = await loadExampleExport<NextPanelAcceptanceFixture>('next', 'p9-panel-acceptance-next', 'nextPanelAcceptanceFixture')
     const auth = { guard: () => ({ provider: async () => 'session', user: async () => admin }) }
     const runtime = await nextPanelAcceptanceFixture.createRuntime({ auth, resolveServices: async () => ({}), resolveTenant: async () => 'tenant-a' }) as NextPanelsRuntime
     const execute = runtime.execute
     expect(execute).toBeTypeOf('function')
     const scope = { actor: admin, locale: 'en', panelId: 'admin', parameters: {}, provider: 'session', request: new Request('https://panels.test/admin/posts'), services: {}, signal, tenant: 'tenant-a' }
     const invoke = (payload: JsonObject) => execute?.({ operation: 'form-submit', panelId: 'admin', payload, request: scope.request, scope })
-    const created = await invoke({ category: 'news', city: 'Cairo', intent: 'create', resourceId: 'posts', slug: 'created-post', title: 'Created post' })
+    const created = await invoke({ category: 'News', city: 'Cairo', intent: 'create', resourceId: 'posts', slug: 'created-post', title: 'Created post' })
     expect(created).toMatchObject({ data: { record: { createdAt: '2026-08-05T00:00:00.000Z' } } })
     const list = await resolveNextPanelPage('admin', ['posts'], new Request('https://panels.test/admin/posts'), runtime)
     expect(list.page.data.records).toEqual([
@@ -249,7 +277,7 @@ describe('P9 example phase gate', () => {
     await expect(runtime.execute?.({ operation: 'table-data', panelId: 'admin', payload: { resourceId: 'posts', sort: [{ column: 'password', direction: 'asc' }] }, request: scope.request, scope })).rejects.toThrow(/unsortable/u)
     const view = await resolveNextPanelPage('admin', ['posts', '4'], new Request('https://panels.test/admin/posts/4'), runtime)
     expect(view.page.data.record).toEqual(expect.objectContaining({ id: 4, slug: 'created-post' }))
-    await invoke({ category: 'news', city: 'Cairo', intent: 'update', recordId: 4, resourceId: 'posts', slug: 'edited-post', title: 'Edited post' })
+    await invoke({ category: 'News', city: 'Cairo', intent: 'update', recordId: 4, resourceId: 'posts', slug: 'edited-post', title: 'Edited post' })
     const edit = await resolveNextPanelPage('admin', ['posts', '4', 'edit'], new Request('https://panels.test/admin/posts/4/edit'), runtime)
     expect(edit.page.data.record).toEqual(expect.objectContaining({ id: 4, slug: 'edited-post', title: 'Edited post' }))
     await expect(resolveNextPanelPage('admin', ['posts', '3'], new Request('https://panels.test/admin/posts/3'), runtime)).rejects.toThrow('not found')
@@ -263,41 +291,46 @@ describe('P9 example phase gate', () => {
   })
 
   it('executes Nuxt list filters, view, CRUD, policy denial, and safe validation through the exported runtime', async () => {
+    await loadExampleSchema('nuxt')
     const modelPath = pathToFileURL(resolve(process.cwd(), '../../apps/example-nuxt/server/models/Post.ts')).href
     const records = await mockPersistence(modelPath)
     const project = await initializeHoloAdapterProject(resolve(process.cwd(), '../../apps/example-nuxt'), { processEnv: { ...process.env, DB_URL: ':memory:' } })
     await configureTestDatabase()
+    const nuxtPanelAcceptanceFixture = await loadExampleExport<NuxtPanelAcceptanceFixture>('nuxt', 'p9-panel-acceptance-nuxt', 'nuxtPanelAcceptanceFixture')
     const runtime = await nuxtPanelAcceptanceFixture.loadRuntime()
     const context = (operation: NuxtPanelOperationContext['operation'], actor: object, input: JsonObject) => nuxtContext(operation, actor, input, project)
-    const list = await runtime.execute(context('page-data', admin, { path: '/admin/posts?search=first&category=news' }))
+    const list = await runtime.execute(context('page-data', admin, { path: '/admin/posts?search=first&category=News' }))
     const listPayload = list.data as { readonly page: { readonly data: JsonObject } }
-    expect(listPayload.page.data.category).toBe('news')
+    expect(listPayload.page.data.category).toBe('News')
     expect(listPayload.page.data.search).toBe('first')
     expect(listPayload.page.data.records).toEqual([expect.objectContaining({ title: 'First post' })])
-    const table = await runtime.execute(context('table-data', admin, { filters: { category: 'engineering' }, resourceId: 'posts', sort: [{ column: 'title', direction: 'asc' }] }))
+    const table = await runtime.execute(context('table-data', admin, { filters: { category: 'Guides' }, resourceId: 'posts', sort: [{ column: 'title', direction: 'asc' }] }))
     expect(table).toMatchObject({ data: { records: [expect.objectContaining({ title: 'Engineering notes' })], total: 1 }, effects: [] })
-    const options = await runtime.execute(context('options', admin, { action: 'list', fieldId: 'city', page: 1, perPage: 25, resourceId: 'posts', search: 'lon' }))
-    expect(options).toMatchObject({ data: { options: [{ label: 'London', value: 'London' }], total: 1 }, effects: [] })
-    const view = await runtime.execute(context('page-data', admin, { path: '/admin/posts/first-post' }))
+    const options = await runtime.execute(context('options', admin, { action: 'list', fieldId: 'city', page: 1, perPage: 25, resourceId: 'posts', search: 'giz' }))
+    expect(options).toMatchObject({ data: { options: [{ label: 'Giza', value: 'Giza' }], total: 1 }, effects: [] })
+    const view = await runtime.execute(context('page-data', admin, { path: '/admin/posts/1' }))
     expect(view.data).toMatchObject({ page: { data: { record: { slug: 'first-post' } } } })
-    await runtime.execute(context('form-submit', admin, { authorId: '1', body: 'Body', category: 'news', categoryId: 'news', city: 'Cairo', excerpt: 'Excerpt', mutation: 'create', resourceId: 'posts', slug: 'created-post', status: 'draft', title: 'Created post' }))
-    await runtime.execute(context('form-submit', admin, { category: 'engineering', city: 'London', mutation: 'update', record: 'created-post', resourceId: 'posts', slug: 'edited-post', title: 'Edited post' }))
-    await runtime.execute(context('action', admin, { actionId: 'delete-record', recordIds: ['edited-post'], resourceId: 'posts' }))
-    await expect(runtime.execute(context('form-submit', denied, { authorId: '2', body: 'Body', category: 'news', categoryId: 'news', city: 'Cairo', excerpt: 'Excerpt', mutation: 'create', resourceId: 'posts', slug: 'denied', status: 'draft', title: 'Denied' }))).rejects.toThrow()
+    await runtime.execute(context('form-submit', admin, { authorId: '1', body: 'Body', category: 'News', categoryId: 'news', city: 'Cairo', excerpt: 'Excerpt', mutation: 'create', resourceId: 'posts', slug: 'created-post', status: 'draft', title: 'Created post' }))
+    await runtime.execute(context('form-submit', admin, { category: 'Guides', city: 'Giza', mutation: 'update', record: 4, resourceId: 'posts', slug: 'edited-post', title: 'Edited post' }))
+    await runtime.execute(context('action', admin, { actionId: 'delete-record', recordIds: [4], resourceId: 'posts' }))
+    await expect(runtime.execute(context('form-submit', denied, { authorId: '2', body: 'Body', category: 'News', categoryId: 'news', city: 'Cairo', excerpt: 'Excerpt', mutation: 'create', resourceId: 'posts', slug: 'denied', status: 'draft', title: 'Denied' }))).rejects.toThrow()
     await expect(runtime.execute(context('form-submit', admin, { mutation: 'create', resourceId: 'posts', title: 'secret stack marker' }))).rejects.toThrow()
     expect(records.some(record => record.slug === 'edited-post')).toBe(false)
   })
 
   it('executes SvelteKit list filters, view, CRUD, dependencies, policy denial, and safe validation through the exported registry', async () => {
+    await loadExampleSchema('sveltekit')
     const modelPath = pathToFileURL(resolve(process.cwd(), '../../apps/example-sveltekit/server/models/Post.ts')).href
     const records = await mockPersistence(modelPath)
-    const project = await initializeHoloAdapterProject(resolve(process.cwd(), '../../apps/example-sveltekit'), { processEnv: { ...process.env, DB_URL: ':memory:' } })
+    const projectRoot = resolve(process.cwd(), '../../apps/example-sveltekit')
+    await initializeHoloAdapterProject(projectRoot, { processEnv: { ...process.env, DB_URL: ':memory:' } })
+    const holo = createSvelteKitHoloHelpers({ projectRoot })
     await configureTestDatabase()
-    const fixture = svelteKitPanelAcceptanceFixture
+    const fixture = await loadExampleExport<SvelteKitPanelAcceptanceFixture>('sveltekit', 'p9-panel-acceptance-sveltekit', 'svelteKitPanelAcceptanceFixture')
     const registry = await fixture.loadRegistry()
     const pageInput = (path: string, actor: SvelteActor = svelteAdmin): PanelPageResolutionInput<SvelteActor> => ({
       event: svelteEvent(path),
-      holo: { getProject: async () => project } as PanelPageResolutionInput<SvelteActor>['holo'],
+      holo,
       panelId: 'admin',
       parameters: {},
       path: new URL(path, 'https://panels.test').pathname,
@@ -309,7 +342,7 @@ describe('P9 example phase gate', () => {
     expect(list.data.records).toEqual([expect.objectContaining({ title: 'First post' })])
     const table = await registry.operations?.['table-data']?.({
       event: svelteEvent('/holo/panels/admin/table-data'),
-      holo: { getProject: async () => project } as PanelOperationInput<SvelteActor, string>['holo'],
+      holo,
       operation: 'table-data',
       panelId: 'admin',
       payload: { page: 1, perPage: 1, resourceId: 'posts', search: 'engineering', sort: [{ column: 'title', direction: 'asc' }] },
@@ -319,28 +352,28 @@ describe('P9 example phase gate', () => {
     expect(table).toMatchObject({ data: { records: [expect.objectContaining({ title: 'Engineering notes' })], total: 1 }, effects: [] })
     const options = await registry.operations?.options?.({
       event: svelteEvent('/holo/panels/admin/options'),
-      holo: { getProject: async () => project } as PanelOperationInput<SvelteActor, string>['holo'],
+      holo,
       operation: 'options',
       panelId: 'admin',
-      payload: { action: 'list', fieldId: 'city', page: 1, perPage: 25, resourceId: 'posts', search: 'lon' },
+      payload: { action: 'list', fieldId: 'city', page: 1, perPage: 25, resourceId: 'posts', search: 'giz' },
       scope: svelteScope(svelteAdmin),
       tenant: 'tenant-a',
     })
-    expect(options).toMatchObject({ data: { options: [{ label: 'London', value: 'London' }], total: 1 }, effects: [] })
-    const view = await registry.resolvePage(pageInput('/admin/posts/first-post'))
+    expect(options).toMatchObject({ data: { options: [{ label: 'Giza', value: 'Giza' }], total: 1 }, effects: [] })
+    const view = await registry.resolvePage(pageInput('/admin/posts/1'))
     expect(view.data).toMatchObject({ record: { slug: 'first-post' } })
     const operation = registry.operations?.['form-submit']
     const invoke = (actor: SvelteActor, payload: JsonObject): Promise<unknown> => {
       const event = svelteEvent('/holo/panels/admin/form-submit')
-      const input: PanelOperationInput<SvelteActor, string> = { event, holo: { getProject: async () => project } as PanelOperationInput<SvelteActor, string>['holo'], operation: 'form-submit', panelId: 'admin', payload, scope: svelteScope(actor), tenant: 'tenant-a' }
+      const input: PanelOperationInput<SvelteActor, string> = { event, holo, operation: 'form-submit', panelId: 'admin', payload, scope: svelteScope(actor), tenant: 'tenant-a' }
       return Promise.resolve(operation?.(input))
     }
-    await invoke(svelteAdmin, { intent: 'create', recordId: '', resourceId: 'posts', values: { category: 'news', city: 'Cairo', slug: 'Created Post', title: 'Created Post' } })
+    await invoke(svelteAdmin, { intent: 'create', recordId: '', resourceId: 'posts', values: { category: 'News', city: 'Cairo', slug: 'created-post', title: 'Created Post' } })
     expect(records.some(record => record.slug === 'created-post')).toBe(true)
-    await invoke(svelteAdmin, { intent: 'update', recordId: 'created-post', resourceId: 'posts', values: { category: 'engineering', city: 'London', slug: 'Edited Post', title: 'Edited Post' } })
-    await registry.operations?.action?.({ event: svelteEvent('/holo/panels/admin/action'), holo: { getProject: async () => project } as PanelOperationInput<unknown, string>['holo'], operation: 'action', panelId: 'admin', payload: { actionId: 'posts.delete', input: {}, recordIds: ['edited-post'], resourceId: 'posts' }, scope: svelteScope(svelteAdmin), tenant: 'tenant-a' })
-    await expect(invoke(svelteDenied, { intent: 'create', resourceId: 'posts', values: { category: 'news', city: 'Cairo', slug: 'denied', title: 'Denied' } })).rejects.toThrow()
-    await expect(invoke(svelteAdmin, { intent: 'create', resourceId: 'posts', values: { category: 'engineering', city: 'Atlantis', slug: 'invalid-city', title: 'private implementation detail' } })).rejects.toThrow()
+    await invoke(svelteAdmin, { intent: 'update', recordId: 4, resourceId: 'posts', values: { category: 'Guides', city: 'Giza', slug: 'edited-post', title: 'Edited Post' } })
+    await registry.operations?.action?.({ event: svelteEvent('/holo/panels/admin/action'), holo, operation: 'action', panelId: 'admin', payload: { actionId: 'posts.delete', input: {}, recordIds: [4], resourceId: 'posts' }, scope: svelteScope(svelteAdmin), tenant: 'tenant-a' })
+    await expect(invoke(svelteDenied, { intent: 'create', resourceId: 'posts', values: { category: 'News', city: 'Cairo', slug: 'denied', title: 'Denied' } })).rejects.toThrow()
+    await expect(invoke(svelteAdmin, { intent: 'create', resourceId: 'posts', values: { category: 'Guides', city: 'Atlantis', slug: 'invalid-city', title: 'private implementation detail' } })).rejects.toThrow()
     expect(records.some(record => record.slug === 'edited-post')).toBe(false)
   })
 })

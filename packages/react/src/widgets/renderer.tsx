@@ -5,8 +5,10 @@ import {
   useId,
   useSyncExternalStore,
   type ComponentType,
+  type CSSProperties,
   type ReactNode,
 } from 'react'
+import { panelColorAppearance } from '@holo-js/panels-ui'
 import {
   createAccessibleChartModel,
   resolveWidgetGrid,
@@ -104,9 +106,20 @@ function StatContent({ action, navigate, stat }: {
 
 function StatsWidget({ data, props }: { readonly data: StatsWidgetData, readonly props: ReactWidgetRendererProps }): ReactNode {
   if (data.stats.length === 0) return <p>{props.manifest.emptyState}</p>
-  return <ul className="hp-widget-stats">{data.stats.map(stat => <li key={stat.id} style={{ color: stat.color ?? undefined }}>
-    <StatContent action={props.action} navigate={props.navigate} stat={stat} />
-  </li>)}</ul>
+  return <ul className="hp-widget-stats">{data.stats.map(stat => {
+    const appearance = panelColorAppearance(stat.color)
+    const style = appearance.custom
+      ? { '--hp-widget-color': appearance.custom } as CSSProperties
+      : undefined
+    return <li
+      className="hp-widget-stat"
+      data-color={appearance.attribute}
+      key={stat.id}
+      style={style}
+    >
+      <StatContent action={props.action} navigate={props.navigate} stat={stat} />
+    </li>
+  })}</ul>
 }
 
 interface ChartScale {

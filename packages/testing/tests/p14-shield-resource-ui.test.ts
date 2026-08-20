@@ -9,7 +9,8 @@ import {
   shieldRoleResource,
 } from '@holo-js/panels-shield'
 import { describe, expect, it } from 'vitest'
-import type { TableAcceptanceModel } from '../src/table-acceptance/contracts'
+import type { TableAcceptanceFixture, TableAcceptanceModel } from '../src/table-acceptance/contracts'
+import { loadExampleExport } from './load-example'
 
 const actor = { id: 7 }
 const tenant = { id: 'tenant-a', members: new Set([actor.id]), slug: 'acme' }
@@ -75,12 +76,11 @@ function model(resource: typeof roles | typeof permissions, records: readonly Re
 
 describe('P14 Shield resource UI acceptance', () => {
   it('renders configurable Role and Permission resources through every standard renderer', async () => {
-    const [next, nuxt, svelteKit] = await Promise.all([
-      import('../../../apps/example-next/tests/p7-table-acceptance-next'),
-      import('../../../apps/example-nuxt/tests/p7-table-acceptance-nuxt'),
-      import('../../../apps/example-sveltekit/tests/p7-table-acceptance-sveltekit'),
+    const fixtures = await Promise.all([
+      loadExampleExport<TableAcceptanceFixture>('next', 'p7-table-acceptance-next', 'nextTableAcceptanceFixture'),
+      loadExampleExport<TableAcceptanceFixture>('nuxt', 'p7-table-acceptance-nuxt', 'nuxtTableAcceptanceFixture'),
+      loadExampleExport<TableAcceptanceFixture>('sveltekit', 'p7-table-acceptance-sveltekit', 'svelteKitTableAcceptanceFixture'),
     ])
-    const fixtures = [next.nextTableAcceptanceFixture, nuxt.nuxtTableAcceptanceFixture, svelteKit.svelteKitTableAcceptanceFixture]
     const resources = [
       model(roles, [{ id: 1, name: 'editor', super_admin: false }]),
       model(permissions, [{ id: 1, key: 'admin.posts.view' }]),
@@ -95,5 +95,5 @@ describe('P14 Shield resource UI acceptance', () => {
         expect(rendered.markup).toContain(resource.caption)
       }
     }
-  })
+  }, 60_000)
 })

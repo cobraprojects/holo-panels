@@ -61,7 +61,7 @@ describe('P12 React widget renderer', () => {
     const store = createStore(widget, {
       data: { stats: [
         { action: 'sales.refresh', chart: [2, 4, 3], color: '#123456', description: 'Since last month', icon: 'currency', id: 'revenue', label: 'Revenue', trend: 'up', url: null, value: '$42' },
-        { action: null, chart: [], color: null, description: null, icon: null, id: 'orders', label: 'Orders', trend: null, url: '/orders', value: 8 },
+        { action: null, chart: [], color: 'success', description: null, icon: null, id: 'orders', label: 'Orders', trend: null, url: '/orders', value: 8 },
       ] },
       status: 'ready',
     })
@@ -74,6 +74,11 @@ describe('P12 React widget renderer', () => {
     expect(widgetRegion?.classList.contains('hp-widget-stats')).toBe(false)
     expect(widgetRegion?.querySelector(':scope > .hp-widget-stats')).not.toBeNull()
     expect(container.textContent).toContain('Revenue$42Since last monthup')
+    const stats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
+    expect(stats[0]?.dataset.color).toBe('#123456')
+    expect(stats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('#123456')
+    expect(stats[1]?.dataset.color).toBe('success')
+    expect(stats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('')
     expect(container.querySelector('svg[aria-hidden="true"] polyline')).not.toBeNull()
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Revenue'))?.click())
     expect(action).toHaveBeenCalledWith('sales.refresh')

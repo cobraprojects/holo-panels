@@ -59,11 +59,19 @@ async function basicProject(): Promise<{
 }> {
   const projectRoot = await createProject()
   const modules = new Map<string, DiscoveryModule>()
+  const commentsRelationManager = { relationship: 'comments' }
   const entries: readonly [string, DiscoveryModule][] = [
-    ['server/admin/AdminPanel.ts', { default: definition({ kind: 'panel', id: 'admin', default: true, route: '/admin', client: { label: 'Admin', path: '/admin' }, server: { routeDomain: null, routePrefix: null, routes: [{ method: 'GET', path: '/health', scope: 'public' }] } }) }],
-    ['server/admin/resources/posts/PostResource.mts', { default: definition({ kind: 'resource', id: 'posts', componentKeys: ['posts.form'], permissionKeys: ['admin.posts.viewAny'] }) }],
+    ['server/admin/AdminPanel.ts', { default: definition({ kind: 'panel', id: 'admin', default: true, discover: {}, route: '/admin', client: { label: 'Admin', path: '/admin' }, server: { routeDomain: null, routePrefix: null, routes: [{ method: 'GET', path: '/health', scope: 'public' }] } }) }],
+    ['server/admin/resources/posts/PostResource.mts', { default: {
+      ...definition({ kind: 'resource', id: 'posts', componentKeys: ['posts.form'], permissionKeys: ['admin.posts.viewAny'] }),
+      model: { definition: { name: 'Post', table: { tableName: 'posts' } } },
+      relations: [commentsRelationManager],
+    } }],
     ['server/admin/resources/posts/pages/ListPosts.ts', { ListPosts: definition({ kind: 'page', id: 'posts.list', route: '/posts' }) }],
-    ['server/admin/resources/posts/relation-managers/CommentsRelationManager.cts', { default: definition({ kind: 'relation-manager', id: 'posts.comments' }) }],
+    ['server/admin/resources/posts/relation-managers/CommentsRelationManager.cts', { default: {
+      ...definition({ kind: 'relation-manager', id: 'posts.comments' }),
+      relationName: 'comments',
+    } }],
     ['server/admin/resources/posts/widgets/PostStats.js', { default: definition({ kind: 'widget', id: 'post-stats', client: { component: 'stats-card' } }) }],
     ['server/admin/pages/Dashboard.mjs', { default: definition({ kind: 'page', id: 'dashboard', route: '/' }) }],
     ['server/admin/widgets/AccountStats.cjs', { default: definition({ kind: 'widget', id: 'account-stats' }) }],
@@ -123,6 +131,19 @@ describe('Holo Panels discovery compiler', () => {
       ['server/admin/resources/posts/widgets/PostStats.js', 'default', 'widget', 'admin', 'post-stats'],
       ['server/admin/widgets/AccountStats.cjs', 'default', 'widget', 'admin', 'account-stats'],
     ])
+    expect(result.resourceTypeBindings).toEqual([{
+      exportName: 'default',
+      modelName: 'Post',
+      projectPath: 'server/admin/resources/posts/PostResource.mts',
+      tableName: 'posts',
+    }])
+    expect(result.relationManagerTypeBindings).toEqual([{
+      exportName: 'default',
+      ownerResourceExportName: 'default',
+      ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.mts',
+      projectPath: 'server/admin/resources/posts/relation-managers/CommentsRelationManager.cts',
+      relationship: 'comments',
+    }])
     expect(result.artifacts.map(artifact => artifact.path)).toEqual(PANEL_ARTIFACT_NAMES)
     expect(result.artifacts.find(artifact => artifact.path === 'server-registry.ts')?.contents).toContain("async () => (await import(\"../../../server/admin/AdminPanel\"))[\"default\"]")
     expect(result.artifacts.find(artifact => artifact.path === 'client-manifest.ts')?.contents).not.toContain('projectPath')
@@ -166,17 +187,23 @@ describe('Holo Panels discovery compiler', () => {
     expect(result.artifacts.find(artifact => artifact.path === 'client-manifest.ts')?.contents).not.toContain('server-only')
   })
 
-  it('generates complete resource CRUD pages when a resource opts into page discovery', async () => {
+  it('generates complete resource CRUD pages from registered resource pages', async () => {
     const projectRoot = await createProject()
     await touch(projectRoot, 'server/admin/AdminPanel.ts')
     await touch(projectRoot, 'server/admin/resources/posts/PostResource.ts')
     const resource = {
-      ...definition({ discover: { pages: 'pages' }, id: 'posts', kind: 'resource' }),
+      ...definition({ id: 'posts', kind: 'resource' }),
       capabilities: { delete: true, forceDelete: false, restore: false },
       form: { dependencies: [], fields: [{ disabled: false, label: 'Title', path: 'title', properties: {}, readOnly: false, required: true, type: 'text', visible: true }] },
       navigation: { icon: 'document-text', label: 'Posts', sort: 10 },
       recordTitle: 'title',
       routeKey: 'id',
+      pages: [
+        { pageType: 'list', path: '/' },
+        { pageType: 'create', path: '/create' },
+        { pageType: 'view', path: '/{record}' },
+        { pageType: 'edit', path: '/{record}/edit' },
+      ],
       singular: null,
       slug: 'posts',
       table: { columns: [{ alignment: 'start', copyable: false, hidden: false, inlineEditor: null, label: 'Title', path: 'title', sortable: true, toggleable: true, type: 'text', width: null, wrap: true }] },
@@ -218,6 +245,28 @@ describe('Holo Panels discovery compiler', () => {
     })
 
     expect((await compiler.compile()).definitions.map(item => item.id)).toEqual(['control', 'products'])
+  })
+
+  it('rejects relation managers that are not registered by their parent resource', async () => {
+    const projectRoot = await createProject()
+    await touch(projectRoot, 'server/admin/AdminPanel.ts')
+    await touch(projectRoot, 'server/admin/resources/posts/PostResource.ts')
+    await touch(projectRoot, 'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts')
+    const modules = new Map<string, DiscoveryModule>([
+      ['server/admin/AdminPanel.ts', { default: definition({ id: 'admin', kind: 'panel' }) }],
+      ['server/admin/resources/posts/PostResource.ts', { default: {
+        ...definition({ id: 'posts', kind: 'resource' }),
+        model: { definition: { name: 'Post', table: { tableName: 'posts' } } },
+        relations: [],
+      } }],
+      ['server/admin/resources/posts/relation-managers/CommentsRelationManager.ts', { default: {
+        ...definition({ id: 'comments', kind: 'relation-manager' }),
+        relationName: 'comments',
+      } }],
+    ])
+
+    await expect(new DiscoveryCompiler({ projectRoot, loadModule: moduleLoader(projectRoot, modules) }).compile())
+      .rejects.toMatchObject({ code: 'PANELS_DISCOVERY_RELATION_OWNER_MISSING' })
   })
 
   it('loads root configuration and scopes ordered defaults to discovered panel definitions', async () => {
@@ -332,6 +381,27 @@ describe('Holo Panels discovery compiler', () => {
     expect(loadedPaths).toEqual(['server/admin/widgets/RenamedStats.ts'])
     expect(renamed.definitions.some(item => item.id === 'account-stats')).toBe(false)
     expect(renamed.definitions.some(item => item.id === 'renamed-stats')).toBe(true)
+  })
+
+  it('updates generated relation-manager bindings for dev create and delete events', async () => {
+    const { projectRoot, modules } = await basicProject()
+    const compiler = new DiscoveryCompiler({ projectRoot, loadModule: moduleLoader(projectRoot, modules) })
+    const relationPath = 'server/admin/resources/posts/relation-managers/CommentsRelationManager.cts'
+
+    expect((await compiler.compile()).relationManagerTypeBindings).toHaveLength(1)
+    await rm(join(projectRoot, relationPath))
+    modules.delete(relationPath)
+
+    const deleted = await compiler.compile([{ kind: 'deleted', path: relationPath }])
+    expect(deleted.relationManagerTypeBindings).toEqual([])
+
+    await touch(projectRoot, relationPath)
+    modules.set(relationPath, { default: {
+      ...definition({ id: 'posts.comments', kind: 'relation-manager' }),
+      relationName: 'comments',
+    } })
+    const created = await compiler.compile([{ kind: 'created', path: relationPath }])
+    expect(created.relationManagerTypeBindings).toHaveLength(1)
   })
 
   it.each([

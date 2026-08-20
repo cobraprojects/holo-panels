@@ -210,6 +210,38 @@ function uniqueSorted(values: readonly string[]): readonly string[] {
   return [...new Set(values)].sort(compareText)
 }
 
+function nestedRecord(value: unknown, ...keys: readonly string[]): Readonly<Record<string, unknown>> | undefined {
+  let current = value
+  for (const key of keys) {
+    if ((typeof current !== 'object' || current === null) && typeof current !== 'function') return undefined
+    current = Reflect.get(current, key)
+  }
+  return typeof current === 'object' && current !== null ? current as Readonly<Record<string, unknown>> : undefined
+}
+
+function resourceModelIdentity(definition: DiscoverableDefinition): Readonly<{ modelName: string, tableName: string }> | undefined {
+  const modelDefinition = nestedRecord(definition, 'model', 'definition')
+  const table = nestedRecord(modelDefinition, 'table')
+  const modelName = modelDefinition?.name
+  const tableName = table?.tableName
+  return typeof modelName === 'string' && typeof tableName === 'string' ? { modelName, tableName } : undefined
+}
+
+function registeredRelationNames(definition: DiscoverableDefinition): readonly string[] {
+  const relations = Reflect.get(definition, 'relations')
+  if (!Array.isArray(relations)) return []
+  return relations.flatMap((relation): readonly string[] => {
+    if ((typeof relation !== 'object' || relation === null) && typeof relation !== 'function') return []
+    const relationship = Reflect.get(relation, 'relationship')
+    return typeof relationship === 'string' ? [relationship] : []
+  })
+}
+
+function ownsRelationManager(resourcePath: string, relationManagerPath: string): boolean {
+  const resourceDirectory = dirname(resourcePath).split(sep).join('/')
+  return relationManagerPath.startsWith(`${resourceDirectory}/relation-managers/`)
+}
+
 function duplicateKeyError(
   keyKind: string,
   key: string,
@@ -391,6 +423,42 @@ export class DiscoveryCompiler {
       ? { application: applicationDefaults }
       : layersByPanel.get(candidate.panelId ?? ''))
     const loadedDefinitions = loadedCandidates.map(({ candidate, loaded }) => convertDefinition(candidate, loaded))
+    const resourceCandidates = loadedCandidates.flatMap(({ candidate, loaded }) => {
+      if (candidate.expectedKind !== 'resource') return []
+      const model = resourceModelIdentity(loaded.definition)
+      return model ? [{ candidate, loaded, model }] : []
+    })
+    const resourceTypeBindings = resourceCandidates.map(({ candidate, loaded, model }) => Object.freeze({
+      exportName: loaded.exportName,
+      modelName: model.modelName,
+      projectPath: candidate.projectPath,
+      tableName: model.tableName,
+    }))
+    const relationManagerTypeBindings = loadedCandidates.flatMap(({ candidate, loaded }) => {
+      if (candidate.expectedKind !== 'relation-manager') return []
+      const relationship = Reflect.get(loaded.definition, 'relationName')
+      if (typeof relationship !== 'string') {
+        throw new PanelsDiscoveryError('PANELS_DISCOVERY_RELATIONSHIP_MISSING', 'Relation managers must declare a relationship.', {
+          path: candidate.projectPath,
+          exportName: loaded.exportName,
+        })
+      }
+      const owner = resourceCandidates.find(resource => ownsRelationManager(resource.candidate.projectPath, candidate.projectPath)
+        && registeredRelationNames(resource.loaded.definition).includes(relationship))
+      if (!owner) {
+        throw new PanelsDiscoveryError('PANELS_DISCOVERY_RELATION_OWNER_MISSING', `Relation manager ${relationship} must be registered by its parent resource.`, {
+          path: candidate.projectPath,
+          exportName: loaded.exportName,
+        })
+      }
+      return [Object.freeze({
+        exportName: loaded.exportName,
+        ownerResourceExportName: owner.loaded.exportName,
+        ownerResourceProjectPath: owner.candidate.projectPath,
+        projectPath: candidate.projectPath,
+        relationship,
+      })]
+    })
     const explicitDefinitions = panels.flatMap(panel => registeredDefinitions(panel.candidate, panel.loaded))
     const discoveredDefinitions = [...loadedDefinitions, ...explicitDefinitions]
     const existingPageKeys = new Set(discoveredDefinitions
@@ -400,7 +468,8 @@ export class DiscoveryCompiler {
     const generatedPages = loadedCandidates.flatMap(({ candidate, loaded }): readonly DiscoveredDefinition[] => {
       if (candidate.expectedKind !== 'resource' || !candidate.panelId) return []
       const discovery = loaded.definition.discover
-      if (!discovery || typeof discovery.pages !== 'string') return []
+      const pages = Reflect.get(loaded.definition, 'pages')
+      if ((!Array.isArray(pages) || pages.length === 0) && (!discovery || typeof discovery.pages !== 'string')) return []
       const panelPath = panelPaths.get(candidate.panelId)
       if (!panelPath) return []
       return generatedResourcePageManifests({ panelPath, resource: loaded.definition }).flatMap((manifest) => {
@@ -441,6 +510,8 @@ export class DiscoveryCompiler {
       artifacts: Object.freeze(artifacts),
       changedArtifacts: Object.freeze(changedArtifacts),
       invalidatedPaths,
+      relationManagerTypeBindings: Object.freeze(relationManagerTypeBindings),
+      resourceTypeBindings: Object.freeze(resourceTypeBindings),
       watchRoots: Object.freeze(uniqueSorted([
         ...(this.#options.panelRoots ?? ['server']),
         ...(this.#options.panelEntries ?? []).map(path => dirname(path).split(sep).join('/')),
@@ -510,7 +581,6 @@ export class DiscoveryCompiler {
     ]
     const candidates: Candidate[] = []
     for (const [key, conventionalPath, expectedKind] of directoryEntries) {
-      if (configured && typeof configured[key] === 'undefined') continue
       const relativeDirectory = configured?.[key] ?? conventionalPath
       const absoluteRoot = resolveProjectPath(projectRoot, normalizeProjectPath(projectRoot, resolve(panelRoot, relativeDirectory)))
       for (const absolutePath of await collectFiles(absoluteRoot)) {

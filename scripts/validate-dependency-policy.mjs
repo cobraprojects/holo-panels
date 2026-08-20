@@ -32,8 +32,12 @@ for (const directory of packageDirectories) {
 
 const expectedRuntime = new Map([
   ['@holo-js/panels', {
-    dependencies: ['@holo-js/panels-cli', '@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui'],
+    dependencies: ['@holo-js/panels-actions', '@holo-js/panels-cli', '@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-forms', '@holo-js/panels-infolists', '@holo-js/panels-notifications', '@holo-js/panels-resources', '@holo-js/panels-schemas', '@holo-js/panels-tables', '@holo-js/panels-ui'],
     peers: ['@holo-js/db', '@holo-js/forms', '@holo-js/kernel'],
+  }],
+  ['@holo-js/panels-actions', {
+    dependencies: ['@holo-js/panels-core', '@holo-js/panels-schemas'],
+    peers: [],
   }],
   ['@holo-js/panels-cli', {
     dependencies: ['@holo-js/panels-core', 'esbuild'],
@@ -73,6 +77,14 @@ const expectedRuntime = new Map([
       '@holo-js/storage',
     ],
   }],
+  ['@holo-js/panels-forms', {
+    dependencies: ['@holo-js/panels-core', '@holo-js/panels-schemas'],
+    peers: ['@holo-js/forms'],
+  }],
+  ['@holo-js/panels-infolists', {
+    dependencies: ['@holo-js/panels-core', '@holo-js/panels-schemas'],
+    peers: [],
+  }],
   ['@holo-js/panels-next', {
     dependencies: ['@holo-js/panels-react'],
     peers: ['@holo-js/adapter-next', '@holo-js/security', 'next', 'react', 'react-dom'],
@@ -80,6 +92,10 @@ const expectedRuntime = new Map([
   ['@holo-js/panels-nuxt', {
     dependencies: ['@holo-js/panels-vue'],
     peers: ['@holo-js/adapter-nuxt', '@holo-js/security', 'h3', 'nuxt', 'vue'],
+  }],
+  ['@holo-js/panels-notifications', {
+    dependencies: ['@holo-js/panels-actions', '@holo-js/panels-core'],
+    peers: ['@holo-js/notifications'],
   }],
   ['@holo-js/panels-plugin-money', {
     dependencies: ['@holo-js/panels-core'],
@@ -89,6 +105,14 @@ const expectedRuntime = new Map([
   ['@holo-js/panels-react', {
     dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'lucide-react', 'radix-ui'],
     peers: ['react', 'react-dom'],
+  }],
+  ['@holo-js/panels-resources', {
+    dependencies: ['@holo-js/panels-actions', '@holo-js/panels-core', '@holo-js/panels-forms', '@holo-js/panels-infolists', '@holo-js/panels-notifications', '@holo-js/panels-schemas', '@holo-js/panels-tables'],
+    peers: [],
+  }],
+  ['@holo-js/panels-schemas', {
+    dependencies: ['@holo-js/panels-core'],
+    peers: [],
   }],
   ['@holo-js/panels-shield', {
     dependencies: ['@holo-js/panels-cli', '@holo-js/panels-core'],
@@ -122,6 +146,10 @@ const expectedRuntime = new Map([
       'svelte',
       'vue',
     ],
+  }],
+  ['@holo-js/panels-tables', {
+    dependencies: ['@holo-js/panels-actions', '@holo-js/panels-core', '@holo-js/panels-schemas'],
+    peers: [],
   }],
   ['@holo-js/panels-ui', {
     dependencies: [],

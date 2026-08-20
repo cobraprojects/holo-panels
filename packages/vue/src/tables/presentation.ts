@@ -1,6 +1,7 @@
-import { ShadcnButton, ShadcnInput } from '../internal-ui'
+import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnTable } from '../internal-ui'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import type { FormPath, FormValueAtPath } from '@holo-js/panels-client'
+import { ChevronDown } from 'lucide-vue-next'
 import { defineComponent, h, ref, type PropType, type VNode, type VNodeChild } from 'vue'
 import type { ComponentRegistry } from '../registry'
 import type { VueCustomColumnProps, VueTableColumn } from './types'
@@ -122,6 +123,144 @@ function iconName(formatters: readonly Formatter[], active: boolean): string {
   return typeof configured === 'string' && /^[a-z][a-z0-9-]*$/u.test(configured) ? configured : active ? 'check' : 'x-mark'
 }
 
+export interface VueTablePresentationColumn<TRecord extends object = object> {
+  readonly alignment?: 'center' | 'end' | 'start'
+  readonly ariaSort?: 'ascending' | 'descending' | 'none'
+  readonly header: VNodeChild
+  readonly key: string
+  readonly label: string
+  readonly width?: number | string | null
+  readonly wrap?: boolean
+  render(record: Readonly<TRecord>): VNodeChild
+}
+
+export interface VueTablePresentationPlacement<TRecord extends object = object> {
+  readonly header: VNodeChild
+  readonly label: string
+  render(record: Readonly<TRecord>): VNodeChild
+}
+
+export interface VueTablePresentationSummary {
+  readonly id: string
+  readonly label: string
+  readonly value: VNodeChild
+}
+
+export interface VueTablePresentationGroup<TRecord extends object = object> {
+  readonly collapsed?: boolean
+  readonly collapsible?: boolean
+  readonly description?: string
+  readonly key: string
+  readonly records: readonly Readonly<TRecord>[]
+  readonly summaries?: readonly VueTablePresentationSummary[]
+  readonly title: string
+  readonly onToggle?: () => void
+}
+
+export interface VueTablePresentationProps<TRecord extends object = object> {
+  readonly ariaLabel: string
+  readonly caption: string
+  readonly columns: readonly VueTablePresentationColumn<TRecord>[]
+  readonly containerClass?: string
+  readonly groups?: readonly VueTablePresentationGroup<TRecord>[]
+  readonly leading?: VueTablePresentationPlacement<TRecord>
+  readonly records: readonly Readonly<TRecord>[]
+  readonly summaries?: readonly VueTablePresentationSummary[]
+  readonly trailing?: VueTablePresentationPlacement<TRecord>
+  rowKey(record: Readonly<TRecord>): number | string
+}
+
+function tableSummaryRows(columnCount: number, summaries: readonly VueTablePresentationSummary[]): VNode | null {
+  if (summaries.length === 0) return null
+  return h('tfoot', summaries.map(summary => h('tr', { class: 'hp-table-total-summary', key: summary.id }, [
+    h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, ['Total · ', summary.label, ': ', summary.value]),
+  ])))
+}
+
+function presentationRows(
+  presentation: VueTablePresentationProps,
+  records: readonly Readonly<object>[],
+  group?: VueTablePresentationGroup,
+): VNodeChild[] {
+  const nodes: VNodeChild[] = []
+  const columnCount = presentation.columns.length + (presentation.leading ? 1 : 0) + (presentation.trailing ? 1 : 0)
+  if (group) {
+    nodes.push(h('tr', { class: 'hp-table-group', key: `group-${group.key}` }, [
+      h('th', { colspan: Math.max(1, columnCount), scope: 'rowgroup' }, [
+        group.collapsible
+          ? h(ShadcnButton, { 'aria-expanded': !group.collapsed, type: 'button', onClick: group.onToggle }, {
+              default: () => [h(ChevronDown, { 'aria-hidden': 'true' }), h('span', group.title), h('span', { class: 'hp-table-group-count' }, records.length)],
+            })
+          : group.title,
+        group.description ? h('small', group.description) : null,
+      ]),
+    ]))
+  }
+  if (!group?.collapsed) {
+    for (const record of records) {
+      nodes.push(h('tr', { key: presentation.rowKey(record) }, [
+        presentation.leading ? h('td', { 'data-label': presentation.leading.label }, [presentation.leading.render(record)]) : null,
+        ...presentation.columns.map(column => h('td', {
+          'data-label': column.label,
+          key: column.key,
+          style: {
+            textAlign: column.alignment,
+            whiteSpace: column.wrap === false ? 'nowrap' : undefined,
+            width: column.width ?? undefined,
+          },
+        }, [column.render(record)])),
+        presentation.trailing ? h('td', { class: 'hp-table-row-actions', 'data-label': presentation.trailing.label }, [presentation.trailing.render(record)]) : null,
+      ]))
+    }
+  }
+  for (const summary of group?.summaries ?? []) {
+    nodes.push(h('tr', { class: 'hp-table-group-summary', key: `${group?.key}-${summary.id}` }, [
+      h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, [group?.title, ' subtotal · ', summary.label, ': ', summary.value]),
+    ]))
+  }
+  return nodes
+}
+
+export const VueTablePresentation = defineComponent({
+  name: 'VueTablePresentation',
+  props: {
+    presentation: { type: Object as PropType<VueTablePresentationProps>, required: true },
+  },
+  setup(componentProps) {
+    return (): VNode => {
+      const presentation = componentProps.presentation
+      const columnCount = presentation.columns.length + (presentation.leading ? 1 : 0) + (presentation.trailing ? 1 : 0)
+      const rows = presentation.groups && presentation.groups.length > 0
+        ? presentation.groups.flatMap(group => presentationRows(presentation, group.records, group))
+        : presentationRows(presentation, presentation.records)
+      return h('div', {
+        'aria-label': presentation.ariaLabel,
+        class: ['hp-table-responsive', presentation.containerClass],
+        'data-panels-component': 'data-table',
+        'data-slot': 'table-container',
+        role: 'region',
+        tabindex: 0,
+      }, [
+        h(ShadcnTable, null, () => [
+          h('caption', { class: 'hp-visually-hidden' }, presentation.caption),
+          h('thead', [h('tr', [
+            presentation.leading ? h('th', { scope: 'col' }, [presentation.leading.header]) : null,
+            ...presentation.columns.map(column => h('th', {
+              'aria-sort': column.ariaSort,
+              key: column.key,
+              scope: 'col',
+              style: { textAlign: column.alignment },
+            }, [column.header])),
+            presentation.trailing ? h('th', { scope: 'col' }, [presentation.trailing.header]) : null,
+          ])]),
+          h('tbody', rows),
+          tableSummaryRows(columnCount, presentation.summaries ?? []),
+        ]),
+      ])
+    }
+  },
+})
+
 export const VueTableColumnPresentation = defineComponent({
   name: 'VueTableColumnPresentation',
   props: {
@@ -182,17 +321,21 @@ export const VueTableColumnPresentation = defineComponent({
       }
       const linked = url ? h('a', { href: url, rel: url.startsWith('/') ? undefined : 'noopener noreferrer' }, [content]) : content
       const copy = async (): Promise<void> => {
+        if (!globalThis.navigator?.clipboard) {
+          copyStatus.value = 'Copy unavailable'
+          return
+        }
         try {
-          await globalThis.navigator?.clipboard?.writeText(formatted)
+          await globalThis.navigator.clipboard.writeText(formatted)
           copyStatus.value = 'Copied'
         } catch {
           copyStatus.value = 'Copy failed'
         }
       }
-      return h('span', { title: typeof tooltip === 'string' ? tooltip : undefined }, [
+      return h('span', { class: 'hp-table-cell', title: typeof tooltip === 'string' ? tooltip : undefined }, [
         linked,
         column.manifest.copyable && !column.manifest.inlineEditor
-          ? h(ShadcnButton, { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: () => void copy() }, 'Copy')
+          ? h(ShadcnButton, { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, class: 'hp-table-copy', type: 'button', onClick: () => void copy() }, { default: () => ShadcnIcon('copy') })
           : null,
         h('span', { 'aria-live': 'polite', class: 'hp-visually-hidden' }, copyStatus.value),
       ])

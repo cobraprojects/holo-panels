@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { executePanelLogin, panelContentWidthValue, panelThemeStyleAttribute } from '@holo-js/panels-svelte'
+  import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-svelte'
+  import { svelteKitPanelAuthAppearanceStyleAttribute, type SvelteKitPanelAuthAppearance } from './auth-appearance'
   import Button from './Button.svelte'
   import Icon from './Icon.svelte'
   import Input from './Input.svelte'
 
   interface Props {
+    appearance?: SvelteKitPanelAuthAppearance
     brandName: string
     forgotPasswordPath?: string
     panelId: string
@@ -14,7 +16,7 @@
     themeColors?: Readonly<Record<string, string>>
   }
 
-  let { brandName, forgotPasswordPath, panelId, registrationPath, simplePageMaxContentWidth, theme = 'system', themeColors }: Props = $props()
+  let { appearance, brandName, forgotPasswordPath, panelId, registrationPath, simplePageMaxContentWidth, theme = 'system', themeColors }: Props = $props()
   let email = $state('')
   let password = $state('')
   let error = $state('')
@@ -47,7 +49,7 @@
   }
 </script>
 
-<main class="hp-auth-page" data-holo-panel data-theme={theme} style={`${panelThemeStyleAttribute({ colors: themeColors })}${simplePageMaxContentWidth ? `--hp-auth-max-width:${panelContentWidthValue(simplePageMaxContentWidth)};` : ''}`}>
+<main class="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(appearance, themeColors)}${simplePageMaxContentWidth ? `--hp-auth-max-width:${panelContentWidthValue(simplePageMaxContentWidth)};` : ''}`}>
   <section class="hp-auth-card" data-slot="card">
     <div data-slot="card-header"><span class="hp-auth-brand-mark"><Icon name="key" /></span><div><p>Administration</p><h1>{brandName}</h1><span>Sign in to your account</span></div></div>
     <div data-slot="card-content">

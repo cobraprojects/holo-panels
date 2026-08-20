@@ -15,21 +15,20 @@ type TemplateContext = {
 
 function panelTemplate(context: TemplateContext): string {
   const defaultCall = context.isDefault ? '\n  .default()' : ''
-  return `import { definePanel } from '@holo-js/panels'\n\nexport default definePanel('${context.panel}')${defaultCall}\n  .path('${context.panelPath}')\n  .authGuard('${context.guard}')\n  .login()\n  .discoverResources()\n  .discoverPages()\n  .discoverWidgets()\n  .discoverClusters()\n`
+  return `import { definePanel } from '@holo-js/panels'\n\nexport default definePanel('${context.panel}')${defaultCall}\n  .path('${context.panelPath}')\n  .authGuard('${context.guard}')\n  .login()\n`
 }
 
 function fieldExpression(field: ModelMetadata['fields'][number]): string {
   const required = field.nullable ? '' : '.required()'
   if (field.type === 'boolean') return `field.checkbox('${field.name}')${required}`
-  if (field.type === 'date' || field.type === 'datetime') return `field.dateTime('${field.name}')${required}`
+  if (field.type === 'date' || field.type === 'datetime') return `field.dateTimePicker('${field.name}')${required}`
   if (field.type === 'number' || field.type === 'integer' || field.type === 'float' || field.type === 'decimal') {
-    return `field.text('${field.name}').numeric()${required}`
+    return `field.textInput('${field.name}').numeric()${required}`
   }
-  return `field.text('${field.name}')${required}`
+  return `field.textInput('${field.name}')${required}`
 }
 
 function columnExpression(field: ModelMetadata['fields'][number]): string {
-  if (field.type === 'boolean') return `column.boolean('${field.name}')`
   if (field.type === 'date' || field.type === 'datetime') return `column.text('${field.name}').dateTime()`
   if (field.type === 'number' || field.type === 'integer' || field.type === 'float' || field.type === 'decimal') {
     return `column.text('${field.name}').number()`
@@ -47,34 +46,63 @@ function resourceFiles(context: TemplateContext): readonly GeneratedFile[] {
     : `import ${name} from '${modelImport}'`
   const fields = context.model?.fields ?? []
   const formBody = fields.length > 0
-    ? fields.map(field => `    ${fieldExpression(field)},`).join('\n')
-    : `    field.text('name').required(),`
+    ? fields.map(field => `        ${fieldExpression(field)},`).join('\n')
+    : ''
+  const formCallback = fields.length > 0 ? 'field => [' : '() => ['
   const tableBody = fields.length > 0
-    ? fields.map(field => `    ${columnExpression(field)},`).join('\n')
-    : `    column.text('name'),`
+    ? fields.map(field => `        ${columnExpression(field)},`).join('\n')
+    : ''
+  const tableCallback = fields.length > 0 ? 'column => [' : '() => ['
+  const relationImports = (context.model?.relations ?? [])
+    .map(relation => `import ${pascalCase(relation.name)}RelationManager from './relation-managers/${pascalCase(relation.name)}RelationManager'`)
+    .join('\n')
+  const getRelations = (context.model?.relations ?? []).length > 0
+    ? `\n\n  static getRelations() {\n    return [${(context.model?.relations ?? []).map(relation => `${pascalCase(relation.name)}RelationManager`).join(', ')}]\n  }`
+    : ''
+  const resourcePages = [
+    {
+      path: `${directory}/pages/List${plural}.ts`,
+      contents: `import { ListRecords } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class List${plural} extends ListRecords {\n  static override get resource() { return ${name}Resource }\n\n  protected override getHeaderActions() {\n    return ${name}Resource.actions(action => [action.create()])\n  }\n}\n`,
+    },
+    {
+      path: `${directory}/pages/Create${name}.ts`,
+      contents: `import { CreateRecord } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class Create${name} extends CreateRecord {\n  static override get resource() { return ${name}Resource }\n}\n`,
+    },
+    {
+      path: `${directory}/pages/Edit${name}.ts`,
+      contents: `import { EditRecord } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class Edit${name} extends EditRecord {\n  static override get resource() { return ${name}Resource }\n\n  protected override getHeaderActions() {\n    return ${name}Resource.actions(action => [action.view(), action.delete()])\n  }\n}\n`,
+    },
+    {
+      path: `${directory}/pages/View${name}.ts`,
+      contents: `import { ViewRecord } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class View${name} extends ViewRecord {\n  static override get resource() { return ${name}Resource }\n\n  protected override getHeaderActions() {\n    return ${name}Resource.actions(action => [action.edit()])\n  }\n}\n`,
+    },
+  ]
+  const pageImports = `import Create${name} from './pages/Create${name}'\nimport Edit${name} from './pages/Edit${name}'\nimport List${plural} from './pages/List${plural}'\nimport View${name} from './pages/View${name}'`
+  const getPages = `  static getPages() {\n    return {\n      index: List${plural}.route('/'),\n      create: Create${name}.route('/create'),\n      view: View${name}.route('/{record}'),\n      edit: Edit${name}.route('/{record}/edit'),\n    }\n  }`
   const relationManagers = (context.model?.relations ?? []).map(relation => ({
     path: `${directory}/relation-managers/${pascalCase(relation.name)}RelationManager.ts`,
-    contents: `import { defineRelationManager } from '@holo-js/panels'\n${modelImportStatement}\n\nexport default defineRelationManager('${relation.name}', ${name})\n`,
+    contents: `import { RelationManager } from '@holo-js/panels-resources'\n\nexport default class ${pascalCase(relation.name)}RelationManager extends RelationManager {\n  protected static override relationship = '${relation.name}'\n\n  static table = this.configureTable(table => table)\n}\n`,
   }))
   if (!context.split) {
     return [{
       path: `${directory}/${name}Resource.ts`,
-      contents: `import { defineResource, defineSchema, defineTable } from '@holo-js/panels'\n${modelImportStatement}\n\nconst form = defineSchema(${name})\n  .fields(field => [\n${formBody}\n  ])\n\nconst table = defineTable(${name})\n  .columns(column => [\n${tableBody}\n  ])\n\nexport default defineResource(${name})\n  .form(form)\n  .table(table)\n`,
-    }, ...relationManagers]
+      contents: `import { Resource } from '@holo-js/panels-resources'\n${modelImportStatement}\n${pageImports}\n${relationImports}\n\nexport default class ${name}Resource extends Resource {\n  protected static override model = ${name}\n\n  static form = this.configureForm(schema => schema.components(${formCallback}\n${formBody}\n    ]))\n\n  static table = this.configureTable(table => table\n    .columns(${tableCallback}\n${tableBody}\n    ])\n    .recordActions(action => [\n      action.view(),\n      action.edit(),\n      action.delete(),\n    ])\n    .toolbarActions(action => [\n      action.group([\n        action.deleteBulk(),\n      ]),\n    ]))\n\n${getPages}${getRelations}\n}\n`,
+    }, ...resourcePages, ...relationManagers]
   }
   return [
     {
       path: `${directory}/${name}Resource.ts`,
-      contents: `import { defineResource } from '@holo-js/panels'\n${modelImportStatement}\nimport { ${name}Form } from './schemas/${name}Form'\nimport { ${plural}Table } from './tables/${plural}Table'\n\nexport default defineResource(${name})\n  .form(${name}Form)\n  .table(${plural}Table)\n`,
+      contents: `import { Resource } from '@holo-js/panels-resources'\n${modelImportStatement}\n${pageImports}\n${relationImports}\nimport { ${name}Form } from './schemas/${name}Form'\nimport { ${plural}Table } from './tables/${plural}Table'\n\nexport default class ${name}Resource extends Resource {\n  protected static override model = ${name}\n\n  static form = ${name}Form.configure\n  static table = ${plural}Table.configure\n\n${getPages}${getRelations}\n}\n`,
     },
     {
       path: `${directory}/schemas/${name}Form.ts`,
-      contents: `import { defineSchema } from '@holo-js/panels'\n${modelImportStatement}\n\nexport const ${name}Form = defineSchema(${name})\n  .fields(field => [\n${formBody}\n  ])\n`,
+      contents: `import { configureResourceForm } from '@holo-js/panels-resources'\n${modelImportStatement}\n\nexport class ${name}Form {\n  static configure = configureResourceForm(${name}, schema => schema.components(${formCallback}\n${formBody}\n  ]))\n}\n`,
     },
     {
       path: `${directory}/tables/${plural}Table.ts`,
-      contents: `import { defineTable } from '@holo-js/panels'\n${modelImportStatement}\n\nexport const ${plural}Table = defineTable(${name})\n  .columns(column => [\n${tableBody}\n  ])\n`,
+      contents: `import { configureResourceTable } from '@holo-js/panels-resources'\n${modelImportStatement}\n\nexport class ${plural}Table {\n  static configure = configureResourceTable(${name}, table => table\n    .columns(${tableCallback}\n${tableBody}\n    ])\n    .recordActions(action => [\n      action.view(),\n      action.edit(),\n      action.delete(),\n    ])\n    .toolbarActions(action => [\n      action.group([\n        action.deleteBulk(),\n      ]),\n    ]))\n}\n`,
     },
+    ...resourcePages,
     ...relationManagers,
   ]
 }
@@ -108,6 +136,12 @@ function simpleDefinition(kind: SimpleKind, context: TemplateContext): Generated
       contents: `import { ${factory} } from '@holo-js/panels'\nimport ${resourceBuilder} from '~/server/${context.panel}/resources/${kebabCase(pluralPascal(resourceName))}/${resourceBuilder}'\n\nexport default ${factory}('${identifier}', ${resourceBuilder})\n`,
     }
   }
+  if (kind === 'action') {
+    return {
+      path: `server/${context.panel}/${directory}/${context.name}.ts`,
+      contents: `import { Action } from '@holo-js/panels'\n\nexport default Action.make('${identifier}')\n`,
+    }
+  }
   if (kind === 'form-field' || kind === 'infolist-entry' || kind === 'table-column' || kind === 'filter') {
     const extensionKind = kind === 'form-field' ? 'field' : kind === 'infolist-entry' ? 'entry' : kind === 'table-column' ? 'column' : 'filter'
     const extensionName = kebabCase(context.name.replace(/(?:Column|Entry|Field|Filter)$/u, ''))
@@ -130,12 +164,12 @@ function nestedDefinition(kind: 'relation-manager' | 'resource-page', context: T
     const relation = lowerFirst(context.name.replace(/RelationManager$/, ''))
     return {
       path: `${directory}/relation-managers/${context.name}.ts`,
-      contents: `import { defineRelationManager } from '@holo-js/panels'\nimport ${resource} from '~/server/models/${resource}'\n\nexport default defineRelationManager('${relation}', ${resource})\n`,
+      contents: `import { RelationManager } from '@holo-js/panels-resources'\n\nexport default class ${context.name} extends RelationManager {\n  protected static override relationship = '${relation}'\n}\n`,
     }
   }
   return {
     path: `${directory}/pages/${context.name}.ts`,
-    contents: `import { defineResourcePage } from '@holo-js/panels'\n\nexport default defineResourcePage('${kebabCase(context.name)}')\n`,
+    contents: `import { Page } from '@holo-js/panels-resources'\nimport ${resource}Resource from '../${resource}Resource'\n\nexport default class ${context.name} extends Page {\n  static override get resource() { return ${resource}Resource }\n}\n`,
   }
 }
 

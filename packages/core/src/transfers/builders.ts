@@ -1,6 +1,5 @@
 import { DISCOVERY_MARKER } from '../discovery/types'
-import type { ResourceBuilder } from '../resources/builder'
-import type { ResourceModelDefinition, ResourceRecord } from '../resources/contracts'
+import type { ResourceCompositionTypes, ResourceInput } from '../resources/contracts'
 import type { TableRecordIdentifier } from '../tables/query/contracts'
 import type {
   CompiledExportColumn,
@@ -562,34 +561,39 @@ export class ExporterBuilder<TQuery, TRecord, TRecordId extends TableRecordIdent
   }
 }
 
-export function defineImporter<
-  TModel extends { readonly definition: ResourceModelDefinition },
-  TRecord extends ResourceRecord,
-  TQuery,
-  TInput extends Readonly<Record<string, unknown>>,
-  TActor extends object,
-  TTenant,
-  TSoftDeletes extends boolean,
->(id: string, resource: ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>): ImporterBuilder<TRecord, TInput, TActor, TTenant> {
-  return new ImporterBuilder(id, resource.id)
+interface TransferResourceClass {
+  readonly model: {
+    readonly definition: { readonly primaryKey: string }
+    create(...parameters: never[]): unknown
+    query(): unknown
+  }
+  readonly prototype: { readonly resourceCompositionTypes: ResourceCompositionTypes<unknown, object, unknown> }
+  getSlug(): string
 }
 
-export function defineExporter<
-  TModel extends { readonly definition: ResourceModelDefinition },
-  TRecord extends ResourceRecord,
-  TQuery,
-  TInput extends Readonly<Record<string, unknown>>,
-  TActor extends object,
-  TTenant,
-  TSoftDeletes extends boolean,
->(id: string, resource: ResourceBuilder<TModel, TRecord, TQuery, TInput, TActor, TTenant, TSoftDeletes>): ExporterBuilder<
-  TQuery,
-  TRecord,
-  TModel['definition']['primaryKey'] extends keyof TRecord
-    ? Extract<TRecord[TModel['definition']['primaryKey']], TableRecordIdentifier>
+type TransferComposition<TResource extends TransferResourceClass> = TResource['prototype']['resourceCompositionTypes']
+type TransferRecord<TResource extends TransferResourceClass> = Awaited<ReturnType<TResource['model']['create']>>
+type TransferActor<TResource extends TransferResourceClass> = TransferComposition<TResource>['actor']
+type TransferTenant<TResource extends TransferResourceClass> = TransferComposition<TResource>['tenant']
+
+export function defineImporter<const TResource extends TransferResourceClass>(
+  id: string,
+  resource: TResource,
+): ImporterBuilder<TransferRecord<TResource>, ResourceInput<TransferRecord<TResource>>, TransferActor<TResource>, TransferTenant<TResource>> {
+  return new ImporterBuilder(id, resource.getSlug())
+}
+
+export function defineExporter<const TResource extends TransferResourceClass>(
+  id: string,
+  resource: TResource,
+): ExporterBuilder<
+  ReturnType<TResource['model']['query']>,
+  TransferRecord<TResource>,
+  TResource['model']['definition']['primaryKey'] extends keyof TransferRecord<TResource>
+    ? Extract<TransferRecord<TResource>[TResource['model']['definition']['primaryKey']], TableRecordIdentifier>
     : TableRecordIdentifier,
-  TActor,
-  TTenant
+  TransferActor<TResource>,
+  TransferTenant<TResource>
 > {
-  return new ExporterBuilder(id, resource.id)
+  return new ExporterBuilder(id, resource.getSlug())
 }

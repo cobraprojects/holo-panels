@@ -83,12 +83,14 @@ describe('P13 Vue notification inbox trigger', () => {
 
     const button = container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')
     const content = container.querySelector<HTMLDivElement>('.hp-notification-inbox-trigger-content')
-    expect(button?.textContent).toContain('Notifications')
+    expect(button?.getAttribute('aria-label')).toBe('Notifications, 1 unread')
     expect(button?.getAttribute('aria-expanded')).toBe('false')
     expect(button?.getAttribute('aria-controls')).toBe(content?.id)
     expect(content?.hidden).toBe(true)
     expect(container.querySelector<HTMLElement>('.hp-notification-inbox')?.dataset.placement).toBe('dropdown')
-    expect(container.querySelector('.hp-notification-inbox-trigger-badge')?.textContent).toBe('1')
+    const badge = container.querySelector('.hp-notification-inbox-trigger-badge')
+    expect(badge?.textContent).toBe('1')
+    expect(badge?.getAttribute('aria-hidden')).toBe('true')
     expect(start).toHaveBeenCalledOnce()
 
     button?.click()
@@ -113,7 +115,7 @@ describe('P13 Vue notification inbox trigger', () => {
     const button = container.querySelector<HTMLButtonElement>('.hp-notification-inbox-trigger-button')
     const content = container.querySelector<HTMLDivElement>('.hp-notification-inbox-trigger-content')
     expect(container.querySelector<HTMLElement>('.hp-notification-inbox')?.dataset.placement).toBe('sidebar')
-    expect(button?.textContent).toContain('Inbox')
+    expect(button?.getAttribute('aria-label')).toBe('Inbox')
 
     button?.click()
     await nextTick()

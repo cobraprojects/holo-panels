@@ -1,5 +1,6 @@
-<!-- @holo-panels-managed sha256:e852f0c9592b5202bdf31ceeb201937b9ebd5740060f16812733a2029db7ec95 -->
+<!-- @holo-panels-managed sha256:5bffd5fd6849af1bcef90ce5b4179fe4f35f042ac05e324e6d5b719712f1e943 -->
 <script setup lang="ts">
+import '@holo-js/panels-vue/style.css'
 import { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } from '@holo-js/panels-nuxt'
 import { registerPanelPluginRenderers } from '../../../.holo-js/generated/panels/plugin-renderers'
 

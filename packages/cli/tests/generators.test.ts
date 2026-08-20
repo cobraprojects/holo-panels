@@ -47,7 +47,10 @@ async function run(
 async function expectGeneratedResourcesToTypecheck(projectRoot: string, files: readonly string[]): Promise<void> {
   const fixtureRoot = join(import.meta.dirname, 'generator-fixtures')
   await mkdir(join(projectRoot, 'models'), { recursive: true })
-  await writeFile(join(projectRoot, 'models/Post.ts'), await readFile(join(fixtureRoot, 'Post.ts'), 'utf8'))
+  await mkdir(join(projectRoot, 'server/models'), { recursive: true })
+  const model = await readFile(join(fixtureRoot, 'Post.ts'), 'utf8')
+  await writeFile(join(projectRoot, 'models/Post.ts'), model)
+  await writeFile(join(projectRoot, 'server/models/Post.ts'), model)
   const declarations = join(fixtureRoot, 'panels.d.ts')
   const program = ts.createProgram({
     rootNames: [...files.map(file => join(projectRoot, file)), declarations],
@@ -99,10 +102,6 @@ describe('Holo Panels generators', () => {
         .path('/control')
         .authGuard('backoffice')
         .login()
-        .discoverResources()
-        .discoverPages()
-        .discoverWidgets()
-        .discoverClusters()
       "
     `)
   })
@@ -135,38 +134,87 @@ describe('Holo Panels generators', () => {
 
     expect(files).toEqual([
       'server/admin/resources/posts/PostResource.ts',
+      'server/admin/resources/posts/pages/ListPosts.ts',
+      'server/admin/resources/posts/pages/CreatePost.ts',
+      'server/admin/resources/posts/pages/EditPost.ts',
+      'server/admin/resources/posts/pages/ViewPost.ts',
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
     expect(await readFile(join(projectRoot, files[0]!), 'utf8')).toMatchInlineSnapshot(`
-      "import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
+      "import { Resource } from '@holo-js/panels-resources'
       import Post from '~/models/Post'
+      import CreatePost from './pages/CreatePost'
+      import EditPost from './pages/EditPost'
+      import ListPosts from './pages/ListPosts'
+      import ViewPost from './pages/ViewPost'
+      import CommentsRelationManager from './relation-managers/CommentsRelationManager'
 
-      const form = defineSchema(Post)
-        .fields(field => [
-          field.text('title').required(),
-          field.checkbox('published').required(),
-          field.dateTime('publishedAt'),
-        ])
+      export default class PostResource extends Resource {
+        protected static override model = Post
 
-      const table = defineTable(Post)
-        .columns(column => [
-          column.text('title'),
-          column.boolean('published'),
-          column.text('publishedAt').dateTime(),
-        ])
+        static form = this.configureForm(schema => schema.components(field => [
+              field.textInput('title').required(),
+              field.checkbox('published').required(),
+              field.dateTimePicker('publishedAt'),
+          ]))
 
-      export default defineResource(Post)
-        .form(form)
-        .table(table)
+        static table = this.configureTable(table => table
+          .columns(column => [
+              column.text('title'),
+              column.text('published'),
+              column.text('publishedAt').dateTime(),
+          ])
+          .recordActions(action => [
+            action.view(),
+            action.edit(),
+            action.delete(),
+          ])
+          .toolbarActions(action => [
+            action.group([
+              action.deleteBulk(),
+            ]),
+          ]))
+
+        static getPages() {
+          return {
+            index: ListPosts.route('/'),
+            create: CreatePost.route('/create'),
+            view: ViewPost.route('/{record}'),
+            edit: EditPost.route('/{record}/edit'),
+          }
+        }
+
+        static getRelations() {
+          return [CommentsRelationManager]
+        }
+      }
       "
     `)
     expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toMatchInlineSnapshot(`
-      "import { defineRelationManager } from '@holo-js/panels'
-      import Post from '~/models/Post'
+      "import { ListRecords } from '@holo-js/panels-resources'
+      import PostResource from '../PostResource'
 
-      export default defineRelationManager('comments', Post)
+      export default class ListPosts extends ListRecords {
+        static override get resource() { return PostResource }
+
+        protected override getHeaderActions() {
+          return PostResource.actions(action => [action.create()])
+        }
+      }
       "
     `)
+  })
+
+  it('generates an empty type-safe resource when metadata generation is not requested', async () => {
+    const projectRoot = await fixture()
+
+    const files = await run(projectRoot, 'resource', ['Post'], { panel: 'admin' })
+    const resource = await readFile(join(projectRoot, files[0]!), 'utf8')
+
+    expect(resource).toContain('schema.components(() => [\n\n    ])')
+    expect(resource).toContain('.columns(() => [\n\n    ])')
+    expect(resource).not.toContain("'name'")
+    await expectGeneratedResourcesToTypecheck(projectRoot, files)
   })
 
   it('loads canonical Holo model and table metadata for generate mode', async () => {
@@ -185,10 +233,14 @@ describe('Holo Panels generators', () => {
     const contents = await readFile(join(projectRoot, files[0]!), 'utf8')
 
     expect(contents).toContain("import Post from '~/server/models/Post'")
-    expect(contents).toContain("field.text('id').numeric().required()")
-    expect(contents).toContain("field.dateTime('published_at')")
+    expect(contents).toContain("field.textInput('id').numeric().required()")
+    expect(contents).toContain("field.dateTimePicker('published_at')")
     expect(files).toEqual([
       'server/admin/resources/posts/PostResource.ts',
+      'server/admin/resources/posts/pages/ListPosts.ts',
+      'server/admin/resources/posts/pages/CreatePost.ts',
+      'server/admin/resources/posts/pages/EditPost.ts',
+      'server/admin/resources/posts/pages/ViewPost.ts',
       'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts',
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
@@ -203,11 +255,16 @@ describe('Holo Panels generators', () => {
       'server/admin/resources/posts/PostResource.ts',
       'server/admin/resources/posts/schemas/PostForm.ts',
       'server/admin/resources/posts/tables/PostsTable.ts',
+      'server/admin/resources/posts/pages/ListPosts.ts',
+      'server/admin/resources/posts/pages/CreatePost.ts',
+      'server/admin/resources/posts/pages/EditPost.ts',
+      'server/admin/resources/posts/pages/ViewPost.ts',
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain("import Post from '~/models/Post'")
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('defineSchema(Post)')
-    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('defineTable(Post)')
+    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('class PostForm')
+    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('static configure = configureResourceForm(Post')
+    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('class PostsTable')
+    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('recordActions(action => [')
   })
 
   it.each([false, true])('typechecks generated resources with concrete model fields in %s split mode', async (split) => {
@@ -290,7 +347,7 @@ describe('Holo Panels generators', () => {
       throw new Error('prepare failed')
     })).rejects.toThrow('prepare failed')
 
-    expect(await readFile(join(projectRoot, existing), 'utf8')).toContain('defineResource')
+    expect(await readFile(join(projectRoot, existing), 'utf8')).toContain('extends Resource')
     await expect(readFile(join(projectRoot, 'server/admin/resources/posts/schemas/PostForm.ts'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(readFile(join(projectRoot, 'server/admin/resources/posts/tables/PostsTable.ts'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
   })

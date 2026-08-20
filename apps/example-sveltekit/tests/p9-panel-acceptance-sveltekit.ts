@@ -1,6 +1,7 @@
 import { createGeneratedResourcePage, generatedResourcePageManifests } from '@holo-js/panels'
 import type { SvelteKitPanelRegistry } from '@holo-js/panels-sveltekit'
 import { createGeneratedSvelteKitPanelsRegistry } from '@holo-js/panels-sveltekit/server'
+import '../.holo-js/generated/schema.generated'
 import serverRegistry from '../.holo-js/generated/panels/server-registry'
 import PostResource from '../server/admin/resources/posts/PostResource'
 

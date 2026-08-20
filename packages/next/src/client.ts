@@ -1,5 +1,6 @@
 'use client'
 
+export type { NextPanelAuthAppearance } from './auth-appearance'
 export { createNextPanelComponentRegistry, NextPanelClient } from './panel-client'
 export { NextPanelResourcePage } from './resource-page'
 export { NextPanelLoginPage, type NextPanelLoginPageProps } from './login-page'

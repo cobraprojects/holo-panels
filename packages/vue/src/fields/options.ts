@@ -110,7 +110,7 @@ export const VueOptionField = defineComponent({
           value: state.value.search,
           onInput: (event: Event) => void store.load((event.currentTarget as HTMLInputElement).value, 1),
         }) : null,
-        property(props.context, 'paginated', true) ? h('nav', { 'aria-label': `${props.context.definition.label ?? 'Option'} pages` }, [
+        property(props.context, 'paginated', true) && (state.value.page > 1 || state.value.hasMore) ? h('nav', { 'aria-label': `${props.context.definition.label ?? 'Option'} pages` }, [
           h(ShadcnButton, { type: 'button', disabled: state.value.page <= 1 || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page - 1) }, 'Previous'),
           h('span', { 'aria-live': 'polite' }, `Page ${state.value.page}`),
           h(ShadcnButton, { type: 'button', disabled: !state.value.hasMore || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page + 1) }, 'Next'),

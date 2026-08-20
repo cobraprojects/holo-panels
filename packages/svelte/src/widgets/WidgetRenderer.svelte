@@ -2,6 +2,7 @@
   import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
   import Table from '../components/Table.svelte'
+  import { panelColorAppearance } from '@holo-js/panels-ui'
   import { onMount, type Component } from 'svelte'
   import { toSvelteSnapshot } from '../stores'
   import type { SvelteCustomWidgetProps, SvelteWidgetRendererProps } from './contracts'
@@ -155,11 +156,17 @@
       {#if stats.length === 0}<p>{manifest.emptyState}</p>{/if}
       <dl class="hp-widget-stats">
         {#each stats as stat (stat.id)}
-          <div data-color={stat.color} data-trend={stat.trend}>
-            <dt>{#if stat.icon}<span aria-hidden="true" data-icon={stat.icon}></span>{/if}{stat.label}</dt>
-            <dd>{stat.value}</dd>
-            {#if stat.description}<dd>{stat.description}</dd>{/if}
-            {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`}>{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
+          {@const appearance = panelColorAppearance(stat.color)}
+          <div
+            class="hp-widget-stat"
+            data-color={appearance.attribute}
+            data-trend={stat.trend}
+            style={appearance.custom ? `--hp-widget-color: ${appearance.custom}` : undefined}
+          >
+            <dt class="hp-widget-stat-label">{#if stat.icon}<span aria-hidden="true" data-icon={stat.icon}></span>{/if}{stat.label}</dt>
+            <dd class="hp-widget-stat-value">{stat.value}</dd>
+            {#if stat.description}<dd class="hp-widget-stat-description">{stat.description}</dd>{/if}
+            {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`} class="hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}">{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
             {#if stat.chart.length > 0}<dd><span aria-label={`${stat.label} trend: ${stat.chart.join(', ')}`} class="hp-widget-sparkline" role="img">{stat.chart.join(' · ')}</span></dd>{/if}
             {#if stat.action}<dd><Button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</Button></dd>{/if}
             {#if safeWidgetUrl(stat.url)}<dd><a href={safeWidgetUrl(stat.url) ?? undefined}>View {stat.label}</a></dd>{/if}

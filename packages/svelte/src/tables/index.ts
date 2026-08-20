@@ -8,7 +8,7 @@ export interface SvelteTableRendererComponentProps {
 }
 
 export const SvelteTableRenderer: Component<SvelteTableRendererComponentProps> = RawTableRenderer
-export { displayValue as displaySvelteTableValue, pageCount as svelteTablePageCount, recordValue as svelteTableRecordValue, visibleColumns as visibleSvelteTableColumns } from './helpers'
+export { displayValue as displaySvelteTableValue, pageCount as svelteTablePageCount, paginationPages as svelteTablePaginationPages, paginationRange, recordValue as svelteTableRecordValue, visibleColumns as visibleSvelteTableColumns } from './helpers'
 export type {
   SvelteCustomColumnProps,
   SvelteCustomFilterProps,

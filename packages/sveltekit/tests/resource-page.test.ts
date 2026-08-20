@@ -61,6 +61,11 @@ const postResource = {
     city: { dependsOn: 'category', valuesByDependency: { engineering: ['Cairo', 'London'], news: ['Cairo', 'New York'] } },
   },
   recordId: 'id',
+  recordActions: [
+    actionPayload({ id: 'posts.create', kind: 'create', label: 'Create post', mount: 'page', type: 'core:action:create' }),
+    actionPayload({ id: 'posts.edit', kind: 'edit', label: 'Edit', type: 'core:action:edit' }),
+    actionPayload({ confirmation: 'Delete this post?', id: 'posts.delete', kind: 'delete', label: 'Delete', type: 'core:action:delete' }),
+  ],
   routeKey: 'slug',
   routes: { create: '/admin/posts/create', edit: '/admin/posts/:record/edit', view: '/admin/posts/:record' },
   saveLabel: 'Save post',
@@ -222,6 +227,19 @@ describe('SvelteKit resource page acceptance', () => {
     expect(list).toContain('href="/admin/posts/create"')
     expect(list).toContain('href="/admin/posts/first-post"')
     expect(list).toContain('href="/admin/posts/first-post/edit"')
+    expect(list).toContain('hp-panel-topbar-start')
+    expect(list).toContain('hp-panel-topbar-end')
+    expect(list).toContain('hp-panel-navigation-header')
+    expect(list).toContain('hp-panel-navigation-body')
+    expect(list).toContain('hp-panel-main-header')
+    expect(list).toContain('hp-panel-main-body')
+    expect(list).toContain('hp-panel-navigation-backdrop')
+    expect(list).toContain('title="Posts"')
+    expect(list).toContain('hp-panel-user-glyph')
+    expect(list).toContain('data-icon="user"')
+    expect(list).toContain('hp-panel-user-action')
+    expect(list).toContain('hp-panel-actions--compact')
+    expect(list).not.toContain('>AD<')
     expect(create).toContain('Save post')
     expect(create).toContain('Category')
     expect(view).toContain('First post')
@@ -238,6 +256,7 @@ describe('SvelteKit resource page acceptance', () => {
     }).body
 
     expect(topbar).toContain('hp-panel-navigation--topbar')
+    expect(topbar).toContain('hp-panel-topbar-center')
     expect(topbar).not.toContain('hp-panel-sidebar')
   })
 
@@ -302,6 +321,7 @@ describe('SvelteKit resource page acceptance', () => {
     expect(chromeRender.head).toContain('href="/admin/theme.css"')
     expect(avatar).toContain('data-custom-avatar="7"')
     expect(avatar).toContain('data-custom-notification="topbar"')
+    expect(avatar).toContain('hp-panel-notification-action')
   })
 
   it('renders the built-in tenant switcher without application transport helpers', () => {
@@ -380,7 +400,8 @@ describe('SvelteKit resource page acceptance', () => {
     }).body
 
     expect(html).toContain('data-placement="topbar"')
-    expect(html).toContain('aria-label="0 unread notifications"')
+    expect(html).toContain('aria-label="Notifications"')
+    expect(html).not.toContain('unread notifications')
     expect(realtimeCalls).toBe(0)
   })
 
@@ -423,6 +444,10 @@ describe('SvelteKit resource page acceptance', () => {
             label: 'Inventory item',
             options: {},
             recordId: 'uuid',
+            recordActions: [
+              actionPayload({ id: 'inventory.edit', kind: 'edit', label: 'Edit', type: 'core:action:edit' }),
+              actionPayload({ id: 'inventory.archive', label: 'Archive' }),
+            ],
             routeKey: 'code',
             routes: { create: '/control/inventory/create', edit: '/control/inventory/:record/edit', view: '/control/inventory/:record' },
           },

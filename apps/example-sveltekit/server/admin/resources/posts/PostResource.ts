@@ -1,46 +1,15 @@
-import { defineRelationManager, defineResource, defineResourceStatsWidget, defineSchema, defineTable, entriesFor } from '@holo-js/panels'
+import {
+  Resource,
+  defineResourceStatsWidget,
+} from '@holo-js/panels'
 import Post from '../../../models/Post'
+import CreatePost from './pages/CreatePost'
+import EditPost from './pages/EditPost'
+import ListPosts from './pages/ListPosts'
+import ViewPost from './pages/ViewPost'
+import CommentsRelationManager from './relation-managers/CommentsRelationManager'
+import TagsRelationManager from './relation-managers/TagsRelationManager'
 
-const form = defineSchema(Post).fields(field => [
-  field.text('title').required(),
-  field.slug('slug').from('title').required(),
-  field.radio('category').options([
-    { label: 'Engineering', value: 'engineering' },
-    { label: 'News', value: 'news' },
-  ]).required(),
-  field.select('city').options([
-    { label: 'Cairo', value: 'Cairo' },
-    { label: 'London', value: 'London' },
-    { label: 'New York', value: 'New York' },
-  ]).required(),
-  field.file('featuredMediaId', {
-    acceptedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-    acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-    directory: 'panels/uploads/posts',
-    disk: 'private',
-    expiresInSeconds: 900,
-    imageOnly: true,
-    maximumFiles: 1,
-    maximumSize: 5_242_880,
-    private: true,
-  }),
-])
-const table = defineTable(Post)
-  .columns(column => [
-    column.text('title').searchable().sortable(),
-    column.text('slug').copyable(),
-    column.text('category').badge(),
-    column.text('city'),
-    column.text('author.name').label('Author'),
-  ])
-  .filters(filter => [
-    filter.select('category', 'category').label('Category').options([{ label: 'Engineering', value: 'engineering' }, { label: 'News', value: 'news' }]),
-    filter.select('city', 'city').label('City').options([{ label: 'Cairo', value: 'Cairo' }, { label: 'London', value: 'London' }, { label: 'New York', value: 'New York' }]),
-  ])
-  .deferFilters()
-  .groups(group => [group.group('category', 'category').label('Category').collapsible()])
-  .summaries(summary => [summary.count('posts-count').label('Posts')])
-const infolist = entriesFor(Post)
 const activeQuery = defineResourceStatsWidget('active-query', { record: Post })
   .heading('Active query')
   .columnSpan('full')
@@ -59,24 +28,95 @@ const activeQuery = defineResourceStatsWidget('active-query', { record: Post })
     }],
   }))
 
-export default defineResource(Post)
-  .actions(action => [
-    action.action('publish-selected')
-      .label('Publish selected')
-      .icon('check')
-      .mount('bulk')
-      .requiresConfirmation('Publish the selected posts?')
-      .authorize(() => true)
-      .action(async (_input, context) => {
-        if (!context.record) throw new Error('A selected post is required.')
-        const post = await Post.where('id', context.record.id).first()
-        if (!post) throw new Error('The selected post no longer exists.')
+export default class PostResource extends Resource {
+  protected static override model = Post
+  static override navigationIcon = 'document'
+  static override navigationLabel = 'Posts'
+  static override navigationSort = 10
+  static override recordTitleAttribute = this.attribute('title')
+  static override routeKeyName = this.attribute('id')
+  static override slug = 'posts'
+
+  static publishSelected = this.action(action => action.bulk('publish-selected')
+    .label('Publish selected')
+    .icon('check')
+    .requiresConfirmation('Publish the selected posts?')
+    .authorize(() => true)
+    .action(async (_data, { selectedRecords }) => {
+      for (const selectedRecord of selectedRecords) {
+        const post = await Post.where('id', selectedRecord.id).first()
+        if (!post) throw new Error('A selected post no longer exists.')
         await post.update({ status: 'published' })
-        return { id: context.record.id, published: true }
-      }),
-  ])
-  .tenantScope((query, context) => query.where('tenantId', context.tenant))
-  .createBindings((context) => {
+      }
+      return { published: selectedRecords.map(record => record.id) }
+    }))
+
+  static form = this.configureForm(schema => schema.components(field => [
+    field.textInput('title').required(),
+    field.textInput('slug').required(),
+    field.radio('category').options([
+      { label: 'News', value: 'News' },
+      { label: 'Guides', value: 'Guides' },
+    ]).required(),
+    field.select('city').options([
+      { label: 'Alexandria', value: 'Alexandria' },
+      { label: 'Cairo', value: 'Cairo' },
+      { label: 'Giza', value: 'Giza' },
+    ]).required(),
+    field.fileUpload('featuredMediaId')
+      .image()
+      .disk('private')
+      .directory('panels/uploads/posts')
+      .acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+      .maxSize(5_242_880),
+  ]))
+
+  static infolist = this.configureInfolist(schema => schema.components(entry => [
+    entry.text('title').label('Title'),
+    entry.text('slug').label('Slug').copyable(),
+    entry.text('category').label('Category').badge(),
+    entry.text('city').label('City'),
+  ]))
+
+  static table = this.configureTable(table => table
+    .columns(column => [
+      column.text('title').searchable().sortable(),
+      column.text('slug').copyable(),
+      column.text('category').badge(),
+      column.text('city'),
+      column.text('author.name').label('Author'),
+    ])
+    .filters(filter => [
+      filter.select('category').label('Category').options({ Guides: 'Guides', News: 'News' }),
+      filter.select('city').label('City').options({ Alexandria: 'Alexandria', Cairo: 'Cairo', Giza: 'Giza' }),
+    ])
+    .deferFilters()
+    .recordActions(action => [
+      action.view(),
+      action.edit(),
+      action.delete(),
+    ])
+    .toolbarActions(action => [
+      action.group([
+        this.publishSelected,
+        action.deleteBulk(),
+      ]),
+    ])
+  )
+
+  static override getGloballySearchableAttributes() {
+    return this.attributes(['title', 'slug'])
+  }
+
+  static override getGlobalSearchResultDetailAttributes() {
+    return this.attributes(['category', 'city'])
+  }
+
+  static override getGlobalSearchResultsLimit() {
+    return 10
+  }
+
+  static getCreateBindings = this.configureCreateBindings(context => {
     if (!context.actor) throw new Error('An authenticated actor is required to create a post.')
     return {
       authorId: String(context.actor.id),
@@ -87,13 +127,25 @@ export default defineResource(Post)
       tenantId: context.tenant,
     }
   })
-  .recordTitle('title')
-  .routeKey('slug')
-  .navigation({ icon: 'document', label: 'Posts', sort: 10 })
-  .globalSearch({ attributes: ['title', 'slug'], details: ['category', 'city'], title: 'title' })
-  .discoverPages()
-  .form(form)
-  .infolist([infolist.text('title').label('Title'), infolist.text('slug').label('Slug').copyable(), infolist.text('category').label('Category').badge(), infolist.text('city').label('City')])
-  .relations(defineRelationManager('comments', Post), defineRelationManager('tags', Post))
-  .table(table)
-  .widgets(activeQuery)
+
+  static scopeQueryToTenant = this.configureQuery((query, context) => {
+    return query.where('tenantId', context.tenant)
+  })
+
+  static getRelations() {
+    return [CommentsRelationManager, TagsRelationManager]
+  }
+
+  static override getWidgets() {
+    return [activeQuery]
+  }
+
+  static getPages() {
+    return {
+      index: ListPosts.route('/'),
+      create: CreatePost.route('/create'),
+      view: ViewPost.route('/{record}'),
+      edit: EditPost.route('/{record}/edit'),
+    }
+  }
+}

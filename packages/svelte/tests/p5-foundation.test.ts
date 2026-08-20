@@ -20,6 +20,8 @@ import {
 } from '../src/index'
 import ShellFixture from './ShellFixture.svelte'
 import InteractiveFixture from './InteractiveFixture.svelte'
+import PortalFixture from './PortalFixture.svelte'
+import RelationNoOperationsFixture from './RelationNoOperationsFixture.svelte'
 import RelationSelectorFixture from './RelationSelectorFixture.svelte'
 import RelationViewFixture from './RelationViewFixture.svelte'
 
@@ -80,12 +82,19 @@ describe('Svelte renderer foundation', () => {
     const onOperation = vi.fn(async () => undefined)
     const component = mountClient(RelationSelectorFixture, { target: container, props: { loadOptions, onOperation } })
     mounted.push({ component, container })
+    expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
     container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-footer"]')).not.toBeNull()
     if (select) {
       select.value = 'tag-typescript'
       select.dispatchEvent(new Event('change', { bubbles: true }))
@@ -105,11 +114,31 @@ describe('Svelte renderer foundation', () => {
     const component = mountClient(RelationViewFixture, { target: container, props: { onOperation } })
     mounted.push({ component, container })
 
+    const table = container.querySelector('[data-panels-component="data-table"]')
+    expect(table).not.toBeNull()
+    expect(table?.classList.contains('hp-table-responsive')).toBe(true)
+    expect(table?.classList.contains('hp-relation-table-overflow')).toBe(true)
+    expect(table?.querySelector('td[data-label="Name"]')?.textContent).toContain('TypeScript')
+    expect(table?.querySelector('.hp-table-row-actions [data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
     container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript'))
 
     expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
     expect(onOperation).not.toHaveBeenCalled()
+  })
+
+  it('omits relation action structure when no operations are configured', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(RelationNoOperationsFixture, { target: container })
+    mounted.push({ component, container })
+
+    const table = container.querySelector('[data-panels-component="data-table"]')
+    expect(table).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-toolbar"]')).toBeNull()
+    expect(table?.querySelector('th:last-child')?.textContent).toBe('Name')
+    expect(table?.querySelector('td[data-label="Actions"]')).toBeNull()
+    expect(table?.querySelector('.hp-table-row-actions')).toBeNull()
   })
 
   it('registers named components and resolves explicit panel overrides', () => {
@@ -195,12 +224,32 @@ describe('Svelte renderer foundation', () => {
     expect(container.querySelector('[data-panels-component="error-boundary"]')?.getAttribute('role')).toBe('alert')
   })
 
+  it('targets a panel-scoped portal container for dialogs and slide-overs', async () => {
+    const container = document.createElement('div')
+    const portal = document.createElement('div')
+    document.body.append(container, portal)
+    const component = mountClient(PortalFixture, { target: container, props: { target: portal } })
+    flushClient()
+
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(portal.querySelectorAll('[data-slot="dialog-overlay"]')).toHaveLength(2)
+    expect(portal.querySelector('[data-panels-component="modal"]')).not.toBeNull()
+    expect(portal.querySelector('[data-panels-component="slide-over"]')).not.toBeNull()
+
+    await unmountClient(component)
+    container.remove()
+    portal.remove()
+  })
+
   it('hydrates genuine SSR output without mismatch diagnostics', () => {
     const container = document.createElement('div')
     container.innerHTML = renderServer(ServerShellFixture, { props: { dialogsOpen: false } }).body
     document.body.append(container)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const component = hydrateClient(ShellFixture, { target: container })
+    const component = hydrateClient(ShellFixture, {
+      props: { dialogsOpen: false },
+      target: container,
+    })
     mounted.push({ component, container })
     flushClient()
 

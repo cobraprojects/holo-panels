@@ -1,17 +1,20 @@
-import { defineResource, defineSchema, defineTable } from '@holo-js/panels'
+import { Resource } from '@holo-js/panels'
 import Category from '../../../models/Category'
 
-const form = defineSchema(Category).fields(field => [field.text('name').required(), field.text('slug').required()])
-const table = defineTable(Category).columns(column => [column.text('name'), column.text('slug')])
+export default class CategoryResource extends Resource {
+  protected static override model = Category
+  static override navigationGroup = 'Content'
+  static override navigationIcon = 'folder'
+  static override navigationLabel = 'Categories'
+  static override navigationSort = 20
+  static override recordTitleAttribute = this.attribute('name')
+  static override routeKeyName = this.attribute('id')
+  static override slug = 'categories'
 
-export default defineResource(Category)
-  .recordTitle('name')
-  .routeKey('id')
-  .slug('categories')
-  .navigation({ group: 'Content', icon: 'folder', label: 'Categories', sort: 20 })
-  .globalSearch({ attributes: ['name', 'slug'], limit: 10, title: 'name' })
-  .tenantScope((query, context) => query.where('tenantId', context.tenant))
-  .createBindings(context => ({ tenantId: context.tenant }))
-  .discoverPages()
-  .form(form)
-  .table(table)
+  static form = this.configureForm(schema => schema.components(field => [field.textInput('name').required(), field.textInput('slug').required()]))
+  static table = this.configureTable(table => table.columns(column => [column.text('name'), column.text('slug')]))
+  static override getGloballySearchableAttributes() { return this.attributes(['name', 'slug']) }
+  static override getGlobalSearchResultsLimit() { return 10 }
+  static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))
+  static scopeQueryToTenant = this.configureQuery((query, context) => query.where('tenantId', context.tenant))
+}

@@ -132,6 +132,19 @@
         "typescript-eslint": "catalog:",
       },
     },
+    "packages/actions": {
+      "name": "@holo-js/panels-actions",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-core": "workspace:*",
+        "@holo-js/panels-schemas": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/cli": {
       "name": "@holo-js/panels-cli",
       "version": "0.1.0-next.1",
@@ -204,6 +217,35 @@
         "@holo-js/storage",
       ],
     },
+    "packages/forms": {
+      "name": "@holo-js/panels-forms",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-core": "workspace:*",
+        "@holo-js/panels-schemas": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "@holo-js/forms": "catalog:",
+      },
+    },
+    "packages/infolists": {
+      "name": "@holo-js/panels-infolists",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-core": "workspace:*",
+        "@holo-js/panels-schemas": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/next": {
       "name": "@holo-js/panels-next",
       "version": "0.1.0-next.1",
@@ -227,6 +269,22 @@
         "next": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
+      },
+    },
+    "packages/notifications": {
+      "name": "@holo-js/panels-notifications",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-actions": "workspace:*",
+        "@holo-js/panels-core": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "@holo-js/notifications": "catalog:",
       },
     },
     "packages/nuxt": {
@@ -256,9 +314,16 @@
       "name": "@holo-js/panels",
       "version": "0.1.0-next.1",
       "dependencies": {
+        "@holo-js/panels-actions": "workspace:*",
         "@holo-js/panels-cli": "workspace:*",
         "@holo-js/panels-client": "workspace:*",
         "@holo-js/panels-core": "workspace:*",
+        "@holo-js/panels-forms": "workspace:*",
+        "@holo-js/panels-infolists": "workspace:*",
+        "@holo-js/panels-notifications": "workspace:*",
+        "@holo-js/panels-resources": "workspace:*",
+        "@holo-js/panels-schemas": "workspace:*",
+        "@holo-js/panels-tables": "workspace:*",
         "@holo-js/panels-ui": "workspace:*",
       },
       "devDependencies": {
@@ -331,6 +396,36 @@
         "react-dom": "catalog:",
       },
     },
+    "packages/resources": {
+      "name": "@holo-js/panels-resources",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-actions": "workspace:*",
+        "@holo-js/panels-core": "workspace:*",
+        "@holo-js/panels-forms": "workspace:*",
+        "@holo-js/panels-infolists": "workspace:*",
+        "@holo-js/panels-notifications": "workspace:*",
+        "@holo-js/panels-schemas": "workspace:*",
+        "@holo-js/panels-tables": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/schemas": {
+      "name": "@holo-js/panels-schemas",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-core": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/shield": {
       "name": "@holo-js/panels-shield",
       "version": "0.1.0-next.1",
@@ -394,6 +489,20 @@
         "@holo-js/security": "catalog:",
         "@sveltejs/kit": "catalog:",
         "svelte": "catalog:",
+      },
+    },
+    "packages/tables": {
+      "name": "@holo-js/panels-tables",
+      "version": "0.1.0-next.1",
+      "dependencies": {
+        "@holo-js/panels-actions": "workspace:*",
+        "@holo-js/panels-core": "workspace:*",
+        "@holo-js/panels-schemas": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "packages/testing": {
@@ -747,13 +856,21 @@
 
     "@holo-js/panels": ["@holo-js/panels@workspace:packages/panels"],
 
+    "@holo-js/panels-actions": ["@holo-js/panels-actions@workspace:packages/actions"],
+
     "@holo-js/panels-cli": ["@holo-js/panels-cli@workspace:packages/cli"],
 
     "@holo-js/panels-client": ["@holo-js/panels-client@workspace:packages/client"],
 
     "@holo-js/panels-core": ["@holo-js/panels-core@workspace:packages/core"],
 
+    "@holo-js/panels-forms": ["@holo-js/panels-forms@workspace:packages/forms"],
+
+    "@holo-js/panels-infolists": ["@holo-js/panels-infolists@workspace:packages/infolists"],
+
     "@holo-js/panels-next": ["@holo-js/panels-next@workspace:packages/next"],
+
+    "@holo-js/panels-notifications": ["@holo-js/panels-notifications@workspace:packages/notifications"],
 
     "@holo-js/panels-nuxt": ["@holo-js/panels-nuxt@workspace:packages/nuxt"],
 
@@ -761,11 +878,17 @@
 
     "@holo-js/panels-react": ["@holo-js/panels-react@workspace:packages/react"],
 
+    "@holo-js/panels-resources": ["@holo-js/panels-resources@workspace:packages/resources"],
+
+    "@holo-js/panels-schemas": ["@holo-js/panels-schemas@workspace:packages/schemas"],
+
     "@holo-js/panels-shield": ["@holo-js/panels-shield@workspace:packages/shield"],
 
     "@holo-js/panels-svelte": ["@holo-js/panels-svelte@workspace:packages/svelte"],
 
     "@holo-js/panels-sveltekit": ["@holo-js/panels-sveltekit@workspace:packages/sveltekit"],
+
+    "@holo-js/panels-tables": ["@holo-js/panels-tables@workspace:packages/tables"],
 
     "@holo-js/panels-testing": ["@holo-js/panels-testing@workspace:packages/testing"],
 

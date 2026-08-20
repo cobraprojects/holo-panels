@@ -81,6 +81,11 @@ const compiledResourceSchema: JsonObject = {
   recordTitle: 'headline',
   resourceId: 'articles',
   routeKey: 'permalink',
+  routes: {
+    create: '/control/articles/create',
+    edit: '/control/articles/:record/edit',
+    view: '/control/articles/:record',
+  },
 }
 
 function formRequest(panelId: string, operation: string, payload: JsonObject = {}, id = 'request-1234567890'): Request {
@@ -248,8 +253,23 @@ describe('P9-D Nuxt adapter', () => {
     expect(html).toContain('aria-current="page"')
     expect(html).toContain('Manage published content')
     expect(html).toContain('data-resource="posts"')
+    expect(html).toContain('hp-panel-topbar-start')
+    expect(html).toContain('hp-panel-topbar-end')
+    expect(html).toContain('hp-panel-navigation-header')
+    expect(html).toContain('hp-panel-navigation-body')
+    expect(html).toContain('hp-panel-main-header')
+    expect(html).toContain('hp-panel-main-body')
+    expect(html).toContain('hp-panel-navigation-backdrop')
+    expect(html).toContain('title="Posts"')
+    expect(html).toContain('hp-panel-user-glyph')
+    expect(html).toContain('data-icon="user"')
+    expect(html).toContain('hp-panel-user-action')
+    expect(html).toContain('hp-panel-actions--compact')
+    expect(html).toContain('aria-label="Account menu"')
+    expect(html).not.toContain('>AC<')
     expect(html).not.toContain('function')
     const container = document.createElement('div')
+    container.dir = 'rtl'
     container.innerHTML = html
     document.body.append(container)
     const hydrated = createSSRApp(PanelPage, properties)
@@ -257,10 +277,61 @@ describe('P9-D Nuxt adapter', () => {
     await nextTick()
     expect(container.querySelector('[data-panels-panel="admin"]')?.getAttribute('data-panels-ready')).toBe('true')
     expect(container.querySelector('[data-panels-panel="admin"]')?.hasAttribute('inert')).toBe(false)
+    const portal = document.body.querySelector<HTMLElement>('.hp-panel-portal-host[data-panel="admin"]')
+    expect(portal?.dataset.theme).toBe('system')
+    expect(portal?.dataset.density).toBe('comfortable')
+    expect(portal?.dir).toBe('rtl')
     expect(container.querySelector('[aria-current="page"]')?.textContent).toContain('Posts')
     await vi.waitFor(() => expect(container.querySelector('[data-resource="posts"]')?.textContent).toBe('Loaded posts'))
     hydrated.unmount()
+    expect(portal?.isConnected).toBe(false)
     container.remove()
+  })
+
+  it('dismisses the mobile drawer with Escape or its backdrop and restores toggle focus', async () => {
+    const mediaQuery = {
+      addEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: true,
+      media: '(width <= 48rem)',
+      onchange: null,
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockReturnValue(mediaQuery)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createSSRApp(PanelPage, { page })
+    app.mount(container)
+    await nextTick()
+
+    const toggle = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-toggle')!
+    const sidebar = container.querySelector<HTMLElement>('.hp-panel-sidebar')!
+    const backdrop = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-backdrop')!
+    expect(sidebar.getAttribute('aria-hidden')).toBe('true')
+    expect(sidebar.hasAttribute('inert')).toBe(true)
+    expect(matchMedia).toHaveBeenCalledWith('(width <= 48rem)')
+
+    toggle.click()
+    await nextTick()
+    expect(container.querySelector('[data-panels-panel]')?.getAttribute('data-navigation-open')).toBe('true')
+    expect(backdrop.hidden).toBe(false)
+    backdrop.focus()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    await Promise.resolve()
+    expect(backdrop.hidden).toBe(true)
+    expect(document.activeElement).toBe(toggle)
+
+    toggle.click()
+    await nextTick()
+    backdrop.focus()
+    backdrop.click()
+    await nextTick()
+    await Promise.resolve()
+    expect(document.activeElement).toBe(toggle)
+    app.unmount()
+    container.remove()
+    matchMedia.mockRestore()
   })
 
   it('renders top navigation without a sidebar when the panel selects topbar mode', async () => {
@@ -271,6 +342,7 @@ describe('P9-D Nuxt adapter', () => {
     const html = await renderToString(createSSRApp(PanelPage, { page: topbarPage }))
 
     expect(html).toContain('hp-panel-navigation--topbar')
+    expect(html).toContain('hp-panel-topbar-center')
     expect(html).not.toContain('hp-panel-sidebar')
   })
 
@@ -334,6 +406,7 @@ describe('P9-D Nuxt adapter', () => {
     expect(chrome).toContain('href="/admin/theme.css"')
     expect(avatar).toContain('data-custom-avatar="7"')
     expect(avatar).toContain('data-custom-notification="topbar"')
+    expect(avatar).toContain('hp-panel-notification-action')
   })
 
   it('renders the built-in tenant switcher without application transport helpers', async () => {
@@ -654,13 +727,15 @@ describe('P9-D Nuxt adapter', () => {
       'city',
       'author.name',
     ])
-    expect(actions.map(action => action.kind)).toEqual(['view', 'edit', 'delete', 'custom'])
-    expect(fields.find(field => field.path === 'slug')).toMatchObject({ properties: { source: 'title', specialization: 'slug' } })
-    expect(fields.find(field => field.path === 'category')).toMatchObject({ properties: { options: [{ disabled: false, label: 'News', value: 'News' }, { disabled: false, label: 'Guides', value: 'Guides' }] } })
+    expect(actions.map(action => action.kind)).toEqual(['view', 'edit', 'delete', 'action-group'])
+    expect(actions.at(-1)).toMatchObject({ actions: [expect.objectContaining({ kind: 'custom' }), expect.objectContaining({ kind: 'delete' })] })
+    expect(fields.find(field => field.path === 'slug')).toMatchObject({ type: 'text' })
+    expect(fields.find(field => field.path === 'category')).toMatchObject({ properties: { options: [{ label: 'News', value: 'News' }, { label: 'Guides', value: 'Guides' }] } })
     const panel = AdminPanel.compile()
     const context = { guard: 'web', operation: 'page-data' as const, panelId: 'admin', provider: 'session', signal: new AbortController().signal }
-    await expect(Promise.resolve(panel.server.access({ ...context, actor: { email: 'editor@example.test', id: '1', name: 'Editor', password: 'secret', role: 'editor', tenantId: null } }))).resolves.toBe(true)
-    await expect(Promise.resolve(panel.server.access({ ...context, actor: { email: 'viewer@example.test', id: '2', name: 'Viewer', password: 'secret', role: 'viewer', tenantId: null } }))).resolves.toBe(false)
+    const timestamp = new Date('2026-01-01T00:00:00.000Z')
+    await expect(Promise.resolve(panel.server.access({ ...context, actor: { created_at: timestamp, email: 'editor@example.test', id: '1', name: 'Editor', password: 'secret', role: 'editor', tenantId: null, updated_at: timestamp } }))).resolves.toBe(true)
+    await expect(Promise.resolve(panel.server.access({ ...context, actor: { created_at: timestamp, email: 'viewer@example.test', id: '2', name: 'Viewer', password: 'secret', role: 'viewer', tenantId: null, updated_at: timestamp } }))).resolves.toBe(false)
     expect(nuxtPanelAcceptanceFixture.pages.map(definition => definition.manifest.path)).toContain('/admin/posts/:record/edit')
   })
 })

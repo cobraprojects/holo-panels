@@ -2,8 +2,12 @@ import {
   computed,
   defineComponent,
   h,
+  inject,
   onErrorCaptured,
+  provide,
   ref,
+  type ComputedRef,
+  type InjectionKey,
   type PropType,
   type VNode,
 } from 'vue'
@@ -11,10 +15,13 @@ import {
   DialogClose,
   DialogContent,
   DialogDescription,
+  DialogOverlay,
+  DialogPortal,
   DialogRoot,
   DialogTitle,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,
   TabsContent,
@@ -43,6 +50,24 @@ export interface PanelsToast {
   readonly id: string
   readonly message: string
   readonly tone?: 'info' | 'success' | 'warning' | 'danger'
+}
+
+const PanelsPortalContext: InjectionKey<ComputedRef<HTMLElement | null>> = Symbol('holo-panels-portal')
+const noPortalContainer = computed<HTMLElement | null>(() => null)
+
+export const PanelsPortalProvider = defineComponent({
+  name: 'PanelsPortalProvider',
+  props: {
+    container: { type: Object as PropType<HTMLElement | null>, default: null },
+  },
+  setup(props, { slots }) {
+    provide(PanelsPortalContext, computed(() => props.container))
+    return () => slotContent(slots.default)
+  },
+})
+
+function panelsPortalContainer(): ComputedRef<HTMLElement | null> {
+  return inject(PanelsPortalContext, noPortalContainer)
 }
 
 function slotContent(slot: (() => VNode[]) | undefined, fallback?: string): VNode[] | string | undefined {
@@ -186,32 +211,36 @@ export const PanelsDropdown = defineComponent({
   emits: ['select', 'update:open'],
   setup(props, { emit }) {
     const search = ref('')
+    const portalContainer = panelsPortalContainer()
+    const content = (): VNode => h(DropdownMenuContent, { class: 'hp-dropdown__menu', 'data-holo-panel': '', 'data-slot': 'dropdown-menu-content' }, {
+      default: () => [
+        props.searchable ? h('input', {
+          'aria-label': 'Search tenants',
+          'data-slot': 'input',
+          onInput: (event: Event) => { search.value = (event.currentTarget as HTMLInputElement).value },
+          placeholder: 'Search tenants…',
+          value: search.value,
+        }) : null,
+        ...props.items
+          .filter(item => !search.value || item.label.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))
+          .map(item => h(DropdownMenuItem, {
+            key: item.id,
+            disabled: item.disabled,
+            textValue: item.label,
+            'data-slot': 'dropdown-menu-item',
+            onSelect: () => emit('select', item.id),
+          }, { default: () => [item.icon ? ShadcnIcon(item.icon) : null, item.label] })),
+      ],
+    })
     return () => h(DropdownMenuRoot, {
       open: props.open,
       'onUpdate:open': (open: boolean) => emit('update:open', open),
     }, {
       default: () => h('div', { class: 'hp-dropdown', 'data-panels-component': 'dropdown' }, [
         h(DropdownMenuTrigger, { as: 'button', 'aria-label': props.ariaLabel, class: 'hp-dropdown__trigger', type: 'button', 'data-slot': 'dropdown-menu-trigger' }, { default: () => [props.label, h(ChevronDown, { 'aria-hidden': 'true' })] }),
-        h(DropdownMenuContent, { class: 'hp-dropdown__menu', 'data-holo-panel': '', 'data-slot': 'dropdown-menu-content' }, {
-          default: () => [
-            props.searchable ? h('input', {
-              'aria-label': 'Search tenants',
-              'data-slot': 'input',
-              onInput: (event: Event) => { search.value = (event.currentTarget as HTMLInputElement).value },
-              placeholder: 'Search tenants…',
-              value: search.value,
-            }) : null,
-            ...props.items
-              .filter(item => !search.value || item.label.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))
-              .map(item => h(DropdownMenuItem, {
-            key: item.id,
-            disabled: item.disabled,
-            textValue: item.label,
-            'data-slot': 'dropdown-menu-item',
-            onSelect: () => emit('select', item.id),
-              }, { default: () => [item.icon ? ShadcnIcon(item.icon) : null, item.label] })),
-          ],
-        }),
+        portalContainer.value
+          ? h(DropdownMenuPortal, { to: portalContainer.value }, { default: content })
+          : content(),
       ]),
     })
   },
@@ -228,11 +257,10 @@ function dialogComponent(name: string, className: string) {
     },
     emits: ['close'],
     setup(props, { emit, slots }) {
-      return () => h(DialogRoot, {
-        open: props.open,
-        'onUpdate:open': (open: boolean) => { if (!open) emit('close') },
-      }, {
-        default: () => h(DialogContent, {
+      const portalContainer = panelsPortalContainer()
+      const surface = (): VNode[] => [
+        h(DialogOverlay, { class: 'hp-dialog-overlay', 'data-holo-panel': '', 'data-slot': 'dialog-overlay' }),
+        h(DialogContent, {
           'aria-modal': 'true',
           class: className,
           'data-holo-panel': '',
@@ -246,6 +274,14 @@ function dialogComponent(name: string, className: string) {
             h(DialogClose, { as: 'button', class: 'hp-dialog-close', type: 'button', 'aria-label': props.closeLabel, 'data-slot': 'dialog-close' }, { default: () => h(X, { 'aria-hidden': 'true' }) }),
           ],
         }),
+      ]
+      return () => h(DialogRoot, {
+        open: props.open,
+        'onUpdate:open': (open: boolean) => { if (!open) emit('close') },
+      }, {
+        default: () => portalContainer.value
+          ? h(DialogPortal, { to: portalContainer.value }, { default: surface })
+          : surface(),
       })
     },
   })

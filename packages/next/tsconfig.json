@@ -10,6 +10,7 @@
     }
   },
   "include": [
+    "../../apps/example-next/.holo-js/generated/**/*.d.ts",
     "src/**/*",
     "tests/**/*",
     "vitest.config.ts",

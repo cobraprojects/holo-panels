@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { executePanelAuthRequest, panelContentWidthValue, panelThemeStyleAttribute, type PanelClientAuthOperation } from '@holo-js/panels-svelte'
+  import { executePanelAuthRequest, panelContentWidthValue, type PanelClientAuthOperation } from '@holo-js/panels-svelte'
   import { onMount } from 'svelte'
+  import { svelteKitPanelAuthAppearanceStyleAttribute, type SvelteKitPanelAuthAppearance } from './auth-appearance'
   import Button from './Button.svelte'
   import Icon from './Icon.svelte'
   import Input from './Input.svelte'
 
   interface Props {
+    appearance?: SvelteKitPanelAuthAppearance
     brandName: string
     panelId: string
     simplePageMaxContentWidth?: string
@@ -13,7 +15,7 @@
     themeColors?: Readonly<Record<string, string>>
   }
 
-  let { brandName, panelId, simplePageMaxContentWidth, theme = 'system', themeColors }: Props = $props()
+  let { appearance, brandName, panelId, simplePageMaxContentWidth, theme = 'system', themeColors }: Props = $props()
   let enabled = $state(false)
   let manualKey = $state('')
   let recoveryCodes = $state<readonly string[]>([])
@@ -66,7 +68,7 @@
   }
 </script>
 
-<main class="hp-auth-page" data-holo-panel data-theme={theme} style={`${panelThemeStyleAttribute({ colors: themeColors })}${simplePageMaxContentWidth ? `--hp-auth-max-width:${panelContentWidthValue(simplePageMaxContentWidth)};` : ''}`}>
+<main class="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(appearance, themeColors)}${simplePageMaxContentWidth ? `--hp-auth-max-width:${panelContentWidthValue(simplePageMaxContentWidth)};` : ''}`}>
   <section class="hp-auth-card" data-slot="card">
     <div data-slot="card-header"><span class="hp-auth-brand-mark"><Icon name="key" /></span><div><p>{brandName}</p><h1>Multi-factor authentication</h1><span>MFA is {enabled ? 'enabled' : 'disabled'}.</span></div></div>
     <div data-slot="card-content">

@@ -41,14 +41,24 @@ const rendererPackages = new Set([
 ])
 const allowedWorkspaceDependencies = new Map([
   ['@holo-js/panels', new Set([
+    '@holo-js/panels-actions',
     '@holo-js/panels-cli',
     '@holo-js/panels-client',
     '@holo-js/panels-core',
+    '@holo-js/panels-forms',
+    '@holo-js/panels-infolists',
+    '@holo-js/panels-notifications',
+    '@holo-js/panels-resources',
+    '@holo-js/panels-schemas',
+    '@holo-js/panels-tables',
     '@holo-js/panels-ui',
   ])],
+  ['@holo-js/panels-actions', new Set(['@holo-js/panels-core', '@holo-js/panels-schemas'])],
   ['@holo-js/panels-cli', new Set(['@holo-js/panels-core'])],
   ['@holo-js/panels-client', new Set(['@holo-js/panels-core'])],
   ['@holo-js/panels-core', new Set()],
+  ['@holo-js/panels-forms', new Set(['@holo-js/panels-core', '@holo-js/panels-schemas'])],
+  ['@holo-js/panels-infolists', new Set(['@holo-js/panels-core', '@holo-js/panels-schemas'])],
   ['@holo-js/panels-next', new Set(['@holo-js/panels-react'])],
   ['@holo-js/panels-nuxt', new Set(['@holo-js/panels-vue'])],
   ['@holo-js/panels-plugin-money', new Set([
@@ -62,6 +72,17 @@ const allowedWorkspaceDependencies = new Map([
     '@holo-js/panels-core',
     '@holo-js/panels-ui',
   ])],
+  ['@holo-js/panels-notifications', new Set(['@holo-js/panels-actions', '@holo-js/panels-core'])],
+  ['@holo-js/panels-resources', new Set([
+    '@holo-js/panels-actions',
+    '@holo-js/panels-core',
+    '@holo-js/panels-forms',
+    '@holo-js/panels-infolists',
+    '@holo-js/panels-notifications',
+    '@holo-js/panels-schemas',
+    '@holo-js/panels-tables',
+  ])],
+  ['@holo-js/panels-schemas', new Set(['@holo-js/panels-core'])],
   ['@holo-js/panels-shield', new Set(['@holo-js/panels-cli', '@holo-js/panels-core'])],
   ['@holo-js/panels-svelte', new Set([
     '@holo-js/panels-client',
@@ -77,6 +98,7 @@ const allowedWorkspaceDependencies = new Map([
     '@holo-js/panels-ui',
     '@holo-js/panels-vue',
   ])],
+  ['@holo-js/panels-tables', new Set(['@holo-js/panels-actions', '@holo-js/panels-core', '@holo-js/panels-schemas'])],
   ['@holo-js/panels-ui', new Set()],
   ['@holo-js/panels-vue', new Set([
     '@holo-js/panels-client',

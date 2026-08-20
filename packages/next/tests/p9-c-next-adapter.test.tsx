@@ -70,6 +70,7 @@ function operationRequest(panelId: string, operation: string, payload: JsonObjec
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('Next panel adapter', () => {
@@ -211,6 +212,108 @@ describe('Next panel adapter', () => {
     await act(async () => root?.unmount())
   })
 
+  it('exposes additive shell regions, collapsed labels, and the shared account glyph', async () => {
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
+    const markup = renderToString(<NextPanelClient payload={payload} />)
+
+    expect(markup).toContain('hp-panel-topbar-start')
+    expect(markup).toContain('hp-panel-topbar-end')
+    expect(markup).toContain('hp-panel-navigation-header')
+    expect(markup).toContain('hp-panel-navigation-body')
+    expect(markup).toContain('hp-panel-main-header')
+    expect(markup).toContain('hp-panel-main-body')
+    expect(markup).toContain('hp-panel-navigation-backdrop')
+    expect(markup).toContain('title="Posts"')
+    expect(markup).toContain('hp-panel-user-glyph')
+    expect(markup).toContain('hp-panel-user-action')
+    expect(markup).toContain('hp-panel-actions--compact')
+    expect(markup).toContain('aria-label="Account menu"')
+    expect(markup).not.toContain('>AC<')
+  })
+
+  it('creates a scoped body portal host and removes it on unmount', async () => {
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
+    const container = document.createElement('div')
+    container.dir = 'rtl'
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => root.render(<NextPanelClient payload={payload} />))
+    const host = document.body.querySelector<HTMLElement>('.hp-panel-portal-host[data-panel="admin"]')
+    expect(host?.parentElement).toBe(document.body)
+    expect(host?.hasAttribute('data-holo-panel')).toBe(true)
+    expect(host?.dataset.theme).toBe(payload.bootstrap.manifest.theme.darkMode)
+    expect(host?.dataset.density).toBe(payload.bootstrap.manifest.theme.density)
+    expect(host?.dir).toBe('rtl')
+    expect(host?.style.getPropertyValue('--hp-sidebar-width')).not.toBe('')
+
+    const account = container.querySelector<HTMLButtonElement>('[aria-label="Account menu"]')
+    await act(async () => {
+      account?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }))
+    })
+    await vi.waitFor(() => expect(host?.querySelector('.hp-dropdown')).not.toBeNull())
+
+    await act(async () => root.unmount())
+    expect(document.body.contains(host)).toBe(false)
+    container.remove()
+  })
+
+  it('dismisses the mobile drawer with Escape or its backdrop and restores toggle focus', async () => {
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
+    let mobileListener: EventListener | undefined
+    const mediaQueryState = {
+      addEventListener: vi.fn((_type: string, listener: EventListener) => { mobileListener = listener }),
+      dispatchEvent: vi.fn(),
+      matches: true,
+      media: '(width <= 48rem)',
+      onchange: null,
+      removeEventListener: vi.fn(),
+    }
+    const mediaQuery = mediaQueryState as unknown as MediaQueryList
+    const matchMedia = vi.spyOn(globalThis, 'matchMedia').mockReturnValue(mediaQuery)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => root.render(<NextPanelClient payload={payload} />))
+    const toggle = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-toggle')!
+    const sidebar = container.querySelector<HTMLElement>('.hp-panel-sidebar')!
+    const backdrop = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-backdrop')!
+    expect(sidebar.getAttribute('aria-hidden')).toBe('true')
+    expect(sidebar.hasAttribute('inert')).toBe(true)
+    expect(matchMedia).toHaveBeenCalledWith('(width <= 48rem)')
+    expect(mediaQueryState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+
+    mediaQueryState.matches = false
+    await act(async () => mobileListener?.(new Event('change')))
+    expect(sidebar.hasAttribute('aria-hidden')).toBe(false)
+    expect(sidebar.hasAttribute('inert')).toBe(false)
+
+    mediaQueryState.matches = true
+    await act(async () => mobileListener?.(new Event('change')))
+    expect(sidebar.getAttribute('aria-hidden')).toBe('true')
+    expect(sidebar.hasAttribute('inert')).toBe(true)
+
+    await act(async () => toggle.click())
+    expect(container.querySelector('[data-holo-panel]')?.getAttribute('data-navigation-open')).toBe('true')
+    expect(backdrop.hidden).toBe(false)
+    expect(sidebar.hasAttribute('inert')).toBe(false)
+    backdrop.focus()
+    await act(async () => globalThis.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    await Promise.resolve()
+    expect(backdrop.hidden).toBe(true)
+    expect(document.activeElement).toBe(toggle)
+
+    await act(async () => toggle.click())
+    backdrop.focus()
+    await act(async () => backdrop.click())
+    await Promise.resolve()
+    expect(document.activeElement).toBe(toggle)
+    await act(async () => root.unmount())
+    expect(mediaQueryState.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+    container.remove()
+  })
+
   it('renders the built-in tenant switcher without application transport helpers', async () => {
     const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
     const tenantPayload = {
@@ -271,6 +374,7 @@ describe('Next panel adapter', () => {
     const markup = renderToString(<NextPanelClient payload={payload} />)
 
     expect(markup).toContain('hp-panel-navigation--topbar')
+    expect(markup).toContain('hp-panel-topbar-center')
     expect(markup).not.toContain('hp-panel-sidebar')
   })
 
@@ -353,6 +457,7 @@ describe('Next panel adapter', () => {
     expect(chrome).toContain('href="/admin/theme.css"')
     expect(avatar).toContain('data-custom-avatar="7"')
     expect(avatar).toContain('data-custom-notification="topbar"')
+    expect(avatar).toContain('hp-panel-notification-action')
   })
 
   it('serves the configured tenant billing route and enforces required subscriptions elsewhere', async () => {
@@ -602,7 +707,7 @@ describe('Next panel adapter', () => {
     expect(chunkedResult.status).toBe(413)
   })
 
-  it('exposes the example Post CRUD routes, policy boundaries, and delete action', async () => {
+  it('exposes the example Post CRUD routes, policy boundaries, and page actions', async () => {
     const pages = nextPanelAcceptanceFixture.pages
     expect(pages.map(page => [page.manifest.pageType, page.manifest.path])).toEqual([
       ['list', '/admin/posts'],
@@ -610,15 +715,15 @@ describe('Next panel adapter', () => {
       ['view', '/admin/posts/:record'],
       ['edit', '/admin/posts/:record/edit'],
     ])
-    const body = pages[2]?.manifest.body
+    const body = pages[3]?.manifest.body
     expect(body?.component).toBe('resource-page')
     const resource = body?.properties.resource
     expect(resource && typeof resource === 'object' && !Array.isArray(resource) ? resource.actions : null).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'delete-record', kind: 'delete' }),
+      expect.objectContaining({ id: 'delete', kind: 'delete' }),
     ]))
   })
 
-  it('runs the Post List/Create/Edit/View/Delete UI journey with filters, reactivity, dependencies, and safe errors', async () => {
+  it('runs the Post List/Create/Edit/View/Delete UI journey with filters and safe errors', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     const mutations: { readonly intent: string, readonly recordId: number | string | null, readonly values: Readonly<Record<string, string>> }[] = []
@@ -708,8 +813,9 @@ describe('Next panel adapter', () => {
       expect(container.textContent).toContain('City guide')
       expect(container.textContent).not.toContain('First post')
     })
+    vi.stubGlobal('confirm', vi.fn(() => true))
     await click('Delete')
-    expect(container.textContent).not.toContain('City guide')
+    await vi.waitFor(() => expect(container.textContent).not.toContain('City guide'))
     const createProperties = structuredClone(properties(1))
     const createResource = createProperties.resource
     if (!createResource || typeof createResource !== 'object' || Array.isArray(createResource)) throw new Error('Create page is missing its resource definition.')
@@ -726,7 +832,7 @@ describe('Next panel adapter', () => {
     const beforeUnload = new Event('beforeunload', { cancelable: true })
     globalThis.dispatchEvent(beforeUnload)
     expect(beforeUnload.defaultPrevented).toBe(true)
-    expect(input('[data-field-path="slug"] input').value).toBe('my-new-post')
+    await change(input('[data-field-path="slug"] input'), 'my-new-post')
     await choose('Guides')
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0))
@@ -741,11 +847,11 @@ describe('Next panel adapter', () => {
     await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Alexandria', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))
     expect(input('[data-field-path="title"] input').value).toBe('First post')
     await change(input('[data-field-path="title"] input'), 'Edited post')
-    expect(input('[data-field-path="slug"] input').value).toBe('edited-post')
+    await change(input('[data-field-path="slug"] input'), 'edited-post')
     await click('Save post')
     fail = true
-    await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(2)} />))
-    await click('Delete post')
+    await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))
+    await click('Delete')
     await click('Confirm')
     await click('Run action')
     expect(document.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')

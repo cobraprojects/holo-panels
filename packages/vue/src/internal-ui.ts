@@ -1,11 +1,13 @@
 import { defineComponent, h } from 'vue'
-import { Archive, Check, Circle, Download, Eye, Pencil, Play, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-vue-next'
+import { Archive, Bell, Check, Circle, Copy, Download, Eye, Pencil, Play, Plus, RotateCcw, Trash2, Upload, User, X } from 'lucide-vue-next'
 
 const icons = Object.freeze({
   archive: Archive,
+  bell: Bell,
   check: Check,
   circle: Circle,
   close: X,
+  copy: Copy,
   delete: Trash2,
   download: Download,
   edit: Pencil,
@@ -13,6 +15,7 @@ const icons = Object.freeze({
   plus: Plus,
   restore: RotateCcw,
   upload: Upload,
+  user: User,
   view: Eye,
 })
 

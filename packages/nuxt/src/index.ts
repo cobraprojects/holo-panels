@@ -1,3 +1,4 @@
+export type { NuxtPanelAuthAppearance } from './auth-appearance'
 export { usePanelPage } from './composable'
 export { createNuxtPanelComponentRegistry, PanelPage } from './page'
 export { PanelLoginPage } from './login-page'

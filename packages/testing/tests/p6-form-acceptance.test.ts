@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { nextFormAcceptanceFixture } from '../../../apps/example-next/tests/p6-form-acceptance-next'
-import { nuxtFormAcceptanceFixture } from '../../../apps/example-nuxt/tests/p6-form-acceptance-nuxt'
-import { svelteKitFormAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p6-form-acceptance-sveltekit'
 import { runFormAcceptanceJourney } from '../src/form-acceptance/index'
+import { loadExampleExport } from './load-example'
+
+type FormAcceptanceFixture = Parameters<typeof runFormAcceptanceJourney>[0]
+
+const [nextFormAcceptanceFixture, nuxtFormAcceptanceFixture, svelteKitFormAcceptanceFixture] = await Promise.all([
+  loadExampleExport<FormAcceptanceFixture>('next', 'p6-form-acceptance-next', 'nextFormAcceptanceFixture'),
+  loadExampleExport<FormAcceptanceFixture>('nuxt', 'p6-form-acceptance-nuxt', 'nuxtFormAcceptanceFixture'),
+  loadExampleExport<FormAcceptanceFixture>('sveltekit', 'p6-form-acceptance-sveltekit', 'svelteKitFormAcceptanceFixture'),
+])
 
 function reportAt<TReport extends { readonly stage: string }>(reports: readonly TReport[], stage: string): TReport {
   const report = reports.find(candidate => candidate.stage === stage)

@@ -1,11 +1,12 @@
-<!-- @holo-panels-managed sha256:1411cf31f83d3114940de05bd189d2c53fb9d7664cd27eeb15fc1571450943ff -->
+<!-- @holo-panels-managed sha256:0942af5fee242b7b9c76c9a39987ef77a1b87b9e8b3f8a6202050435e9a7c8c2 -->
 <script setup lang="ts">
+import '@holo-js/panels-vue/style.css'
 import { PanelAuthPage } from '@holo-js/panels-nuxt'
 
 const brandName = "Holo Panels Admin"
-const themeColors = {"primary":"#7c3aed"}
+const appearance = {"colors":{"primary":"#7c3aed"},"density":"comfortable","fontFamily":null,"monoFontFamily":null,"serifFontFamily":null,"tokens":{}} as const
 </script>
 
 <template>
-  <PanelAuthPage :brand-name="brandName" login-path="/admin/login" panel-id="admin" simple-page-max-content-width="lg" theme="system" :theme-colors="themeColors" type="mfa-challenge" />
+  <PanelAuthPage :appearance="appearance" :brand-name="brandName" login-path="/admin/login" panel-id="admin" simple-page-max-content-width="lg" theme="system" type="mfa-challenge" />
 </template>

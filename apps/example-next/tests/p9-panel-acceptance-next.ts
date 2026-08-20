@@ -1,5 +1,6 @@
 import { createGeneratedResourcePage, generatedResourcePageManifests, type JsonObject } from '@holo-js/panels'
 import { createGeneratedNextPanelsRuntime, type NextPanelOperationInput, type NextPanelsRuntime } from '@holo-js/panels-next'
+import '../.holo-js/generated/schema.generated'
 import serverRegistry from '../.holo-js/generated/panels/server-registry'
 import PostResource from '../server/admin/resources/posts/PostResource'
 

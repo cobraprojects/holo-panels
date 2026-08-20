@@ -1,7 +1,8 @@
-import { ShadcnButton, ShadcnInput, ShadcnSelect, ShadcnTable, ShadcnTextarea } from '../internal-ui'
+import { ShadcnButton, ShadcnInput, ShadcnSelect, ShadcnTextarea } from '../internal-ui'
 import { createClientRelationLayout, type ClientRelationManager, type ClientRelationRecord, type JsonValue, type RelationOperation } from '@holo-js/panels-client'
 import { defineComponent, h, ref, watch, type PropType, type VNodeChild } from 'vue'
 import { PanelsButton, PanelsModal } from '../primitives'
+import { VueTablePresentation, type VueTablePresentationProps } from '../tables/presentation'
 import type { VueRelationManagerRendererProps } from './types'
 
 const managerOperations: readonly RelationOperation[] = ['create', 'associate', 'attach']
@@ -35,19 +36,42 @@ function operationButton(
 function relationPanel(manager: ClientRelationManager, enabled: boolean, mount: (operation: MountedOperation) => void): VNodeChild {
   const managerActions = enabled ? managerOperations.filter(operation => manager.operations.includes(operation)) : []
   const recordActions = enabled ? recordOperations.filter(operation => manager.operations.includes(operation)) : []
-  return h('section', { 'aria-label': manager.label, class: 'hp-relation-manager', 'data-relation-manager': manager.id }, [
-    h('header', [h('h3', manager.label), manager.badge !== null ? h('span', { class: 'hp-relation-badge' }, String(manager.badge)) : null]),
-    managerActions.length > 0 ? h('div', { class: 'hp-relation-actions' }, managerActions.map(operation => operationButton(manager, operation, mount))) : null,
+  const presentation: VueTablePresentationProps<ClientRelationRecord> = {
+    ariaLabel: `${manager.label} data`,
+    caption: manager.label,
+    columns: manager.columns.map(column => ({
+      header: column.label,
+      key: column.key,
+      label: column.label,
+      render(record: ClientRelationRecord): VNodeChild {
+        return display(record.values[column.key])
+      },
+    })),
+    containerClass: 'hp-relation-table-overflow',
+    records: manager.records,
+    rowKey: record => record.id,
+    ...(recordActions.length > 0 ? { trailing: {
+      header: 'Actions',
+      label: 'Actions',
+      render(record: ClientRelationRecord): VNodeChild {
+        return h('div', {
+          'aria-label': `Actions for ${manager.label.toLocaleLowerCase()} record ${String(record.id)}`,
+          class: 'hp-relation-row-actions',
+          'data-slot': 'relation-row-actions',
+          role: 'group',
+        }, recordActions.map(operation => operationButton(manager, operation, mount, record)))
+      },
+    } } : {}),
+  }
+  return h('section', { 'aria-label': manager.label, class: 'hp-relation-manager', 'data-empty': manager.records.length === 0 || undefined, 'data-relation-manager': manager.id }, [
+    h('header', { class: 'hp-relation-manager-header', 'data-slot': 'relation-manager-header' }, [
+      h('h3', { class: 'hp-relation-manager-title', 'data-slot': 'relation-manager-title' }, manager.label),
+      manager.badge !== null ? h('span', { 'aria-label': `${String(manager.badge)} ${manager.label.toLocaleLowerCase()}`, class: 'hp-relation-badge hp-relation-manager-count', 'data-slot': 'relation-manager-count' }, String(manager.badge)) : null,
+    ]),
+    managerActions.length > 0 ? h('div', { 'aria-label': `${manager.label} actions`, class: 'hp-relation-actions hp-relation-toolbar', 'data-slot': 'relation-toolbar', role: 'group' }, managerActions.map(operation => operationButton(manager, operation, mount))) : null,
     manager.records.length === 0
-      ? h('p', { class: 'hp-relation-empty' }, manager.emptyMessage ?? `No ${manager.label.toLocaleLowerCase()} found.`)
-      : h(ShadcnTable, [
-          h('caption', manager.label),
-          h('thead', h('tr', [...manager.columns.map(column => h('th', { scope: 'col' }, column.label)), ...(recordActions.length > 0 ? [h('th', { scope: 'col' }, 'Actions')] : [])])),
-          h('tbody', manager.records.map(record => h('tr', { key: record.id }, [
-            ...manager.columns.map(column => h('td', display(record.values[column.key]))),
-            ...(recordActions.length > 0 ? [h('td', recordActions.map(operation => operationButton(manager, operation, mount, record)))] : []),
-          ]))),
-        ]),
+      ? h('p', { class: 'hp-relation-empty hp-relation-loading-empty', 'data-slot': 'relation-loading-empty', role: 'status' }, manager.emptyMessage ?? `No ${manager.label.toLocaleLowerCase()} found.`)
+      : h(VueTablePresentation, { presentation }),
   ])
 }
 
@@ -97,9 +121,12 @@ export const VueRelationManagerRenderer = defineComponent({
       const destructive = ['delete', 'detach', 'dissociate'].includes(current.operation)
       if (current.operation === 'view') {
         return h(PanelsModal, { open: true, title: `View ${current.manager.label.toLocaleLowerCase()}`, onClose: () => { mounted.value = null } }, {
-          default: () => h('article', { class: 'hp-relation-operation-form' }, [
-            h('dl', { class: 'hp-infolist' }, current.manager.columns.map(column => h('div', { key: column.key }, [h('dt', column.label), h('dd', display(current.record?.values[column.key]))]))),
-            h('footer', [h(PanelsButton, { type: 'button', onClick: () => { mounted.value = null } }, () => 'Close')]),
+          default: () => h('article', { class: 'hp-relation-dialog hp-relation-operation-form', 'data-slot': 'relation-dialog' }, [
+            h('header', { class: 'hp-relation-dialog-header', 'data-slot': 'relation-dialog-header' }, [h('h3', { class: 'hp-visually-hidden' }, `${current.manager.label} details`)]),
+            h('div', { class: 'hp-relation-dialog-body hp-relation-operation-form', 'data-slot': 'relation-dialog-body' }, [
+              h('dl', { class: 'hp-infolist' }, current.manager.columns.map(column => h('div', { key: column.key }, [h('dt', column.label), h('dd', display(current.record?.values[column.key]))]))),
+            ]),
+            h('footer', { class: 'hp-relation-dialog-footer', 'data-slot': 'relation-dialog-footer' }, [h(PanelsButton, { type: 'button', onClick: () => { mounted.value = null } }, () => 'Close')]),
           ]),
         })
       }
@@ -123,25 +150,28 @@ export const VueRelationManagerRenderer = defineComponent({
         }
       }
       return h(PanelsModal, { open: true, title: `${operationLabel(current.operation)} ${current.manager.label.toLocaleLowerCase()}`, onClose: () => { mounted.value = null } }, {
-        default: () => h('form', { class: 'hp-relation-operation-form', onSubmit: (event: Event) => void submit(event) }, [
-          h('p', destructive ? 'This action changes the relationship immediately.' : `Complete the fields below to ${current.operation} this relationship.`),
-          selectsRecord ? componentProps.relations.loadOptions
-            ? h('label', [h('span', 'Related record'), h(ShadcnInput, { 'aria-label': 'Search related records', autofocus: true, placeholder: 'Search…', value: optionSearch.value, onInput: (event: Event) => { optionSearch.value = (event.currentTarget as HTMLInputElement).value } }), h(ShadcnSelect, { 'aria-label': 'Related record', required: true, value: String(relatedId.value), onChange: (event: Event) => { const value = (event.currentTarget as HTMLSelectElement).value; relatedId.value = options.value.find(option => String(option.value) === value)?.value ?? '' } }, [h('option', { value: '' }, 'Select a record'), ...options.value.map(option => h('option', { key: option.value, value: String(option.value) }, option.label))])])
-            : h('label', [h('span', 'Related record ID'), h(ShadcnInput, { autofocus: true, required: true, value: relatedId.value, onInput: (event: Event) => { relatedId.value = (event.currentTarget as HTMLInputElement).value } })]) : null,
-          ...fields.map(field => h('label', { key: field.id }, [
-            h('span', field.label),
-            field.type === 'textarea'
-              ? h(ShadcnTextarea, { required: field.required, value: String(values.value[field.id] ?? ''), onInput: (event: Event) => { values.value = { ...values.value, [field.id]: (event.currentTarget as HTMLTextAreaElement).value } } })
-              : h(ShadcnInput, {
-                  checked: field.type === 'toggle' ? values.value[field.id] === true : undefined,
-                  required: field.required,
-                  type: field.type === 'toggle' ? 'checkbox' : field.type === 'number' ? 'number' : field.type === 'date-time' ? 'datetime-local' : 'text',
-                  value: field.type === 'toggle' ? undefined : String(values.value[field.id] ?? ''),
-                  onInput: (event: Event) => { const input = event.currentTarget as HTMLInputElement; values.value = { ...values.value, [field.id]: field.type === 'toggle' ? input.checked : field.type === 'number' ? input.valueAsNumber : input.value } },
-                }),
-          ])),
-          error.value ? h('p', { role: 'alert' }, error.value) : null,
-          h('footer', [h(PanelsButton, { disabled: submitting.value, type: 'button', onClick: () => { mounted.value = null } }, () => 'Cancel'), h(PanelsButton, { disabled: submitting.value, type: 'submit', variant: destructive ? 'danger' : 'primary' }, () => submitting.value ? 'Working…' : operationLabel(current.operation))]),
+        default: () => h('form', { 'aria-busy': submitting.value, class: 'hp-relation-dialog hp-relation-operation-form', 'data-pending': submitting.value || undefined, 'data-slot': 'relation-dialog', onSubmit: (event: Event) => void submit(event) }, [
+          h('header', { class: 'hp-relation-dialog-header', 'data-slot': 'relation-dialog-header' }, [h('p', destructive ? 'This action changes the relationship immediately.' : `Complete the fields below to ${current.operation} this relationship.`)]),
+          h('div', { class: 'hp-relation-dialog-body hp-relation-operation-form', 'data-slot': 'relation-dialog-body' }, [
+            selectsRecord ? componentProps.relations.loadOptions
+              ? h('label', [h('span', 'Related record'), h(ShadcnInput, { 'aria-label': 'Search related records', autofocus: true, placeholder: 'Search…', value: optionSearch.value, onInput: (event: Event) => { optionSearch.value = (event.currentTarget as HTMLInputElement).value } }), h(ShadcnSelect, { 'aria-label': 'Related record', required: true, value: String(relatedId.value), onChange: (event: Event) => { const value = (event.currentTarget as HTMLSelectElement).value; relatedId.value = options.value.find(option => String(option.value) === value)?.value ?? '' } }, [h('option', { value: '' }, 'Select a record'), ...options.value.map(option => h('option', { key: option.value, value: String(option.value) }, option.label))])])
+              : h('label', [h('span', 'Related record ID'), h(ShadcnInput, { autofocus: true, required: true, value: relatedId.value, onInput: (event: Event) => { relatedId.value = (event.currentTarget as HTMLInputElement).value } })]) : null,
+            ...fields.map(field => h('label', { key: field.id }, [
+              h('span', field.label),
+              field.type === 'textarea'
+                ? h(ShadcnTextarea, { required: field.required, value: String(values.value[field.id] ?? ''), onInput: (event: Event) => { values.value = { ...values.value, [field.id]: (event.currentTarget as HTMLTextAreaElement).value } } })
+                : h(ShadcnInput, {
+                    checked: field.type === 'toggle' ? values.value[field.id] === true : undefined,
+                    required: field.required,
+                    type: field.type === 'toggle' ? 'checkbox' : field.type === 'number' ? 'number' : field.type === 'date-time' ? 'datetime-local' : 'text',
+                    value: field.type === 'toggle' ? undefined : String(values.value[field.id] ?? ''),
+                    onInput: (event: Event) => { const input = event.currentTarget as HTMLInputElement; values.value = { ...values.value, [field.id]: field.type === 'toggle' ? input.checked : field.type === 'number' ? input.valueAsNumber : input.value } },
+                  }),
+            ])),
+            submitting.value ? h('p', { 'aria-live': 'polite', class: 'hp-relation-dialog-pending hp-visually-hidden', 'data-slot': 'relation-dialog-pending', role: 'status' }, `${operationLabel(current.operation)} in progress`) : null,
+            error.value ? h('p', { class: 'hp-relation-dialog-error', 'data-slot': 'relation-dialog-error', role: 'alert' }, error.value) : null,
+          ]),
+          h('footer', { class: 'hp-relation-dialog-footer', 'data-slot': 'relation-dialog-footer' }, [h(PanelsButton, { disabled: submitting.value, type: 'button', onClick: () => { mounted.value = null } }, () => 'Cancel'), h(PanelsButton, { 'aria-label': submitting.value ? `${operationLabel(current.operation)} in progress` : undefined, 'data-pending': submitting.value || undefined, disabled: submitting.value, type: 'submit', variant: destructive ? 'danger' : 'primary' }, () => submitting.value ? 'Working…' : operationLabel(current.operation))]),
         ]),
       })
     }

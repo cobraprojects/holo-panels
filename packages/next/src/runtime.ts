@@ -33,7 +33,7 @@ function assertIdentifier(value: string, label: string): void {
 }
 
 function compiled(value: unknown): unknown {
-  if (typeof value === 'object' && value !== null && 'compile' in value && typeof value.compile === 'function') return value.compile()
+  if ((typeof value === 'object' && value !== null || typeof value === 'function') && 'compile' in value && typeof value.compile === 'function') return value.compile()
   return value
 }
 

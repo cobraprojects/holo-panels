@@ -15,6 +15,7 @@ import {
   PanelsLoadingIndicator,
   PanelsModal,
   PanelsPagination,
+  PanelsPortalProvider,
   PanelsSection,
   PanelsSlideOver,
   PanelsTab,
@@ -92,6 +93,23 @@ describe('shared React renderer contract', () => {
     expect(container.querySelector('#title-errors')?.getAttribute('role')).toBe('alert')
     expect(container.querySelector('#title')?.getAttribute('aria-describedby')).toBe('title-description title-errors')
     expect(container.querySelector('#title')?.getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('targets a panel-scoped portal container when one is provided', () => {
+    const container = document.createElement('div')
+    const portal = document.createElement('div')
+    document.body.append(container, portal)
+    const root = createRoot(container)
+
+    act(() => root.render(createElement(PanelsPortalProvider, { container: portal },
+      createElement(PanelsModal, { labelledBy: 'scoped-modal-title', onClose: () => undefined, open: true },
+        createElement('h2', { id: 'scoped-modal-title' }, 'Scoped modal')))))
+
+    expect(portal.querySelector('[data-panels-component="modal"]')).not.toBeNull()
+    expect(document.body.querySelector(':scope > [data-panels-component="modal"]')).toBeNull()
+    act(() => root.unmount())
+    container.remove()
+    portal.remove()
   })
 
   it('hydrates deterministic SSR markup without mismatch diagnostics', async () => {
@@ -190,12 +208,19 @@ describe('shared React renderer contract', () => {
       managers: [{ badge: 0, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: ['attach'], pivotFields: [{ id: 'position', label: 'Position', required: false, type: 'number' }], presentation: 'inline', records: [], url: null, visible: true }],
       onOperation,
     })))
+    expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
     await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click() })
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="relation-dialog-footer"]')).not.toBeNull()
     await act(async () => {
       if (!select) return
       select.value = 'tag-typescript'
@@ -220,10 +245,32 @@ describe('shared React renderer contract', () => {
       onOperation,
     })))
 
+    expect(container.querySelector('[data-slot="table-container"]')).not.toBeNull()
+    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-relation-table-overflow')).toBe(true)
+    expect(container.querySelector('td[data-label="Name"]')?.textContent).toBe('TypeScript')
+    expect(container.querySelector('td.hp-table-row-actions[data-label="Actions"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
     await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click() })
 
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript')
     expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
     expect(onOperation).not.toHaveBeenCalled()
+  })
+
+  it('omits relation action structure when no operations are configured', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    await act(async () => root.render(createElement(ReactRelationManagerRenderer, {
+      managers: [{ badge: 1, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: [], presentation: 'inline', records: [{ id: 'tag-typescript', values: { name: 'TypeScript' } }], url: null, visible: true }],
+    })))
+
+    const table = container.querySelector('[data-panels-component="data-table"]')
+    expect(table).not.toBeNull()
+    expect(container.querySelector('[data-slot="relation-toolbar"]')).toBeNull()
+    expect(table?.querySelector('th:last-child')?.textContent).toBe('Name')
+    expect(table?.querySelector('td[data-label="Actions"]')).toBeNull()
+    expect(table?.querySelector('.hp-table-row-actions')).toBeNull()
   })
 })

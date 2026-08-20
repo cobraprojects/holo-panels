@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { nextNotificationAcceptanceFixture } from '../../../apps/example-next/tests/p13-notification-acceptance-next'
-import { nuxtNotificationAcceptanceFixture } from '../../../apps/example-nuxt/tests/p13-notification-acceptance-nuxt'
-import { svelteKitNotificationAcceptanceFixture } from '../../../apps/example-sveltekit/tests/p13-notification-acceptance-sveltekit'
 import { runNotificationAcceptanceJourney } from '../src/notification-acceptance'
+import { loadExampleExport } from './load-example'
+
+type NotificationAcceptanceFixture = Parameters<typeof runNotificationAcceptanceJourney>[0]
+
+const [nextNotificationAcceptanceFixture, nuxtNotificationAcceptanceFixture, svelteKitNotificationAcceptanceFixture] = await Promise.all([
+  loadExampleExport<NotificationAcceptanceFixture>('next', 'p13-notification-acceptance-next', 'nextNotificationAcceptanceFixture'),
+  loadExampleExport<NotificationAcceptanceFixture>('nuxt', 'p13-notification-acceptance-nuxt', 'nuxtNotificationAcceptanceFixture'),
+  loadExampleExport<NotificationAcceptanceFixture>('sveltekit', 'p13-notification-acceptance-sveltekit', 'svelteKitNotificationAcceptanceFixture'),
+])
 
 describe('P13 notifications phase gate', () => {
   it('renders temporary and database notification behavior across every example app', async () => {

@@ -2,6 +2,7 @@ import { Window } from 'happy-dom'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { InfolistActionAcceptanceFixture } from '../src/infolist-action-acceptance/contracts'
 import { runInfolistActionAcceptanceJourney } from '../src/infolist-action-acceptance/journey'
+import { loadExampleExport } from './load-example'
 
 const browser = new Window({ url: 'http://localhost/' })
 let fixtures: readonly [string, InfolistActionAcceptanceFixture][] = []
@@ -33,14 +34,14 @@ beforeAll(async () => {
   for (const [key, value] of Object.entries(exposed)) Reflect.set(globalThis, key, value)
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   const [next, nuxt, svelteKit] = await Promise.all([
-    import('../../../apps/example-next/tests/p8-infolist-action-acceptance-next'),
-    import('../../../apps/example-nuxt/tests/p8-infolist-action-acceptance-nuxt'),
-    import('../../../apps/example-sveltekit/tests/p8-infolist-action-acceptance-sveltekit'),
+    loadExampleExport<InfolistActionAcceptanceFixture>('next', 'p8-infolist-action-acceptance-next', 'nextInfolistActionAcceptanceFixture'),
+    loadExampleExport<InfolistActionAcceptanceFixture>('nuxt', 'p8-infolist-action-acceptance-nuxt', 'nuxtInfolistActionAcceptanceFixture'),
+    loadExampleExport<InfolistActionAcceptanceFixture>('sveltekit', 'p8-infolist-action-acceptance-sveltekit', 'svelteKitInfolistActionAcceptanceFixture'),
   ])
   fixtures = [
-    ['Next', next.nextInfolistActionAcceptanceFixture],
-    ['Nuxt', nuxt.nuxtInfolistActionAcceptanceFixture],
-    ['SvelteKit', svelteKit.svelteKitInfolistActionAcceptanceFixture],
+    ['Next', next],
+    ['Nuxt', nuxt],
+    ['SvelteKit', svelteKit],
   ]
 })
 

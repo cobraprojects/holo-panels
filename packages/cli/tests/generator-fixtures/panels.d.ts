@@ -1,48 +1,96 @@
-declare module '@holo-js/panels' {
-  type PathFor<TRecord, TValue> = {
-    [TKey in keyof TRecord & string]: NonNullable<TRecord[TKey]> extends TValue ? TKey : never
-  }[keyof TRecord & string]
+declare module '@holo-js/panels-resources' {
+  type Component = { compile(): object }
+  type ModelSource = {
+    create(...parameters: never[]): object | Promise<object>
+    readonly definition: {
+      readonly name: string
+      readonly primaryKey: string
+      readonly relations?: Readonly<Record<string, unknown>>
+      readonly softDeletes: boolean
+    }
+    query(): object
+  }
+  type RecordFor<TModel extends ModelSource> = Awaited<ReturnType<TModel['create']>>
+  type RecordPath<TRecord extends object> = string extends keyof TRecord ? string : Extract<keyof TRecord, string>
 
-  type FieldBuilder<TKey extends string> = {
-    readonly path: TKey
-    numeric(): FieldBuilder<TKey>
-    required(): FieldBuilder<TKey>
+  type FieldBuilder = Component & {
+    numeric(): FieldBuilder
+    required(): FieldBuilder
   }
 
-  type ColumnBuilder<TKey extends string> = {
-    readonly path: TKey
-    dateTime(): ColumnBuilder<TKey>
-    number(): ColumnBuilder<TKey>
+  type ColumnBuilder = Component & {
+    dateTime(): ColumnBuilder
+    number(): ColumnBuilder
   }
 
-  type FieldFactory<TRecord> = {
-    checkbox<TKey extends PathFor<TRecord, boolean>>(key: TKey): FieldBuilder<TKey>
-    dateTime<TKey extends PathFor<TRecord, Date>>(key: TKey): FieldBuilder<TKey>
-    text<TKey extends PathFor<TRecord, number | string>>(key: TKey): FieldBuilder<TKey>
+  type TableAction = {
+    compile(): object
+    manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): object
   }
 
-  type ColumnFactory<TRecord> = {
-    boolean<TKey extends PathFor<TRecord, boolean>>(key: TKey): ColumnBuilder<TKey>
-    text<TKey extends keyof TRecord & string>(key: TKey): ColumnBuilder<TKey>
+  type FieldFactory<TRecord extends object> = {
+    checkbox<TPath extends RecordPath<TRecord>>(path: TPath): FieldBuilder
+    dateTimePicker<TPath extends RecordPath<TRecord>>(path: TPath): FieldBuilder
+    textInput<TPath extends RecordPath<TRecord>>(path: TPath): FieldBuilder
   }
 
-  type Resource<TRecord> = {
-    form(schema: Schema<TRecord>): Resource<TRecord>
-    table(table: Table<TRecord>): Resource<TRecord>
+  type ColumnFactory<TRecord extends object> = {
+    text<TPath extends RecordPath<TRecord>>(path: TPath): ColumnBuilder
   }
 
-  type Schema<TRecord> = {
-    readonly definitionKind: 'schema'
-    fields<TFields extends readonly FieldBuilder<string>[]>(configure: (field: FieldFactory<TRecord>) => TFields): Schema<TRecord>
+  type ActionFactory = {
+    create(): TableAction
+    delete(): TableAction
+    deleteBulk(): TableAction
+    edit(): TableAction
+    group(actions: readonly TableAction[]): TableAction
+    view(): TableAction
   }
 
-  type Table<TRecord> = {
-    readonly definitionKind: 'table'
-    columns<TColumns extends readonly ColumnBuilder<string>[]>(configure: (column: ColumnFactory<TRecord>) => TColumns): Table<TRecord>
+  class Schema<TRecord extends object> {
+    components(configure: (field: FieldFactory<TRecord>) => readonly Component[]): this
   }
 
-  export function defineResource<TRecord>(model: abstract new () => TRecord): Resource<TRecord>
-  export function defineRelationManager<TRecord>(id: string, model: abstract new () => TRecord): { readonly record?: TRecord }
-  export function defineSchema<TRecord>(model: abstract new () => TRecord): Schema<TRecord>
-  export function defineTable<TRecord>(model: abstract new () => TRecord): Table<TRecord>
+  class Table<TRecord extends object> {
+    columns(configure: (column: ColumnFactory<TRecord>) => readonly Component[]): this
+    recordActions(configure: (action: ActionFactory) => readonly TableAction[]): this
+    toolbarActions(configure: (action: ActionFactory) => readonly TableAction[]): this
+  }
+
+  type SchemaConfiguration = (schema: Schema<object>) => Schema<object>
+  type TableConfiguration = (table: Table<object>) => Table<object>
+
+  export class Resource {
+    protected static model: ModelSource
+    static actions(configure: (action: ActionFactory) => readonly TableAction[]): readonly TableAction[]
+    protected static configureForm(configuration: (schema: Schema<Record<string, unknown>>) => Schema<Record<string, unknown>>): SchemaConfiguration
+    protected static configureTable(configuration: (table: Table<Record<string, unknown>>) => Table<Record<string, unknown>>): TableConfiguration
+  }
+
+  export function configureResourceForm<TModel extends ModelSource>(
+    model: TModel,
+    configuration: (schema: Schema<RecordFor<TModel>>) => Schema<RecordFor<TModel>>,
+  ): SchemaConfiguration
+
+  export function configureResourceTable<TModel extends ModelSource>(
+    model: TModel,
+    configuration: (table: Table<RecordFor<TModel>>) => Table<RecordFor<TModel>>,
+  ): TableConfiguration
+
+  class ResourcePage {
+    static get resource(): object
+    static route(path: string): { readonly pageType: 'create' | 'edit' | 'list' | 'view', readonly path: string }
+    protected getHeaderActions(): readonly TableAction[]
+  }
+
+  export class CreateRecord extends ResourcePage {}
+  export class EditRecord extends ResourcePage {}
+  export class ListRecords extends ResourcePage {}
+  export class ViewRecord extends ResourcePage {}
+  export class Page extends ResourcePage {}
+
+  export class RelationManager {
+    protected static relationship: string
+    protected static configureTable(configuration: (table: Table<Record<string, unknown>>) => Table<Record<string, unknown>>): TableConfiguration
+  }
 }

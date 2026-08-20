@@ -1,10 +1,12 @@
 'use client'
 
-import { executePanelAuthRequest, panelContentWidthValue, panelThemeVariables } from '@holo-js/panels-react'
+import { executePanelAuthRequest, panelContentWidthValue } from '@holo-js/panels-react'
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { nextPanelAuthAppearanceVariables, type NextPanelAuthAppearance } from './auth-appearance'
 import { ShadcnButton, ShadcnCard, ShadcnCardContent, ShadcnCardHeader, ShadcnIcon, ShadcnInput, ShadcnLabel, ShadcnSelect } from './internal-ui'
 
 export interface NextPanelMultiFactorPageProps {
+  readonly appearance?: NextPanelAuthAppearance
   readonly brandName: string
   readonly panelId: string
   readonly simplePageMaxContentWidth?: string
@@ -17,12 +19,12 @@ function cookie(name: string): string {
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : ''
 }
 
-export function NextPanelMultiFactorPage({ brandName, panelId, simplePageMaxContentWidth, theme = 'system', themeColors }: NextPanelMultiFactorPageProps) {
+export function NextPanelMultiFactorPage({ appearance, brandName, panelId, simplePageMaxContentWidth, theme = 'system', themeColors }: NextPanelMultiFactorPageProps) {
   const [enabled, setEnabled] = useState(false)
   const [manualKey, setManualKey] = useState('')
   const [recoveryCodes, setRecoveryCodes] = useState<readonly string[]>([])
   const [error, setError] = useState('')
-  const style = { ...panelThemeVariables({ colors: themeColors }), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
+  const style = { ...nextPanelAuthAppearanceVariables(appearance, themeColors), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
   const request = (operation: Parameters<typeof executePanelAuthRequest>[0]['operation'], payload: Readonly<Record<string, unknown>> = {}) => executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId, payload })
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function NextPanelMultiFactorPage({ brandName, panelId, simplePageMaxCont
     }
   }
 
-  return <main className="hp-auth-page" data-holo-panel data-theme={theme} style={style}><ShadcnCard className="hp-auth-card"><ShadcnCardHeader><span className="hp-auth-brand-mark"><ShadcnIcon name="key" /></span><div><p>{brandName}</p><h1>Multi-factor authentication</h1><span>MFA is {enabled ? 'enabled' : 'disabled'}.</span></div></ShadcnCardHeader><ShadcnCardContent>
+  return <main className="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={style}><ShadcnCard className="hp-auth-card"><ShadcnCardHeader><span className="hp-auth-brand-mark"><ShadcnIcon name="key" /></span><div><p>{brandName}</p><h1>Multi-factor authentication</h1><span>MFA is {enabled ? 'enabled' : 'disabled'}.</span></div></ShadcnCardHeader><ShadcnCardContent>
     {!enabled && !manualKey ? <ShadcnButton className="hp-button hp-button-primary" onClick={() => void begin()}>Begin enrollment</ShadcnButton> : null}
     {manualKey ? <><p>Manual key: <code>{manualKey}</code></p><form onSubmit={confirm}><div className="hp-auth-field"><ShadcnLabel htmlFor={`${panelId}-confirm-code`}>Authentication code</ShadcnLabel><ShadcnInput autoComplete="one-time-code" id={`${panelId}-confirm-code`} name="code" required /></div><ShadcnButton className="hp-button hp-button-primary" type="submit">Confirm enrollment</ShadcnButton></form></> : null}
     {recoveryCodes.length ? <section aria-label="Recovery codes"><h2>Recovery codes</h2><ul>{recoveryCodes.map(code => <li key={code}><code>{code}</code></li>)}</ul></section> : null}

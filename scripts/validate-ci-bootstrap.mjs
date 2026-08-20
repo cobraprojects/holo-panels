@@ -1,36 +1,29 @@
-import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 
-const execFileAsync = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
-const holoRoot = resolve(process.env.HOLO_PANELS_HOLO_JS_ROOT ?? resolve(repositoryRoot, '../holo-js'))
 const expectedRepository = 'cobraprojects/holo-js'
-const expectedRef = '9abcce12588feeb22353fd57869719df43d3ac39'
-const expectedVersion = '0.3.12'
 const expectedCompatibilityRange = '>=0.3.9'
 const workflow = await readFile(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release.yml'), 'utf8')
 const hostReleaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release-holo.yml'), 'utf8')
 
+const forbiddenRegistryBypassText = [
+  'HOLO_JS_REF',
+  'build-compatible-holo.mjs',
+  'bun run link:holo',
+]
+
 const requiredWorkflowText = [
-  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
-  `HOLO_JS_REF: ${expectedRef}`,
-  `HOLO_JS_VERSION: ${expectedVersion}`,
-  'path: holo-panels',
-  'path: holo-js',
-  'bun install --frozen-lockfile --ignore-scripts',
-  'npm rebuild better-sqlite3',
-  'node ../holo-panels/scripts/build-compatible-holo.mjs',
-  'run: bun run link:holo',
+  'bun install --frozen-lockfile',
+  'node scripts/validate-ci-bootstrap.mjs',
   'run: bun run validate',
 ]
 
 for (const requiredText of requiredWorkflowText) {
   if (!workflow.includes(requiredText)) {
-    throw new Error(`CI is missing required compatibility bootstrap text: ${requiredText}`)
+    throw new Error(`CI is missing required bootstrap text: ${requiredText}`)
   }
 }
 
@@ -41,20 +34,23 @@ if (workflow.includes('Validate P0-B')) {
 const requiredReleaseWorkflowText = [
   'workflow_dispatch:',
   'environment: npm-release',
-  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
-  `HOLO_JS_REF: ${expectedRef}`,
-  `HOLO_JS_VERSION: ${expectedVersion}`,
   'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
-  'bun install --frozen-lockfile --ignore-scripts',
-  'npm rebuild better-sqlite3',
-  'node ../holo-panels/scripts/build-compatible-holo.mjs',
-  'run: bun run link:holo',
+  'bun install --frozen-lockfile',
+  'node scripts/validate-ci-bootstrap.mjs',
   'run: bun run release',
 ]
 
 for (const requiredText of requiredReleaseWorkflowText) {
   if (!releaseWorkflow.includes(requiredText)) {
     throw new Error(`Release CI is missing required publication text: ${requiredText}`)
+  }
+}
+
+for (const [workflowName, contents] of [['CI', workflow], ['Release CI', releaseWorkflow]]) {
+  for (const forbiddenText of forbiddenRegistryBypassText) {
+    if (contents.includes(forbiddenText)) {
+      throw new Error(`${workflowName} must resolve Holo-JS from the registry, not an adjacent checkout: ${forbiddenText}`)
+    }
   }
 }
 
@@ -66,8 +62,6 @@ const requiredHostReleaseWorkflowText = [
   'workflow_dispatch:',
   'environment: npm-release',
   `HOLO_JS_REPOSITORY: ${expectedRepository}`,
-  `HOLO_JS_REF: ${expectedRef}`,
-  `HOLO_JS_VERSION: ${expectedVersion}`,
   'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
   'bun install --frozen-lockfile --ignore-scripts',
   'npm rebuild better-sqlite3',
@@ -87,21 +81,6 @@ if (hostReleaseWorkflow.includes('pull_request:') || hostReleaseWorkflow.include
   throw new Error('Holo release CI must only publish through explicit workflow dispatch')
 }
 
-const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
-  cwd: holoRoot,
-  encoding: 'utf8',
-  timeout: 10_000,
-})
-const actualRef = stdout.trim()
-if (actualRef !== expectedRef) {
-  throw new Error(`Expected adjacent Holo-JS at ${expectedRef}, received ${actualRef}`)
-}
-
-const kernelManifest = JSON.parse(await readFile(resolve(holoRoot, 'packages/kernel/package.json'), 'utf8'))
-if (kernelManifest.version !== expectedVersion) {
-  throw new Error(`Expected Holo-JS ${expectedVersion}, received ${kernelManifest.version ?? '(missing)'}`)
-}
-
 const panelsManifest = JSON.parse(await readFile(resolve(repositoryRoot, 'package.json'), 'utf8'))
 for (const [packageName, version] of Object.entries(panelsManifest.workspaces?.catalog ?? {})) {
   if (packageName.startsWith('@holo-js/') && version !== expectedCompatibilityRange) {
@@ -109,4 +88,12 @@ for (const [packageName, version] of Object.entries(panelsManifest.workspaces?.c
   }
 }
 
-console.log(`Validated Holo-JS ${expectedVersion} CI pin at ${expectedRef}`)
+const installedKernelManifest = JSON.parse(await readFile(
+  resolve(repositoryRoot, 'node_modules/@holo-js/kernel/package.json'),
+  'utf8',
+))
+if (!installedKernelManifest.version) {
+  throw new Error('Installed @holo-js/kernel does not report a version')
+}
+
+console.log(`Validated installed Holo-JS ${installedKernelManifest.version} against compatibility line ${expectedCompatibilityRange}`)

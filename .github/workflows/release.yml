@@ -6,6 +6,11 @@ on:
 permissions:
   contents: read
 
+env:
+  HOLO_JS_REPOSITORY: cobraprojects/holo-js
+  HOLO_JS_REF: 9abcce12588feeb22353fd57869719df43d3ac39
+  HOLO_JS_VERSION: 0.3.12
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -15,6 +20,14 @@ jobs:
       - name: Check out Holo Panels
         uses: actions/checkout@v4
         with:
+          path: holo-panels
+          persist-credentials: false
+      - name: Check out compatible Holo-JS
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.HOLO_JS_REPOSITORY }}
+          ref: ${{ env.HOLO_JS_REF }}
+          path: holo-js
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
@@ -23,11 +36,23 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - name: Install Holo Panels
-        run: bun install --frozen-lockfile
-      - name: Validate the published Holo compatibility line
+      - name: Validate the compatibility pin
+        working-directory: holo-panels
         run: node scripts/validate-ci-bootstrap.mjs
+      - name: Install and build compatible Holo-JS packages
+        working-directory: holo-js
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          npm rebuild better-sqlite3
+          node ../holo-panels/scripts/build-compatible-holo.mjs
+      - name: Install Holo Panels
+        working-directory: holo-panels
+        run: bun install --frozen-lockfile
+      - name: Link compatible Holo-JS packages
+        working-directory: holo-panels
+        run: bun run link:holo
       - name: Publish Holo Panels
+        working-directory: holo-panels
         env:
           CI: 'true'
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

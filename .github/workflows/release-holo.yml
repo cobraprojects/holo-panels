@@ -8,6 +8,8 @@ permissions:
 
 env:
   HOLO_JS_REPOSITORY: cobraprojects/holo-js
+  HOLO_JS_REF: 9abcce12588feeb22353fd57869719df43d3ac39
+  HOLO_JS_VERSION: 0.3.12
 
 jobs:
   publish:
@@ -15,11 +17,11 @@ jobs:
     timeout-minutes: 90
     environment: npm-release
     steps:
-      - name: Check out Holo-JS
+      - name: Check out compatible Holo-JS
         uses: actions/checkout@v4
         with:
           repository: ${{ env.HOLO_JS_REPOSITORY }}
-          ref: main
+          ref: ${{ env.HOLO_JS_REF }}
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
@@ -34,6 +36,7 @@ jobs:
           npm rebuild better-sqlite3
       - name: Validate Holo-JS
         run: |
+          test "$(node -p "require('./packages/kernel/package.json').version")" = "${HOLO_JS_VERSION}"
           bun run typecheck
           bun run lint
           bun run test

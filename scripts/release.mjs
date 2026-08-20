@@ -13,6 +13,13 @@ if (publish) validateNpmPublishAuthentication()
 const packagesRoot = new URL('../packages/', import.meta.url)
 const preferredOrder = [
   'core',
+  'schemas',
+  'actions',
+  'forms',
+  'infolists',
+  'tables',
+  'notifications',
+  'resources',
   'client',
   'ui',
   'react',

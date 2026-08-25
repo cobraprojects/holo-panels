@@ -1,5 +1,5 @@
 import { posix } from 'node:path'
-import type { DiscoveredPanelAppearance, DiscoveredPanelPath, FrameworkArtifactDirectories, FrameworkArtifactKind, FrameworkId } from './contracts'
+import type { DiscoveredPanelPath, FrameworkArtifactDirectories, FrameworkArtifactKind, FrameworkId } from './contracts'
 
 export const MANAGED_ARTIFACT_MARKER = '@holo-panels-managed sha256:'
 
@@ -25,42 +25,17 @@ function moduleSpecifier(artifactPath: string, modulePath: string): string {
   return relative.startsWith('.') ? relative : `./${relative}`
 }
 
-function resolvedAppearance(appearance: DiscoveredPanelAppearance | undefined, themeColors: Readonly<Record<string, string>>): DiscoveredPanelAppearance | undefined {
-  if (!appearance) return undefined
-  const colors = { ...themeColors, ...appearance.colors }
-  return {
-    ...appearance,
-    ...(Object.keys(colors).length > 0 ? { colors } : {}),
-  }
+function themeImport(artifactPath: string): string {
+  return moduleSpecifier(artifactPath, '.holo-js/generated/panels/theme.css')
 }
 
-function jsxAppearanceProp(appearance: DiscoveredPanelAppearance | undefined, themeColors: Readonly<Record<string, string>>): string {
-  const resolved = resolvedAppearance(appearance, themeColors)
-  return resolved
-    ? ` appearance={${JSON.stringify(resolved)}}`
-    : ` themeColors={${JSON.stringify(themeColors)}}`
-}
-
-function nuxtAppearanceBindings(appearance: DiscoveredPanelAppearance | undefined, themeColors: Readonly<Record<string, string>>): readonly [string, string] {
-  const resolved = resolvedAppearance(appearance, themeColors)
-  return resolved
-    ? [`const appearance = ${JSON.stringify(resolved)} as const`, ':appearance="appearance"']
-    : [`const themeColors = ${JSON.stringify(themeColors)}`, ':theme-colors="themeColors"']
-}
-
-function svelteAppearanceProp(appearance: DiscoveredPanelAppearance | undefined, themeColors: Readonly<Record<string, string>>): string {
-  const resolved = resolvedAppearance(appearance, themeColors)
-  return resolved
-    ? ` appearance={${JSON.stringify(resolved)}}`
-    : ` themeColors={${JSON.stringify(themeColors)}}`
-}
-
-function nextTemplates(panelId: string, panelPath: string, directories: FrameworkArtifactDirectories, loginPath?: string, brandingName = 'Holo Panels', darkMode = 'light', forgotPasswordPath?: string, registrationPath?: string, themeColors: Readonly<Record<string, string>> = {}, simplePageMaxContentWidth = 'lg', appearance?: DiscoveredPanelAppearance): readonly ArtifactTemplate[] {
+function nextTemplates(panelId: string, panelPath: string, directories: FrameworkArtifactDirectories, loginPath?: string): readonly ArtifactTemplate[] {
   const basePath = routePath(panelPath)
   const pagePath = posix.join(directories.pages, basePath, '[[...panelsPath]]/page.tsx')
   const clientPath = posix.join(directories.pages, basePath, '[[...panelsPath]]/panels-client.tsx')
   const serverRegistryImport = moduleSpecifier(pagePath, '.holo-js/generated/panels/server-registry.ts')
   const rendererImport = moduleSpecifier(clientPath, '.holo-js/generated/panels/plugin-renderers.ts')
+  const applicationRendererImport = moduleSpecifier(clientPath, '.holo-js/generated/panels/application-renderers.ts')
   return [
     {
       path: pagePath,
@@ -72,53 +47,56 @@ function nextTemplates(panelId: string, panelPath: string, directories: Framewor
       path: clientPath,
       kind: 'panel-page',
       panelIds: [panelId],
-      body: `'use client'\n\nimport '@holo-js/panels-react/style.css'\nimport { createNextPanelComponentRegistry, NextPanelClient, type NextPanelClientProps } from '@holo-js/panels-next/client'\nimport { registerPanelPluginRenderers } from '${rendererImport}'\n\nconst registry = registerPanelPluginRenderers(createNextPanelComponentRegistry())\n\nexport function PanelsClient(props: Pick<NextPanelClientProps, 'payload'>) {\n  return <NextPanelClient {...props} registry={registry} />\n}\n`,
+      body: `'use client'\n\nimport '${themeImport(clientPath)}'\nimport { createNextPanelComponentRegistry, NextPanelClient, type NextPanelClientProps } from '@holo-js/panels-next/client'\nimport { registerPanelApplicationRenderers } from '${applicationRendererImport}'\nimport { registerPanelPluginRenderers } from '${rendererImport}'\n\nconst registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createNextPanelComponentRegistry()))\n\nexport function PanelsClient(props: Pick<NextPanelClientProps, 'payload'>) {\n  return <NextPanelClient {...props} registry={registry} />\n}\n`,
     },
-    ...(loginPath ? [nextLoginTemplate(panelId, loginPath, directories, brandingName, darkMode, forgotPasswordPath, registrationPath, themeColors, simplePageMaxContentWidth, appearance)] : []),
+    ...(loginPath ? [nextLoginTemplate(panelId, loginPath, directories)] : []),
   ]
 }
 
-function nextLoginTemplate(panelId: string, loginPath: string, directories: FrameworkArtifactDirectories, brandingName: string, darkMode: string, forgotPasswordPath: string | undefined, registrationPath: string | undefined, themeColors: Readonly<Record<string, string>>, simplePageMaxContentWidth: string, appearance?: DiscoveredPanelAppearance): ArtifactTemplate {
+function nextLoginTemplate(panelId: string, loginPath: string, directories: FrameworkArtifactDirectories): ArtifactTemplate {
+  const path = posix.join(directories.pages, routePath(loginPath), 'page.tsx')
   return {
-    path: posix.join(directories.pages, routePath(loginPath), 'page.tsx'),
+    path,
     kind: 'auth-page',
     panelIds: [panelId],
-    body: `'use client'\n\nimport '@holo-js/panels-react/style.css'\nimport { NextPanelLoginPage } from '@holo-js/panels-next/client'\n\nexport default function LoginPage() {\n  return <NextPanelLoginPage brandName={${JSON.stringify(brandingName)}}${forgotPasswordPath ? ` forgotPasswordPath="${forgotPasswordPath}"` : ''} panelId="${panelId}"${registrationPath ? ` registrationPath="${registrationPath}"` : ''} simplePageMaxContentWidth="${simplePageMaxContentWidth}" theme="${darkMode}"${jsxAppearanceProp(appearance, themeColors)} />\n}\n`,
+    body: `'use client'\n\nimport '${themeImport(path)}'\nimport { NextPanelLoginPage } from '@holo-js/panels-next/client'\n\nexport default function LoginPage() {\n  return <NextPanelLoginPage panelId="${panelId}" />\n}\n`,
   }
 }
 
-function nuxtTemplates(panelId: string, panelPath: string, directories: FrameworkArtifactDirectories, managedPaths: readonly string[], loginPath?: string, brandingName = 'Holo Panels', darkMode = 'light', forgotPasswordPath?: string, registrationPath?: string, themeColors: Readonly<Record<string, string>> = {}, simplePageMaxContentWidth = 'lg', appearance?: DiscoveredPanelAppearance): readonly ArtifactTemplate[] {
+function nuxtTemplates(panelId: string, panelPath: string, directories: FrameworkArtifactDirectories, managedPaths: readonly string[], loginPath?: string): readonly ArtifactTemplate[] {
   const basePath = routePath(panelPath)
   const pagePath = posix.join(directories.pages, basePath, '[[...panelsPath]].vue')
   const rendererImport = moduleSpecifier(pagePath, '.holo-js/generated/panels/plugin-renderers.ts')
+  const applicationRendererImport = moduleSpecifier(pagePath, '.holo-js/generated/panels/application-renderers.ts')
   return [
     {
       path: pagePath,
       kind: 'panel-page',
       panelIds: [panelId],
-      body: `<script setup lang="ts">\nimport '@holo-js/panels-vue/style.css'\nimport { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } from '@holo-js/panels-nuxt'\nimport { registerPanelPluginRenderers } from '${rendererImport}'\n\ndefinePageMeta({\n  middleware: async (to) => {\n    try {\n      await useRequestFetch()('/holo/panels/${panelId}/auth/mfa-status')\n    } catch {\n      return navigateTo(\`${loginPath ?? '/login'}?next=\${encodeURIComponent(to.fullPath)}\`, { redirectCode: 302 })\n    }\n  },\n})\n\nconst panelPage = await usePanelPage({ panelId: '${panelId}' })\nconst registry = registerPanelPluginRenderers(createNuxtPanelComponentRegistry())\n</script>\n\n<template>\n  <PanelPage :page="panelPage" :registry="registry" />\n</template>\n`,
+      body: `<script setup lang="ts">\nimport '${themeImport(pagePath)}'\nimport { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } from '@holo-js/panels-nuxt'\nimport { registerPanelApplicationRenderers } from '${applicationRendererImport}'\nimport { registerPanelPluginRenderers } from '${rendererImport}'\n\ndefinePageMeta({\n  middleware: async (to) => {\n    try {\n      await useRequestFetch()('/holo/panels/${panelId}/auth/mfa-status')\n    } catch {\n      return navigateTo(\`${loginPath ?? '/login'}?next=\${encodeURIComponent(to.fullPath)}\`, { redirectCode: 302 })\n    }\n  },\n})\n\nconst panelPage = await usePanelPage({ panelId: '${panelId}' })\nconst registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createNuxtPanelComponentRegistry()))\n</script>\n\n<template>\n  <PanelPage :page="panelPage" :registry="registry" />\n</template>\n`,
     },
-    ...(loginPath ? [nuxtLoginTemplate(panelId, loginPath, directories, managedPaths, brandingName, darkMode, forgotPasswordPath, registrationPath, themeColors, simplePageMaxContentWidth, appearance)] : []),
+    ...(loginPath ? [nuxtLoginTemplate(panelId, loginPath, directories, managedPaths)] : []),
   ]
 }
 
-function nuxtLoginTemplate(panelId: string, loginPath: string, directories: FrameworkArtifactDirectories, managedPaths: readonly string[], brandingName: string, darkMode: string, forgotPasswordPath: string | undefined, registrationPath: string | undefined, themeColors: Readonly<Record<string, string>>, simplePageMaxContentWidth: string, appearance?: DiscoveredPanelAppearance): ArtifactTemplate {
-  const [appearanceDeclaration, appearanceBinding] = nuxtAppearanceBindings(appearance, themeColors)
+function nuxtLoginTemplate(panelId: string, loginPath: string, directories: FrameworkArtifactDirectories, managedPaths: readonly string[]): ArtifactTemplate {
+  const path = nuxtPagePath(loginPath, directories, managedPaths)
   return {
-    path: nuxtPagePath(loginPath, directories, managedPaths),
+    path,
     kind: 'auth-page',
     panelIds: [panelId],
-    body: `<script setup lang="ts">\nimport '@holo-js/panels-vue/style.css'\nimport { PanelLoginPage } from '@holo-js/panels-nuxt'\n\nconst brandName = ${JSON.stringify(brandingName)}\n${appearanceDeclaration}\n</script>\n\n<template>\n  <PanelLoginPage ${appearanceBinding} :brand-name="brandName"${forgotPasswordPath ? ` forgot-password-path="${forgotPasswordPath}"` : ''} panel-id="${panelId}"${registrationPath ? ` registration-path="${registrationPath}"` : ''} simple-page-max-content-width="${simplePageMaxContentWidth}" theme="${darkMode}" />\n</template>\n`,
+    body: `<script setup lang="ts">\nimport '${themeImport(path)}'\nimport { PanelLoginPage } from '@holo-js/panels-nuxt'\n</script>\n\n<template>\n  <PanelLoginPage panel-id="${panelId}" />\n</template>\n`,
   }
 }
 
-function svelteKitTemplates(panelId: string, panelPath: string, directories: FrameworkArtifactDirectories, loginPath?: string, brandingName = 'Holo Panels', darkMode = 'light', forgotPasswordPath?: string, registrationPath?: string, themeColors: Readonly<Record<string, string>> = {}, simplePageMaxContentWidth = 'lg', appearance?: DiscoveredPanelAppearance): readonly ArtifactTemplate[] {
+function svelteKitTemplates(panelId: string, panelPath: string, directories: FrameworkArtifactDirectories, loginPath?: string): readonly ArtifactTemplate[] {
   const basePath = routePath(panelPath)
   const routeRoot = posix.join(directories.pages, basePath, '[...path]')
   const pageServerPath = `${routeRoot}/+page.server.ts`
   const registryImport = moduleSpecifier(pageServerPath, '.holo-js/generated/panels/server-registry.ts')
   const pagePath = `${routeRoot}/+page.svelte`
   const rendererImport = moduleSpecifier(pagePath, '.holo-js/generated/panels/plugin-renderers.ts')
+  const applicationRendererImport = moduleSpecifier(pagePath, '.holo-js/generated/panels/application-renderers.ts')
   return [
     {
       path: pageServerPath,
@@ -130,18 +108,19 @@ function svelteKitTemplates(panelId: string, panelPath: string, directories: Fra
       path: pagePath,
       kind: 'panel-page',
       panelIds: [panelId],
-      body: `<script lang="ts">\n  import '@holo-js/panels-svelte/style.css'\n  import { createSvelteKitPanelComponentRegistry, PanelPage } from '@holo-js/panels-sveltekit'\n  import { registerPanelPluginRenderers } from '${rendererImport}'\n\n  let { data } = $props()\n  const registry = registerPanelPluginRenderers(createSvelteKitPanelComponentRegistry())\n</script>\n\n<PanelPage {data} {registry} />\n`,
+      body: `<script lang="ts">\n  import '${themeImport(pagePath)}'\n  import { createSvelteKitPanelComponentRegistry, PanelPage } from '@holo-js/panels-sveltekit'\n  import { registerPanelApplicationRenderers } from '${applicationRendererImport}'\n  import { registerPanelPluginRenderers } from '${rendererImport}'\n\n  let { data } = $props()\n  const registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createSvelteKitPanelComponentRegistry()))\n</script>\n\n<PanelPage {data} {registry} />\n`,
     },
-    ...(loginPath ? [svelteKitLoginTemplate(panelId, loginPath, directories, brandingName, darkMode, forgotPasswordPath, registrationPath, themeColors, simplePageMaxContentWidth, appearance)] : []),
+    ...(loginPath ? [svelteKitLoginTemplate(panelId, loginPath, directories)] : []),
   ]
 }
 
-function svelteKitLoginTemplate(panelId: string, loginPath: string, directories: FrameworkArtifactDirectories, brandingName: string, darkMode: string, forgotPasswordPath: string | undefined, registrationPath: string | undefined, themeColors: Readonly<Record<string, string>>, simplePageMaxContentWidth: string, appearance?: DiscoveredPanelAppearance): ArtifactTemplate {
+function svelteKitLoginTemplate(panelId: string, loginPath: string, directories: FrameworkArtifactDirectories): ArtifactTemplate {
+  const path = posix.join(directories.pages, routePath(loginPath), '+page.svelte')
   return {
-    path: posix.join(directories.pages, routePath(loginPath), '+page.svelte'),
+    path,
     kind: 'auth-page',
     panelIds: [panelId],
-    body: `<script lang="ts">\n  import '@holo-js/panels-svelte/style.css'\n  import { PanelLoginPage } from '@holo-js/panels-sveltekit'\n</script>\n\n<PanelLoginPage brandName={${JSON.stringify(brandingName)}}${forgotPasswordPath ? ` forgotPasswordPath="${forgotPasswordPath}"` : ''} panelId="${panelId}"${registrationPath ? ` registrationPath="${registrationPath}"` : ''} simplePageMaxContentWidth="${simplePageMaxContentWidth}" theme="${darkMode}"${svelteAppearanceProp(appearance, themeColors)} />\n`,
+    body: `<script lang="ts">\n  import '${themeImport(path)}'\n  import { PanelLoginPage } from '@holo-js/panels-sveltekit'\n</script>\n\n<PanelLoginPage panelId="${panelId}" />\n`,
   }
 }
 
@@ -163,38 +142,35 @@ function generatedAuthPages(panel: DiscoveredPanelPath): readonly GeneratedAuthP
 }
 
 function additionalAuthPageTemplates(framework: FrameworkId, panel: DiscoveredPanelPath, directories: FrameworkArtifactDirectories): readonly ArtifactTemplate[] {
-  const brandName = panel.brandingName ?? 'Holo Panels'
-  const theme = panel.darkMode ?? 'light'
-  const themeColors = panel.themeColors ?? {}
-  const appearance = panel.appearance
-  const width = panel.simplePageMaxContentWidth ?? 'lg'
   const authPages = generatedAuthPages(panel)
   const managedPaths = [...(panel.loginPath ? [panel.loginPath] : []), ...authPages.map(page => page.path)]
   return authPages.map((authPage): ArtifactTemplate => {
     const component = authPage.type === 'mfa-management' ? 'MultiFactor' : authPage.type === 'profile' ? 'Profile' : 'Auth'
     const auth = component === 'Auth'
-    const [appearanceDeclaration, appearanceBinding] = nuxtAppearanceBindings(appearance, themeColors)
     if (framework === 'next') {
+      const path = posix.join(directories.pages, routePath(authPage.path), 'page.tsx')
       return {
-        body: `'use client'\n\nimport '@holo-js/panels-react/style.css'\nimport { NextPanel${component}Page } from '@holo-js/panels-next/client'\n\nexport default function AuthPage() {\n  return <NextPanel${component}Page brandName={${JSON.stringify(brandName)}}${auth && panel.loginPath ? ` loginPath="${panel.loginPath}"` : ''} panelId="${panel.id}" simplePageMaxContentWidth="${width}" theme="${theme}"${jsxAppearanceProp(appearance, themeColors)}${auth ? ` type="${authPage.type}"` : ''} />\n}\n`,
+        body: `'use client'\n\nimport '${themeImport(path)}'\nimport { NextPanel${component}Page } from '@holo-js/panels-next/client'\n\nexport default function AuthPage() {\n  return <NextPanel${component}Page panelId="${panel.id}"${auth ? ` type="${authPage.type}"` : ''} />\n}\n`,
         kind: 'auth-page',
         panelIds: [panel.id],
-        path: posix.join(directories.pages, routePath(authPage.path), 'page.tsx'),
+        path,
       }
     }
     if (framework === 'nuxt') {
+      const path = nuxtPagePath(authPage.path, directories, managedPaths)
       return {
-        body: `<script setup lang="ts">\nimport '@holo-js/panels-vue/style.css'\nimport { Panel${component}Page } from '@holo-js/panels-nuxt'\n\nconst brandName = ${JSON.stringify(brandName)}\n${appearanceDeclaration}\n</script>\n\n<template>\n  <Panel${component}Page ${appearanceBinding} :brand-name="brandName"${auth && panel.loginPath ? ` login-path="${panel.loginPath}"` : ''} panel-id="${panel.id}" simple-page-max-content-width="${width}" theme="${theme}"${auth ? ` type="${authPage.type}"` : ''} />\n</template>\n`,
+        body: `<script setup lang="ts">\nimport '${themeImport(path)}'\nimport { Panel${component}Page } from '@holo-js/panels-nuxt'\n</script>\n\n<template>\n  <Panel${component}Page panel-id="${panel.id}"${auth ? ` type="${authPage.type}"` : ''} />\n</template>\n`,
         kind: 'auth-page',
         panelIds: [panel.id],
-        path: nuxtPagePath(authPage.path, directories, managedPaths),
+        path,
       }
     }
+    const path = posix.join(directories.pages, routePath(authPage.path), '+page.svelte')
     return {
-      body: `<script lang="ts">\n  import '@holo-js/panels-svelte/style.css'\n  import { Panel${component}Page } from '@holo-js/panels-sveltekit'\n</script>\n\n<Panel${component}Page brandName={${JSON.stringify(brandName)}}${auth && panel.loginPath ? ` loginPath="${panel.loginPath}"` : ''} panelId="${panel.id}" simplePageMaxContentWidth="${width}" theme="${theme}"${svelteAppearanceProp(appearance, themeColors)}${auth ? ` type="${authPage.type}"` : ''} />\n`,
+      body: `<script lang="ts">\n  import '${themeImport(path)}'\n  import { Panel${component}Page } from '@holo-js/panels-sveltekit'\n</script>\n\n<Panel${component}Page panelId="${panel.id}"${auth ? ` type="${authPage.type}"` : ''} />\n`,
       kind: 'auth-page',
       panelIds: [panel.id],
-      path: posix.join(directories.pages, routePath(authPage.path), '+page.svelte'),
+      path,
     }
   })
 }
@@ -317,13 +293,13 @@ export function frameworkArtifactTemplates(
       : { pages: 'src/routes', server: 'src/routes' })
   const pages = panels.flatMap((panel) => {
     if (framework === 'next') {
-      return nextTemplates(panel.id, panel.path, resolvedDirectories, panel.loginPath, panel.brandingName, panel.darkMode, panel.forgotPasswordPath, panel.registrationPath, panel.themeColors, panel.simplePageMaxContentWidth, panel.appearance)
+      return nextTemplates(panel.id, panel.path, resolvedDirectories, panel.loginPath)
     }
     if (framework === 'nuxt') {
       const managedPaths = [...(panel.loginPath ? [panel.loginPath] : []), ...generatedAuthPages(panel).map(page => page.path)]
-      return nuxtTemplates(panel.id, panel.path, resolvedDirectories, managedPaths, panel.loginPath, panel.brandingName, panel.darkMode, panel.forgotPasswordPath, panel.registrationPath, panel.themeColors, panel.simplePageMaxContentWidth, panel.appearance)
+      return nuxtTemplates(panel.id, panel.path, resolvedDirectories, managedPaths, panel.loginPath)
     }
-    return svelteKitTemplates(panel.id, panel.path, resolvedDirectories, panel.loginPath, panel.brandingName, panel.darkMode, panel.forgotPasswordPath, panel.registrationPath, panel.themeColors, panel.simplePageMaxContentWidth, panel.appearance)
+    return svelteKitTemplates(panel.id, panel.path, resolvedDirectories, panel.loginPath)
   })
   const authPages = panels.flatMap(panel => additionalAuthPageTemplates(framework, panel, resolvedDirectories))
   return [...pages, ...authPages, ...operationTemplates(framework, panels.map(panel => panel.id), resolvedDirectories), ...customRouteTemplates(framework, panels, resolvedDirectories)]

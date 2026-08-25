@@ -1,22 +1,19 @@
 import { FormStore } from '@holo-js/panels-client'
-import { createSSRApp, createApp, defineComponent, effectScope, h, isReadonly, nextTick, ref } from 'vue'
+import { createSSRApp, createApp, defineComponent, effectScope, h, isReadonly, nextTick } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ComponentRegistry,
-  PanelsDropdown,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   PanelsErrorBoundary,
-  PanelsInputWrapper,
-  PanelsModal,
-  PanelsPagination,
-  PanelsPortalProvider,
-  PanelsTabs,
-  PanelsToastViewport,
+  PanelsRenderHook,
   VueRelationManagerRenderer,
-  registerVueShellComponents,
+  renderPanelsHook,
   useFormStore,
   usePanelsStore,
-  vueShellComponents,
 } from '../src/index'
 
 const mountedApps: Array<{ unmount(): void }> = []
@@ -36,19 +33,35 @@ function mount(component: ReturnType<typeof defineComponent>): HTMLElement {
 }
 
 describe('Vue renderer registry', () => {
+  it('renders registered hook components with properties, page data, and scopes without a wrapper', async () => {
+    const registry = new ComponentRegistry().register('app.banner', defineComponent({
+      props: { data: { type: Object, required: true }, scopes: { type: Array, required: true }, title: { type: String, required: true } },
+      setup(props) { return () => h('strong', { 'data-record': String(Reflect.get(props.data, 'recordId')), 'data-scope': props.scopes.join(':') }, props.title) },
+    }))
+    const app = createSSRApp(() => renderPanelsHook({
+      data: { recordId: 42 },
+      hook: PanelsRenderHook.PAGE_START,
+      manifest: { id: 'admin', slots: { [PanelsRenderHook.PAGE_START]: [{ component: 'app.banner', order: 0, properties: { title: 'Notice' }, source: 'panel' }] } },
+      registry,
+      scopes: ['posts', 'edit'],
+    }))
+
+    expect(await renderToString(app)).toBe('<!--[--><strong data-record="42" data-scope="posts:edit">Notice</strong><!--]-->')
+  })
+
   it('registers named components, rejects duplicates, and resolves panel overrides', () => {
-    const registry = registerVueShellComponents(new ComponentRegistry())
+    const defaultComponent = defineComponent(() => () => h('button', 'Default'))
+    const registry = new ComponentRegistry().register('button', defaultComponent, 'test/default-button.ts')
     const override = defineComponent(() => () => h('strong', 'Panel override'))
 
-    expect(Object.keys(vueShellComponents)).toHaveLength(16)
     expect(registry.has('button')).toBe(true)
-    expect(registry.resolve('button')).toBe(vueShellComponents.button)
+    expect(registry.resolve('button')).toBe(defaultComponent)
     expect(() => registry.register('button', override, 'test/button.ts')).toThrow(/already registered/u)
 
     registry.override('staff', 'button', override, 'panels/staff/button.ts')
 
     expect(registry.resolve('button', 'staff')).toBe(override)
-    expect(registry.resolve('button', 'public')).toBe(vueShellComponents.button)
+    expect(registry.resolve('button', 'public')).toBe(defaultComponent)
     expect(() => registry.resolve('missing', 'staff', 'resources/users.ts:18')).toThrow(
       /Missing Vue component registration "missing" for panel "staff"\. Requested by resources\/users\.ts:18\./u,
     )
@@ -82,131 +95,7 @@ describe('Vue shared store binding', () => {
   })
 })
 
-describe('Vue shell observable contract', () => {
-  it('renders semantic input, pagination, toast, and dialog accessibility contracts', async () => {
-    const Shell = defineComponent(() => () => h('main', [
-      h(PanelsInputWrapper, {
-        inputId: 'email',
-        label: 'Email',
-        description: 'Work address',
-        error: 'Email is required',
-        required: true,
-      }, {
-        default: (bindings: Record<string, string | undefined>) => h('input', { ...bindings, name: 'email' }),
-      }),
-      h(PanelsPagination, { page: 2, pages: 4 }),
-      h(PanelsToastViewport, { toasts: [{ id: 'saved', message: 'Saved', tone: 'success' }] }),
-      h(PanelsModal, { open: true, title: 'Confirm', description: 'Review this action' }, { default: () => 'Contents' }),
-    ]))
-
-    const html = await renderToString(createSSRApp(Shell))
-
-    expect(html).toContain('data-panels-component="input-wrapper"')
-    expect(html).toContain('<label')
-    expect(html).toContain('for="email"')
-    expect(html).toContain('aria-describedby="email-description email-error"')
-    expect(html).toContain('aria-invalid="true"')
-    expect(html).toContain('role="alert"')
-    expect(html).toContain('<nav class="hp-pagination" aria-label="Pagination"')
-    expect(html).toContain('aria-live="polite"')
-    expect(html).toContain('role="dialog"')
-    expect(html).toContain('aria-modal="true"')
-  })
-
-  it('supports tab navigation, dropdown selection, and dialog dismissal', async () => {
-    const selectedItem = ref<string>()
-    const Fixture = defineComponent({
-      setup() {
-        const activeTab = ref('details')
-        const dropdownOpen = ref(true)
-        const modalOpen = ref(true)
-        return () => h('main', [
-          h(PanelsTabs, {
-            tabs: [{ id: 'details', label: 'Details' }, { id: 'history', label: 'History' }],
-            modelValue: activeTab.value,
-            'onUpdate:modelValue': (value: string) => { activeTab.value = value },
-          }),
-          h(PanelsDropdown, {
-            label: 'Actions',
-            items: [{ id: 'archive', label: 'Archive' }, { id: 'delete', label: 'Delete' }],
-            open: dropdownOpen.value,
-            onSelect: (value: string) => { selectedItem.value = value },
-            'onUpdate:open': (value: boolean) => { dropdownOpen.value = value },
-          }),
-          h(PanelsModal, {
-            open: modalOpen.value,
-            title: 'Confirm',
-            onClose: () => { modalOpen.value = false },
-          }),
-        ])
-      },
-    })
-    const container = mount(Fixture)
-    await nextTick()
-    const firstTab = container.querySelector<HTMLElement>('[role="tab"]')
-    const dropdownTrigger = container.querySelector<HTMLElement>('[aria-haspopup="menu"]')
-    const dialog = container.querySelector<HTMLElement>('[role="dialog"]')
-    const dialogButton = dialog?.querySelector<HTMLElement>('button')
-
-    expect(dialogButton?.getAttribute('aria-label')).toBe('Close')
-
-    firstTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-    dropdownTrigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
-    await nextTick()
-    const menuItems = container.querySelectorAll<HTMLElement>('[role="menuitem"]')
-    menuItems[1]?.click()
-    dialogButton?.click()
-    await nextTick()
-    await new Promise(resolve => setTimeout(resolve, 0))
-    await nextTick()
-
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('History')
-    expect(selectedItem.value).toBe('delete')
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
-  })
-
-  it('targets a panel-scoped portal container when one is provided', async () => {
-    const portal = document.createElement('div')
-    portal.dataset.panelPortal = ''
-    document.body.append(portal)
-    const Fixture = defineComponent(() => () => h(PanelsPortalProvider, { container: portal }, {
-      default: () => h('main', [
-        h(PanelsDropdown, {
-          items: [{ id: 'profile', label: 'Profile' }],
-          label: 'Account',
-          open: true,
-        }),
-        h(PanelsModal, { open: true, title: 'Confirm' }),
-      ]),
-    }))
-    const container = mount(Fixture)
-    await nextTick()
-
-    expect(container.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull()
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
-    expect(portal.querySelector('[data-slot="dropdown-menu-content"]')).not.toBeNull()
-    expect(portal.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull()
-    expect(portal.querySelector('[role="dialog"]')).not.toBeNull()
-  })
-
-  it('opens an uncontrolled dropdown when the open prop is omitted', async () => {
-    const selectedItem = ref<string>()
-    const Fixture = defineComponent(() => () => h(PanelsDropdown, {
-      label: 'Account',
-      items: [{ id: 'profile', label: 'Profile' }],
-      onSelect: (value: string) => { selectedItem.value = value },
-    }))
-    const container = mount(Fixture)
-    await nextTick()
-
-    container.querySelector<HTMLElement>('[aria-haspopup="menu"]')?.click()
-    await nextTick()
-    container.querySelector<HTMLElement>('[role="menuitem"]')?.click()
-    await nextTick()
-
-    expect(selectedItem.value).toBe('profile')
-  })
-
+describe('Vue shell error boundary', () => {
   it('captures descendant render failures in an accessible boundary', async () => {
     const Broken = defineComponent(() => () => {
       throw new Error('Sensitive implementation detail')
@@ -218,7 +107,7 @@ describe('Vue shell observable contract', () => {
     const container = mount(Fixture)
     await nextTick()
 
-    expect(container.querySelector('[data-panels-component="error-boundary"]')?.getAttribute('role')).toBe('alert')
+    expect(container.querySelector('[data-slot="alert"]')?.getAttribute('role')).toBe('alert')
     expect(container.textContent).toContain('Unable to render this section')
     expect(container.textContent).not.toContain('Sensitive implementation detail')
   })
@@ -235,8 +124,9 @@ describe('Vue relation selection', () => {
     } }))
     const container = mount(Fixture)
     expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
+    expect(container.querySelector('.hp-relation-manager-count[data-slot="badge"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
+    expect(container.querySelector('[data-operation="attach"] [data-icon="link"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
     container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
@@ -297,10 +187,14 @@ describe('Vue relation selection', () => {
 
 describe('Vue SSR hydration', () => {
   it('hydrates deterministic shell markup without mismatch diagnostics', async () => {
-    const Fixture = defineComponent(() => () => h(PanelsTabs, {
-      tabs: [{ id: 'details', label: 'Details' }, { id: 'history', label: 'History' }],
-      modelValue: 'details',
-    }))
+    const Fixture = defineComponent(() => () => h(Tabs, { defaultValue: 'details' }, () => [
+      h(TabsList, {}, () => [
+        h(TabsTrigger, { value: 'details' }, () => 'Details'),
+        h(TabsTrigger, { value: 'history' }, () => 'History'),
+      ]),
+      h(TabsContent, { value: 'details' }, () => 'Details'),
+      h(TabsContent, { value: 'history' }, () => 'History'),
+    ]))
     const serverHtml = await renderToString(createSSRApp(Fixture))
     const container = document.createElement('div')
     container.innerHTML = serverHtml
@@ -314,7 +208,7 @@ describe('Vue SSR hydration', () => {
     await nextTick()
 
     expect(warn).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-panels-component="tabs"]')).not.toBeNull()
+    expect(container.querySelector('[data-slot="tabs"]')).not.toBeNull()
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2)
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Details')
   })

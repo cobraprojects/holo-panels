@@ -13,5 +13,6 @@ export interface VueRelationManagerRendererProps {
   readonly managers: readonly ClientRelationManager[]
   readonly onOperation?: (request: VueRelationOperationRequest) => void | Promise<void>
   readonly onSelectionChange?: (groupId: string, managerId: string) => void
+  readonly panelId?: string
   readonly selection?: ClientRelationSelection
 }

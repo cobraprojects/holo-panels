@@ -28,6 +28,7 @@
     "@holo-js/panels-resources": "workspace:*",
     "@holo-js/security": "catalog:",
     "@holo-js/session": "catalog:",
+    "@holo-js/storage": "catalog:",
     "esbuild": "catalog:",
     "next": "catalog:",
     "react": "catalog:",

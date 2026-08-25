@@ -1,23 +1,5 @@
 import type { ComponentType } from 'react'
 import { rendererRegistryName, type ExtensionTypeId, type RegistryKind } from '@holo-js/panels-client'
-import {
-  PanelsAvatar,
-  PanelsBadge,
-  PanelsButton,
-  PanelsDropdown,
-  PanelsEmptyState,
-  PanelsErrorBoundary,
-  PanelsIconButton,
-  PanelsInputWrapper,
-  PanelsLink,
-  PanelsLoadingIndicator,
-  PanelsModal,
-  PanelsPagination,
-  PanelsSection,
-  PanelsSlideOver,
-  PanelsTabs,
-  PanelsToastViewport,
-} from './primitives'
 
 export type ReactRendererComponent<TProps = object> = ComponentType<TProps>
 
@@ -83,6 +65,12 @@ export function createComponentRegistry(): ComponentRegistry {
   return new ComponentRegistry()
 }
 
+export type ReactPanelRendererRegistration = (registry: ComponentRegistry) => ComponentRegistry
+
+export function defineReactPanelRenderers(registration: ReactPanelRendererRegistration): ReactPanelRendererRegistration {
+  return registration
+}
+
 export function registerReactExtensionRenderer<TProps extends object>(
   registry: ComponentRegistry,
   kind: RegistryKind,
@@ -95,20 +83,4 @@ export function registerReactExtensionRenderer<TProps extends object>(
 
 export function createDefaultComponentRegistry(): ComponentRegistry {
   return createComponentRegistry()
-    .register('button', PanelsButton, '@holo-js/panels-react')
-    .register('link', PanelsLink, '@holo-js/panels-react')
-    .register('badge', PanelsBadge, '@holo-js/panels-react')
-    .register('avatar', PanelsAvatar, '@holo-js/panels-react')
-    .register('icon-button', PanelsIconButton, '@holo-js/panels-react')
-    .register('input-wrapper', PanelsInputWrapper, '@holo-js/panels-react')
-    .register('loading-indicator', PanelsLoadingIndicator, '@holo-js/panels-react')
-    .register('dropdown', PanelsDropdown, '@holo-js/panels-react')
-    .register('modal', PanelsModal, '@holo-js/panels-react')
-    .register('slide-over', PanelsSlideOver, '@holo-js/panels-react')
-    .register('tabs', PanelsTabs, '@holo-js/panels-react')
-    .register('section', PanelsSection, '@holo-js/panels-react')
-    .register('empty-state', PanelsEmptyState, '@holo-js/panels-react')
-    .register('pagination', PanelsPagination, '@holo-js/panels-react')
-    .register('toast-viewport', PanelsToastViewport, '@holo-js/panels-react')
-    .register('error-boundary', PanelsErrorBoundary, '@holo-js/panels-react')
 }

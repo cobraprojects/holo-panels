@@ -1,4 +1,4 @@
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,6 +21,12 @@ import { resolveNextPanelPage } from '../src/runtime'
 import type { NextPanelPagePayload, NextPanelsRuntime } from '../src/contracts'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+
+const routerPush = vi.hoisted(() => vi.fn())
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}))
 
 vi.mock('@holo-js/security/next/server', () => ({
   csrfProtection: () => (request: Request) => request.headers.get('x-csrf-token') === 'valid'
@@ -144,12 +150,52 @@ async function openNotifications(container: HTMLElement): Promise<void> {
 
 afterEach(() => {
   flashed.clear()
+  routerPush.mockReset()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
 describe('Next notification and effect integration', () => {
+  it('keeps resource effects alive through the React Strict Mode lifecycle', async () => {
+    document.cookie = 'XSRF-TOKEN=valid; Path=/'
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const request = await decodedRequest(input, init)
+      return Response.json({
+        data: { record: { id: 1, slug: 'first-post', title: 'First post' } },
+        effects: [{ kind: 'toast', level: 'success', message: 'Post saved.' }],
+        id: request.id,
+        ok: true,
+        protocolVersion: '1.0',
+      })
+    }))
+    const source = await payload()
+    const strictPayload: NextPanelPagePayload = {
+      ...source,
+      page: {
+        ...source.page,
+        data: { record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } },
+        heading: 'Edit Post',
+        manifest: {
+          ...source.page.manifest,
+          body: { component: 'resource-page', properties: editProperties() },
+        },
+      },
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<StrictMode><NextPanelClient payload={strictPayload} /></StrictMode>)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await click(container, 'Save post')
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Post saved.'))
+    await act(async () => root.unmount())
+  })
+
   it('rejects a multibyte operation envelope above 4 MiB without flashing success effects', async () => {
     const effects = [
       { kind: 'redirect' as const, url: '/admin' },
@@ -203,8 +249,9 @@ describe('Next notification and effect integration', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(container.querySelector(`[data-placement="${placement}"]`)).not.toBeNull()
+    expect(container.querySelector('.hp-notification-inbox-trigger-button')).not.toBeNull()
     await openNotifications(container)
+    expect(container.querySelector(`[data-placement="${placement === 'topbar' ? 'dropdown' : 'sidebar'}"]`)).not.toBeNull()
     expect(calls).toEqual(['/holo/panels/admin/notification'])
     await act(async () => root.unmount())
   })

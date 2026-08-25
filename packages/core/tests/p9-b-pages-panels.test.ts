@@ -85,7 +85,6 @@ describe('P9-B page definitions', () => {
       .footerWidgets('audit-log')
       .schema('dashboard-schema', null)
       .body('app.page.dashboard', { mode: 'summary' })
-      .slot('above-content', 'app.banner')
       .navigation({ group: 'Content', icon: 'home', label: 'Dashboard', sort: 10 })
       .compile()
 
@@ -96,9 +95,6 @@ describe('P9-B page definitions', () => {
     expect(result.manifest).toMatchObject({
       actions: { footer: ['dashboard.refresh'], header: ['posts.create'] },
       body: { component: 'app.page.dashboard', properties: { mode: 'summary' } },
-      slots: {
-        'above-content': [{ component: 'app.banner', order: 0, properties: {}, source: 'page' }],
-      },
       widgets: { footer: ['audit-log'], header: ['post-stats'] },
     })
     expect(JSON.stringify(page.manifest)).not.toContain('Dashboard for')

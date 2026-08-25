@@ -1,17 +1,21 @@
-import {
-  forwardRef,
-  type ButtonHTMLAttributes,
-  type InputHTMLAttributes,
-  type SelectHTMLAttributes,
-  type TableHTMLAttributes,
-  type TextareaHTMLAttributes,
-} from 'react'
-import { Archive, Bell, Check, ChevronDown, ChevronUp, ChevronsUpDown, Circle, Copy, Download, Eye, LogOut, Pencil, Play, Plus, RotateCcw, Trash2, Upload, User, X } from 'lucide-react'
+import type { SVGProps } from 'react'
+import { Archive, Bell, Check, ChevronDown, ChevronUp, ChevronsUpDown, Circle, Copy, Download, Eye, File, FileText, Folder, Home, Image, KeyRound, Link2, LogOut, Menu, MessageSquare, Monitor, Moon, Pencil, Play, Plus, RotateCcw, Search, Sun, Tag, Trash2, Unlink, Upload, User, Users, X } from 'lucide-react'
+
+export { Badge } from './ui/badge'
+export { Button, buttonVariants, type ButtonVariants } from './ui/button'
+export { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card'
+export { Checkbox } from './ui/checkbox'
+export { Input } from './ui/input'
+export { Label } from './ui/label'
+export { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from './ui/native-select'
+export { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from './ui/table'
+export { Textarea } from './ui/textarea'
 
 const icons = Object.freeze({
   archive: Archive,
   bell: Bell,
   check: Check,
+  chat: MessageSquare,
   'chevron-down': ChevronDown,
   'chevron-up': ChevronUp,
   circle: Circle,
@@ -19,42 +23,38 @@ const icons = Object.freeze({
   copy: Copy,
   delete: Trash2,
   download: Download,
+  document: File,
+  'document-text': FileText,
   edit: Pencil,
+  folder: Folder,
+  home: Home,
+  image: Image,
+  key: KeyRound,
+  link: Link2,
   'log-out': LogOut,
+  menu: Menu,
+  monitor: Monitor,
+  moon: Moon,
   play: Play,
   plus: Plus,
   restore: RotateCcw,
+  search: Search,
   sort: ChevronsUpDown,
+  sun: Sun,
+  tag: Tag,
+  unlink: Unlink,
   upload: Upload,
   user: User,
+  users: Users,
   view: Eye,
 })
 
-export function ShadcnIcon({ name }: { readonly name: string }) {
-  const Icon = icons[name as keyof typeof icons] ?? Circle
-  return <Icon aria-hidden="true" data-icon={name} data-slot="icon" />
+export interface PanelsIconProps extends Omit<SVGProps<SVGSVGElement>, 'ref'> {
+  readonly name: string
 }
 
-export const ShadcnButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(function ShadcnButton(
-  { type = 'button', ...props },
-  ref,
-) {
-  return <button {...props} data-slot="button" ref={ref} type={type} />
-})
-
-export const ShadcnInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function ShadcnInput(props, ref) {
-  const slot = props.type === 'checkbox' ? 'checkbox' : props.type === 'radio' ? 'radio-group-item' : props.type === 'range' ? 'slider' : 'input'
-  return <input {...props} data-slot={slot} ref={ref} />
-})
-
-export const ShadcnTextarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function ShadcnTextarea(props, ref) {
-  return <textarea {...props} data-slot="textarea" ref={ref} />
-})
-
-export const ShadcnSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function ShadcnSelect(props, ref) {
-  return <select {...props} data-slot="native-select" ref={ref} />
-})
-
-export const ShadcnTable = forwardRef<HTMLTableElement, TableHTMLAttributes<HTMLTableElement>>(function ShadcnTable(props, ref) {
-  return <table {...props} data-slot="table" ref={ref} />
-})
+export function PanelsIcon({ name, ...props }: PanelsIconProps) {
+  const normalized = name === 'chat-bubble-left' || name === 'chat-bubble-left-right' ? 'chat' : name === 'photo' ? 'image' : name
+  const Icon = icons[normalized as keyof typeof icons] ?? Circle
+  return <Icon {...props} aria-hidden="true" data-icon={normalized} data-slot="icon" />
+}

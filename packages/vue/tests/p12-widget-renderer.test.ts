@@ -181,13 +181,13 @@ describe('P12 Vue widget renderer', () => {
     expect(container.querySelector('[data-widget-id="hidden"]')).toBeNull()
     expect(container.querySelector('[data-widget-id="secret"]')).toBeNull()
     expect(container.querySelector('[data-widget-id="failed"] [role="alert"]')?.textContent).toBe('Filtered request failed')
-    expect(container.querySelector('[data-widget-id="empty"] .hp-widget-empty')?.textContent).toBe('Nothing to show')
+    expect(container.querySelector('[data-widget-id="empty"] .hp-widget-empty')?.textContent).toContain('Nothing to show')
     expect(lazy.activate).not.toHaveBeenCalled()
     container.querySelector<HTMLButtonElement>('[data-widget-id="lazy-sales"] button')?.click()
     expect(lazy.activate).toHaveBeenCalledOnce()
     lazy.update('loading')
     await nextTick()
-    expect(container.querySelector('[data-widget-id="lazy-sales"] [role="status"]')?.textContent).toBe('Loading widget')
+    expect(container.querySelector('[data-widget-id="lazy-sales"] [role="status"]')?.getAttribute('aria-label')).toBe('Loading widget')
   })
 
   it('operates persisted widget filters through the shared store contract', () => {

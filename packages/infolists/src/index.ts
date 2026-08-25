@@ -8,37 +8,69 @@ import {
   TextEntry as CoreTextEntry,
   type EntryRecordPath,
   type RecordPathFor,
+  type RegisteredPanelRecordForPath,
+  type RegisteredPanelRecordForPathValue,
+  type RegisteredPanelRecordPath,
+  type RegisteredPanelRecordPathFor,
 } from '@holo-js/panels-core'
 import { Schema } from '@holo-js/panels-schemas'
 
 export class Infolist<TRecord extends object = Record<string, unknown>> extends Schema<TRecord> {}
 
 export class TextEntry<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>> extends CoreTextEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>>(path: TPath): TextEntry<TRecord, TPath> { return new TextEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): TextEntry<RegisteredPanelRecordForPath<TPath>, Extract<TPath, EntryRecordPath<RegisteredPanelRecordForPath<TPath>>>>
+  static make<TRecord extends object, const TPath extends EntryRecordPath<TRecord>>(path: TPath): TextEntry<TRecord, TPath>
+  static make(path: string): unknown { return new TextEntry<Record<string, unknown>, string>(path) }
 }
 
 export class IconEntry<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>> extends CoreIconEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>>(path: TPath): IconEntry<TRecord, TPath> { return new IconEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): IconEntry<RegisteredPanelRecordForPath<TPath>, Extract<TPath, EntryRecordPath<RegisteredPanelRecordForPath<TPath>>>>
+  static make<TRecord extends object, const TPath extends EntryRecordPath<TRecord>>(path: TPath): IconEntry<TRecord, TPath>
+  static make(path: string): unknown { return new IconEntry<Record<string, unknown>, string>(path) }
 }
 
 export class ImageEntry<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>> extends CoreImageEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>>(path: TPath): ImageEntry<TRecord, TPath> { return new ImageEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<string>>(path: TPath): ImageEntry<RegisteredPanelRecordForPathValue<TPath, string>, Extract<TPath, RecordPathFor<RegisteredPanelRecordForPathValue<TPath, string>, string>>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, string>>(path: TPath): ImageEntry<TRecord, TPath>
+  static make(path: string): unknown { return new ImageEntry<Record<string, string>, string>(path) }
 }
 
 export class ColorEntry<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>> extends CoreColorEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>>(path: TPath): ColorEntry<TRecord, TPath> { return new ColorEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<string>>(path: TPath): ColorEntry<RegisteredPanelRecordForPathValue<TPath, string>, Extract<TPath, RecordPathFor<RegisteredPanelRecordForPathValue<TPath, string>, string>>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, string>>(path: TPath): ColorEntry<TRecord, TPath>
+  static make(path: string): unknown { return new ColorEntry<Record<string, string>, string>(path) }
 }
 
 export class CodeEntry<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>> extends CoreCodeEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>>(path: TPath): CodeEntry<TRecord, TPath> { return new CodeEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): CodeEntry<RegisteredPanelRecordForPath<TPath>, Extract<TPath, EntryRecordPath<RegisteredPanelRecordForPath<TPath>>>>
+  static make<TRecord extends object, const TPath extends EntryRecordPath<TRecord>>(path: TPath): CodeEntry<TRecord, TPath>
+  static make(path: string): unknown { return new CodeEntry<Record<string, unknown>, string>(path) }
 }
 
 export class KeyValueEntry<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>> extends CoreKeyValueEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>>(path: TPath): KeyValueEntry<TRecord, TPath> { return new KeyValueEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): KeyValueEntry<RegisteredPanelRecordForPath<TPath>, Extract<TPath, EntryRecordPath<RegisteredPanelRecordForPath<TPath>>>>
+  static make<TRecord extends object, const TPath extends EntryRecordPath<TRecord>>(path: TPath): KeyValueEntry<TRecord, TPath>
+  static make(path: string): unknown { return new KeyValueEntry<Record<string, unknown>, string>(path) }
 }
 
 export class RepeatableEntry<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>> extends CoreRepeatableEntry<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends EntryRecordPath<TRecord> = EntryRecordPath<TRecord>>(path: TPath): RepeatableEntry<TRecord, TPath> { return new RepeatableEntry(path) }
+  readonly recordPath: TPath
+  private constructor(path: TPath) { super(path); this.recordPath = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): RepeatableEntry<RegisteredPanelRecordForPath<TPath>, Extract<TPath, EntryRecordPath<RegisteredPanelRecordForPath<TPath>>>>
+  static make<TRecord extends object, const TPath extends EntryRecordPath<TRecord>>(path: TPath): RepeatableEntry<TRecord, TPath>
+  static make(path: string): unknown { return new RepeatableEntry<Record<string, unknown>, string>(path) }
 }
 
 export interface EntryFactory<TRecord extends object> {

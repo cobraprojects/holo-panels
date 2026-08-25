@@ -12,15 +12,15 @@
     },
     {
       "path": "internal-ui.tsx",
-      "checksum": "fcea75694d010a8d2d42cf06dfebe29036d1e1ba4459c8f2c54ec43acf44a28c"
+      "checksum": "f84871a84b530c1da7fe9d4b5db6cec6e9483d462d443c937bd75ceb8413e39b"
     },
     {
       "path": "panel-client.tsx",
-      "checksum": "40fb00bc73601aacec60c56d69201091113db36509615eb02b01e4bf9b892d5d"
+      "checksum": "793da78d5c7af005f9f70a2ceabd8938f7e5ef8fab77138e3c3f8d8b0483679d"
     },
     {
       "path": "resource-page.tsx",
-      "checksum": "d7289f6c71e51eabd570cded2b6919a591ffd82d5016e83d6cfd0aa8c26e7862"
+      "checksum": "25b26a05dacbe541d8bfab3f2ebd275741417c2584e6c596d20ebeb021ee540d"
     }
   ]
 }

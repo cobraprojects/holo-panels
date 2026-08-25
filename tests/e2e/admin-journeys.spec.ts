@@ -18,14 +18,6 @@ const generatedResources = Object.freeze([
   { id: 'user-acme-admin', label: 'User', plural: 'Users', slug: 'users' },
 ])
 
-function generatedResourceRouteKey(resource: typeof generatedResources[number], framework: string): string {
-  if (framework === 'next') return resource.id
-  if (resource.slug === 'posts') return 'building-with-holo-panels'
-  if (resource.slug === 'categories') return 'guides'
-  if (resource.slug === 'tags') return 'holo'
-  return resource.id
-}
-
 async function login(page: Page): Promise<void> {
   await page.goto('/admin/login', { waitUntil: 'networkidle' })
   await expect(page.locator('[data-slot="card"]')).toBeVisible()
@@ -119,6 +111,18 @@ async function waitForPanelReady(page: Page): Promise<void> {
   if (await readiness.count()) await expect(readiness).toHaveAttribute('data-panels-ready', 'true')
 }
 
+async function markDocument(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const sentinel = globalThis.crypto.randomUUID()
+    Reflect.set(globalThis, '__holoPanelsDocumentSentinel', sentinel)
+    return sentinel
+  })
+}
+
+async function expectSameDocument(page: Page, sentinel: string): Promise<void> {
+  await expect.poll(async () => await page.evaluate(() => Reflect.get(globalThis, '__holoPanelsDocumentSentinel'))).toBe(sentinel)
+}
+
 async function gotoPanelPage(page: Page, path: string): Promise<void> {
   try {
     await page.goto(path)
@@ -194,22 +198,37 @@ test('protects the admin shell with the configured Holo Auth guard', async ({ re
 test.describe('authenticated admin journeys', () => {
   test.describe.configure({ mode: 'serial' })
 
+  test('recovers an open login form after its CSRF cookie becomes stale', async ({ page }) => {
+    await page.goto('/admin/login', { waitUntil: 'networkidle' })
+    await page.evaluate(() => {
+      document.cookie = 'XSRF-TOKEN=stale-token; Path=/; SameSite=Lax'
+    })
+    const loginButton = page.getByRole('button', { name: 'Sign in' })
+    await expect(loginButton).toBeEnabled()
+    await page.getByLabel('Email').fill('super@example.test')
+    await page.getByLabel('Password').fill('panel-secret')
+    await Promise.all([
+      page.waitForURL(url => url.pathname.startsWith('/admin') && url.pathname !== '/admin/login'),
+      loginButton.click(),
+    ])
+    await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === 'holo_panels_session')).toBe(true)
+  })
+
   test('loads the authorized admin dashboard', async ({ page }) => {
     await login(page)
     await expect(page.getByText(/Holo Panels/u).first()).toBeVisible()
   })
 
-  test('loads every generated resource route with and without model policies', async ({ page }, testInfo) => {
+  test('loads every generated resource route with and without model policies', async ({ page }) => {
     test.setTimeout(120_000)
     await login(page)
 
     for (const resource of generatedResources) {
-      const routeKey = generatedResourceRouteKey(resource, testInfo.project.name)
       const routes = [
         { heading: resource.plural, path: `/admin/${resource.slug}` },
         { heading: `Create ${resource.label}`, path: `/admin/${resource.slug}/create` },
-        { heading: `View ${resource.label}`, path: `/admin/${resource.slug}/${routeKey}` },
-        { heading: `Edit ${resource.label}`, path: `/admin/${resource.slug}/${routeKey}/edit` },
+        { heading: `View ${resource.label}`, path: `/admin/${resource.slug}/${resource.id}` },
+        { heading: `Edit ${resource.label}`, path: `/admin/${resource.slug}/${resource.id}/edit` },
       ]
 
       for (const route of routes) {
@@ -232,7 +251,7 @@ test.describe('authenticated admin journeys', () => {
 
   test('opens the compiled user menu and navigates to the profile page', async ({ page }) => {
     await login(page)
-    const trigger = page.locator('.hp-panel-user-trigger button, button:has(.hp-panel-user-trigger)').first()
+    const trigger = page.getByRole('button', { name: 'Account menu' })
 
     await trigger.click()
     await page.getByRole('menuitem', { name: 'Profile' }).click()
@@ -246,7 +265,7 @@ test.describe('authenticated admin journeys', () => {
   test('switches and persists the panel color mode without changing the host application', async ({ page }) => {
     await login(page)
     const shell = page.locator('[data-holo-panel]').first()
-    const trigger = page.locator('.hp-panel-user-trigger button, button:has(.hp-panel-user-trigger)').first()
+    const trigger = page.getByRole('button', { name: 'Account menu' })
 
     await trigger.click()
     await page.getByRole('menuitem', { name: /Dark(?: theme)?/u }).click()
@@ -263,17 +282,17 @@ test.describe('authenticated admin journeys', () => {
 
   test('composes the isolated dashboard from shadcn-family components', async ({ page }) => {
     await login(page)
-    await gotoPanelPage(page, '/admin/users')
+    await gotoPanelPage(page, '/admin/posts')
     await expect(page.getByRole('heading', { name: /^example-/u })).toHaveCount(0)
     await expect(page.locator('[data-slot="sidebar-wrapper"]')).toBeVisible()
     await expect(page.locator('[data-slot="sidebar"]')).toBeVisible()
-    await expect(page.locator('[data-slot="command"]')).toBeVisible()
+    await expect(page.locator('.hp-global-search [data-slot="input-group"]')).toBeVisible()
     await expect(page.locator('[data-slot="table"]')).toBeVisible()
-    await expect(page.locator('[data-slot="checkbox"]')).toHaveCount(0)
+    await expect(page.locator('[data-slot="checkbox"]').first()).toBeVisible()
     const unclassifiedListControls = await page.locator('[data-holo-panel] button, [data-holo-panel] input, [data-holo-panel] select, [data-holo-panel] textarea, [data-holo-panel] table').evaluateAll(controls => controls.filter(control => !control.hasAttribute('data-slot')).map(control => control.outerHTML))
     expect(unclassifiedListControls).toEqual([])
 
-    const userMenu = page.locator('[data-slot="dropdown-menu-trigger"]').last()
+    const userMenu = page.getByRole('button', { name: 'Account menu' })
     await userMenu.click()
     const openMenu = page.locator('[data-slot="dropdown-menu-content"][data-state="open"]')
     await expect(openMenu).toBeVisible()
@@ -284,12 +303,64 @@ test.describe('authenticated admin journeys', () => {
     await expect(page.locator('[data-slot="input"]').first()).toBeVisible()
     await expect(page.locator('[data-slot="native-select"]').first()).toBeVisible()
     await expect(page.locator('[data-slot="radio-group-item"]').first()).toBeVisible()
-    const unclassifiedFormControls = await page.locator('[data-holo-panel] button, [data-holo-panel] input, [data-holo-panel] select, [data-holo-panel] textarea, [data-holo-panel] table').evaluateAll(controls => controls.filter(control => !control.hasAttribute('data-slot')).map(control => control.outerHTML))
+    const unclassifiedFormControls = await page.locator('[data-holo-panel] button, [data-holo-panel] input, [data-holo-panel] select, [data-holo-panel] textarea, [data-holo-panel] table').evaluateAll(controls => controls.filter(control => control.getAttribute('aria-hidden') !== 'true' && !control.hasAttribute('data-slot')).map(control => control.outerHTML))
     expect(unclassifiedFormControls).toEqual([])
+
+    const formGeometry = await page.locator('.hp-resource-form').evaluate((form) => {
+      const input = form.querySelector<HTMLInputElement>('[data-field-path="title"] input')
+      const select = form.querySelector<HTMLSelectElement>('[data-field-path="city"] select')
+      const radio = form.querySelector<HTMLFieldSetElement>('[data-field-type="radio"]')
+      if (!input || !select || !radio) throw new Error('The post form controls are unavailable')
+      const view = form.ownerDocument.defaultView
+      if (!view) throw new Error('The post form window is unavailable')
+      return {
+        inputWidth: input.getBoundingClientRect().width,
+        radioBorder: view.getComputedStyle(radio).borderTopWidth,
+        selectWidth: select.getBoundingClientRect().width,
+      }
+    })
+    expect(Math.abs(formGeometry.inputWidth - formGeometry.selectWidth)).toBeLessThanOrEqual(1)
+    expect(formGeometry.radioBorder).toBe('0px')
+
+    const globalSearch = page.locator('.hp-global-search [data-slot="input-group"]')
+    await expect(globalSearch).toHaveCount(1)
+    const groupedSearchBorders = await globalSearch.evaluate((group) => {
+      const input = group.querySelector('[data-slot="input-group-control"]')
+      if (!input) throw new Error('The grouped global search input is unavailable')
+      const view = group.ownerDocument.defaultView
+      if (!view) throw new Error('The global search window is unavailable')
+      return {
+        group: view.getComputedStyle(group).borderTopWidth,
+        input: view.getComputedStyle(input).borderTopWidth,
+      }
+    })
+    expect(groupedSearchBorders).toEqual({ group: '1px', input: '0px' })
+
+    const postRouteKey = generatedResources[0]!.id
+    await gotoPanelPage(page, `/admin/posts/${postRouteKey}/edit`)
+    await expect(page.getByRole('heading', { name: 'Active query' })).toHaveCount(0)
+    await expect(page.locator('[data-slot="page-actions"] a, [data-slot="page-actions"] button')).toHaveCount(2)
+    const actionGeometry = await page.locator('.hp-panel-page-header').evaluate((header) => {
+      const heading = header.querySelector('h1')
+      const actions = [...header.querySelectorAll<HTMLElement>('[data-slot="page-actions"] a, [data-slot="page-actions"] button')]
+      if (!heading || actions.length < 2) throw new Error('The edit page heading and actions are unavailable')
+      return {
+        actionTops: actions.map(action => action.getBoundingClientRect().top),
+        headingCenter: heading.getBoundingClientRect().top + heading.getBoundingClientRect().height / 2,
+      }
+    })
+    expect(Math.max(...actionGeometry.actionTops) - Math.min(...actionGeometry.actionTops)).toBeLessThanOrEqual(1)
+    const pageActions = page.locator('[data-slot="page-actions"]')
+    const pageActionsBox = await pageActions.boundingBox()
+    expect(pageActionsBox?.width ?? 0).toBeGreaterThan(150)
+    const commentsRelation = page.locator('[data-relation-manager="comments"]')
+    await expect(commentsRelation.getByRole('table')).toBeVisible()
+    await expect(commentsRelation.getByRole('columnheader', { name: 'Author Name' })).toBeVisible()
+    await expect(commentsRelation.getByRole('button', { name: 'Edit' }).first()).toBeVisible()
 
     const styles = await page.locator('body').evaluate((body) => {
       const root = body.querySelector('[data-holo-panel]')
-      const input = body.querySelector('[data-holo-panel] input:not([type="checkbox"])')
+      const input = body.querySelector('.hp-resource-form [data-slot="input"]')
       const button = body.querySelector('[data-holo-panel] button[type="submit"]')
       const form = body.querySelector('.hp-resource-form')
       if (!root || !input || !button || !form) throw new Error('The generated panel controls are unavailable')
@@ -315,15 +386,50 @@ test.describe('authenticated admin journeys', () => {
     expect(styles.buttonRadius).not.toBe('0px')
     expect(styles.externalRadius).toBe('0px')
     expect(styles.formDisplay).toBe('grid')
-    expect(styles.inputHeight).toBeGreaterThanOrEqual(34)
+    expect(styles.inputHeight).toBeGreaterThanOrEqual(32)
     expect(styles.inputRadius).not.toBe('0px')
     expect(styles.rootFont).toContain('ui-sans-serif')
+  })
+
+  test('executes grouped bulk actions through the table and reports failures with Sonner', async ({ page }) => {
+    await login(page)
+    await gotoPanelPage(page, '/admin/posts')
+
+    await page.getByRole('checkbox', { name: 'Select page' }).click()
+    await page.getByRole('button', { name: 'Bulk actions' }).click()
+    await page.getByRole('menuitem', { name: 'Publish selected' }).click()
+    const publishResponsePromise = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click()
+    const publishResponse = await publishResponsePromise
+    expect(publishResponse.ok()).toBe(true)
+    await expect(page.getByText('The requested action is not available.')).toHaveCount(0)
+    await expect(page.getByRole('menuitem', { name: 'Publish selected' })).toHaveCount(0)
+
+    await page.route('**/holo/panels/admin/action', async (route) => {
+      const requestBody = new URLSearchParams(route.request().postData() ?? '')
+      const envelope = JSON.parse(requestBody.get('request') ?? '{}') as { readonly id?: unknown }
+      await route.fulfill({
+        body: JSON.stringify({
+          error: { category: 'internal', code: 'forced-action-failure', message: 'Forced action failure.', retryable: false },
+          id: typeof envelope.id === 'string' ? envelope.id : 'forced-action-request',
+          ok: false,
+          protocolVersion: '1.0',
+        }),
+        contentType: 'application/json',
+        status: 500,
+      })
+    })
+    await page.getByRole('button', { name: 'Bulk actions' }).click()
+    await page.getByRole('menuitem', { name: 'Publish selected' }).click()
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click()
+    const actionFailureToast = page.locator('[data-sonner-toast]').filter({ hasText: 'Publish selected failed' })
+    await expect(actionFailureToast).toContainText('The operation could not be completed.')
+    await expect(page.locator('.hp-table-bulk-actions [role="alert"]')).toHaveCount(0)
   })
 
   test('collapses the desktop sidebar and opens the mobile navigation drawer', async ({ page }) => {
     await login(page)
     const shell = page.locator('[data-holo-panel]').first()
-    const drawer = shell.locator(':scope > .hp-panel-sidebar, :scope > .hp-panel-navigation').first()
     const navigation = page.getByRole('navigation', { name: 'Panel navigation' })
     const toggle = page.getByRole('button', { name: 'Toggle navigation' })
     const expandedWidth = (await navigation.boundingBox())?.width ?? 0
@@ -338,7 +444,7 @@ test.describe('authenticated admin journeys', () => {
     await waitForPanelReady(page)
     await expect(navigation).not.toBeInViewport()
     await toggle.click()
-    await expect(drawer).toHaveAttribute('data-open', 'true')
+    await expect(page.getByRole('dialog', { name: 'Sidebar' })).toBeVisible()
     await expect(navigation).toBeInViewport()
   })
 
@@ -357,7 +463,7 @@ test.describe('authenticated admin journeys', () => {
       'Users',
     ])
     const content = navigation.getByText('Content', { exact: true })
-    const groupedDestination = content.locator('xpath=..').getByRole('link').first()
+    const groupedDestination = navigation.getByRole('link', { name: 'Categories', exact: true })
     const ungroupedDestination = navigation.getByRole('link', { name: 'Posts', exact: true })
 
     await expect(groupedDestination).toBeVisible()
@@ -368,6 +474,20 @@ test.describe('authenticated admin journeys', () => {
     await expect(groupedDestination).toBeVisible()
   })
 
+  test('navigates between panel pages without replacing the browser document', async ({ page }) => {
+    await login(page)
+    const sentinel = await markDocument(page)
+
+    await page.getByRole('navigation', { name: 'Panel navigation' }).getByRole('link', { name: 'Posts', exact: true }).click()
+    await expect(page).toHaveURL(/\/admin\/posts$/u)
+    await expect(page.getByRole('row').filter({ hasText: 'Acme draft' })).toBeVisible()
+    await expectSameDocument(page, sentinel)
+
+    await page.getByRole('button', { name: 'Edit' }).or(page.getByRole('link', { name: 'Edit' })).first().click()
+    await expect(page.getByRole('heading', { name: 'Edit Post' })).toBeVisible()
+    await expectSameDocument(page, sentinel)
+  })
+
   test('searches tenant-scoped resources from the generated shell', async ({ page }) => {
     await login(page)
     const search = page.getByRole('combobox', { name: 'Global search' })
@@ -375,7 +495,7 @@ test.describe('authenticated admin journeys', () => {
     await search.fill('draft')
     const result = page.getByRole('option').filter({ hasText: 'Acme draft' })
     await expect(result).toBeVisible()
-    await result.getByRole('link', { name: /Acme draft/iu }).click()
+    await result.click()
     await expect(page).toHaveURL(/\/admin\/posts\/(?:post-)?acme-draft$/u)
   })
 
@@ -439,7 +559,14 @@ test.describe('authenticated admin journeys', () => {
 
     await gotoPanelPage(page, '/admin/posts/create')
     await page.getByRole('textbox', { name: /^Title/iu }).fill(title)
-    await page.getByRole('textbox', { name: /^Slug/iu }).fill(slug)
+    const slugInput = page.getByRole('textbox', { name: /^Slug/iu })
+    await expect(slugInput).toHaveValue(slug)
+    await slugInput.fill(`editorial-${slug}`)
+    await page.getByRole('textbox', { name: /^Title/iu }).fill(`${title} draft`)
+    await expect(slugInput).toHaveValue(`editorial-${slug}`)
+    await slugInput.fill(slug)
+    await page.getByRole('textbox', { name: /^Title/iu }).fill(title)
+    await expect(slugInput).toHaveValue(slug)
     await fillOptionalField(page, /^Excerpt$/iu, 'Created through the shared Holo Panels browser journey.')
     await fillOptionalField(page, /^Body$/iu, 'This tenant-scoped record proves the production CRUD transport.')
     await fillOptionalField(page, /^Status$/iu, 'draft')
@@ -447,6 +574,15 @@ test.describe('authenticated admin journeys', () => {
     await fillOptionalField(page, /^Author ?ID$/iu, 'user-super-admin')
     await selectField(page, 'Category', ['Guides', 'engineering', 'News', 'product'])
     await selectField(page, 'City', ['Cairo', 'Giza', 'Alexandria'])
+    const uploadResponsePromise = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/upload'))
+    await page.locator('input[type="file"]').setInputFiles({
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z8ZkAAAAASUVORK5CYII=', 'base64'),
+      mimeType: 'image/png',
+      name: `${slug}.png`,
+    })
+    const uploadResponse = await uploadResponsePromise
+    expect(uploadResponse.ok()).toBe(true)
+    await expect(page.getByText('stored', { exact: true })).toBeVisible()
     await submitResourceForm(page)
 
     await gotoPanelPage(page, '/admin/posts')
@@ -464,6 +600,7 @@ test.describe('authenticated admin journeys', () => {
     await waitForPanelReady(page)
     await page.getByRole('textbox', { name: /^Title/iu }).fill(editedTitle)
     await submitResourceForm(page)
+    const relationDocument = await markDocument(page)
 
     const tags = page.getByRole('region', { name: 'Tags' })
     await expect(tags).toBeVisible()
@@ -484,6 +621,7 @@ test.describe('authenticated admin journeys', () => {
     const attached = await attachResponse
     if (!attached.ok()) throw new Error(await attached.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     const attachedTagRow = page.getByRole('row').filter({ hasText: selectedTag.label }).first()
     await expect(attachedTagRow).toBeVisible()
     await attachedTagRow.getByRole('button', { name: 'Edit pivot', exact: true }).click()
@@ -495,6 +633,7 @@ test.describe('authenticated admin journeys', () => {
     const editedPivot = await editPivotResponse
     if (!editedPivot.ok()) throw new Error(await editedPivot.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     const editedTagRow = page.getByRole('row').filter({ hasText: selectedTag.label }).first()
     await editedTagRow.getByRole('button', { name: 'Edit pivot', exact: true }).click()
     await expect(page.getByRole('dialog').getByRole('spinbutton', { name: 'Position', exact: true })).toHaveValue('7')
@@ -507,7 +646,7 @@ test.describe('authenticated admin journeys', () => {
     await editedTagRow.getByRole('button', { name: 'View', exact: true }).click()
     const viewTagDialog = page.getByRole('dialog')
     await expect(viewTagDialog).toContainText(selectedTag.label)
-    await viewTagDialog.locator('.hp-relation-operation-form').getByRole('button', { name: 'Close', exact: true }).click()
+    await viewTagDialog.getByRole('button', { name: 'Close', exact: true }).last().click()
     await expect.poll(() => viewMutations).toBe(0)
     page.off('request', countViewMutation)
     await editedTagRow.getByRole('button', { name: 'Detach', exact: true }).click()
@@ -516,6 +655,7 @@ test.describe('authenticated admin journeys', () => {
     const detached = await detachResponse
     if (!detached.ok()) throw new Error(await detached.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     await expect(page.getByRole('row').filter({ hasText: selectedTag.label })).toHaveCount(0)
 
     const commentAuthor = `Panel reviewer ${suffix}`
@@ -531,17 +671,30 @@ test.describe('authenticated admin journeys', () => {
     await page.getByRole('button', { name: 'Create', exact: true }).last().click()
     const createdComment = await createCommentResponse
     if (!createdComment.ok()) throw new Error(await createdComment.text())
+    const createdCommentPayload = await createdComment.json() as {
+      readonly data?: {
+        readonly relations?: readonly {
+          readonly id?: unknown
+          readonly records?: readonly { readonly id?: unknown, readonly values?: { readonly authorName?: unknown } }[]
+        }[]
+      }
+    }
+    const commentId = createdCommentPayload.data?.relations
+      ?.find(relation => relation.id === 'comments')
+      ?.records?.find(candidate => candidate.values?.authorName === commentAuthor)
+      ?.id
+    if (typeof commentId !== 'number' && typeof commentId !== 'string') throw new Error('The created relation response has no record identifier')
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     let commentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(commentRow).toContainText(commentBody)
-    const commentId = (await commentRow.getByRole('cell').first().textContent())?.trim()
-    if (!commentId) throw new Error('The created relation row has no record identifier')
     await commentRow.getByRole('button', { name: 'Dissociate', exact: true }).click()
     const dissociateResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Dissociate', exact: true }).last().click()
     const dissociatedComment = await dissociateResponse
     if (!dissociatedComment.ok()) throw new Error(await dissociatedComment.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     await expect(page.getByRole('row').filter({ hasText: commentAuthor })).toHaveCount(0)
     const associateOptionsResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/options'))
     await comments.getByRole('button', { name: 'Associate', exact: true }).click()
@@ -549,12 +702,13 @@ test.describe('authenticated admin journeys', () => {
     if (!associateOptions.ok()) throw new Error(await associateOptions.text())
     const relatedComment = page.getByLabel('Related record', { exact: true })
     await expect.poll(async () => relatedComment.locator('option').count()).toBeGreaterThan(1)
-    await relatedComment.selectOption(commentId)
+    await relatedComment.selectOption(String(commentId))
     const associateResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Associate', exact: true }).last().click()
     const associatedComment = await associateResponse
     if (!associatedComment.ok()) throw new Error(await associatedComment.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     commentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(commentRow).toContainText(commentBody)
     await commentRow.getByRole('button', { name: 'Edit', exact: true }).click()
@@ -565,6 +719,7 @@ test.describe('authenticated admin journeys', () => {
     const editedComment = await editCommentResponse
     if (!editedComment.ok()) throw new Error(await editedComment.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     const editedCommentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(editedCommentRow).toContainText(editedCommentBody)
     await editedCommentRow.getByRole('button', { name: 'Delete', exact: true }).click()
@@ -573,6 +728,7 @@ test.describe('authenticated admin journeys', () => {
     const deletedComment = await deleteCommentResponse
     if (!deletedComment.ok()) throw new Error(await deletedComment.text())
     await waitForPanelReady(page)
+    await expectSameDocument(page, relationDocument)
     await expect(page.getByRole('row').filter({ hasText: commentAuthor })).toHaveCount(0)
 
     await gotoPanelPage(page, '/admin/posts')

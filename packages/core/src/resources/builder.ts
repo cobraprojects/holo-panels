@@ -1,8 +1,6 @@
 import { DISCOVERY_MARKER } from '../discovery/types'
 import type { ClientManifestValue, DiscoverableBuilder, DiscoveryDirectories } from '../discovery/types'
 import { createResourceActionComposer, type ResourceActionComposer } from '../actions'
-import { appendScopedRenderSlot, type ResourceRenderSlot, type ScopedRenderSlots } from '../panels/render-slots'
-import type { RenderSlotReference } from '../schemas/contracts'
 import type { OptionalRuntimeTypeValue, RecordTypeSource, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import type { JsonObject } from '../protocol/json'
 import type {
@@ -51,7 +49,6 @@ interface ResourceBuilderState<TModel, TRecord, TQuery, TInput extends Readonly<
   readonly singular: SingularResourceOptions<TRecord, TQuery, TActor, TTenant> | null
   readonly slug: string
   readonly softDeletes: TSoftDeletes
-  readonly slots: ScopedRenderSlots<ResourceRenderSlot>
   readonly table?: object
   readonly tenantScope?: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery
   readonly validation?: ResourceValidation<TInput, ResourceExecutionContext<TActor, TTenant>>
@@ -240,7 +237,6 @@ export class ResourceBuilder<
       singular: null,
       slug: id,
       softDeletes: model.definition.softDeletes as TSoftDeletes,
-      slots: {},
       widgets: [],
       writableAttributes: inferWritableAttributes<TRecord>(model),
     }
@@ -389,13 +385,6 @@ export class ResourceBuilder<
       parent: Object.freeze({ ...parentReference }),
     })
     return this.with({ nested: nested as CompiledNestedResource<ResourceRecord, TRecord, TQuery, TActor, TTenant> })
-  }
-
-  slot(
-    slot: ResourceRenderSlot,
-    reference: string | RenderSlotReference,
-  ): this {
-    return this.with({ slots: appendScopedRenderSlot(this.#state.slots, slot, reference, 'resource') })
   }
 
   persistence(persistence: ResourcePersistence<TRecord, TInput, ResourceExecutionContext<TActor, TTenant>, TSoftDeletes>): this {

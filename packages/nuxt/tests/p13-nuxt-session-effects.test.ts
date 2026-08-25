@@ -62,6 +62,7 @@ const page: NuxtPanelPage = {
       navigationMode: 'sidebar',
       path: '/admin',
       sidebarCollapsible: true,
+      slots: {},
       tenancy: null,
       theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
       userMenu: [],
@@ -179,7 +180,7 @@ describe('Nuxt redirect toast session handoff', () => {
     const app = createApp(PanelPage, { page: redirectedPage })
     app.mount(container)
     await nextTick()
-    await vi.waitFor(() => expect(container.querySelector('.hp-notification-toasts')?.textContent).toContain('Article saved'))
+    await vi.waitFor(() => expect(container.querySelector('[data-slot="notification-toast"]')?.textContent).toContain('Article saved'))
     await nextTick()
     expect(push).toHaveBeenCalledTimes(1)
     app.unmount()

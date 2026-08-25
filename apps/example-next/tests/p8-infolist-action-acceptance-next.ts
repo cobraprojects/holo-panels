@@ -40,7 +40,7 @@ function driver(container: HTMLDivElement, destroy: () => Promise<void>): Infoli
       input.dispatchEvent(new Event('input', { bubbles: true }))
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }),
-    keydown: (selector, key) => update(() => { required<HTMLElement>(selector).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key })) }),
+    keydown: (selector, key) => update(() => { required<HTMLElement>(selector).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key })) }),
     markup: () => document.body.innerHTML,
     sync: update,
   }

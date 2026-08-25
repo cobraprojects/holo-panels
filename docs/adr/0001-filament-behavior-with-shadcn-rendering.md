@@ -1,0 +1,3 @@
+# Use Filament behavior with shadcn rendering
+
+Holo Panels follows Filament 5 for panel structure, resource behavior, action placement, extension points, and user-facing concepts. React uses shadcn/ui, Vue uses shadcn-vue with Reka UI, and Svelte uses shadcn-svelte with Bits UI for controls, styling, tokens, and accessibility. Holo may build panel composition components from those controls but does not create replacement UI components or make independent design choices. Package-owned source, stable Holo root classes, render hooks, optional UI publishing, and isolated Tailwind output preserve customization without requiring the application frontend to use Tailwind.

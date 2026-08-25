@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
@@ -130,6 +130,40 @@ const packageImportPath = (packageName: string, subpath: string): string => (
   subpath === '.' ? packageName : `${packageName}/${subpath.slice(2)}`
 )
 
+const expandWildcardEntrypoints = (
+  manifest: PackageManifest,
+  packageRoot: string,
+  subpath: string,
+  declarationTarget: string,
+  runtimeTarget: string,
+): readonly PublicEntrypoint[] => {
+  const wildcardIndex = declarationTarget.indexOf('*')
+
+  if (wildcardIndex < 0 || declarationTarget.indexOf('*', wildcardIndex + 1) >= 0 || !subpath.includes('*') || !runtimeTarget.includes('*')) {
+    throw new TypeError(`${manifest.name} export ${subpath} must use one matching wildcard in its subpath, declaration, and runtime targets`)
+  }
+
+  const declarationPrefix = declarationTarget.slice(0, wildcardIndex)
+  const declarationSuffix = declarationTarget.slice(wildcardIndex + 1).replace(/^[/\\]+/u, '')
+  const wildcardRoot = resolve(packageRoot, declarationPrefix)
+
+  return readdirSync(wildcardRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && existsSync(resolve(wildcardRoot, entry.name, declarationSuffix)))
+    .map((entry): PublicEntrypoint => {
+      const expandedSubpath = subpath.replace('*', entry.name)
+      const expandedDeclaration = declarationTarget.replace('*', entry.name)
+      const expandedRuntime = runtimeTarget.replace('*', entry.name)
+
+      return {
+        declarationPath: resolve(packageRoot, expandedDeclaration),
+        importPath: packageImportPath(manifest.name, expandedSubpath),
+        packageName: manifest.name,
+        subpath: expandedSubpath,
+        targetPath: relative(repositoryRoot, resolve(packageRoot, expandedRuntime)),
+      }
+    })
+}
+
 const discoverEntrypoints = (): readonly PublicEntrypoint[] => {
   const packagesRoot = resolve(repositoryRoot, 'packages')
   const manifestPaths = readdirSync(packagesRoot, { withFileTypes: true })
@@ -147,11 +181,16 @@ const discoverEntrypoints = (): readonly PublicEntrypoint[] => {
     const manifest = readPackageManifest(manifestPath)
     const packageRoot = dirname(manifestPath)
 
-    return Object.entries(manifest.exports).map(([subpath, target]) => {
+    return Object.entries(manifest.exports).flatMap(([subpath, target]) => {
       const declarationTarget = findConditionTarget(target, 'types')
       const runtimeTarget = findRuntimeTarget(target)
 
-      return {
+      if (declarationTarget?.includes('*') || runtimeTarget.includes('*') || subpath.includes('*')) {
+        if (!declarationTarget) throw new TypeError(`${manifest.name} wildcard export ${subpath} requires a declaration target`)
+        return expandWildcardEntrypoints(manifest, packageRoot, subpath, declarationTarget, runtimeTarget)
+      }
+
+      return [{
         declarationPath: declarationTarget
           ? resolve(packageRoot, declarationTarget)
           : undefined,
@@ -159,7 +198,7 @@ const discoverEntrypoints = (): readonly PublicEntrypoint[] => {
         packageName: manifest.name,
         subpath,
         targetPath: relative(repositoryRoot, resolve(packageRoot, runtimeTarget)),
-      }
+      }]
     })
   }).sort((left, right) => compareText(left.importPath, right.importPath))
 }

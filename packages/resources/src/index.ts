@@ -4,6 +4,7 @@ import {
   type ActionFactory,
   type ActionContract,
   type ActionGroup,
+  type BulkAction,
 } from '@holo-js/panels-actions'
 import {
   DISCOVERY_MARKER,
@@ -42,7 +43,10 @@ export interface ResourceModelSource<TRecord extends ResourceRecord = ResourceRe
 
 type PreviousDepth = [never, 0, 1, 2, 3, 4]
 type Flatten<TValue> = { [TKey in keyof TValue]: TValue[TKey] }
-type ModelRecordFor<TModel> = TModel extends { create(...parameters: never[]): infer TRecord } ? Awaited<TRecord> : never
+type CreatedModelFor<TModel> = TModel extends { create(...parameters: never[]): infer TRecord } ? Awaited<TRecord> : never
+type ModelRecordFor<TModel> = CreatedModelFor<TModel> extends { toJSON(): infer TRecord }
+  ? TRecord
+  : CreatedModelFor<TModel>
 type ModelRelationsFor<TModel> = TModel extends { readonly definition: { readonly relations?: infer TRelations } } ? NonNullable<TRelations> : object
 type RelatedRecord<TRelation, TDepth extends number> = TRelation extends { readonly related: () => infer TModel }
   ? ResourceRecordFromModel<TModel, TDepth>
@@ -84,6 +88,11 @@ export type ResourceActionFactory<TRecord extends object> = ActionFactory<
   object,
   ResourceFormFactory<TRecord>
 >
+type BoundResourceAction<TAction, TRecord extends object> = TAction extends BulkAction<infer _TExistingRecord, infer TData, infer TResult, infer _TActor, infer _TTenant, infer _TServices, infer _TSchemaFactory>
+  ? BulkAction<TRecord, TData, TResult, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>
+  : TAction extends Action<infer _TExistingRecord, infer TData, infer TResult, infer _TActor, infer _TTenant, infer _TServices, infer _TSchemaFactory>
+    ? Action<TRecord, TData, TResult, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>
+    : never
 export type ResourceTable<TRecord extends object> = Table<TRecord, ResourceInput<TRecord>, ResourceFormFactory<TRecord>>
 export type TableConfiguration<TRecord extends object> = (table: ResourceTable<TRecord>) => ResourceTable<TRecord>
 export type ResourceSchemaConfiguration = (schema: Schema) => Schema
@@ -153,7 +162,7 @@ type RegisteredRelationRecord<TManager extends RelationManagerClass> = ResourceR
   RegisteredRelationOwnerModel<TManager>,
   RegisteredRelationName<TManager>
 >
-type RegisteredModelRecord<TResource extends ResourceClass> = ModelRecordFor<RegisteredResourceModel<TResource>>
+type RegisteredModelRecord<TResource extends ResourceClass> = CreatedModelFor<RegisteredResourceModel<TResource>>
 type RegisteredResourceQuery<TResource extends ResourceClass> = ReturnType<RegisteredResourceModel<TResource>['query']>
 type RegisteredResourceIdentifier<TResource extends ResourceClass> = RegisteredResourceModel<TResource>['definition']['primaryKey'] extends infer TPrimaryKey
   ? TPrimaryKey extends keyof RegisteredModelRecord<TResource>
@@ -279,6 +288,7 @@ interface ResourceBuilderContract {
   recordTitle(value: string): ResourceBuilderContract
   relations(...values: readonly object[]): ResourceBuilderContract
   routeKey(value: string): ResourceBuilderContract
+  shared(value?: boolean): ResourceBuilderContract
   slug(value: string): ResourceBuilderContract
   table(value: object): ResourceBuilderContract
   tenantScope(scope: (query: ResourceQuery<unknown, ResourceRecord>, context: ResourceExecutionContext<object, unknown>) => ResourceQuery<unknown, ResourceRecord>): ResourceBuilderContract
@@ -357,6 +367,7 @@ export abstract class Resource<
   static routeKeyName: string | null = null
   static slug: string | null = null
   static writableAttributes: readonly string[] | null = null
+  protected static isScopedToTenant = true
 
   protected static attribute<TResource extends ResourceClass, const TPath extends RecordPath<ResourceRecordFor<RegisteredResourceModel<TResource>>>>(
     this: TResource,
@@ -375,13 +386,22 @@ export abstract class Resource<
     return context => configuration(context)
   }
 
+  static action<TResource extends ResourceClass, TAction extends ActionContract>(
+    this: TResource,
+    action: TAction,
+  ): BoundResourceAction<TAction, ResourceRecordFor<RegisteredResourceModel<TResource>>>
   static action<TResource extends ResourceClass, TResult>(
     this: TResource,
     configure: (action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TResult,
-  ): TResult extends ActionContract ? ActionContract<never> : TResult {
+  ): TResult extends ActionContract ? ActionContract<never> : TResult
+  static action<TResource extends ResourceClass, TResult>(
+    this: TResource,
+    action: ActionContract | ((action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TResult),
+  ): unknown {
+    if (typeof action !== 'function') return action
     type TRecord = ResourceRecordFor<RegisteredResourceModel<TResource>>
     const factory = Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
-    return configure(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory)) as TResult extends ActionContract ? ActionContract<never> : TResult
+    return action(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory))
   }
 
   static actions<TResource extends ResourceClass, const TActions extends readonly ActionContract<ResourceRecordFor<RegisteredResourceModel<TResource>>>[]>(
@@ -436,6 +456,7 @@ export abstract class Resource<
     if (this.recordTitleAttribute) builder = builder.recordTitle(this.recordTitleAttribute)
     if (this.routeKeyName) builder = builder.routeKey(this.routeKeyName)
     if (this.writableAttributes) builder = builder.writableAttributes(this.writableAttributes)
+    if (!this.isScopedToTenant) builder = builder.shared()
     builder = builder.navigation({
       ...(this.navigationGroup ? { group: this.navigationGroup } : {}),
       ...(this.navigationIcon ? { icon: this.navigationIcon } : {}),
@@ -513,13 +534,22 @@ export abstract class RelationManager<TOwnerRecord extends object = object, TRec
   protected static relationship: string
   static title: string | null = null
 
+  static action<TManager extends RelationManagerClass, TAction extends ActionContract>(
+    this: TManager,
+    action: TAction,
+  ): BoundResourceAction<TAction, RegisteredRelationRecord<TManager>>
   static action<TManager extends RelationManagerClass, TResult>(
     this: TManager,
     configure: (action: ResourceActionFactory<RegisteredRelationRecord<TManager>>) => TResult,
-  ): TResult extends ActionContract ? ActionContract<never> : TResult {
+  ): TResult extends ActionContract ? ActionContract<never> : TResult
+  static action<TManager extends RelationManagerClass, TResult>(
+    this: TManager,
+    action: ActionContract | ((action: ResourceActionFactory<RegisteredRelationRecord<TManager>>) => TResult),
+  ): unknown {
+    if (typeof action !== 'function') return action
     type TRecord = RegisteredRelationRecord<TManager>
     const factory = Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
-    return configure(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory)) as TResult extends ActionContract ? ActionContract<never> : TResult
+    return action(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory))
   }
 
   static actions<TManager extends RelationManagerClass, const TActions extends readonly ActionContract<RegisteredRelationRecord<TManager>>[]>(

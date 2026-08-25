@@ -1,4 +1,5 @@
 import { cloneVNode, computed, getCurrentScope, h, onScopeDispose, shallowRef, useId, type ComputedRef, type VNode, type VNodeChild } from 'vue'
+import { Field, FieldDescription, FieldError, FieldLabel } from '../internal-ui'
 import type { VueFieldControlProps, VueFieldPath, VueFieldRenderContext, VueFieldRendererProps, VueFieldValue } from './types'
 
 export function fieldValue(values: object, path: string): unknown {
@@ -57,16 +58,16 @@ export function fieldFrame<TValues extends object>(
   const descriptionId = description ? `${context.inputId}-description` : undefined
   const errorId = context.errors.length > 0 ? `${context.inputId}-errors` : undefined
   const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined
-  return h('div', {
+  return h(Field, {
     class: 'hp-field',
     'data-field-path': context.definition.path,
     'data-field-type': context.definition.type,
-  }, [
-    context.definition.label ? h('label', { for: context.inputId }, [
+  }, () => [
+    context.definition.label ? h(FieldLabel, { for: context.inputId }, () => [
       context.definition.label,
       context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null,
     ]) : null,
-    description ? h('div', { id: descriptionId }, description) : null,
+    description ? h(FieldDescription, { id: descriptionId }, () => description) : null,
     adornments.before,
     cloneVNode(control, {
       id: context.inputId,
@@ -75,7 +76,7 @@ export function fieldFrame<TValues extends object>(
       'aria-required': context.definition.required ? 'true' : undefined,
     }),
     adornments.after,
-    context.errors.length > 0 ? h('ul', { id: errorId, role: 'alert' }, context.errors.map((error, index) => h('li', { key: `${index}-${error}` }, error))) : null,
+    context.errors.length > 0 ? h(FieldError, { errors: context.errors.map(message => ({ message })), id: errorId }) : null,
   ])
 }
 

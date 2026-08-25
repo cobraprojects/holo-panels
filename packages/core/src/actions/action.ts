@@ -9,6 +9,7 @@ import type {
   ActionResolvedState,
   ActionResolvable,
 } from './contracts'
+import { builtInActionPresentation } from './presentation'
 
 const ACTION_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u
 
@@ -55,9 +56,10 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   const normalizedLabel = label.trim()
   if (!normalizedLabel) throw new Error('Action labels cannot be empty')
   if (normalizedLabel.length > 200) throw new Error('Action labels cannot exceed 200 characters')
-  if (definition.confirmation !== undefined && definition.confirmation.length > 2000) {
+  if (typeof definition.confirmation === 'string' && definition.confirmation.length > 2000) {
     throw new Error('Action confirmations cannot exceed 2000 characters')
   }
+  const defaults = builtInActionPresentation(definition.kind)
   const modal = definition.modal
     ? {
         content: definition.modal.content ?? null,
@@ -76,15 +78,15 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   }
   const presentation = {
     badge: definition.badge === undefined ? null : await resolve(definition.badge, context),
-    color: definition.color === undefined ? null : await resolve(definition.color, context),
-    icon: definition.icon === undefined ? null : await resolve(definition.icon, context),
+    color: definition.color === undefined ? defaults?.color ?? null : await resolve(definition.color, context),
+    icon: definition.icon === undefined ? defaults?.icon ?? null : await resolve(definition.icon, context),
     size: definition.size ?? 'medium',
     tooltip: definition.tooltip === undefined ? null : await resolve(definition.tooltip, context),
     type: definition.type ?? definition.kind,
   }
   const serialized = toJsonValue({
     ...presentation,
-    confirmation: definition.confirmation ?? null,
+    confirmation: definition.confirmation === undefined ? defaults?.confirmation ?? null : definition.confirmation,
     disabled: state.disabled,
     id: definition.id,
     kind: definition.kind,

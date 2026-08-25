@@ -21,6 +21,7 @@ function store(): PanelShellStore {
       navigationMode: 'sidebar',
       path: '/admin',
       sidebarCollapsible: true,
+      slots: {},
       tenancy: { enabled: true },
       theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
       userMenu: [],
@@ -38,7 +39,7 @@ describe('Vue tenant switcher', () => {
     const html = await renderToString(createSSRApp(() => h(VueTenantSwitcher, { shell })))
 
     expect(html).toContain('aria-label="Tenant menu"')
-    expect(html).toContain('data-slot="dropdown-menu-trigger"')
+    expect(html).toContain('data-slot="popover-trigger"')
     expect(html).toContain('Acme')
   })
 })

@@ -103,6 +103,7 @@ describe('P6-E React field renderers', () => {
 
     const password = container.querySelector<HTMLInputElement>('input')
     expect(password?.type).toBe('password')
+    expect(password?.closest('[data-slot="input-group"]')).not.toBeNull()
     expect(password?.dataset.mask).toBe('AAAA-9999')
     expect(password?.getAttribute('list')).toBeTruthy()
     expect(container.querySelectorAll('datalist option')).toHaveLength(2)
@@ -396,7 +397,7 @@ describe('P6-E React field renderers', () => {
     act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Move two.png up"]')?.click())
     expect(uploadStore.state.items[0]?.name).toBe('two.png')
     expect(container.querySelector('img')?.getAttribute('alt')).toBe('Preview of one.png')
-    expect(container.querySelectorAll('progress')).toHaveLength(2)
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(2)
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Remove one.png"]')?.click())
     expect(deleteExisting).toHaveBeenCalledOnce()
   })

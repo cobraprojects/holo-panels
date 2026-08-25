@@ -1,6 +1,6 @@
 # Holo Panels renderer reference states
 
-Every renderer uses the exported `componentConformanceFixtures` and `shellReferenceStates` collections. A reference capture must use `@holo-js/panels-ui/style.css` with the default token values and a deterministic clock, locale, data set, and animation-disabled environment.
+Every renderer uses the exported `shellReferenceStates` collection. A reference capture must use `@holo-js/panels-ui/style.css` with the default token values and a deterministic clock, locale, data set, and animation-disabled environment.
 
 The required shell captures are:
 

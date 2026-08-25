@@ -16,6 +16,11 @@
       "import": "./dist/server.mjs",
       "default": "./dist/server.mjs"
     },
+    "./ui/*": {
+      "types": "./dist/svelte/ui/*/index.d.ts",
+      "svelte": "./dist/svelte/ui/*/index.js",
+      "default": "./dist/svelte/ui/*/index.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "main": "./dist/index.mjs",
@@ -24,22 +29,30 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/package-svelte-source.mjs",
+    "build": "tsup && svelte-package -i src -o dist/svelte",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest --run --passWithNoTests --reporter=json"
   },
   "dependencies": {
-    "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
+    "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-ui": "workspace:*",
+    "@lucide/svelte": "catalog:",
     "bits-ui": "catalog:",
-    "lucide-svelte": "catalog:"
+    "clsx": "catalog:",
+    "lucide-svelte": "catalog:",
+    "mode-watcher": "catalog:",
+    "svelte-sonner": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tailwind-variants": "catalog:"
   },
   "peerDependencies": {
     "svelte": "catalog:"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@sveltejs/package": "catalog:",
+    "clsx": "catalog:",
     "happy-dom": "catalog:",
     "svelte": "catalog:",
     "svelte-check": "catalog:",

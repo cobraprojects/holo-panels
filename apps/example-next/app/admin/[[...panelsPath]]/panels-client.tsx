@@ -1,11 +1,12 @@
-// @holo-panels-managed sha256:493479b059a66ad62e55b050e2ad9ed4f5da257b0f3a8f3c512601affb709a77
+// @holo-panels-managed sha256:dc39e8e4c033bbdeff609a92c8268a171f9b67abc7547a5fc01d9e28b1a9ae7b
 'use client'
 
-import '@holo-js/panels-react/style.css'
+import '../../../.holo-js/generated/panels/theme.css'
 import { createNextPanelComponentRegistry, NextPanelClient, type NextPanelClientProps } from '@holo-js/panels-next/client'
+import { registerPanelApplicationRenderers } from '../../../.holo-js/generated/panels/application-renderers'
 import { registerPanelPluginRenderers } from '../../../.holo-js/generated/panels/plugin-renderers'
 
-const registry = registerPanelPluginRenderers(createNextPanelComponentRegistry())
+const registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createNextPanelComponentRegistry()))
 
 export function PanelsClient(props: Pick<NextPanelClientProps, 'payload'>) {
   return <NextPanelClient {...props} registry={registry} />

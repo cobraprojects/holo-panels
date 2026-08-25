@@ -16,6 +16,8 @@ export type {
   SvelteInlineEditRequest,
   SvelteInlineEditTransport,
   SvelteTableAction,
+  SvelteTableActionGroup,
+  SvelteTableActionItem,
   SvelteTableActionRequest,
   SvelteTableActionTransport,
   SvelteTableColumn,

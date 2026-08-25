@@ -117,6 +117,7 @@ describe('Svelte renderer parity', () => {
     const secret = container.querySelector<HTMLInputElement>('#hp-field-secret')
 
     expect(secret?.type).toBe('password')
+    expect(secret?.closest('[data-slot="input-group"]')).not.toBeNull()
     expect(secret?.dataset.mask).toBe('credential')
     expect(secret?.autocomplete).toBe('current-password')
     expect(container.querySelector('.hp-field-prefix')?.textContent).toBe('@')

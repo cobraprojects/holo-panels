@@ -2,7 +2,7 @@ import { getContext, setContext } from 'svelte'
 
 export type PanelsPortalTarget = () => Element | string | undefined
 
-const PANELS_PORTAL_CONTEXT = Symbol('holo-panels-portal')
+const PANELS_PORTAL_CONTEXT = Symbol.for('holo-panels-portal')
 const defaultPortalTarget: PanelsPortalTarget = () => undefined
 
 export function panelsPortalTarget(): PanelsPortalTarget {

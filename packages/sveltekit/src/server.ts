@@ -450,9 +450,9 @@ export function createGeneratedSvelteKitPanelRoute<TActor, TTenant>(options: Cre
 const AUTH_OPERATIONS = new Set<PanelAuthOperation>([
   'email-verification-resend', 'email-verification-verify', 'login', 'logout', 'mfa-challenge', 'mfa-disable',
   'mfa-enrollment-begin', 'mfa-enrollment-confirm', 'mfa-recovery', 'mfa-recovery-codes-regenerate', 'mfa-status',
-  'password-reset-request', 'password-reset', 'profile-read', 'profile-update', 'registration',
+  'password-reset-request', 'password-reset', 'presentation', 'profile-read', 'profile-update', 'registration',
 ])
-const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'profile-read'])
+const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'presentation', 'profile-read'])
 
 function nativeResponse(data: unknown, status: number, cookies: readonly string[] = [], location: string | null = null): Response {
   const headers = new Headers(RESPONSE_HEADERS)

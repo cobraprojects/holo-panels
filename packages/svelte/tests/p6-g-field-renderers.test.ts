@@ -140,7 +140,7 @@ describe('P6-G Svelte field renderers', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Title is required')
     expect(container.querySelector('select')?.textContent).toContain('Cairo')
     expect(container.querySelector('[data-custom-editor]')).not.toBeNull()
-    expect(container.querySelectorAll('progress')).toHaveLength(2)
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(2)
     expect(container.querySelector('img')?.getAttribute('alt')).toBe('Preview of one.png')
     expect(container.querySelector('[data-custom-path="rating"]')?.textContent).toBe('Five stars')
   })

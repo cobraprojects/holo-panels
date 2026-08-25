@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
-import { ShadcnButton, ShadcnInput, ShadcnTextarea } from '../internal-ui'
+import { Checkbox, Input, Textarea } from '../internal-ui'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText, RadioGroup, RadioGroupItem, Switch } from '../ui'
 import { FieldFrame, property, touchField, updateField } from './shared'
 import type { ReactFieldControlProps } from './types'
 
@@ -22,10 +23,10 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
     readOnly: context.readOnly,
   }
   if (context.definition.type === 'hidden') {
-    return <ShadcnInput data-slot="input" name={context.definition.path} type="hidden" value={textValue(context.value)} />
+    return <Input data-slot="input" name={context.definition.path} type="hidden" value={textValue(context.value)} />
   }
   if (context.definition.type === 'textarea') {
-    return <FieldFrame context={context}><ShadcnTextarea
+    return <FieldFrame context={context}><Textarea
       {...common}
       data-autosize={property(context, 'autosize', false) || undefined}
       data-slot="textarea"
@@ -43,37 +44,34 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
     const stateLabel = context.value === true
       ? stringProperty(props, 'onLabel')
       : stringProperty(props, 'offLabel')
-    return <FieldFrame after={stateLabel ? <span className="hp-field-toggle-label">{stateLabel}</span> : null} context={context}><ShadcnInput
+    const Toggle = context.definition.type === 'toggle' ? Switch : Checkbox
+    return <FieldFrame after={stateLabel ? <span className="hp-field-toggle-label">{stateLabel}</span> : null} context={context}><Toggle
       checked={context.value === true}
-      data-slot={context.definition.type === 'toggle' ? 'switch' : 'checkbox'}
-      disabled={context.disabled}
+      disabled={context.disabled || context.readOnly}
       onBlur={common.onBlur}
-      onChange={event => updateField(props, event.currentTarget.checked)}
-      readOnly={context.readOnly}
-      role={context.definition.type === 'toggle' ? 'switch' : undefined}
-      type="checkbox"
+      onCheckedChange={checked => updateField(props, checked === true)}
     /></FieldFrame>
   }
   if (context.definition.type === 'radio') {
     const options: readonly unknown[] = Array.isArray(context.definition.properties.options) ? context.definition.properties.options : []
-    return <fieldset className="hp-field" data-field-path={context.definition.path} data-field-type="radio" disabled={context.disabled}>
-      {context.definition.label ? <legend>{context.definition.label}</legend> : null}
-      {options.map((option: unknown, index: number) => {
+    return <fieldset className="hp-field hp:grid hp:gap-3 hp:border-0 hp:p-0" data-field-path={context.definition.path} data-field-type="radio" disabled={context.disabled || context.readOnly}>
+      {context.definition.label ? <legend className="hp:text-sm hp:font-medium">{context.definition.label}</legend> : null}
+      <RadioGroup className="hp:grid hp:gap-3" disabled={context.disabled || context.readOnly} onValueChange={selected => {
+        const option = options.find(candidate => typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate) && String(Reflect.get(candidate, 'value')) === selected)
+        if (!option || typeof option !== 'object' || Array.isArray(option)) return
+        const value = Reflect.get(option, 'value')
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') updateField(props, value)
+      }} value={String(context.value ?? '')}>{options.map((option: unknown, index: number) => {
         if (typeof option !== 'object' || option === null || Array.isArray(option)) return null
         const value: unknown = Reflect.get(option, 'value')
         if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return null
         const id = `${context.inputId}-${index}`
-        return <label htmlFor={id} key={String(value)}><ShadcnInput
-          checked={context.value === value}
-          data-slot="radio-group-item"
+        return <label className="hp:flex hp:items-center hp:gap-2 hp:text-sm" htmlFor={id} key={String(value)}><RadioGroupItem
           disabled={context.disabled || Reflect.get(option, 'disabled') === true}
           id={id}
-          name={context.definition.path}
-          onChange={() => updateField(props, value)}
-          readOnly={context.readOnly}
-          type="radio"
+          value={String(value)}
         />{typeof Reflect.get(option, 'label') === 'string' ? String(Reflect.get(option, 'label')) : String(value)}</label>
-      })}
+      })}</RadioGroup>
     </fieldset>
   }
   const dateMode = property(context, 'mode', 'date' as string)
@@ -97,29 +95,31 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
     ? datalistProperty.filter((value): value is string => typeof value === 'string')
     : []
   const datalistId = datalist.length > 0 ? `${context.inputId}-list` : undefined
-  const after = <>
-    {suffix ? <span className="hp-field-suffix">{suffix}</span> : null}
-    {revealable ? <ShadcnButton
-      aria-controls={context.inputId}
-      aria-label={passwordVisible ? 'Hide password' : 'Show password'}
-      onClick={() => setPasswordVisible(value => !value)}
-      type="button"
-    >{passwordVisible ? 'Hide' : 'Show'}</ShadcnButton> : null}
+  const inputProps = {
+    ...common,
+    autoComplete: property(context, 'autocomplete', undefined as string | undefined),
+    'data-mask': stringProperty(props, 'mask') ?? undefined,
+    list: datalistId,
+    max: property(context, 'maximum', undefined as number | string | undefined),
+    maxLength: property(context, 'maximumLength', undefined as number | undefined),
+    min: property(context, 'minimum', undefined as number | string | undefined),
+    minLength: property(context, 'minimumLength', undefined as number | undefined),
+    onChange: change,
+    step: property(context, 'step', undefined as number | undefined),
+    type: inputType,
+    value: textValue(context.value),
+  }
+  return <FieldFrame context={context}>{controlProperties => <>
+    {prefix || suffix || revealable
+      ? <InputGroup>
+          {prefix ? <InputGroupAddon align="inline-start"><InputGroupText className="hp-field-prefix">{prefix}</InputGroupText></InputGroupAddon> : null}
+          <InputGroupInput {...inputProps} {...controlProperties} />
+          {suffix || revealable ? <InputGroupAddon align="inline-end">
+            {suffix ? <InputGroupText className="hp-field-suffix">{suffix}</InputGroupText> : null}
+            {revealable ? <InputGroupButton aria-controls={context.inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onClick={() => setPasswordVisible(value => !value)}>{passwordVisible ? 'Hide' : 'Show'}</InputGroupButton> : null}
+          </InputGroupAddon> : null}
+        </InputGroup>
+      : <Input {...inputProps} {...controlProperties} data-slot={context.definition.type === 'slider' ? 'slider' : 'input'} />}
     {datalistId ? <datalist id={datalistId}>{datalist.map(option => <option key={option} value={option} />)}</datalist> : null}
-  </>
-  return <FieldFrame after={after} before={prefix ? <span className="hp-field-prefix">{prefix}</span> : null} context={context}><ShadcnInput
-    {...common}
-    autoComplete={property(context, 'autocomplete', undefined as string | undefined)}
-    data-mask={stringProperty(props, 'mask') ?? undefined}
-    data-slot={context.definition.type === 'slider' ? 'slider' : 'input'}
-    list={datalistId}
-    max={property(context, 'maximum', undefined as number | string | undefined)}
-    maxLength={property(context, 'maximumLength', undefined as number | undefined)}
-    min={property(context, 'minimum', undefined as number | string | undefined)}
-    minLength={property(context, 'minimumLength', undefined as number | undefined)}
-    onChange={change}
-    step={property(context, 'step', undefined as number | undefined)}
-    type={inputType}
-    value={textValue(context.value)}
-  /></FieldFrame>
+  </>}</FieldFrame>
 }

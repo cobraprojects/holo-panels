@@ -104,6 +104,27 @@ function renderRelationManagerEntries(
   })
 }
 
+function renderPanelRecordEntries(
+  resourceBindings: readonly DiscoveredResourceTypeBinding[],
+  relationManagerBindings: readonly DiscoveredRelationManagerTypeBinding[],
+  resources: ReadonlyMap<string, DiscoveredResourceTypeBinding>,
+  models: ReadonlyMap<string, GeneratedModelRegistryEntry>,
+): readonly string[] {
+  const resourceRecords = resourceBindings.map((binding) => {
+    const model = models.get(`${binding.modelName}\0${binding.tableName}`)
+    if (!model) throw new Error(`[Holo Panels] Resource ${binding.projectPath} uses model ${binding.modelName}, but Holo did not generate that model.`)
+    return `    readonly ${JSON.stringify(`resource:${resourceKey(binding)}`)}: import('@holo-js/panels-resources').ResourceRecordFor<${exportedType(model.sourcePath, model.exportName ?? 'default')}>`
+  })
+  const relationRecords = relationManagerBindings.map((binding) => {
+    const resource = resources.get(`${binding.ownerResourceProjectPath}#${binding.ownerResourceExportName}`)
+    if (!resource) throw new Error(`[Holo Panels] Relation manager ${binding.projectPath} has no registered parent resource.`)
+    const model = models.get(`${resource.modelName}\0${resource.tableName}`)
+    if (!model) throw new Error(`[Holo Panels] Parent resource ${resource.projectPath} has no generated Holo model.`)
+    return `    readonly ${JSON.stringify(`relation:${relationManagerKey(binding)}`)}: import('@holo-js/panels-resources').ResourceRelationRecordFor<${exportedType(model.sourcePath, model.exportName ?? 'default')}, ${JSON.stringify(binding.relationship)}>`
+  })
+  return [...resourceRecords, ...relationRecords]
+}
+
 export async function renderResourceTypeBindings(
   projectRoot: string,
   resourceBindings: readonly DiscoveredResourceTypeBinding[],
@@ -124,6 +145,7 @@ export async function renderResourceTypeBindings(
   const resources = new Map(resourceBindings.map(binding => [resourceKey(binding), binding]))
   const resourceEntries = renderResourceEntries(resourceBindings, models)
   const relationManagerEntries = renderRelationManagerEntries(relationManagerBindings, resources, models)
+  const panelRecordEntries = renderPanelRecordEntries(resourceBindings, relationManagerBindings, resources, models)
   const resourceRegistry = resourceEntries.length > 0
     ? ['  interface ResourceTypeRegistry {', ...resourceEntries, '  }']
     : []
@@ -141,6 +163,16 @@ export async function renderResourceTypeBindings(
             'declare module \'@holo-js/panels-resources\' {',
             ...resourceRegistry,
             ...relationManagerRegistry,
+            '}',
+            '',
+          ]
+        : []),
+      ...(panelRecordEntries.length > 0
+        ? [
+            'declare module \'@holo-js/panels-core\' {',
+            '  interface PanelRecordTypeRegistry {',
+            ...panelRecordEntries,
+            '  }',
             '}',
             '',
           ]

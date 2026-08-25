@@ -60,7 +60,7 @@ export class ClientEffectSession {
   }
 
   async apply(response: Readonly<ResponseEnvelope>): Promise<void> {
-    if (this.#disposed) throw new Error('[Holo Panels] Client effect session is disposed.')
+    if (this.#disposed) return
     const active = this.#activeResponses.get(response.id)
     if (active) return await active
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
+  import { Button } from '../ui/button'
   import type { Component } from 'svelte'
   import { entryRichTextMetadata, entryUsesMarkdown, safeEntryAttributes, safeMarkdownBlocks } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'

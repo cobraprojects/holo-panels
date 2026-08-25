@@ -1,10 +1,11 @@
 import { EditRecord } from '@holo-js/panels-resources'
+import { DeleteAction, ViewAction } from '@holo-js/panels-actions'
 import PostResource from '../PostResource'
 
 export default class EditPost extends EditRecord {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return PostResource.actions(action => [action.view(), action.delete()])
+    return [ViewAction.make(), DeleteAction.make()]
   }
 }

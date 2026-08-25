@@ -36,6 +36,7 @@ function panelPage(options: {
         navigationMode: 'sidebar',
         path: '/admin',
         sidebarCollapsible: true,
+        slots: {},
         tenancy: null,
         theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
         userMenu: [],
@@ -150,8 +151,8 @@ describe('Nuxt P13 notification integration', () => {
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
     expect(notificationRealtime).toHaveBeenCalledWith('panels.notifications.admin-7')
     expect(subscribe).toHaveBeenCalledTimes(1)
-    expect(container.querySelector('[data-placement="topbar"]')).not.toBeNull()
-    expect(container.querySelector('.hp-notification-toasts')).not.toBeNull()
+    expect(container.querySelector('[data-placement="dropdown"]')).not.toBeNull()
+    expect(container.querySelector('[data-sonner-toaster]')).not.toBeNull()
     expect(requests[0]).toMatchObject({
       operation: 'notification',
       panelId: 'admin',
@@ -225,7 +226,7 @@ describe('Nuxt P13 notification integration', () => {
 
     app.mount(container)
     container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    await vi.waitFor(() => expect(container.querySelector('.hp-notification-toasts')?.textContent).toContain('Article saved'))
+    await vi.waitFor(() => expect(container.querySelector('[data-slot="notification-toast"]')?.textContent).toContain('Article saved'))
     expect(order).toEqual(['toast', 'redirect'])
     expect(container.querySelector('[data-icon="check"]')).not.toBeNull()
     expect(requests.at(-1)).toMatchObject({ operation: 'form-submit', panelId: 'admin' })

@@ -155,7 +155,7 @@ describe('P7-E React table renderer', () => {
     act(() => [...container.querySelectorAll('button')].find(button => button.textContent === 'Filters')?.click())
     await vi.waitFor(() => expect(document.querySelector('form[aria-label="Table filters"]')).not.toBeNull())
     const form = document.querySelector('form[aria-label="Table filters"]')
-    expect(document.querySelector('[data-panels-component="modal"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-content"]')).not.toBeNull()
     expect(form?.getAttribute('data-filter-placement')).toBe('modal')
     expect(form?.getAttribute('style')).toContain('--hp-filter-columns-md: 3')
     expect(Array.from(form?.querySelectorAll('label') ?? []).map(label => label.textContent)).toEqual(['Status filter', 'Title filter'])
@@ -179,7 +179,7 @@ describe('P7-E React table renderer', () => {
     await vi.waitFor(() => expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent === 'Start export')).toBe(true))
     await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click())
     expect(startExport).toHaveBeenCalledWith(expect.objectContaining({ columnIds: ['title'], definitionId: 'posts.export', formatId: 'csv', selection: { mode: 'explicit', recordIds: [] } }), expect.any(AbortSignal))
-    expect(document.querySelector('progress[aria-label="Transfer progress"]')).not.toBeNull()
+    expect(document.querySelector('[role="progressbar"][aria-label="Transfer progress"]')).not.toBeNull()
     act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Close')?.click())
     act(() => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Import posts')?.click())
     await vi.waitFor(() => expect(document.querySelector('input[type="file"]')).not.toBeNull())
@@ -293,7 +293,7 @@ describe('P7-E React table renderer', () => {
     expect(execute).toHaveBeenCalledWith({ actionId: 'posts.total', recordId: 1 }, expect.any(AbortSignal))
   })
 
-  it('supports sorting, deferred filters, column management, and pagination through TableStateStore', () => {
+  it('supports sorting, deferred filters, column management, and pagination through TableStateStore', async () => {
     const store = createStore({ filterMode: 'deferred', total: 60 })
     const onQueryChange = vi.fn()
     const container = mount({
@@ -312,8 +312,14 @@ describe('P7-E React table renderer', () => {
     act(() => container.querySelector<HTMLButtonElement>('form button[type="submit"]')?.click())
     expect(store.snapshot.filters.applied.status).toBe('draft')
 
-    act(() => container.querySelector<HTMLButtonElement>('.hp-column-manager > button')?.click())
-    const statusColumn = [...container.querySelectorAll<HTMLInputElement>('.hp-column-manager input')].find(input => input.parentElement?.textContent === 'Status')
+    act(() => {
+      const trigger = container.querySelector<HTMLButtonElement>('.hp-column-manager')
+      trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      trigger?.click()
+    })
+    await vi.waitFor(() => expect(document.querySelector('#hp-column-status')).not.toBeNull())
+    const statusColumn = document.querySelector<HTMLButtonElement>('#hp-column-status')
+    expect(statusColumn).not.toBeNull()
     act(() => statusColumn?.click())
     expect(store.snapshot.visibleColumns).toEqual(['title'])
 
@@ -398,7 +404,7 @@ describe('P7-E React table renderer', () => {
       actionTransport: { execute },
     })
 
-    act(() => container.querySelector<HTMLInputElement>('input[aria-label="Select page"]')?.click())
+    act(() => container.querySelector<HTMLButtonElement>('[role="checkbox"][aria-label="Select page"]')?.click())
     expect(store.snapshot.selection.selectedRecordIds).toEqual([1, 2])
     act(() => container.querySelector<HTMLButtonElement>('button')?.dispatchEvent(new Event('blur')))
     const selectAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Select all 4 matching records')
@@ -413,6 +419,29 @@ describe('P7-E React table renderer', () => {
       actionId: 'posts.publish',
       selection: expect.objectContaining({ mode: 'all-matching', excludedRecordIds: [] }),
     }), expect.any(AbortSignal))
+  })
+
+  it('requires the panel confirmation UI before executing destructive table actions', async () => {
+    const execute = vi.fn(async () => undefined)
+    const container = mount({
+      ...baseProps(createStore()),
+      actions: [{ color: 'danger', confirmation: 'Delete this record?', icon: 'delete', id: 'posts.delete', label: 'Delete', scope: 'row' }],
+      actionTransport: { execute },
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action="posts.delete"]')
+    expect(trigger?.className).toContain('hp:bg-destructive')
+    expect(trigger?.querySelector('[data-icon="delete"]')).not.toBeNull()
+    act(() => trigger?.click())
+    expect(execute).not.toHaveBeenCalled()
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain('Delete this record?')
+    const confirm = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === 'Confirm')
+    expect(confirm?.className).toContain('hp:bg-destructive')
+    expect(confirm?.querySelector('[data-icon="delete"]')).not.toBeNull()
+    await act(async () => confirm?.click())
+    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.delete', recordId: 1 }, expect.any(AbortSignal))
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
   })
 
   it('executes only the compiled inline action and supports Enter and Escape keyboard behavior', async () => {

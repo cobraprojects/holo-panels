@@ -35,6 +35,11 @@ describe('Filament-shaped panel configuration', () => {
     expect(panel.server.routes).toEqual([])
   })
 
+  it('uses SPA navigation by default and keeps explicit opt-out available', () => {
+    expect(definePanel().compile().manifest.runtime?.spa).toBe(true)
+    expect(definePanel().spa(false).compile().manifest.runtime?.spa).toBe(false)
+  })
+
   it('configures independent auth pages without requiring a login page', () => {
     const publicPanel = definePanel('public').compile()
     const accountPanel = definePanel('account')

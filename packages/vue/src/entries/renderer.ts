@@ -1,4 +1,4 @@
-import { ShadcnButton } from '../internal-ui'
+import { Button } from '../internal-ui'
 import { defineComponent, h, onScopeDispose, ref, shallowRef, type Component, type PropType, type VNode, type VNodeChild } from 'vue'
 import {
   entryRichTextMetadata,
@@ -175,8 +175,8 @@ export const VueEntryRenderer = defineComponent({
         slot(entry, componentProps.entry, 'before'),
         h('div', { class: 'hp-entry-state' }, [linked]),
         slot(entry, componentProps.entry, 'after'),
-        entry.copyable ? h(ShadcnButton, { type: 'button', onClick: () => void copy() }, 'Copy') : null,
-        ...entry.actions.map(action => h(ShadcnButton, {
+        entry.copyable ? h(Button, { type: 'button', onClick: () => void copy() }, 'Copy') : null,
+        ...entry.actions.map(action => h(Button, {
           disabled: entry.pending || !componentProps.entry.action,
           key: action,
           type: 'button',

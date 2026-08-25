@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ShadcnButton, ShadcnInput, ShadcnSelect } from '../internal-ui'
+import { Button, Input, NativeSelect } from '../internal-ui'
 import { FieldFrame, property, requireStore, updateField, useStoreState } from './shared'
 import type { ReactFieldControlProps } from './types'
 
@@ -49,7 +49,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
   for (const item of state.selectedOptions) if (!options.some(option => option.value === item.value)) options.push(item)
   const multiple = props.context.definition.type === 'multiselect' || props.context.definition.type === 'checkbox-list'
   const searchAndPaging = <>
-    {property(props.context, 'searchable', false) ? <ShadcnInput
+    {property(props.context, 'searchable', false) ? <Input
       aria-label={`Search ${props.context.definition.label ?? 'options'}`}
       disabled={props.context.disabled || state.disabled}
       onChange={event => void optionStore.load(event.currentTarget.value, 1)}
@@ -57,37 +57,37 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
       value={state.search}
     /> : null}
     {property(props.context, 'paginated', true) && (state.page > 1 || state.hasMore) ? <nav aria-label={`${props.context.definition.label ?? 'Option'} pages`}>
-      <ShadcnButton disabled={state.page <= 1 || state.loading} onClick={() => void optionStore.load(state.search, state.page - 1)} type="button">Previous</ShadcnButton>
+      <Button disabled={state.page <= 1 || state.loading} onClick={() => void optionStore.load(state.search, state.page - 1)} type="button">Previous</Button>
       <span aria-live="polite">Page {state.page}</span>
-      <ShadcnButton disabled={!state.hasMore || state.loading} onClick={() => void optionStore.load(state.search, state.page + 1)} type="button">Next</ShadcnButton>
+      <Button disabled={!state.hasMore || state.loading} onClick={() => void optionStore.load(state.search, state.page + 1)} type="button">Next</Button>
     </nav> : null}
   </>
   const createAndEdit = <>
     {property(props.context, 'canCreateOption', false) ? <div>
-      <ShadcnInput aria-label={`Create ${props.context.definition.label ?? 'option'} label`} disabled={props.context.disabled || props.context.readOnly} onChange={event => setCreateLabel(event.currentTarget.value)} value={createLabel} />
-      <ShadcnButton disabled={!createLabel.trim()} onClick={() => void optionStore.create(createLabel).then(async (option) => {
+      <Input aria-label={`Create ${props.context.definition.label ?? 'option'} label`} disabled={props.context.disabled || props.context.readOnly} onChange={event => setCreateLabel(event.currentTarget.value)} value={createLabel} />
+      <Button disabled={!createLabel.trim()} onClick={() => void optionStore.create(createLabel).then(async (option) => {
         const next = multiple ? [...values, option.value] : option.value
         setCreateLabel('')
         updateField(props, next)
         await optionStore.hydrateSelected(multiple ? next as readonly OptionValue[] : [option.value])
-      })} type="button">Create option</ShadcnButton>
+      })} type="button">Create option</Button>
     </div> : null}
     {property(props.context, 'canEditOption', false) ? <div>
-      <ShadcnInput aria-label={`Edit ${props.context.definition.label ?? 'option'} label`} disabled={props.context.disabled || props.context.readOnly || values.length !== 1} onChange={event => setEditLabel(event.currentTarget.value)} value={editLabel} />
-      <ShadcnButton disabled={!editLabel.trim() || values.length !== 1} onClick={() => {
+      <Input aria-label={`Edit ${props.context.definition.label ?? 'option'} label`} disabled={props.context.disabled || props.context.readOnly || values.length !== 1} onChange={event => setEditLabel(event.currentTarget.value)} value={editLabel} />
+      <Button disabled={!editLabel.trim() || values.length !== 1} onClick={() => {
         const value = values[0]
         if (typeof value === 'undefined') return
         void optionStore.edit(value, editLabel).then(async () => {
           setEditLabel('')
           await optionStore.hydrateSelected([value])
         })
-      }} type="button">Edit option</ShadcnButton>
+      }} type="button">Edit option</Button>
     </div> : null}
   </>
   if (props.context.definition.type === 'checkbox-list' || props.context.definition.type === 'toggle-buttons') {
     return <fieldset className="hp-field" data-field-path={props.context.definition.path} disabled={props.context.disabled || state.disabled}>
       {props.context.definition.label ? <legend>{props.context.definition.label}</legend> : null}
-      {options.map(option => <label key={String(option.value)}><ShadcnInput
+      {options.map(option => <label key={String(option.value)}><Input
         checked={values.includes(option.value)}
         disabled={option.disabled || props.context.readOnly}
         name={props.context.definition.path}
@@ -100,7 +100,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
       {createAndEdit}
     </fieldset>
   }
-  return <div><FieldFrame context={props.context}><ShadcnSelect
+  return <div><FieldFrame context={props.context}><NativeSelect
       disabled={props.context.disabled || props.context.readOnly || state.disabled}
       multiple={multiple}
       onChange={event => updateField(props, multiple
@@ -110,5 +110,5 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
     >
       {!multiple ? <option value="">{state.loading ? 'Loading…' : 'Select an option'}</option> : null}
       {options.map(option => <option disabled={option.disabled} key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
-    </ShadcnSelect></FieldFrame>{searchAndPaging}{createAndEdit}</div>
+    </NativeSelect></FieldFrame>{searchAndPaging}{createAndEdit}</div>
 }

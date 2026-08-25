@@ -20,6 +20,7 @@ function store(): PanelShellStore {
       navigationMode: 'sidebar',
       path: '/admin',
       sidebarCollapsible: true,
+      slots: {},
       tenancy: { enabled: true },
       theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
       userMenu: [],

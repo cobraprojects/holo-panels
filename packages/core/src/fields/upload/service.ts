@@ -30,6 +30,7 @@ interface UploadMetadata {
   readonly name: string
   readonly panelId: string
   readonly resourceId: string
+  readonly sessionId: string
   readonly size: number
   readonly state: 'pending' | 'stored'
   readonly tenantId?: string
@@ -62,15 +63,16 @@ function tokenMatches(token: string, expectedHash: string): boolean {
   return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
 
-function scopeKey(context: UploadActorContext): string {
-  return [context.panelId, context.resourceId, context.fieldId, context.tenantId ?? '-', context.actorId].join(':')
+function scopeKey(context: UploadActorContext & { readonly sessionId: string }): string {
+  return [context.panelId, context.resourceId, context.fieldId, context.tenantId ?? '-', context.actorId, context.sessionId].join(':')
 }
 
-function sameScope(metadata: UploadMetadata, context: UploadActorContext): boolean {
+function sameScope(metadata: UploadMetadata, context: UploadActorContext & { readonly sessionId: string }): boolean {
   return metadata.actorId === context.actorId
     && metadata.fieldId === context.fieldId
     && metadata.panelId === context.panelId
     && metadata.resourceId === context.resourceId
+    && metadata.sessionId === context.sessionId
     && metadata.tenantId === context.tenantId
 }
 
@@ -84,6 +86,7 @@ function publicDescriptor(metadata: UploadMetadata, token: string): TemporaryUpl
     name: metadata.name,
     panelId: metadata.panelId,
     resourceId: metadata.resourceId,
+    sessionId: metadata.sessionId,
     size: metadata.size,
     state: metadata.state,
     ...(metadata.tenantId ? { tenantId: metadata.tenantId } : {}),
@@ -142,6 +145,7 @@ export class TemporaryUploadService {
         name,
         panelId: input.panelId,
         resourceId: input.resourceId,
+        sessionId: input.sessionId,
         size: input.size,
         state: 'pending',
         ...(input.tenantId ? { tenantId: input.tenantId } : {}),
@@ -272,7 +276,7 @@ export class TemporaryUploadService {
     return removed
   }
 
-  private async activeUploads(context: UploadActorContext): Promise<readonly UploadMetadata[]> {
+  private async activeUploads(context: UploadActorContext & { readonly sessionId: string }): Promise<readonly UploadMetadata[]> {
     const active: UploadMetadata[] = []
     for await (const files of this.storagePages()) {
       for (const file of files) {
@@ -320,11 +324,12 @@ export class TemporaryUploadService {
     if (!tokenMatches(input.token, metadata.tokenHash)) throw new Error('Temporary upload token is invalid')
   }
 
-  private assertContext(context: UploadActorContext): void {
+  private assertContext(context: UploadActorContext & { readonly sessionId: string }): void {
     normalizeIdentifier(context.actorId, 'actor ID')
     normalizeIdentifier(context.fieldId, 'field ID')
     normalizeIdentifier(context.panelId, 'panel ID')
     normalizeIdentifier(context.resourceId, 'resource ID')
+    normalizeIdentifier(context.sessionId, 'session ID')
     if (context.tenantId) normalizeIdentifier(context.tenantId, 'tenant ID')
   }
 
@@ -364,10 +369,11 @@ export class TemporaryUploadService {
       name: metadata.name,
       panelId: metadata.panelId,
       resourceId: metadata.resourceId,
+      sessionId: metadata.sessionId,
       size: metadata.size,
       state: 'stored',
       ...(metadata.tenantId ? { tenantId: metadata.tenantId } : {}),
-      previewUrl,
+      ...(previewUrl ? { previewUrl } : {}),
     })
   }
 

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
+  import { Button } from '../ui/button'
+  import { Input } from '../ui/input'
+  import { Progress } from '../ui/progress'
   import type { ClientUploadFile } from '@holo-js/panels-client'
   import { toSvelteState } from '../stores'
   import type { SvelteFieldRendererProps } from './contracts'
@@ -47,7 +48,7 @@
 </script>
 
 {#if presentation.visible}
-  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} required={presentation.required}>
+  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type="file-upload">
     {#snippet children(attributes)}
       <Input {...attributes} type="file" multiple disabled={presentation.disabled || presentation.readOnly} required={presentation.required && ($uploadState?.items.length ?? 0) === 0} onchange={choose} />
       <div aria-live="polite" data-panels-upload-list>
@@ -55,7 +56,7 @@
           <article data-upload-id={item.id}>
             {#if item.previewUrl}<img src={item.previewUrl} alt="Preview of {item.name}" />{/if}
             <span>{item.name}</span>
-            <progress max="1" value={item.progress} aria-label="Upload progress for {item.name}"></progress>
+            <Progress max={1} value={item.progress} aria-label="Upload progress for {item.name}" />
             <span>{item.status}</span>
             {#if item.error}<span role="alert">{item.error}</span>{/if}
             <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => move(index, index - 1)}>Move up</Button>

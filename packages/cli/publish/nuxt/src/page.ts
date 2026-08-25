@@ -11,10 +11,8 @@ import {
   installPanelSpaNavigation,
   OptionStore,
   PanelsErrorBoundary,
-  PanelsAvatar,
-  PanelsDropdown,
-  PanelsLink,
-  PanelsLoadingIndicator,
+  PanelsPageActions,
+  PanelsRenderHook,
   PanelsPortalProvider,
   PanelsTransport,
   PanelShellStore,
@@ -36,6 +34,9 @@ import {
   createDefaultComponentRegistry,
   executePanelAuthRequest,
   registerVueFieldRenderers,
+  registerPanelNotificationStore,
+  providePanelsRenderHooks,
+  renderPanelsHook,
   toJsonValue,
   type ClientActionManifest,
   type ClientNotificationRealtime,
@@ -49,6 +50,7 @@ import {
   type VueEntryStore,
   type VueRelationManagerRendererProps,
   type VueTableAction,
+  type VueTableActionGroup,
   type VueTableColumn,
   type VueTableFilter,
   type VueTableGroup,
@@ -56,9 +58,54 @@ import {
   type VueWidgetManifest,
   type UploadPolicy,
 } from '@holo-js/panels-vue'
-import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, watchEffect, type Component, type PropType, type VNode } from 'vue'
+import { useRouter } from '#imports'
+import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, type Component, type PropType, type Ref, type VNode } from 'vue'
 import type { NuxtPanelPage, NuxtPanelPageData, PanelPageProps } from './contracts'
-import { ShadcnButton, ShadcnIcon, ShadcnInput } from './internal-ui'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  Command,
+  CommandEmpty,
+  CommandItem,
+  CommandList,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  PanelsIcon,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  Skeleton,
+} from './internal-ui'
 
 type ResourceRecord = Record<string, unknown>
 type ResourceValues = Record<string, unknown>
@@ -74,7 +121,17 @@ function panelColorMode(value: unknown): PanelColorMode {
 
 interface PanelPageRuntime {
   readonly effects: ClientEffectSession
+  readonly manifest: NuxtPanelPage['bootstrap']['manifest']
+  readonly navigate: (url: string, replace?: boolean) => Promise<void>
+  readonly pageActionsTarget: Ref<HTMLElement | null>
+  readonly registry: ComponentRegistry
+  readonly renderHookScopes: readonly string[]
+  readonly toastStore: ClientToastStore
   readonly transport: PanelsTransport
+}
+
+function resourceRenderHook(runtime: PanelPageRuntime, hook: PanelsRenderHook, data: JsonObject): VNode {
+  return renderPanelsHook({ data, hook, manifest: runtime.manifest, registry: runtime.registry, scopes: runtime.renderHookScopes })
 }
 
 interface ResourceOption {
@@ -104,8 +161,14 @@ interface ResourceAction extends VueTableAction {
   readonly path?: string
 }
 
-interface ResourceRenderSchema {
+interface ResourceActionGroup extends Omit<VueTableActionGroup, 'actions'> {
   readonly actions: readonly ResourceAction[]
+}
+
+type ResourceTableAction = ResourceAction | ResourceActionGroup
+
+interface ResourceRenderSchema {
+  readonly actions: readonly ResourceTableAction[]
   readonly basePath: string
   readonly columns: readonly VueTableColumn<ResourceRecord>[]
   readonly entries: readonly JsonObject[]
@@ -116,6 +179,7 @@ interface ResourceRenderSchema {
   readonly recordActions: readonly ClientActionManifest[]
   readonly resourceId: string
   readonly routeKey: string
+  readonly routes: Readonly<{ create: string | null, edit: string | null, view: string | null }>
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -231,6 +295,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
         recordActions: Array.isArray(generated.actions) ? generated.actions : [],
         resourceId: generated.id,
         routeKey: generated.routeKey,
+        routes: isObject(generated.routes) ? generated.routes : {},
       }
     : page.schema
   if (!isObject(schema) || schema.kind !== 'resource' || typeof schema.resourceId !== 'string' || typeof schema.basePath !== 'string' || !schema.basePath.startsWith('/') || !isPath(schema.routeKey) || !isPath(schema.recordTitle)) {
@@ -241,8 +306,12 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
   }
   if (!schema.fields.every(item => isObject(item) && isPath(item.path) && typeof item.type === 'string')) throw new Error('Resource render schema fields are invalid')
   if (!schema.columns.every(item => isObject(item) && isObject(item.manifest) && isPath(item.manifest.path) && typeof item.manifest.type === 'string')) throw new Error('Resource render schema columns are invalid')
+  const routes = isObject(schema.routes) ? schema.routes : {}
   return {
-    actions: schema.actions as unknown as readonly ResourceAction[],
+    actions: (schema.actions as unknown as readonly JsonObject[]).flatMap((action) => {
+      const normalized = resourceTableAction(action, routes)
+      return normalized ? [normalized] : []
+    }),
     basePath: schema.basePath.replace(/\/+$/gu, ''),
     columns: schema.columns as unknown as readonly VueTableColumn<ResourceRecord>[],
     entries: (Array.isArray(schema.entries) ? schema.entries : schema.fields) as JsonObject[],
@@ -256,7 +325,54 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
     recordActions: (Array.isArray(schema.recordActions) ? schema.recordActions : schema.actions).flatMap(item => clientAction(item) ?? []),
     resourceId: schema.resourceId,
     routeKey: schema.routeKey,
+    routes: {
+      create: typeof routes.create === 'string' ? routes.create : null,
+      edit: typeof routes.edit === 'string' ? routes.edit : null,
+      view: typeof routes.view === 'string' ? routes.view : null,
+    },
   }
+}
+
+function resourceTableAction(action: JsonObject, routes: JsonObject): ResourceTableAction | null {
+  const id = typeof action.id === 'string' ? action.id : ''
+  const scope = action.scope
+  if (!id || (scope !== 'bulk' && scope !== 'header' && scope !== 'row')) return null
+  if (action.kind === 'action-group') {
+    const actions = Array.isArray(action.actions) ? action.actions.flatMap(item => {
+      if (!isObject(item)) return []
+      const normalized = resourceTableAction(item, routes)
+      return normalized && normalized.kind !== 'action-group' ? [normalized] : []
+    }) : []
+    if (actions.length === 0) return null
+    return {
+      actions,
+      color: typeof action.color === 'string' ? action.color : null,
+      icon: typeof action.icon === 'string' ? action.icon : null,
+      id,
+      kind: 'action-group',
+      label: typeof action.label === 'string' ? action.label : null,
+      scope,
+    }
+  }
+  if (typeof action.label !== 'string' || !['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'].includes(String(action.kind))) return null
+  const kind = action.kind as ClientActionManifest['kind']
+  const path = kind === 'edit' || kind === 'view' ? routes[kind] : null
+  return {
+    color: typeof action.color === 'string' ? action.color : null,
+    confirmation: typeof action.confirmation === 'string' ? action.confirmation : undefined,
+    icon: typeof action.icon === 'string' ? action.icon : null,
+    id,
+    kind,
+    label: action.label,
+    scope,
+    ...(typeof path === 'string' ? { path } : {}),
+  }
+}
+
+function executableResourceTableActions(actions: readonly ResourceTableAction[]): readonly ResourceAction[] {
+  return actions.flatMap(action => action.kind === 'action-group'
+    ? executableResourceTableActions(action.actions)
+    : [action])
 }
 
 function recordsFrom(page: NuxtPanelPageData): ResourceRecord[] {
@@ -462,18 +578,31 @@ function initialValues(schema: ResourceRenderSchema, record: ResourceRecord | nu
 function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentRegistry, schema: ResourceRenderSchema, runtime: PanelPageRuntime, createRedirect: 'edit' | 'index' | 'view', editRedirect: 'index' | 'view' | null, unsavedChangesAlerts: boolean): () => VNode {
   const record = recordFrom(page)
   let routeValue = record ? valueAtPath(record, schema.routeKey) : undefined
+  const viewAction = schema.recordActions.find(action => action.kind === 'view' && action.visible)
+  const recordActions = schema.recordActions.filter(action => action.mount === 'record' && action.visible && !['create', 'edit', 'view'].includes(action.kind))
   const values = initialValues(schema, record)
-  const relations = relationManagers(page.data.relations)
+  const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new FormStore(values, {
     dependencies: schema.fields.flatMap(field => field.reactive
       ? [{
           id: `${schema.resourceId}:${field.path}`,
           paths: [field.reactive.source],
-          recompute: (context: { readonly changedPaths: ReadonlySet<string>, get(path: string): unknown }) => context.changedPaths.has(field.reactive?.source ?? '')
+          recompute: (context: { readonly changedPaths: ReadonlySet<string>, readonly touchedPaths: ReadonlySet<string>, get(path: string): unknown }) => context.changedPaths.has(field.reactive?.source ?? '') && !context.touchedPaths.has(field.path)
             ? [{ kind: 'set' as const, path: field.path, value: slug(context.get(field.reactive?.source ?? '')) }]
             : [],
         }]
       : []),
+  })
+  const actionStore = new ClientActionStore({
+    createIdempotencyKey: () => crypto.randomUUID(),
+    transport: {
+      async execute(request) {
+        if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Resource record is unavailable')
+        if (!recordActions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId })
+        return { effects: [], items: [], status: 'succeeded' }
+      },
+    },
   })
   const preventUnload = (event: BeforeUnloadEvent): void => {
     if (!unsavedChangesAlerts || store.state.dirtyPaths.length === 0) return
@@ -507,7 +636,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       policy: uploadPolicy,
     })
     upload.subscribe(snapshot => {
-      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.token ? [{ id: item.id, token: item.token }] : [])
+      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.sessionId && item.token ? [{ id: item.id, sessionId: item.sessionId, token: item.token }] : [])
       store.batch([{ kind: 'set', path: field.path, touch: true, value: uploadPolicy.maximumFiles === 1 ? stored[0] ?? '' : stored }])
     })
     return [[field.path, upload] as const]
@@ -541,7 +670,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
           const encodedRouteValue = encodeURIComponent(String(nextRouteValue))
           if (redirect) {
             const target = redirect === 'index' ? schema.basePath : redirect === 'view' ? `${schema.basePath}/${encodedRouteValue}` : `${schema.basePath}/${encodedRouteValue}/edit`
-            window.location.assign(target)
+            await runtime.navigate(target)
           } else if (page.manifest.pageType === 'edit') {
             window.history.replaceState(null, '', `${schema.basePath}/${encodedRouteValue}/edit`)
           }
@@ -552,7 +681,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   }
   const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request) => {
     if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Relation operations require a persisted owner record')
-    await mutate(runtime, panelId, 'action', mutationPayload({
+    const result = await mutate(runtime, panelId, 'action', mutationPayload({
       intent: 'relation',
       managerId: request.managerId,
       ownerId: routeValue,
@@ -562,7 +691,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       resourceId: schema.resourceId,
       ...(request.values ? { values: request.values } : {}),
     }))
-    window.location.reload()
+    if (isObject(result)) relations.splice(0, relations.length, ...relationManagers(result.relations))
   }
   const loadRelationOptions: NonNullable<VueRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
     if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Relation options require a persisted owner record')
@@ -575,11 +704,17 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
   return () => h('div', { class: 'hp-resource-page' }, [
-    h('form', { class: 'hp-resource-form', 'data-resource-crud': page.manifest.pageType, 'data-slot': 'card', onSubmit: (event: Event) => { event.preventDefault(); void submit().catch(() => undefined) } }, [
-      ...schema.fields.map(definition => h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path })),
-      h('div', { class: 'hp-form-actions' }, [h(ShadcnButton, { class: 'hp-button hp-button-primary', type: 'submit' }, 'Save')]),
+    page.manifest.pageType === 'edit' ? h(PanelsPageActions, { to: runtime.pageActionsTarget.value }, () => [
+      viewAction && schema.routes.view && (typeof routeValue === 'string' || typeof routeValue === 'number') ? h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': viewAction.id, 'data-color': viewAction.color ?? undefined, href: schema.routes.view.replace(':record', encodeURIComponent(String(routeValue))), variant: 'outline' }, () => [viewAction.icon ? PanelsIcon(viewAction.icon) : null, h('span', viewAction.label)]) : null,
+      ...recordActions.map(action => h(VueActionRenderer, { action, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], store: actionStore })),
+    ]) : null,
+    h('form', { class: 'hp-resource-form hp:grid hp:gap-6', 'data-resource-crud': page.manifest.pageType, onSubmit: (event: Event) => { event.preventDefault(); void submit().catch(() => undefined) } }, [
+      h(Card, {}, () => [
+        h(CardContent, { class: 'hp:grid hp:gap-6 hp:pt-6' }, () => schema.fields.map(definition => h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path }))),
+        h(CardFooter, { class: 'hp:justify-end' }, () => h(Button, { class: 'hp-form-actions hp-button hp-button-primary', type: 'submit' }, 'Save')),
+      ]),
     ]),
-    relations.length > 0 ? h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation } }) : null,
+    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])
 }
 
@@ -597,7 +732,7 @@ function actionLocation(schema: ResourceRenderSchema, action: ResourceAction, ro
 }
 
 function navigableColumns(schema: ResourceRenderSchema): readonly VueTableColumn<ResourceRecord>[] {
-  const viewAction = schema.actions.find(action => action.kind === 'view')
+  const viewAction = schema.actions.find((action): action is ResourceAction => action.kind === 'view')
   if (!viewAction) return schema.columns
   return schema.columns.map(column => column.manifest.path === schema.recordTitle
     ? {
@@ -637,23 +772,28 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}?${store.toQueryString()}`)
     })
   }
-  return h('div', { class: 'hp-resource-page' }, [h('div', { class: 'hp-resource-toolbar' }, [h(PanelsLink, { class: 'hp-button hp-button-primary', href: `${schema.basePath}/create` }, () => 'Create')]), h(VueTableRenderer, {
+  const createAction = schema.recordActions.find(action => action.kind === 'create' && action.visible)
+  const createRoute = schema.routes.create
+  return h('div', { class: 'hp-resource-page' }, [createAction && createRoute ? h(PanelsPageActions, { to: runtime.pageActionsTarget.value }, () => h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': createAction.id, 'data-color': createAction.color ?? undefined, href: createRoute, variant: 'default' }, () => [createAction.icon ? PanelsIcon(createAction.icon) : null, h('span', createAction.label)])) : null, resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE, page.data), h(VueTableRenderer, {
     table: {
       actionTransport: {
-        async execute(request: { readonly actionId: string, readonly recordId?: number | string }) {
-          if (request.recordId === undefined) return
-          const action = schema.actions.find(candidate => candidate.id === request.actionId)
+        async execute(request: { readonly actionId: string, readonly recordId?: number | string, readonly selection?: { readonly mode: 'all-matching' } | { readonly mode: 'explicit', readonly recordIds: readonly (number | string)[] } }) {
+          const action = executableResourceTableActions(schema.actions).find(candidate => candidate.id === request.actionId)
           if (!action) throw new Error('Resource action is unavailable')
-          if (action.kind === 'edit' || action.kind === 'view') {
-            if (typeof window !== 'undefined') window.location.assign(actionLocation(schema, action, request.recordId))
+          if ((action.kind === 'edit' || action.kind === 'view') && request.recordId !== undefined) {
+            await runtime.navigate(actionLocation(schema, action, request.recordId))
             return
           }
-          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), recordIds: [request.recordId], resourceId: schema.resourceId })
+          const recordIds = request.selection?.mode === 'explicit'
+            ? request.selection.recordIds
+            : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
+          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), recordIds: [...recordIds], resourceId: schema.resourceId })
           refresh()
         },
       },
       actions: schema.actions,
       caption: page.title,
+      panelId,
       columns: navigableColumns(schema),
       filterPresentation: {
         columns: Object.freeze({ default: 2 }),
@@ -665,19 +805,20 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       filters: schema.filters,
       groups,
       getRecordId: (record: ResourceRecord) => recordId(record, schema.routeKey),
+      notificationStore: runtime.toastStore,
       onQueryChange: refresh,
       store,
       summaries,
     },
-  })])
+  }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER, page.data)])
 }
 
 function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: boolean, registry: ComponentRegistry, schema: ResourceRenderSchema, runtime: PanelPageRuntime): VNode {
   const record = recordFrom(page)
-  const editAction = schema.actions.find(action => action.kind === 'edit')
+  const editAction = schema.recordActions.find(action => action.kind === 'edit' && action.visible)
   const routeValue = record ? recordId(record, schema.routeKey) : null
-  const actions = schema.recordActions.filter(action => action.mount === 'record' && action.visible)
-  const relations = relationManagers(page.data.relations)
+  const actions = schema.recordActions.filter(action => action.mount === 'record' && action.visible && !['create', 'edit', 'view'].includes(action.kind))
+  const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
@@ -691,7 +832,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
   })
   const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request) => {
     if (routeValue === null) throw new Error('Relation operations require a persisted owner record')
-    await mutate(runtime, panelId, 'action', mutationPayload({
+    const result = await mutate(runtime, panelId, 'action', mutationPayload({
       intent: 'relation',
       managerId: request.managerId,
       ownerId: routeValue,
@@ -701,7 +842,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       resourceId: schema.resourceId,
       ...(request.values ? { values: request.values } : {}),
     }))
-    window.location.reload()
+    if (isObject(result)) relations.splice(0, relations.length, ...relationManagers(result.relations))
   }
   const loadRelationOptions: NonNullable<VueRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
     if (routeValue === null) throw new Error('Relation options require a persisted owner record')
@@ -714,10 +855,12 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
   return h('section', { class: 'hp-resource-view', 'data-resource-crud': 'view' }, [
-    editAction && routeValue !== null ? h('div', { class: 'hp-form-actions' }, [h(PanelsLink, { class: 'hp-button', href: actionLocation(schema, editAction, routeValue) }, () => editAction.label)]) : null,
+    h(PanelsPageActions, { to: runtime.pageActionsTarget.value }, () => [
+      editAction && schema.routes.edit && routeValue !== null ? h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': editAction.id, 'data-color': editAction.color ?? undefined, href: schema.routes.edit.replace(':record', encodeURIComponent(String(routeValue))), variant: 'outline' }, () => [editAction.icon ? PanelsIcon(editAction.icon) : null, h('span', editAction.label)]) : null,
+      ...actions.map(action => h(VueActionRenderer, { action, panelId, recordIds: routeValue === null ? [] : [routeValue], store })),
+    ]),
     h('div', { class: 'hp-infolist' }, record ? schema.entries.map(entry => h(VueEntryRenderer, { entry: { panelId, store: entryStore(entry, record) } })) : []),
-    ...actions.map(action => h(VueActionRenderer, { action, panelId, recordIds: routeValue === null ? [] : [routeValue], store })),
-    relations.length > 0 ? h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation } }) : null,
+    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations, panelId } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])
 }
 
@@ -726,17 +869,30 @@ const VueResourcePage = defineComponent({
   props: {
     effects: { type: Object as PropType<ClientEffectSession>, required: true },
     page: { type: Object as PropType<NuxtPanelPageData>, required: true },
+    pageActionsTarget: { type: Object as PropType<Ref<HTMLElement | null>>, required: true },
     panelId: { type: String, required: true },
+    panelManifest: { type: Object as PropType<NuxtPanelPage['bootstrap']['manifest']>, required: true },
     registry: { type: Object as PropType<ComponentRegistry>, required: true },
     readOnlyRelations: { type: Boolean, default: true },
     resourceCreatePageRedirect: { type: String as PropType<'edit' | 'index' | 'view'>, default: 'edit' },
     resourceEditPageRedirect: { type: String as PropType<'index' | 'view' | null>, default: null },
     transport: { type: Object as PropType<PanelsTransport>, required: true },
+    toastStore: { type: Object as PropType<ClientToastStore>, required: true },
     unsavedChangesAlerts: { type: Boolean, default: false },
   },
   setup(props) {
+    const router = useRouter()
     const schema = resourceSchema(props.page)
-    const runtime = { effects: props.effects, transport: props.transport }
+    const runtime = {
+      effects: props.effects,
+      manifest: props.panelManifest,
+      navigate: async (url: string, replace = false) => { await (replace ? router.replace(url) : router.push(url)) },
+      pageActionsTarget: props.pageActionsTarget,
+      registry: props.registry,
+      renderHookScopes: [props.page.manifest.id, schema.resourceId],
+      toastStore: props.toastStore,
+      transport: props.transport,
+    }
     if (props.page.manifest.pageType === 'create' || props.page.manifest.pageType === 'edit') {
       return formPage(props.page, props.panelId, props.registry, schema, runtime, props.resourceCreatePageRedirect, props.resourceEditPageRedirect, props.unsavedChangesAlerts)
     }
@@ -750,11 +906,11 @@ const VueResourcePage = defineComponent({
 
 function resourceComponent(page: NuxtPanelPageData, resolveResource: PanelPageProps['resolveResource']): Component | null {
   if (!resolveResource) return page.manifest.body?.component === 'resource-page' ? VueResourcePage : null
-  return defineAsyncComponent({ loader: async () => await resolveResource(page), loadingComponent: PanelsLoadingIndicator })
+  return defineAsyncComponent({ loader: async () => await resolveResource(page), loadingComponent: Skeleton })
 }
 
 function navigationIcon(name: string): VNode {
-  return ShadcnIcon(name, 'hp-panel-icon')
+  return PanelsIcon(name, 'hp-panel-icon')
 }
 
 function configuredIcon(icons: JsonObject | undefined, name: string | null): string | null {
@@ -800,15 +956,30 @@ function orderedNavigation(items: readonly PanelNavigationItem[]): readonly Read
 }
 
 function navigationLink(item: PanelNavigationItem, depth: number, activePath: string, mode: 'sidebar' | 'topbar', close: () => void): VNode {
-  return h(PanelsLink, {
-    current: activePath === item.path || activePath.startsWith(`${item.path}/`),
-    'data-slot': 'sidebar-menu-button',
+  const active = activePath === item.path || activePath.startsWith(`${item.path}/`)
+  const content = (): VNode[] => [
+    ...(item.icon ? [navigationIcon(item.icon)] : []),
+    h('span', item.label),
+    ...(item.badge ? [h(Badge, { variant: 'secondary' }, () => item.badge)] : []),
+  ]
+  if (mode === 'topbar') {
+    return h(Button, {
+      as: 'a',
+      'aria-current': active ? 'page' : undefined,
+      href: item.path,
+      key: item.id,
+      onClick: close,
+      variant: active ? 'secondary' : 'ghost',
+    }, content)
+  }
+  return h(SidebarMenuItem, { key: item.id }, () => h(SidebarMenuButton, {
+    as: 'a',
     href: item.path,
-    key: item.id,
+    isActive: active,
     onClick: close,
     style: { '--hp-navigation-depth': depth },
-    title: mode === 'sidebar' ? item.label : undefined,
-  }, () => [item.icon ? navigationIcon(item.icon) : null, h('span', item.label), item.badge ? h('span', { class: 'hp-panel-badge' }, item.badge) : null])
+    tooltip: item.label,
+  }, content))
 }
 
 function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boolean, id: string, close: () => void): VNode {
@@ -820,44 +991,42 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
   const items: VNode[] = []
   if (mode === 'topbar') {
     for (const { depth, item } of ordered) items.push(navigationLink(item, depth, activePath, mode, close))
-  } else {
-    for (let index = 0; index < ordered.length;) {
-      const current = ordered[index]!
-      if (!current.item.group) {
-        items.push(navigationLink(current.item, current.depth, activePath, mode, close))
-        index += 1
-        continue
-      }
-      const group = current.item.group
-      const grouped: VNode[] = []
-      while (index < ordered.length && ordered[index]!.item.group === group) {
-        const entry = ordered[index]!
-        grouped.push(navigationLink(entry.item, entry.depth, activePath, mode, close))
-        index += 1
-      }
-      const configuration = page.bootstrap.manifest.navigationGroups?.find(candidate => candidate.label === group)
-      const collapsible = page.bootstrap.manifest.layout?.collapsibleNavigationGroups !== false && configuration?.collapsible !== false
-      if (!collapsible) {
-        items.push(h('section', { class: 'hp-panel-navigation-section', key: group }, [h('div', { class: 'hp-panel-navigation-group', title: group }, group), ...grouped]))
-        continue
-      }
-      items.push(h('details', { class: 'hp-panel-navigation-section', key: group, open: true }, [h('summary', {
-        class: 'hp-panel-navigation-group',
-        title: group,
-        onClick: (event: MouseEvent) => {
-          event.preventDefault()
-          const details = (event.currentTarget as HTMLElement).parentElement
-          if (details?.tagName === 'DETAILS') details.toggleAttribute('open')
-        },
-      }, group), ...grouped]))
-    }
+    return h('nav', { 'aria-label': 'Panel navigation', class: 'hp-panel-navigation hp-panel-navigation--topbar hp-panel-navigation-body hp-panel-topbar-center', 'data-open': open ? 'true' : 'false', 'data-slot': 'navigation-menu', id }, items)
   }
-  return h('nav', { 'aria-label': 'Panel navigation', class: ['hp-panel-navigation', 'hp-panel-navigation-body', mode === 'topbar' ? 'hp-panel-navigation--topbar hp-panel-topbar-center' : null], 'data-open': open ? 'true' : 'false', 'data-slot': mode === 'sidebar' ? 'sidebar-content' : 'navigation-menu', id }, items)
+  const ungrouped: VNode[] = []
+  for (let index = 0; index < ordered.length;) {
+    const current = ordered[index]!
+    if (!current.item.group) {
+      ungrouped.push(navigationLink(current.item, current.depth, activePath, mode, close))
+      index += 1
+      continue
+    }
+    const group = current.item.group
+    const grouped: VNode[] = []
+    while (index < ordered.length && ordered[index]!.item.group === group) {
+      const entry = ordered[index]!
+      grouped.push(navigationLink(entry.item, entry.depth, activePath, mode, close))
+      index += 1
+    }
+    const configuration = page.bootstrap.manifest.navigationGroups?.find(candidate => candidate.label === group)
+    const content = h(SidebarGroupContent, {}, () => h(SidebarMenu, {}, () => grouped))
+    const collapsible = page.bootstrap.manifest.layout?.collapsibleNavigationGroups !== false && configuration?.collapsible !== false
+    items.push(collapsible
+      ? h(Collapsible, { asChild: true, defaultOpen: true, key: group }, () => h(SidebarGroup, {}, () => [
+          h(CollapsibleTrigger, { asChild: true }, () => h(SidebarGroupLabel, {}, () => [h('span', group), PanelsIcon('chevron-down', 'hp:ml-auto')])),
+          h(CollapsibleContent, {}, () => content),
+        ]))
+      : h(SidebarGroup, { key: group }, () => [h(SidebarGroupLabel, {}, () => group), content]))
+  }
+  if (ungrouped.length > 0) {
+    items.unshift(h(SidebarGroup, { key: 'navigation' }, () => h(SidebarGroupContent, {}, () => h(SidebarMenu, {}, () => ungrouped))))
+  }
+  return h(SidebarContent, { 'aria-label': 'Panel navigation', class: 'hp-panel-navigation hp-panel-navigation-body', id }, () => items)
 }
 
 function pageBody(page: NuxtPanelPage, registry: ComponentRegistry, resolveResource: PanelPageProps['resolveResource'], runtime: PanelPageRuntime): VNode {
   const component = resourceComponent(page.page, resolveResource)
-  if (component) return h(component, { effects: runtime.effects, key: page.path, page: page.page, panelId: page.bootstrap.manifest.id, readOnlyRelations: page.bootstrap.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true, registry, resourceCreatePageRedirect: page.bootstrap.manifest.runtime?.resourceCreatePageRedirect ?? 'edit', resourceEditPageRedirect: page.bootstrap.manifest.runtime?.resourceEditPageRedirect ?? null, transport: runtime.transport, unsavedChangesAlerts: page.bootstrap.manifest.runtime?.unsavedChangesAlerts ?? false })
+  if (component) return h(component, { effects: runtime.effects, key: page.path, page: page.page, pageActionsTarget: runtime.pageActionsTarget, panelId: page.bootstrap.manifest.id, panelManifest: page.bootstrap.manifest, readOnlyRelations: page.bootstrap.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true, registry, resourceCreatePageRedirect: page.bootstrap.manifest.runtime?.resourceCreatePageRedirect ?? 'edit', resourceEditPageRedirect: page.bootstrap.manifest.runtime?.resourceEditPageRedirect ?? null, toastStore: runtime.toastStore, transport: runtime.transport, unsavedChangesAlerts: page.bootstrap.manifest.runtime?.unsavedChangesAlerts ?? false })
   return h('section', { 'data-panels-page-type': page.page.manifest.pageType })
 }
 
@@ -917,9 +1086,11 @@ export const PanelPage = defineComponent({
     resolveResource: { type: Function as PropType<PanelPageProps['resolveResource']>, default: undefined },
   },
   setup(props) {
+    const router = useRouter()
     const ready = ref(false)
     const panelId = props.page.bootstrap.manifest.id
     const registry = props.registry ?? createNuxtPanelComponentRegistry()
+    providePanelsRenderHooks({ data: props.page.page.data, manifest: props.page.bootstrap.manifest, registry, scopes: [props.page.page.manifest.id, ...(typeof props.page.page.manifest.body?.properties.resourceId === 'string' ? [props.page.page.manifest.body.properties.resourceId] : [])] })
     const TopbarComponent = props.page.bootstrap.manifest.components?.topbar
       ? registry.resolve(props.page.bootstrap.manifest.components.topbar, panelId, 'panel topbar')
       : null
@@ -936,17 +1107,14 @@ export const PanelPage = defineComponent({
       return { store, transport: createPanelTenantSwitcherTransport(transport, panelId) }
     })() : null
     const toastStore = new ClientToastStore()
+    const unregisterNotificationStore = registerPanelNotificationStore(panelId, toastStore)
     const viewportWidth = ref(1280)
-    const mobileNavigation = ref(false)
     const navigationOpen = ref(false)
     const sidebarCollapsed = ref(false)
     const portalContainer = ref<HTMLElement | null>(null)
+    const pageActionsTarget = ref<HTMLElement | null>(null)
     const navigationId = `hp-panel-navigation-${panelId}`
     const navigationToggleId = `hp-panel-navigation-toggle-${panelId}`
-    const dismissMobileNavigation = (): void => {
-      navigationOpen.value = false
-      window.queueMicrotask(() => window.document.getElementById(navigationToggleId)?.focus())
-    }
     const colorMode = ref<PanelColorMode>(panelColorMode(props.page.bootstrap.manifest.theme.darkMode))
     const widgetStore = (widget: NuxtPanelPage['widgets']['header'][number]): WidgetStore => new WidgetStore(
       widget.manifest,
@@ -973,7 +1141,6 @@ export const PanelPage = defineComponent({
     }) : null
     const searchState = ref(searchStore?.snapshot ?? null)
     let unsubscribeSearch: (() => void) | undefined
-    let unregisterMobileQuery: (() => void) | undefined
     let unregisterResize: (() => void) | undefined
     let unregisterSearchShortcut: (() => void) | undefined
     let unregisterSpa: (() => void) | undefined
@@ -988,26 +1155,8 @@ export const PanelPage = defineComponent({
       redirect: async effect => browserNavigate(effect.url, effect.replace),
       refresh: async effect => dispatchPanelEvent('holo-panels:refresh', { panelId, target: effect.target ?? 'page' }),
     })
-    watchEffect(() => {
-      const container = portalContainer.value
-      if (!container) return
-      container.dataset.holoPanel = ''
-      container.dataset.panel = panelId
-      container.dataset.theme = colorMode.value
-      container.dataset.density = props.page.bootstrap.manifest.theme.density
-      container.removeAttribute('style')
-      for (const [name, value] of Object.entries(panelConfigurationVariables(props.page.bootstrap.manifest))) {
-        container.style.setProperty(name, value)
-      }
-    })
     onMounted(() => {
-      const portal = window.document.createElement('div')
-      portal.className = 'hp-panel-portal-host'
-      const owner = shellElement.value ?? window.document.documentElement
-      portal.dir = owner.closest<HTMLElement>('[dir="rtl"], [dir="ltr"]')?.dir
-        ?? window.getComputedStyle(owner).direction
-      window.document.body.append(portal)
-      portalContainer.value = portal
+      portalContainer.value = shellElement.value
       ready.value = true
       const storedColorMode = window.localStorage.getItem(`holo-panels:${panelId}:color-mode`)
       if (isPanelColorMode(storedColorMode)) colorMode.value = storedColorMode
@@ -1015,17 +1164,7 @@ export const PanelPage = defineComponent({
       updateWidth()
       window.addEventListener('resize', updateWidth)
       unregisterResize = () => window.removeEventListener('resize', updateWidth)
-      const mobileQuery = window.matchMedia('(width <= 48rem)')
-      const updateMobileNavigation = (): void => { mobileNavigation.value = mobileQuery.matches }
-      updateMobileNavigation()
-      mobileQuery.addEventListener('change', updateMobileNavigation)
-      unregisterMobileQuery = () => mobileQuery.removeEventListener('change', updateMobileNavigation)
       const searchShortcut = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape' && mobileNavigation.value && navigationOpen.value) {
-          event.preventDefault()
-          dismissMobileNavigation()
-          return
-        }
         if (!searchStore?.shortcut(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey })) return
         event.preventDefault()
         window.document.querySelector<HTMLInputElement>('[data-panel-global-search]')?.focus()
@@ -1034,14 +1173,11 @@ export const PanelPage = defineComponent({
       unregisterSearchShortcut = () => window.removeEventListener('keydown', searchShortcut)
       unsubscribeSearch = searchStore?.subscribe(state => { searchState.value = state })
       const runtime = props.page.bootstrap.manifest.runtime
-      if (runtime?.spa && shellElement.value) {
+      if (runtime?.spa !== false && shellElement.value) {
         unregisterSpa = installPanelSpaNavigation(shellElement.value, {
-          exceptions: runtime.spaUrlExceptions,
-          navigate: url => {
-            window.history.pushState({}, '', url)
-            window.dispatchEvent(new PopStateEvent('popstate'))
-          },
-          prefetching: runtime.spaPrefetching ?? false,
+          exceptions: runtime?.spaUrlExceptions ?? [],
+          navigate: url => { void router.push(url) },
+          prefetching: runtime?.spaPrefetching ?? false,
         })
       }
       if (!props.page.effects?.length) return
@@ -1073,11 +1209,10 @@ export const PanelPage = defineComponent({
       if (disposed) return
       disposed = true
       unsubscribeSearch?.()
-      unregisterMobileQuery?.()
       unregisterResize?.()
       unregisterSearchShortcut?.()
       unregisterSpa?.()
-      portalContainer.value?.remove()
+      unregisterNotificationStore()
       portalContainer.value = null
       effects.dispose()
     })
@@ -1087,9 +1222,9 @@ export const PanelPage = defineComponent({
       const account = actorLabel(bootstrap.actor)
       const avatarUrl = actorAvatarUrl(bootstrap.actor)
       const themeMenuItems = bootstrap.manifest.theme.switcher === false ? [] : [
-        { id: 'panel-theme-light', label: `${colorMode.value === 'light' ? '✓ ' : ''}Light theme` },
-        { id: 'panel-theme-dark', label: `${colorMode.value === 'dark' ? '✓ ' : ''}Dark theme` },
-        { id: 'panel-theme-system', label: `${colorMode.value === 'system' ? '✓ ' : ''}System theme` },
+        { icon: colorMode.value === 'light' ? 'check' : null, id: 'panel-theme-light', label: 'Light theme' },
+        { icon: colorMode.value === 'dark' ? 'check' : null, id: 'panel-theme-dark', label: 'Dark theme' },
+        { icon: colorMode.value === 'system' ? 'check' : null, id: 'panel-theme-system', label: 'System theme' },
       ]
       const userMenuItems = [
         ...themeMenuItems,
@@ -1107,10 +1242,34 @@ export const PanelPage = defineComponent({
             store: inboxStore,
           } satisfies VueNotificationInboxTriggerProps)
         : null
-      const globalSearch = searchStore && searchState.value ? h('div', { class: 'hp-global-search hp-panel-topbar-center', 'data-slot': 'command', role: 'search' }, [
-        h('label', [h('span', { class: 'hp-sr-only' }, 'Global search'), ShadcnIcon('search', 'hp-global-search-icon'), h(ShadcnInput, {
+      const pageScopes = [page.manifest.id, ...(typeof page.manifest.body?.properties.resourceId === 'string' ? [page.manifest.body.properties.resourceId] : [])]
+      const renderHook = (hook: PanelsRenderHook, data: JsonObject = {}): VNode => renderPanelsHook({ data, hook, manifest: bootstrap.manifest, registry, scopes: pageScopes })
+      const selectUserMenuItem = (id: string): void => {
+        const mode = id.replace('panel-theme-', '')
+        if (isPanelColorMode(mode)) {
+          colorMode.value = mode
+          window.localStorage.setItem(`holo-panels:${panelId}:color-mode`, mode)
+          return
+        }
+        if (id === 'profile' && bootstrap.manifest.auth?.profile && !bootstrap.manifest.userMenu.some(item => item.id === 'profile')) {
+          void router.push(bootstrap.manifest.auth.profile.path)
+          return
+        }
+        if (id === 'panel-logout') {
+          void executePanelAuthRequest({ csrfToken: '', operation: 'logout', panelId, payload: {} }).then(result => {
+            if (result.ok) window.location.assign(result.url ?? bootstrap.manifest.auth?.login?.path ?? bootstrap.manifest.path)
+          })
+          return
+        }
+        const item = bootstrap.manifest.userMenu.find(candidate => candidate.id === id)
+        if (item) void router.push(item.path)
+      }
+      const currentSearchState = searchState.value
+      const globalSearch = searchStore && currentSearchState ? h('div', { class: 'hp-global-search hp-panel-topbar-center hp:relative hp:w-full hp:max-w-md', role: 'search' }, [
+        renderHook(PanelsRenderHook.GLOBAL_SEARCH_START),
+        h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => PanelsIcon('search')), h(InputGroupInput, {
           'aria-controls': 'hp-global-search-results',
-          'aria-expanded': searchState.value.open,
+          'aria-expanded': currentSearchState.open,
           'data-panel-global-search': '',
           onFocus: () => searchStore.open(),
           onInput: (event: Event) => searchStore.input((event.currentTarget as HTMLInputElement).value),
@@ -1121,16 +1280,24 @@ export const PanelPage = defineComponent({
               if (url) browserNavigate(url)
             } else if (event.key === 'Escape') searchStore.close()
           },
-          placeholder: searchConfiguration?.fieldSuffix ?? 'Search…',
+          placeholder: 'Search…',
           role: 'combobox',
-          value: searchState.value.term,
-        }), searchConfiguration?.keybindingSuffix ? h('kbd', searchConfiguration.keybindingSuffix) : null]),
-        searchState.value.loading ? h('span', { 'aria-live': 'polite', role: 'status' }, 'Searching…') : null,
-        searchState.value.error ? h('span', { role: 'alert' }, searchState.value.error) : null,
-        h('ul', { 'data-slot': 'command-list', id: 'hp-global-search-results', role: 'listbox' }, searchState.value.results.map((result, index) => h('li', { 'aria-selected': index === searchState.value?.selectedIndex, 'data-slot': 'command-item', key: `${result.resourceId}:${result.id}`, role: 'option' }, [h('a', { href: result.url }, result.title)]))),
+          value: currentSearchState.term,
+        }), searchConfiguration?.fieldSuffix ? h(InputGroupAddon, { align: 'inline-end' }, () => searchConfiguration.fieldSuffix ?? '') : null, searchConfiguration?.keybindingSuffix ? h(InputGroupAddon, { align: 'inline-end' }, () => h('kbd', { class: 'hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground' }, searchConfiguration.keybindingSuffix ?? '')) : null]),
+        currentSearchState.open && currentSearchState.term ? h(Command, { class: 'hp:absolute hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md' }, () => h(CommandList, { id: 'hp-global-search-results' }, () => [
+          currentSearchState.loading ? h(CommandEmpty, {}, () => 'Searching…') : currentSearchState.error ? h(CommandEmpty, {}, () => currentSearchState.error) : currentSearchState.results.length === 0 ? h(CommandEmpty, {}, () => 'No results found.') : null,
+          ...currentSearchState.results.map((result, index) => h(CommandItem, {
+            'aria-selected': index === currentSearchState.selectedIndex,
+            as: 'a',
+            href: result.url,
+            key: `${result.resourceId}:${result.id}`,
+            value: `${result.resourceId}:${result.id}`,
+          }, () => result.title)),
+        ])) : null,
+        renderHook(PanelsRenderHook.GLOBAL_SEARCH_END),
       ]) : null
       const toggleNavigation = (): void => {
-        if (mobileNavigation.value || bootstrap.manifest.navigationMode === 'topbar') {
+        if (bootstrap.manifest.navigationMode === 'topbar') {
           navigationOpen.value = !navigationOpen.value
           return
         }
@@ -1138,9 +1305,12 @@ export const PanelPage = defineComponent({
       }
       return h(PanelsErrorBoundary, {}, {
         default: () => h(PanelsPortalProvider, { container: portalContainer.value }, {
-          default: () => h('div', {
+          default: () => h(SidebarProvider, {
+            open: !sidebarCollapsed.value,
+            'onUpdate:open': (open: boolean) => { sidebarCollapsed.value = !open },
+          }, () => h('div', {
           'aria-busy': ready.value ? undefined : 'true',
-          class: ['hp-panel', 'hp-panel-shell', `hp-panel--${bootstrap.manifest.navigationMode}`],
+          class: ['hp-panel', 'hp-panel-shell', 'hp:grid', 'hp:min-h-svh', 'hp:w-full', 'hp:grid-cols-[auto_minmax(0,1fr)]', 'hp:grid-rows-[auto_minmax(0,1fr)]', `hp-panel--${bootstrap.manifest.navigationMode}`],
           'data-holo-panel': '',
           'data-panels-panel': bootstrap.manifest.id,
           'data-panels-ready': ready.value ? 'true' : 'false',
@@ -1152,79 +1322,119 @@ export const PanelPage = defineComponent({
           'data-sidebar-collapsed': sidebarCollapsed.value ? 'true' : 'false',
           'data-sidebar-collapsible': bootstrap.manifest.sidebarCollapsible ? 'true' : 'false',
           'data-sidebar-fully-collapsible': bootstrap.manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false',
-          'data-slot': 'sidebar-wrapper',
           'data-width': bootstrap.manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained',
           inert: ready.value ? undefined : '',
           ref: shellElement,
           style: panelConfigurationVariables(bootstrap.manifest),
         }, [
+          renderHook(PanelsRenderHook.BODY_START),
+          renderHook(PanelsRenderHook.LAYOUT_START),
           ...bootstrap.manifest.assets?.map(asset => asset.type === 'css'
             ? h('link', { 'data-panel-asset': asset.id, href: asset.src, key: asset.id, rel: 'stylesheet' })
             : h('script', { 'data-panel-asset': asset.id, defer: true, key: asset.id, src: asset.src })) ?? [],
+          renderHook(PanelsRenderHook.TOPBAR_BEFORE),
           bootstrap.manifest.layout?.topbar === false ? null : TopbarComponent ? h(TopbarComponent, {
             actor: props.page.bootstrap.actor,
             manifest: bootstrap.manifest,
             page,
-          } satisfies PanelChromeComponentProps<typeof page>) : h('header', { class: 'hp-panel-header' }, [
-            bootstrap.manifest.navigationEnabled === false ? null : h(ShadcnButton, { 'aria-controls': bootstrap.manifest.navigationMode === 'topbar' || !SidebarComponent ? navigationId : undefined, 'aria-expanded': mobileNavigation.value ? navigationOpen.value : !sidebarCollapsed.value, 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', 'data-variant': 'ghost', id: navigationToggleId, onClick: toggleNavigation, type: 'button' }, () => ShadcnIcon('menu')),
-            h(PanelsLink, { class: ['hp-panel-brand', 'hp-panel-topbar-start', bootstrap.manifest.navigationMode === 'sidebar' ? 'hp-panel-navigation-header' : null], href: bootstrap.manifest.routing?.homeUrl ?? bootstrap.manifest.path }, () => [bootstrap.manifest.branding.logo ? h('img', { alt: '', src: bootstrap.manifest.branding.logo }) : h('span', { 'aria-hidden': 'true', class: 'hp-panel-brand-mark' }, 'H'), h('strong', bootstrap.manifest.branding.name)]),
+          } satisfies PanelChromeComponentProps<typeof page>) : h('header', { class: 'hp-panel-header hp:sticky hp:top-0 hp:z-20 hp:col-start-2 hp:row-start-1 hp:flex hp:h-16 hp:min-w-0 hp:items-center hp:gap-2 hp:border-b hp:bg-background hp:px-4' }, [
+            renderHook(PanelsRenderHook.TOPBAR_START),
+            bootstrap.manifest.navigationEnabled === false
+              ? null
+              : bootstrap.manifest.navigationMode === 'sidebar' && !SidebarComponent
+                ? h(SidebarTrigger, { 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId })
+                : h(Button, { 'aria-controls': navigationId, 'aria-expanded': navigationOpen.value, 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId, onClick: toggleNavigation, type: 'button', variant: 'ghost' }, () => PanelsIcon('menu')),
+            renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE),
+            h(Button, { as: 'a', class: ['hp-panel-brand', 'hp-panel-topbar-start', bootstrap.manifest.navigationMode === 'sidebar' ? 'hp-panel-navigation-header' : null], href: bootstrap.manifest.routing?.homeUrl ?? bootstrap.manifest.path, variant: 'ghost' }, () => [bootstrap.manifest.branding.logo ? h('img', { alt: '', src: bootstrap.manifest.branding.logo }) : h(Avatar, {}, () => h(AvatarFallback, {}, () => 'H')), h('strong', bootstrap.manifest.branding.name)]),
+            renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER),
             bootstrap.manifest.navigationEnabled !== false && bootstrap.manifest.navigationMode === 'topbar' ? navigation(props.page, 'topbar', navigationOpen.value, navigationId, () => { navigationOpen.value = false }) : null,
+            renderHook(PanelsRenderHook.GLOBAL_SEARCH_BEFORE),
             globalSearch,
+            renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER),
             h('div', { class: 'hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact' }, [
               tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action hp-panel-action--compact' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
               configuration?.placement === 'topbar' ? h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger]) : null,
-              bootstrap.manifest.userMenuEnabled === false ? null : h('div', { class: 'hp-panel-user-trigger hp-panel-user-action hp-panel-action--compact' }, [
-                AvatarComponent
-                  ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps)
-                  : avatarUrl
-                    ? h(PanelsAvatar, { alt: account, src: avatarUrl })
-                    : h('span', { 'aria-hidden': 'true', class: 'hp-avatar hp-panel-user-avatar hp-panel-user-glyph', 'data-slot': 'avatar-fallback' }, [ShadcnIcon('user')]),
-                h(PanelsDropdown, { ariaLabel: 'Account menu', items: userMenuItems, label: account, onSelect: (id: string) => {
-                  const mode = id.replace('panel-theme-', '')
-                  if (isPanelColorMode(mode)) {
-                    colorMode.value = mode
-                    window.localStorage.setItem(`holo-panels:${panelId}:color-mode`, mode)
-                    return
-                  }
-                  if (id === 'profile' && bootstrap.manifest.auth?.profile && !bootstrap.manifest.userMenu.some(item => item.id === 'profile')) {
-                    browserNavigate(bootstrap.manifest.auth.profile.path)
-                    return
-                  }
-                  if (id === 'panel-logout') {
-                    void executePanelAuthRequest({ csrfToken: '', operation: 'logout', panelId, payload: {} }).then(result => {
-                      if (result.ok) window.location.assign(result.url ?? bootstrap.manifest.auth?.login?.path ?? bootstrap.manifest.path)
-                    })
-                    return
-                  }
-                  const item = bootstrap.manifest.userMenu.find(candidate => candidate.id === id)
-                  if (item) browserNavigate(item.path)
-                } }),
+              bootstrap.manifest.userMenuEnabled === false ? null : h(DropdownMenu, {}, () => [
+                h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': 'Account menu', class: 'hp-panel-user-trigger hp-panel-user-action', variant: 'outline' }, () => [
+                  AvatarComponent
+                    ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps)
+                    : h(Avatar, { class: 'hp-panel-user-glyph' }, () => [
+                        avatarUrl ? h(AvatarImage, { alt: account, src: avatarUrl }) : null,
+                        h(AvatarFallback, {}, () => account.slice(0, 2).toUpperCase()),
+                      ]),
+                  h('span', account),
+                  PanelsIcon('chevron-down'),
+                ])),
+                h(DropdownMenuContent, { align: 'end' }, () => userMenuItems.flatMap((item, index) => [
+                  index === themeMenuItems.length && index > 0 ? h(DropdownMenuSeparator, { key: `${item.id}-separator` }) : null,
+                  h(DropdownMenuItem, {
+                    key: item.id,
+                    onSelect: () => selectUserMenuItem(item.id),
+                    variant: item.id === 'panel-logout' ? 'destructive' : 'default',
+                  }, () => [item.icon ? PanelsIcon(item.icon) : null, h('span', item.label)]),
+                ])),
               ]),
             ]),
+            renderHook(PanelsRenderHook.TOPBAR_END),
           ]),
+          renderHook(PanelsRenderHook.TOPBAR_AFTER),
           bootstrap.manifest.navigationEnabled !== false && bootstrap.manifest.navigationMode === 'sidebar'
             ? [
-                h('button', { 'aria-hidden': !mobileNavigation.value || !navigationOpen.value ? 'true' : undefined, 'aria-label': 'Close navigation', class: 'hp-panel-navigation-backdrop', 'data-open': navigationOpen.value ? 'true' : 'false', 'data-slot': 'navigation-backdrop', hidden: !mobileNavigation.value || !navigationOpen.value, onClick: dismissMobileNavigation, tabindex: -1, type: 'button' }),
                 SidebarComponent
                   ? h(SidebarComponent, { actor: props.page.bootstrap.actor, manifest: bootstrap.manifest, page } satisfies PanelChromeComponentProps<typeof page>)
-                  : h('aside', { 'aria-hidden': mobileNavigation.value && !navigationOpen.value ? 'true' : undefined, class: 'hp-panel-sidebar', 'data-open': navigationOpen.value ? 'true' : 'false', 'data-slot': 'sidebar', inert: mobileNavigation.value && !navigationOpen.value ? '' : undefined }, [
+                  : h(Sidebar, { class: 'hp-panel-sidebar', collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none' }, () => [
+                      renderHook(PanelsRenderHook.SIDEBAR_START),
+                      renderHook(PanelsRenderHook.SIDEBAR_NAV_START),
                       navigation(props.page, 'sidebar', navigationOpen.value, navigationId, () => { navigationOpen.value = false }),
-                      configuration?.placement === 'sidebar' ? h('div', { class: 'hp-panel-navigation-footer hp-panel-actions--compact' }, [h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger])]) : null,
+                      renderHook(PanelsRenderHook.SIDEBAR_NAV_END),
+                      configuration?.placement === 'sidebar' ? h(SidebarFooter, {}, () => notificationTrigger) : null,
+                      renderHook(PanelsRenderHook.SIDEBAR_FOOTER),
                     ]),
                 SidebarComponent && configuration?.placement === 'sidebar' ? h('div', { class: 'hp-panel-navigation-footer hp-panel-actions--compact' }, [h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger])]) : null,
               ]
             : null,
-          h('main', { class: 'hp-panel-content', 'data-slot': 'sidebar-inset' }, [
-            bootstrap.manifest.layout?.breadcrumbs === false ? null : h('nav', { 'aria-label': 'Breadcrumbs', class: 'hp-panel-breadcrumbs' }, [h('ol', page.breadcrumbs.map((item, index) => h('li', { key: `${item.path}:${index}` }, [h(PanelsLink, { href: item.path }, () => item.label)])))]),
-            h('header', { class: 'hp-panel-page-header hp-panel-main-header' }, [h('div', [h('h1', page.heading ?? page.title), page.subheading ? h('p', page.subheading) : null])]),
-            h('div', { class: 'hp-panel-main-body' }, [
+          renderHook(PanelsRenderHook.CONTENT_BEFORE),
+          h(SidebarInset, { class: 'hp-panel-content hp:col-start-2 hp:row-start-2 hp:mx-auto hp:flex hp:w-full hp:min-w-0 hp:flex-col hp:gap-6 hp:p-4 hp:pt-6 hp:md:p-6', style: { maxWidth: 'var(--hp-content-max-width)' } }, () => [
+            renderHook(PanelsRenderHook.CONTENT_START),
+            bootstrap.manifest.layout?.breadcrumbs === false ? null : h(Breadcrumb, { class: 'hp-panel-breadcrumbs' }, () => h(BreadcrumbList, {}, () => page.breadcrumbs.flatMap((item, index) => [
+              index > 0 ? h(BreadcrumbSeparator, { key: `${item.path}:separator` }) : null,
+              h(BreadcrumbItem, { key: `${item.path}:${index}` }, () => index === page.breadcrumbs.length - 1
+                ? h(BreadcrumbPage, {}, () => item.label)
+                : h(BreadcrumbLink, { href: item.path }, () => item.label)),
+            ]))),
+            renderHook(PanelsRenderHook.PAGE_START, page.data),
+            h('header', { class: 'hp-panel-page-header hp-panel-main-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between' }, [h('div', { class: 'hp:space-y-1' }, [renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, page.data), h('h1', { class: 'hp:text-3xl hp:font-bold hp:tracking-tight' }, page.heading ?? page.title), page.subheading ? h('p', { class: 'hp:text-muted-foreground' }, page.subheading) : null, renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, page.data)]), h('div', { 'aria-label': 'Page actions', class: 'hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2', role: 'group' }, [renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, page.data), h('div', { class: 'hp:contents', ref: pageActionsTarget }), renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, page.data)])]),
+            h('div', { class: 'hp-panel-main-body hp:flex hp:flex-col hp:gap-6' }, [
+              renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, page.data),
+              renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, page.data),
               headerWidgets.length > 0 ? h(VueDashboardRenderer, { dashboard: { dashboardId: `${page.manifest.id}-header`, label: 'Page header widgets', viewportWidth: viewportWidth.value, widgets: headerWidgets } }) : null,
-              pageBody(props.page, registry, props.resolveResource, { effects, transport }),
+              renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_END, page.data),
+              renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER, page.data),
+              pageBody(props.page, registry, props.resolveResource, {
+                effects,
+                manifest: bootstrap.manifest,
+                navigate: async (url: string, replace = false) => { await (replace ? router.replace(url) : router.push(url)) },
+                pageActionsTarget,
+                registry,
+                renderHookScopes: pageScopes,
+                toastStore,
+                transport,
+              }),
+              renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE, page.data),
+              renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_START, page.data),
               footerWidgets.length > 0 ? h(VueDashboardRenderer, { dashboard: { dashboardId: `${page.manifest.id}-footer`, label: 'Page footer widgets', viewportWidth: viewportWidth.value, widgets: footerWidgets } }) : null,
+              renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_END, page.data),
+              renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER, page.data),
             ]),
+            renderHook(PanelsRenderHook.PAGE_END, page.data),
+            renderHook(PanelsRenderHook.CONTENT_END),
           ]),
+          renderHook(PanelsRenderHook.CONTENT_AFTER),
+          renderHook(PanelsRenderHook.FOOTER),
           h(VueToastViewport, { navigate: browserNavigate, store: toastStore }),
-        ]),
+          renderHook(PanelsRenderHook.LAYOUT_END),
+          renderHook(PanelsRenderHook.BODY_END),
+        ])),
         }),
         fallback: () => h('section', { role: 'alert', 'data-panels-error': '500' }, [h('h1', 'Panel unavailable')]),
       })

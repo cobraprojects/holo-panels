@@ -36,8 +36,17 @@
 
 <script lang="ts" generics="TRecord extends object">
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
-  import Button from '../components/Button.svelte'
-  import Table from '../components/Table.svelte'
+  import { Button } from '../ui/button'
+  import {
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableFooter,
+    TableHead,
+    TableHeader,
+    TableRow,
+  } from '../ui/table'
 
   let {
     caption,
@@ -84,60 +93,54 @@
   tabindex="0"
 >
   <Table>
-    <caption class="hp-visually-hidden">{caption}</caption>
-    <thead>
-      <tr>
-        {#if leading}
-          <th scope="col">{#if leading.header}{@render leading.header()}{:else}{leading.label}{/if}</th>
-        {/if}
+    <TableCaption class="hp:sr-only">{caption}</TableCaption>
+    <TableHeader>
+      <TableRow>
+        {#if leading}<TableHead scope="col">{#if leading.header}{@render leading.header()}{:else}{leading.label}{/if}</TableHead>{/if}
         {#each columns as column (column.key)}
-          <th aria-sort={column.ariaSort} scope="col" style:text-align={column.alignment}>
-            {#if header}{@render header(column)}{:else}{column.label}{/if}
-          </th>
+          <TableHead aria-sort={column.ariaSort} scope="col" style={column.alignment ? `text-align: ${column.alignment}` : undefined}>{#if header}{@render header(column)}{:else}{column.label}{/if}</TableHead>
         {/each}
-        {#if trailing}
-          <th scope="col">{#if trailing.header}{@render trailing.header()}{:else}{trailing.label}{/if}</th>
-        {/if}
-      </tr>
-    </thead>
-    <tbody>
+        {#if trailing}<TableHead scope="col">{#if trailing.header}{@render trailing.header()}{:else}{trailing.label}{/if}</TableHead>{/if}
+      </TableRow>
+    </TableHeader>
+    <TableBody>
       {#if groups && groups.length > 0}
         {#each groups as group (group.key)}
-          <tr class="hp-table-group">
-            <th colspan={columnCount} scope="rowgroup">
+          <TableRow class="hp-table-group">
+            <TableCell colspan={columnCount}>
               {#if group.collapsible}
                 <Button type="button" aria-expanded={!group.collapsed} onclick={group.onToggle}><ChevronDown aria-hidden="true" /><span>{group.title}</span><span class="hp-table-group-count">{group.records.length}</span></Button>
               {:else}
                 {group.title}
               {/if}
               {#if group.description}<small>{group.description}</small>{/if}
-            </th>
-          </tr>
+            </TableCell>
+          </TableRow>
           {#if !group.collapsed}
             {#each group.records as record (getRecordId(record))}
-              <tr>
-                {#if leading}<td data-label={leading.label}>{@render leading.cell(record)}</td>{/if}
-                {#each columns as column (column.key)}<td data-label={column.label} style:text-align={column.alignment} style:width={columnWidth(column.width)} style:white-space={column.wrap === false ? 'nowrap' : undefined}>{@render cell(record, column)}</td>{/each}
-                {#if trailing}<td class="hp-table-row-actions" data-label={trailing.label}>{@render trailing.cell(record)}</td>{/if}
-              </tr>
+              <TableRow>
+                {#if leading}<TableCell data-label={leading.label}>{@render leading.cell(record)}</TableCell>{/if}
+                {#each columns as column (column.key)}<TableCell data-label={column.label} style={[column.alignment ? `text-align: ${column.alignment}` : '', columnWidth(column.width) ? `width: ${columnWidth(column.width)}` : '', column.wrap === false ? 'white-space: nowrap' : ''].filter(Boolean).join('; ')}>{@render cell(record, column)}</TableCell>{/each}
+                {#if trailing}<TableCell class="hp-table-row-actions" data-label={trailing.label}>{@render trailing.cell(record)}</TableCell>{/if}
+              </TableRow>
             {/each}
           {/if}
           {#each group.summaries ?? [] as summary (summary.id)}
-            <tr class="hp-table-group-summary"><th colspan={columnCount} scope="row">{group.title} subtotal · {summary.label}: {summary.value}</th></tr>
+            <TableRow class="hp-table-group-summary"><TableCell colspan={columnCount}>{group.title} subtotal · {summary.label}: {summary.value}</TableCell></TableRow>
           {/each}
         {/each}
       {:else}
         {#each records as record (getRecordId(record))}
-          <tr>
-            {#if leading}<td data-label={leading.label}>{@render leading.cell(record)}</td>{/if}
-            {#each columns as column (column.key)}<td data-label={column.label} style:text-align={column.alignment} style:width={columnWidth(column.width)} style:white-space={column.wrap === false ? 'nowrap' : undefined}>{@render cell(record, column)}</td>{/each}
-            {#if trailing}<td class="hp-table-row-actions" data-label={trailing.label}>{@render trailing.cell(record)}</td>{/if}
-          </tr>
+          <TableRow>
+            {#if leading}<TableCell data-label={leading.label}>{@render leading.cell(record)}</TableCell>{/if}
+            {#each columns as column (column.key)}<TableCell data-label={column.label} style={[column.alignment ? `text-align: ${column.alignment}` : '', columnWidth(column.width) ? `width: ${columnWidth(column.width)}` : '', column.wrap === false ? 'white-space: nowrap' : ''].filter(Boolean).join('; ')}>{@render cell(record, column)}</TableCell>{/each}
+            {#if trailing}<TableCell class="hp-table-row-actions" data-label={trailing.label}>{@render trailing.cell(record)}</TableCell>{/if}
+          </TableRow>
         {/each}
       {/if}
-    </tbody>
+    </TableBody>
     {#if (summaries?.length ?? 0) > 0}
-      <tfoot>{#each summaries ?? [] as summary (summary.id)}<tr class="hp-table-total-summary"><th colspan={Math.max(1, columnCount)} scope="row">Total · {summary.label}: {summary.value}</th></tr>{/each}</tfoot>
+      <TableFooter>{#each summaries ?? [] as summary (summary.id)}<TableRow class="hp-table-total-summary"><TableCell colspan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableCell></TableRow>{/each}</TableFooter>
     {/if}
   </Table>
 </div>

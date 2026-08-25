@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
 import PanelPage from '../src/PanelPage.svelte'
 import type { PanelPageData } from '../src/contracts'
+import { configureSvelteKitNavigation } from './sveltekit-navigation'
 
 function pageData(): PanelPageData {
   return {
@@ -45,7 +46,6 @@ function pageData(): PanelPageData {
         path: '/admin/posts',
         renderer: null,
         schemaId: null,
-        slots: {},
         widgets: { footer: [], header: [] },
       },
       schema: null,
@@ -60,9 +60,10 @@ describe('SvelteKit panel SPA navigation', () => {
   it('navigates same-origin links, honors exceptions, and prefetches on hover', async () => {
     const container = document.createElement('div')
     document.body.append(container)
+    const goto = vi.fn(async () => undefined)
+    configureSvelteKitNavigation(goto)
     const component = mount(PanelPage, { props: { data: pageData() }, target: container })
     await tick()
-    const pushState = vi.spyOn(window.history, 'pushState')
     const postsLink = container.querySelector<HTMLAnchorElement>('a[href="/admin/posts"]')
     const externalLink = container.querySelector<HTMLAnchorElement>('a[href="/admin/external-report"]')
     if (!postsLink || !externalLink) throw new Error('SPA navigation links did not render')
@@ -72,7 +73,7 @@ describe('SvelteKit panel SPA navigation', () => {
     const internalClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
     postsLink.dispatchEvent(internalClick)
     expect(internalClick.defaultPrevented).toBe(true)
-    expect(pushState).toHaveBeenCalledWith({}, '', '/admin/posts')
+    expect(goto).toHaveBeenCalledWith('/admin/posts')
     const excludedClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
     externalLink.dispatchEvent(excludedClick)
     expect(excludedClick.defaultPrevented).toBe(false)
@@ -97,14 +98,15 @@ describe('SvelteKit panel SPA navigation', () => {
     const component = mount(PanelPage, { props: { data: configured }, target: container })
     await tick()
 
-    const portal = document.body.querySelector<HTMLElement>('.hp-panel-portal[data-panel="admin"]')
+    const portal = container.querySelector<HTMLElement>('[data-holo-panel][data-panel-id="admin"]')
     expect(portal?.dataset.theme).toBe('system')
     expect(portal?.dataset.density).toBe('compact')
-    expect(portal?.dir).toBe('rtl')
+    expect(portal?.closest('[dir="rtl"]')).toBe(container)
     expect(portal?.style.getPropertyValue('--holo-color-primary')).toBe('#123456')
 
-    container.querySelector<HTMLButtonElement>('[data-slot="dropdown-menu-trigger"]')?.click()
-    await tick()
+    const account = container.querySelector<HTMLButtonElement>('[data-slot="dropdown-menu-trigger"]')
+    account?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }))
+    await vi.waitFor(() => expect(document.querySelector('[data-slot="dropdown-menu-content"]')).not.toBeNull())
     expect(portal?.querySelector('[data-slot="dropdown-menu-content"]')).not.toBeNull()
 
     await unmount(component)
@@ -113,12 +115,11 @@ describe('SvelteKit panel SPA navigation', () => {
   })
 
   it('tracks the shared mobile breakpoint and cleans up its media listener', async () => {
-    let mobileListener: EventListener | undefined
     const mediaQueryState = {
-      addEventListener: vi.fn((_type: string, listener: EventListener) => { mobileListener = listener }),
+      addEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
       matches: true,
-      media: '(width <= 48rem)',
+      media: '(max-width: 767px)',
       onchange: null,
       removeEventListener: vi.fn(),
     }
@@ -130,36 +131,38 @@ describe('SvelteKit panel SPA navigation', () => {
     await tick()
 
     const toggle = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-toggle')
-    const sidebar = container.querySelector<HTMLElement>('.hp-panel-sidebar')
-    const backdrop = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-backdrop')
-    expect(matchMedia).toHaveBeenCalledWith('(width <= 48rem)')
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 767px)')
     expect(mediaQueryState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
-    expect(sidebar?.getAttribute('aria-hidden')).toBe('true')
-    expect(sidebar?.hasAttribute('inert')).toBe(true)
-
-    mediaQueryState.matches = false
-    mobileListener?.(new Event('change'))
-    await tick()
-    expect(sidebar?.hasAttribute('aria-hidden')).toBe(false)
-    expect(sidebar?.hasAttribute('inert')).toBe(false)
-
-    mediaQueryState.matches = true
-    mobileListener?.(new Event('change'))
-    await tick()
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
     toggle?.click()
     await tick()
-    expect(backdrop?.hidden).toBe(false)
-    expect(sidebar?.hasAttribute('inert')).toBe(false)
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('[data-panels-component="slide-over"][data-mobile="true"]')).not.toBeNull()
+    expect(container.querySelector('[data-panels-component="slide-over"][data-mobile="true"]')).not.toBeNull()
 
-    backdrop?.focus()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
     await tick()
     await Promise.resolve()
-    expect(backdrop?.hidden).toBe(true)
+    await vi.waitFor(() => expect(toggle?.getAttribute('aria-expanded')).toBe('false'))
+    expect(document.activeElement).toBe(toggle)
+
+    toggle?.click()
+    await tick()
+    const backdrop = container.querySelector<HTMLElement>('[data-slot="sheet-overlay"][data-state="open"]')
+    expect(backdrop).not.toBeNull()
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    backdrop?.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      pointerType: 'mouse',
+    }))
+    await vi.waitFor(() => expect(toggle?.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(toggle)
 
     await unmount(component)
-    expect(mediaQueryState.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+    expect(mediaQueryState.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function), {})
     container.remove()
     matchMedia.mockRestore()
   })

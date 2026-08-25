@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FieldControlAttributes, SvelteFieldFrameProps } from './contracts'
 
-  let { children, description, errors = [], hint, inputId, label, required = false }: SvelteFieldFrameProps = $props()
+  let { children, description, errors = [], hint, inputId, label, path, required = false, type }: SvelteFieldFrameProps = $props()
   const descriptionId = $derived(description || hint ? `${inputId}-description` : undefined)
   const errorId = $derived(errors.length > 0 ? `${inputId}-error` : undefined)
   const describedBy = $derived([descriptionId, errorId].filter(Boolean).join(' ') || undefined)
@@ -13,7 +13,7 @@
   })
 </script>
 
-<div class="hp-field" data-panels-field={inputId}>
+<div class="hp-field" data-field-path={path} data-field-type={type} data-panels-field={inputId}>
   <label for={inputId}>{label}{#if required}<span aria-hidden="true"> *</span>{/if}</label>
   {#if descriptionId}<div id={descriptionId}>{description ?? hint}</div>{/if}
   {@render children(attributes)}

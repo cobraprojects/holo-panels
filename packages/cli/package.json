@@ -26,6 +26,8 @@
     "validate:publish": "node scripts/validate-publish.mjs"
   },
   "dependencies": {
+    "@holo-js/panels-ui": "workspace:*",
+    "@tailwindcss/cli": "catalog:",
     "@holo-js/panels-core": "workspace:*",
     "esbuild": "catalog:"
   },

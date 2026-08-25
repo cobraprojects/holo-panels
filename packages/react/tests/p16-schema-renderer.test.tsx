@@ -120,14 +120,10 @@ describe('P16 React compiled schema renderer', () => {
     act(() => next?.click())
     expect(container.querySelector('[aria-current="step"]')?.textContent).toBe('Finish')
     expect(window.localStorage.getItem('holo-panels:wizard:setup')).toBe('1')
-    const details = container.querySelector('details')
-    expect(details?.open).toBe(false)
-    act(() => {
-      if (details) {
-        details.open = true
-        details.dispatchEvent(new Event('toggle', { bubbles: true }))
-      }
-    })
+    const collapseTrigger = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Advanced')
+    expect(collapseTrigger?.getAttribute('aria-expanded')).toBe('false')
+    act(() => collapseTrigger?.click())
+    expect(collapseTrigger?.getAttribute('aria-expanded')).toBe('true')
     expect(window.localStorage.getItem('holo-panels:collapse:advanced')).toBe('true')
   })
 

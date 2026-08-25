@@ -23,25 +23,34 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "vite build && tsup",
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit",
     "test": "vitest --run --passWithNoTests --reporter=json"
   },
   "dependencies": {
-    "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
+    "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-ui": "workspace:*",
+    "@radix-icons/vue": "catalog:",
+    "@vueuse/core": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
     "lucide-vue-next": "catalog:",
-    "reka-ui": "catalog:"
+    "reka-ui": "catalog:",
+    "tailwind-merge": "catalog:",
+    "vue-sonner": "catalog:"
   },
   "peerDependencies": {
     "vue": "catalog:"
   },
   "devDependencies": {
     "happy-dom": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
     "vue": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "catalog:",
     "vitest": "catalog:"
   }
 }

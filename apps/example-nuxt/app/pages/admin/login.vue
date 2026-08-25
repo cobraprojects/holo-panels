@@ -1,12 +1,9 @@
-<!-- @holo-panels-managed sha256:3bc9c218be5c248a378905133c50816b90429f5586541da2050def9cd5accd75 -->
+<!-- @holo-panels-managed sha256:721b5d7bbbf81eb60f40a25f8f838e9df9081d7e869003d232049e94eba22e50 -->
 <script setup lang="ts">
-import '@holo-js/panels-vue/style.css'
+import '../../../.holo-js/generated/panels/theme.css'
 import { PanelLoginPage } from '@holo-js/panels-nuxt'
-
-const brandName = "Holo Panels Admin"
-const appearance = {"colors":{"primary":"#7c3aed"},"density":"comfortable","fontFamily":null,"monoFontFamily":null,"serifFontFamily":null,"tokens":{}} as const
 </script>
 
 <template>
-  <PanelLoginPage :appearance="appearance" :brand-name="brandName" panel-id="admin" simple-page-max-content-width="lg" theme="system" />
+  <PanelLoginPage panel-id="admin" />
 </template>

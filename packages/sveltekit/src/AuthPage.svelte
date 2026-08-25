@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { executePanelAuthRequest, panelContentWidthValue, type PanelClientAuthOperation } from '@holo-js/panels-svelte'
-  import { svelteKitPanelAuthAppearanceStyleAttribute, type SvelteKitPanelAuthAppearance } from './auth-appearance'
-  import Button from './Button.svelte'
+  import { executePanelAuthRequest, loadPanelAuthPresentation, panelContentWidthValue, type PanelAuthPresentation, type PanelClientAuthOperation } from '@holo-js/panels-svelte'
+  import { onMount } from 'svelte'
+  import { svelteKitPanelAuthAppearanceStyleAttribute } from './auth-appearance'
+  import { Button } from '@holo-js/panels-svelte/ui/button'
+  import { Alert, AlertDescription } from '@holo-js/panels-svelte/ui/alert'
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@holo-js/panels-svelte/ui/card'
+  import { Field, FieldLabel } from '@holo-js/panels-svelte/ui/field'
   import Icon from './Icon.svelte'
-  import Input from './Input.svelte'
+  import { Input } from '@holo-js/panels-svelte/ui/input'
+  import { NativeSelect, NativeSelectOption } from '@holo-js/panels-svelte/ui/native-select'
 
   type AuthPageType = 'email-verification' | 'email-verification-verify' | 'mfa-challenge' | 'password-reset-request' | 'password-reset' | 'registration'
   interface Props {
-    appearance?: SvelteKitPanelAuthAppearance
-    brandName: string
-    loginPath?: string
     panelId: string
-    simplePageMaxContentWidth?: string
-    theme?: 'dark' | 'light' | 'system'
-    themeColors?: Readonly<Record<string, string>>
     type: AuthPageType
   }
 
-  let { appearance, brandName, loginPath, panelId, simplePageMaxContentWidth, theme = 'system', themeColors, type }: Props = $props()
+  let { panelId, type }: Props = $props()
+  let presentation = $state<PanelAuthPresentation | null>(null)
   let name = $state('')
   let email = $state('')
   let password = $state('')
@@ -27,6 +27,10 @@
   let error = $state('')
   let message = $state('')
   let pending = $state(false)
+
+  onMount(() => {
+    void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
+  })
 
   const pageText: Readonly<Record<AuthPageType, readonly [string, string]>> = {
     'email-verification': ['Verify your email', 'Use the verification link in your email, or request another one.'],
@@ -64,29 +68,33 @@
   }
 </script>
 
-<main class="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(appearance, themeColors)}${simplePageMaxContentWidth ? `--hp-auth-max-width:${panelContentWidthValue(simplePageMaxContentWidth)};` : ''}`}>
-  <section class="hp-auth-card" data-slot="card">
-    <div data-slot="card-header"><span class="hp-auth-brand-mark"><Icon name={type === 'registration' ? 'user' : 'key'} /></span><div><p>{brandName}</p><h1>{pageText[type][0]}</h1><span>{pageText[type][1]}</span></div></div>
-    <div data-slot="card-content">
-      <form onsubmit={submit}>
+{#if presentation}
+<main class="hp-auth-page" data-density={presentation.appearance.density} data-holo-panel data-theme={presentation.theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(presentation.appearance)}--hp-auth-max-width:${panelContentWidthValue(presentation.simplePageMaxContentWidth)};`}>
+  <Card class="hp-auth-card hp:w-full hp:max-w-md">
+    <CardHeader><span class="hp-auth-brand-mark"><Icon name={type === 'registration' ? 'user' : 'key'} /></span><CardDescription>{presentation.brandName}</CardDescription><CardTitle>{pageText[type][0]}</CardTitle><CardDescription>{pageText[type][1]}</CardDescription></CardHeader>
+    <CardContent class="hp:space-y-6">
+      <form class="hp:space-y-4" onsubmit={submit}>
         {#if type === 'mfa-challenge'}
-          <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-method`}>Verification method</label><select data-slot="native-select" id={`${panelId}-method`} name="method" bind:value={method}><option value="totp">Authenticator code</option><option value="recovery">Recovery code</option></select></div>
-          <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-code`}>Authentication code</label><Input autocomplete="one-time-code" id={`${panelId}-code`} name="code" bind:value={code} required /></div>
+          <Field><FieldLabel for={`${panelId}-method`}>Verification method</FieldLabel><NativeSelect id={`${panelId}-method`} name="method" bind:value={method}><NativeSelectOption value="totp">Authenticator code</NativeSelectOption><NativeSelectOption value="recovery">Recovery code</NativeSelectOption></NativeSelect></Field>
+          <Field><FieldLabel for={`${panelId}-code`}>Authentication code</FieldLabel><Input autocomplete="one-time-code" id={`${panelId}-code`} name="code" bind:value={code} required /></Field>
         {:else if type === 'password-reset-request'}
-          <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-email`}>Email</label><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></div>
+          <Field><FieldLabel for={`${panelId}-email`}>Email</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></Field>
         {:else if type !== 'email-verification' && type !== 'email-verification-verify'}
           {#if type === 'registration'}
-            <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-name`}>Name</label><Input autocomplete="name" id={`${panelId}-name`} bind:value={name} required /></div>
-            <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-email`}>Email</label><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></div>
+            <Field><FieldLabel for={`${panelId}-name`}>Name</FieldLabel><Input autocomplete="name" id={`${panelId}-name`} bind:value={name} required /></Field>
+            <Field><FieldLabel for={`${panelId}-email`}>Email</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></Field>
           {/if}
-          <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-password`}>Password</label><Input autocomplete="new-password" id={`${panelId}-password`} type="password" bind:value={password} required /></div>
-          <div class="hp-auth-field"><label data-slot="label" for={`${panelId}-password-confirmation`}>Confirm password</label><Input autocomplete="new-password" id={`${panelId}-password-confirmation`} type="password" bind:value={passwordConfirmation} required /></div>
+          <Field><FieldLabel for={`${panelId}-password`}>Password</FieldLabel><Input autocomplete="new-password" id={`${panelId}-password`} type="password" bind:value={password} required /></Field>
+          <Field><FieldLabel for={`${panelId}-password-confirmation`}>Confirm password</FieldLabel><Input autocomplete="new-password" id={`${panelId}-password-confirmation`} type="password" bind:value={passwordConfirmation} required /></Field>
         {/if}
-        {#if error}<p class="hp-auth-error" role="alert">{error}</p>{/if}
-        {#if message}<p class="hp-auth-success" role="status">{message}</p>{/if}
-        <Button class="hp-button hp-button-primary" disabled={pending} type="submit">{pending ? 'Please wait…' : type === 'email-verification' ? 'Resend verification email' : type === 'email-verification-verify' ? 'Verify email' : type === 'mfa-challenge' ? 'Verify' : 'Continue'}</Button>
+        {#if error}<Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>{/if}
+        {#if message}<Alert><AlertDescription>{message}</AlertDescription></Alert>{/if}
+        <Button class="hp:w-full" disabled={pending} type="submit">{pending ? 'Please wait…' : type === 'email-verification' ? 'Resend verification email' : type === 'email-verification-verify' ? 'Verify email' : type === 'mfa-challenge' ? 'Verify' : 'Continue'}</Button>
       </form>
-      {#if loginPath}<p class="hp-auth-footer"><a href={loginPath}>Back to sign in</a></p>{/if}
-    </div>
-  </section>
+      {#if presentation.loginPath}<p class="hp-auth-footer hp:text-center"><Button href={presentation.loginPath} variant="link">Back to sign in</Button></p>{/if}
+    </CardContent>
+  </Card>
 </main>
+{:else}
+<main class="hp-auth-page" data-holo-panel><Card class="hp-auth-card hp:h-80 hp:animate-pulse" /></main>
+{/if}

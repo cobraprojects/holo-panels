@@ -10,17 +10,61 @@ import {
   executePanelAuthRequest,
   registerReactFieldRenderers,
   PanelShellStore,
-  PanelsAvatar,
-  PanelsDropdown,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Command,
+  CommandEmpty,
+  CommandItem,
+  CommandList,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  PanelsPageActionsProvider,
   PanelsPortalProvider,
+  PanelsRenderHook,
   panelConfigurationVariables,
   PanelsTransport,
   PROTOCOL_VERSION,
   ReactNotificationInboxTrigger,
+  ReactFeedbackProvider,
+  ReactPanelsRenderHook,
+  ReactPanelsRenderHookProvider,
   ReactDashboardRenderer,
   ReactTenantSwitcher,
   ReactToastViewport,
   ReactWidgetRenderer,
+  Separator,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
   WidgetStore,
   createPanelNotificationTransport,
   createPanelTenantSwitcherTransport,
@@ -34,16 +78,32 @@ import {
   type ReactNotificationInboxTriggerProps,
   type ReactWidgetManifest,
 } from '@holo-js/panels-react'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { NextPanelClientProps } from './contracts'
-import { ShadcnButton, ShadcnIcon, ShadcnInput } from './internal-ui'
+import { Button, InputGroup, InputGroupAddon, InputGroupInput, PanelsIcon } from './internal-ui'
+
+function useStrictModeSafeDisposal<TValue extends object>(value: TValue, dispose: (current: TValue) => void): void {
+  const generations = useRef(new WeakMap<object, number>())
+  useEffect(() => {
+    const generation = (generations.current.get(value) ?? 0) + 1
+    generations.current.set(value, generation)
+    return () => {
+      globalThis.queueMicrotask(() => {
+        if (generations.current.get(value) === generation) dispose(value)
+      })
+    }
+  }, [dispose, value])
+}
+
+const disposeEffectSession = (session: ClientEffectSession): void => session.dispose()
 
 const LazyResourcePage = lazy(async () => {
   const module = await import('./resource-page')
   return { default: module.NextPanelResourcePage }
 })
 
-export function displayJson(value: JsonValue): ReactNode {
+function displayJson(value: JsonValue): ReactNode {
   if (value === null) return null
   if (Array.isArray(value)) return <ul>{value.map((item, index) => <li key={index}>{displayJson(item)}</li>)}</ul>
   if (typeof value === 'object') return <dl>{Object.entries(value).flatMap(([key, item]) => [<dt key={`${key}:label`}>{key}</dt>, <dd key={key}>{displayJson(item)}</dd>])}</dl>
@@ -96,9 +156,11 @@ function searchResponse(value: JsonValue, panelId: string, term: string): Client
   return Object.freeze({ panelId, results: Object.freeze(results), term })
 }
 
-function PanelGlobalSearch({ configuration, panelId }: {
+function PanelGlobalSearch({ configuration, end, panelId, start }: {
   readonly configuration: NextPanelClientProps['payload']['bootstrap']['manifest']['globalSearchConfiguration']
+  readonly end: ReactNode
   readonly panelId: string
+  readonly start: ReactNode
 }): ReactNode {
   const store = useMemo(() => new GlobalSearchStore({
     async search(term, signal) {
@@ -123,18 +185,19 @@ function PanelGlobalSearch({ configuration, panelId }: {
     globalThis.addEventListener('keydown', shortcut)
     return () => globalThis.removeEventListener('keydown', shortcut)
   }, [store])
-  return <div className="hp-global-search hp-panel-topbar-center" data-slot="command" role="search">
-    <label><span className="hp-sr-only">Global search</span><ShadcnIcon className="hp-global-search-icon" name="search" /><ShadcnInput aria-controls="hp-global-search-results" aria-expanded={state.open} data-panel-global-search="" data-slot="command-input" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
+  return <div className="hp-global-search hp:relative hp:w-full hp:max-w-md" role="search">
+    {start}<InputGroup><InputGroupAddon><PanelsIcon name="search" /></InputGroupAddon><InputGroupInput aria-controls="hp-global-search-results" aria-expanded={state.open} data-panel-global-search="" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') store.move(event.key === 'ArrowDown' ? 1 : -1)
       if (event.key === 'Enter') {
         const url = store.selectedUrl()
         if (url) browserNavigate(url)
       }
       if (event.key === 'Escape') store.close()
-    }} placeholder={configuration?.fieldSuffix ?? 'Search…'} role="combobox" value={state.term} />{configuration?.keybindingSuffix ? <kbd>{configuration.keybindingSuffix}</kbd> : null}</label>
-    {state.loading ? <span aria-live="polite" role="status">Searching…</span> : null}
-    {state.error ? <span role="alert">{state.error}</span> : null}
-    <ul data-slot="command-list" id="hp-global-search-results" role="listbox">{state.results.map((result, index) => <li aria-selected={index === state.selectedIndex} data-slot="command-item" key={`${result.resourceId}:${result.id}`} role="option"><a href={result.url}><strong>{result.title}</strong>{Object.entries(result.details).map(([key, value]) => <span key={key}>{key}: {value}</span>)}</a></li>)}</ul>
+    }} placeholder="Search…" role="combobox" value={state.term} />{configuration?.fieldSuffix ? <InputGroupAddon align="inline-end">{configuration.fieldSuffix}</InputGroupAddon> : null}{configuration?.keybindingSuffix ? <InputGroupAddon align="inline-end"><kbd className="hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground">{configuration.keybindingSuffix}</kbd></InputGroupAddon> : null}</InputGroup>
+    {state.open && state.term ? <Command className="hp:absolute hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md"><CommandList id="hp-global-search-results">
+      {state.loading ? <CommandEmpty>Searching…</CommandEmpty> : state.error ? <CommandEmpty>{state.error}</CommandEmpty> : state.results.length === 0 ? <CommandEmpty>No results found.</CommandEmpty> : null}
+      {state.results.map(result => <CommandItem asChild key={`${result.resourceId}:${result.id}`} value={`${result.title} ${Object.values(result.details).join(' ')}`}><a className="hp:flex hp:w-full hp:flex-col hp:items-start" href={result.url}><strong>{result.title}</strong>{Object.entries(result.details).map(([key, value]) => <span className="hp:text-xs hp:text-muted-foreground" key={key}>{key}: {value}</span>)}</a></CommandItem>)}
+    </CommandList></Command> : null}{end}
   </div>
 }
 
@@ -202,7 +265,7 @@ function hasPageData(value: JsonValue): boolean {
 
 function PanelGlyph({ name }: { readonly name: string | null }): ReactNode {
   if (!name) return null
-  return <ShadcnIcon className="hp-panel-icon" name={name} />
+  return <PanelsIcon className="hp-panel-icon" name={name} />
 }
 
 function configuredIcon(icons: JsonObject | undefined, name: string | null): string | null {
@@ -234,33 +297,31 @@ function isPanelColorMode(value: string | null): value is PanelColorMode {
   return value === 'light' || value === 'dark' || value === 'system'
 }
 
-function orderedNavigation(items: readonly PanelNavigationItem[]): readonly Readonly<{ readonly depth: number, readonly item: PanelNavigationItem }>[] {
-  const children = new Map<string | null, PanelNavigationItem[]>()
-  for (const item of items) {
-    const siblings = children.get(item.parent) ?? []
-    siblings.push(item)
-    children.set(item.parent, siblings)
-  }
-  const ordered: { depth: number, item: PanelNavigationItem }[] = []
-  const append = (parent: string | null, depth: number): void => {
-    for (const item of children.get(parent) ?? []) {
-      ordered.push({ depth, item })
-      append(item.id, depth + 1)
-    }
-  }
-  append(null, 0)
-  return ordered
-}
-
-function NavigationLink({ activeId, depth, icons, item, mode, onNavigate }: {
+function NavigationLink({ activeId, icons, item, mode, onNavigate, sub = false }: {
   readonly activeId: string | null
-  readonly depth: number
   readonly icons?: JsonObject
   readonly item: PanelNavigationItem
   readonly mode: 'sidebar' | 'topbar'
   readonly onNavigate: () => void
+  readonly sub?: boolean
 }): ReactNode {
-  return <a aria-current={item.id === activeId ? 'page' : undefined} data-parent={item.parent ?? undefined} data-slot="sidebar-menu-button" href={item.path} onClick={onNavigate} style={{ '--hp-navigation-depth': depth } as CSSProperties} title={mode === 'sidebar' ? item.label : undefined}><PanelGlyph name={configuredIcon(icons, item.icon)} /><span>{item.label}</span>{item.badge ? <span className="hp-panel-badge" data-slot="sidebar-menu-badge">{item.badge}</span> : null}</a>
+  const link = <a aria-current={item.id === activeId ? 'page' : undefined} data-parent={item.parent ?? undefined} href={item.path} onClick={onNavigate}><PanelGlyph name={configuredIcon(icons, item.icon)} /><span>{item.label}</span></a>
+  if (mode === 'topbar') return <Button asChild variant="ghost">{link}</Button>
+  if (sub) return <SidebarMenuSubItem><SidebarMenuSubButton asChild isActive={item.id === activeId}>{link}</SidebarMenuSubButton>{item.badge ? <SidebarMenuBadge>{item.badge}</SidebarMenuBadge> : null}</SidebarMenuSubItem>
+  return <SidebarMenuItem><SidebarMenuButton asChild isActive={item.id === activeId} tooltip={item.label}>{link}</SidebarMenuButton>{item.badge ? <SidebarMenuBadge>{item.badge}</SidebarMenuBadge> : null}</SidebarMenuItem>
+}
+
+function SidebarNavigationBranch({ activeId, icons, items, onNavigate, parent = null }: {
+  readonly activeId: string | null
+  readonly icons?: JsonObject
+  readonly items: readonly PanelNavigationItem[]
+  readonly onNavigate: () => void
+  readonly parent?: string | null
+}): ReactNode {
+  return items.filter(item => item.parent === parent).map(item => {
+    const children = items.some(candidate => candidate.parent === item.id)
+    return <Fragment key={item.id}><NavigationLink activeId={activeId} icons={icons} item={item} mode="sidebar" onNavigate={onNavigate} sub={parent !== null} />{children ? <SidebarMenuSub><SidebarNavigationBranch activeId={activeId} icons={icons} items={items} onNavigate={onNavigate} parent={item.id} /></SidebarMenuSub> : null}</Fragment>
+  })
 }
 
 function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mode, onNavigate }: {
@@ -281,33 +342,33 @@ function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mo
       return next
     })
   }
-  const ordered = orderedNavigation(items)
-  if (mode === 'topbar') return ordered.map(({ depth, item }) => <NavigationLink activeId={activeId} depth={depth} icons={icons} item={item} key={item.id} mode={mode} onNavigate={onNavigate} />)
+  if (mode === 'topbar') return items.map(item => <NavigationLink activeId={activeId} icons={icons} item={item} key={item.id} mode={mode} onNavigate={onNavigate} />)
   const rendered: ReactNode[] = []
-  for (let index = 0; index < ordered.length;) {
-    const current = ordered[index]!
-    if (!current.item.group) {
-      rendered.push(<NavigationLink activeId={activeId} depth={current.depth} icons={icons} item={current.item} key={current.item.id} mode={mode} onNavigate={onNavigate} />)
-      index += 1
+  const rootItems = items.filter(item => item.parent === null)
+  const groupLabels = [...new Set(rootItems.map(item => item.group))]
+  for (const group of groupLabels) {
+    const grouped = items.filter(item => {
+      if (item.parent === null) return item.group === group
+      let parent = items.find(candidate => candidate.id === item.parent)
+      while (parent?.parent) parent = items.find(candidate => candidate.id === parent?.parent)
+      return parent?.group === group
+    })
+    if (group === null) {
+      rendered.push(<SidebarGroup key="ungrouped"><SidebarGroupContent><SidebarMenu><SidebarNavigationBranch activeId={activeId} icons={icons} items={grouped} onNavigate={onNavigate} /></SidebarMenu></SidebarGroupContent></SidebarGroup>)
       continue
-    }
-    const group = current.item.group
-    const grouped = []
-    while (index < ordered.length && ordered[index]!.item.group === group) {
-      grouped.push(ordered[index]!)
-      index += 1
     }
     const configuration = groups?.find(candidate => candidate.label === group)
     const collapsible = collapsibleGroups !== false && configuration?.collapsible !== false
-    const links = grouped.map(({ depth, item }) => <NavigationLink activeId={activeId} depth={depth} icons={icons} item={item} key={item.id} mode={mode} onNavigate={onNavigate} />)
+    const links = <SidebarGroupContent><SidebarMenu><SidebarNavigationBranch activeId={activeId} icons={icons} items={grouped} onNavigate={onNavigate} /></SidebarMenu></SidebarGroupContent>
     rendered.push(collapsible
-      ? <details className="hp-panel-navigation-section" key={group} open={!collapsedGroups.has(group)}><summary className="hp-panel-navigation-group" onClick={(event) => { event.preventDefault(); toggleGroup(group) }} title={group}>{group}</summary>{links}</details>
-      : <section className="hp-panel-navigation-section" key={group}><div className="hp-panel-navigation-group" title={group}>{group}</div>{links}</section>)
+      ? <Collapsible asChild key={group} onOpenChange={() => toggleGroup(group)} open={!collapsedGroups.has(group)}><SidebarGroup><CollapsibleTrigger asChild><SidebarGroupLabel className="hp:cursor-pointer">{group}<PanelsIcon className="hp:ml-auto" name="chevron-down" /></SidebarGroupLabel></CollapsibleTrigger><CollapsibleContent>{links}</CollapsibleContent></SidebarGroup></Collapsible>
+      : <SidebarGroup key={group}><SidebarGroupLabel>{group}</SidebarGroupLabel>{links}</SidebarGroup>)
   }
   return rendered
 }
 
 export function NextPanelClient({ notificationRealtime, payload, registry: registryInput, tenantTransport }: NextPanelClientProps): ReactNode {
+  const router = useRouter()
   const registry = useMemo<ComponentRegistry>(
     () => registryInput ?? createNextPanelComponentRegistry(),
     [registryInput],
@@ -339,18 +400,15 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     redirect: effect => browserNavigate(effect.url),
     toastStore,
   }), [state.panelId, toastStore])
-  useEffect(() => () => effects.dispose(), [effects])
+  useStrictModeSafeDisposal(effects, disposeEffectSession)
   useEffect(() => {
-    if (!manifest.runtime?.spa || !shell.current) return
+    if (manifest.runtime?.spa === false || !shell.current) return
     return installPanelSpaNavigation(shell.current, {
-      exceptions: manifest.runtime.spaUrlExceptions,
-      navigate: url => {
-        globalThis.history.pushState({}, '', url)
-        globalThis.dispatchEvent(new PopStateEvent('popstate'))
-      },
-      prefetching: manifest.runtime.spaPrefetching ?? false,
+      exceptions: manifest.runtime?.spaUrlExceptions ?? [],
+      navigate: url => router.push(url),
+      prefetching: manifest.runtime?.spaPrefetching ?? false,
     })
-  }, [manifest.runtime])
+  }, [manifest.runtime, router])
   useEffect(() => {
     if (payload.effects.length === 0) return
     void effects.apply({
@@ -391,75 +449,22 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
   const body = payload.page.manifest.body
   const [navigationOpen, setNavigationOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [mobileNavigation, setMobileNavigation] = useState(false)
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
-  const navigationToggle = useRef<HTMLButtonElement>(null)
+  const [pageActionsContainer, setPageActionsContainer] = useState<HTMLElement | null>(null)
   const [colorMode, setColorMode] = useState<PanelColorMode>(manifest.theme.darkMode)
   const accountLabel = actorLabel(payload.bootstrap.actor)
   const avatarUrl = actorAvatarUrl(payload.bootstrap.actor)
-  const navigationId = `hp-panel-navigation-${state.panelId}`
-  const dismissMobileNavigation = useCallback((): void => {
-    setNavigationOpen(false)
-    globalThis.queueMicrotask(() => navigationToggle.current?.focus())
-  }, [])
-  useEffect(() => {
-    const mobileQuery = globalThis.matchMedia('(width <= 48rem)')
-    const update = (): void => setMobileNavigation(mobileQuery.matches)
-    update()
-    mobileQuery.addEventListener('change', update)
-    return () => mobileQuery.removeEventListener('change', update)
-  }, [])
-  useEffect(() => {
-    if (!mobileNavigation || !navigationOpen) return
-    const dismissOnEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      dismissMobileNavigation()
-    }
-    globalThis.addEventListener('keydown', dismissOnEscape)
-    return () => globalThis.removeEventListener('keydown', dismissOnEscape)
-  }, [dismissMobileNavigation, mobileNavigation, navigationOpen])
-  useEffect(() => {
-    const container = globalThis.document.createElement('div')
-    container.className = 'hp-panel-portal-host'
-    const owner = shell.current ?? globalThis.document.documentElement
-    container.dir = owner.closest<HTMLElement>('[dir="rtl"], [dir="ltr"]')?.dir
-      ?? globalThis.getComputedStyle(owner).direction
-    globalThis.document.body.append(container)
-    setPortalContainer(container)
-    return () => {
-      setPortalContainer(current => current === container ? null : current)
-      container.remove()
-    }
-  }, [state.panelId])
-  useEffect(() => {
-    if (!portalContainer) return
-    portalContainer.dataset.holoPanel = ''
-    portalContainer.dataset.panel = state.panelId
-    portalContainer.dataset.theme = colorMode
-    portalContainer.dataset.density = manifest.theme.density
-    portalContainer.removeAttribute('style')
-    for (const [name, value] of Object.entries(panelConfigurationVariables(manifest))) portalContainer.style.setProperty(name, value)
-  }, [colorMode, manifest, portalContainer, state.panelId])
   useEffect(() => {
     const stored = globalThis.localStorage?.getItem(`holo-panels:${state.panelId}:color-mode`) ?? null
     if (isPanelColorMode(stored)) setColorMode(stored)
   }, [state.panelId])
-  const toggleNavigation = (): void => {
-    if (mobileNavigation || manifest.navigationMode === 'topbar') {
-      setNavigationOpen(open => !open)
-      return
-    }
-    if (manifest.sidebarCollapsible) setSidebarCollapsed(collapsed => !collapsed)
-  }
   const chooseColorMode = (mode: PanelColorMode): void => {
     setColorMode(mode)
     globalThis.localStorage?.setItem(`holo-panels:${state.panelId}:color-mode`, mode)
   }
   const themeMenu = manifest.theme.switcher === false ? [] : [
-    { id: 'panel-theme-light', label: <span className="hp-panel-theme-option"><ShadcnIcon name="sun" /><span>Light</span>{colorMode === 'light' ? <ShadcnIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('light') },
-    { id: 'panel-theme-dark', label: <span className="hp-panel-theme-option"><ShadcnIcon name="moon" /><span>Dark</span>{colorMode === 'dark' ? <ShadcnIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('dark') },
-    { id: 'panel-theme-system', label: <span className="hp-panel-theme-option"><ShadcnIcon name="monitor" /><span>System</span>{colorMode === 'system' ? <ShadcnIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('system') },
+    { icon: null, id: 'panel-theme-light', label: <span className="hp-panel-theme-option"><PanelsIcon name="sun" /><span>Light</span>{colorMode === 'light' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('light') },
+    { icon: null, id: 'panel-theme-dark', label: <span className="hp-panel-theme-option"><PanelsIcon name="moon" /><span>Dark</span>{colorMode === 'dark' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('dark') },
+    { icon: null, id: 'panel-theme-system', label: <span className="hp-panel-theme-option"><PanelsIcon name="monitor" /><span>System</span>{colorMode === 'system' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('system') },
   ]
   const userMenu = [
     ...themeMenu,
@@ -467,39 +472,64 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     ...manifest.userMenu.map(item => ({ icon: configuredIcon(manifest.icons, item.icon), id: item.id, label: item.label, onSelect: () => browserNavigate(item.path) })),
     ...(manifest.auth?.logout ? [{ icon: 'log-out', id: 'panel-logout', label: 'Sign out', onSelect: () => { void executePanelAuthRequest({ csrfToken: '', operation: 'logout', panelId: state.panelId, payload: {} }).then(result => { if (result.ok) globalThis.location.assign(result.url ?? manifest.auth?.login?.path ?? manifest.path) }) } }] : []),
   ]
-  return <PanelsPortalProvider container={portalContainer}><div ref={shell} className="hp-panel hp-panel-shell" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-slot="sidebar-wrapper" data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
-    {manifest.assets?.map(asset => asset.type === 'css'
-      ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" />
-      : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
-    {manifest.layout?.topbar === false ? null : TopbarComponent ? <TopbarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <header className="hp-panel-header" data-slot="panel-header">
-      {manifest.navigationEnabled === false ? null : <ShadcnButton aria-controls={manifest.navigationMode === 'topbar' || !SidebarComponent ? navigationId : undefined} aria-expanded={mobileNavigation ? navigationOpen : !sidebarCollapsed} aria-label="Toggle navigation" className="hp-panel-navigation-toggle hp-panel-topbar-start-action" data-slot="button" data-variant="ghost" onClick={toggleNavigation} ref={navigationToggle} type="button"><ShadcnIcon name="menu" /></ShadcnButton>}
-      <a className={`hp-panel-brand hp-panel-topbar-start${manifest.navigationMode === 'sidebar' ? ' hp-panel-navigation-header' : ''}`} data-slot="panel-brand" href={manifest.routing?.homeUrl ?? manifest.path}>{manifest.branding.logo ? <img alt="" src={manifest.branding.logo} /> : <span aria-hidden="true" className="hp-panel-brand-mark">H</span>}<strong>{manifest.branding.name}</strong></a>
-      {manifest.navigationEnabled !== false && manifest.navigationMode === 'topbar' ? <nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation--topbar hp-panel-navigation-body hp-panel-topbar-center" data-open={navigationOpen ? 'true' : 'false'} id={navigationId}><NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav> : null}
-      {manifest.globalSearch ? <PanelGlobalSearch configuration={manifest.globalSearchConfiguration} panelId={state.panelId} /> : null}
-      <div className="hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact">
-        {payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <div className="hp-panel-tenant-action hp-panel-action--compact"><ReactTenantSwitcher onSwitched={() => globalThis.location.reload()} store={store} transport={resolvedTenantTransport} /></div> : null}
-        {notificationConfiguration?.placement === 'topbar' ? <div className="hp-panel-notification-action hp-panel-action--compact">{notificationTrigger}</div> : null}
-        {manifest.userMenuEnabled === false ? null : <div className="hp-panel-user-action hp-panel-action--compact"><PanelsDropdown ariaLabel="Account menu" items={userMenu} label={<span className="hp-panel-user-trigger">{AvatarComponent ? <AvatarComponent actor={payload.bootstrap.actor} label={accountLabel} /> : avatarUrl ? <PanelsAvatar alt={accountLabel} src={avatarUrl} /> : <span aria-hidden="true" className="hp-avatar hp-panel-user-avatar hp-panel-user-glyph" data-slot="avatar-fallback"><ShadcnIcon name="user" /></span>}<span className="hp-panel-user-label">{accountLabel}</span></span>} /></div>}
+  const pageScopes = [payload.page.manifest.id, ...(typeof body?.properties.resourceId === 'string' ? [body.properties.resourceId] : [])]
+  const renderHook = (hook: PanelsRenderHook, data: JsonObject = {}): ReactNode => <ReactPanelsRenderHook data={data} hook={hook} manifest={manifest} registry={registry} scopes={pageScopes} />
+  const accountAvatar = AvatarComponent
+    ? <AvatarComponent actor={payload.bootstrap.actor} label={accountLabel} />
+    : <Avatar className="hp-panel-user-glyph hp:size-8">{avatarUrl ? <AvatarImage alt={accountLabel} src={avatarUrl} /> : null}<AvatarFallback><PanelsIcon name="user" /></AvatarFallback></Avatar>
+  const accountMenu = manifest.userMenuEnabled === false ? null : <DropdownMenu>
+    <DropdownMenuTrigger asChild><Button aria-label="Account menu" className="hp-panel-user-action hp:h-10 hp:gap-2 hp:px-2" variant="ghost">{accountAvatar}<span className="hp:hidden hp:max-w-40 hp:truncate hp:sm:inline">{accountLabel}</span><PanelsIcon name="chevron-down" /></Button></DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="hp:w-56"><DropdownMenuLabel>{accountLabel}</DropdownMenuLabel><DropdownMenuSeparator />{userMenu.map((item, index) => <Fragment key={item.id}>{index === themeMenu.length && themeMenu.length > 0 ? <DropdownMenuSeparator /> : null}<DropdownMenuItem onSelect={item.onSelect} variant={item.id === 'panel-logout' ? 'destructive' : 'default'}>{item.icon ? <PanelsIcon name={item.icon} /> : null}{item.label}</DropdownMenuItem></Fragment>)}</DropdownMenuContent>
+  </DropdownMenu>
+  const brand = <a className="hp-panel-brand hp:flex hp:items-center hp:gap-2 hp:font-semibold" href={manifest.routing?.homeUrl ?? manifest.path}>{manifest.branding.logo ? <img alt="" className="hp:size-8 hp:rounded-md hp:object-contain" src={manifest.branding.logo} /> : <span aria-hidden="true" className="hp:flex hp:size-8 hp:items-center hp:justify-center hp:rounded-md hp:bg-primary hp:text-sm hp:font-semibold hp:text-primary-foreground">H</span>}<span className="hp:truncate hp:group-data-[collapsible=icon]:hidden">{manifest.branding.name}</span></a>
+  const page = <>
+    {renderHook(PanelsRenderHook.CONTENT_BEFORE)}
+    <SidebarInset className="hp-panel-content">
+      {renderHook(PanelsRenderHook.CONTENT_START)}
+      {manifest.layout?.topbar === false ? null : TopbarComponent ? <TopbarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <header className="hp-panel-header hp-panel-main-header hp:sticky hp:top-0 hp:z-20 hp:flex hp:h-16 hp:shrink-0 hp:items-center hp:gap-2 hp:border-b hp:bg-background hp:px-4">
+        <div className="hp-panel-topbar-start hp:contents">{renderHook(PanelsRenderHook.TOPBAR_START)}</div>
+        {manifest.navigationEnabled === false ? null : manifest.navigationMode === 'sidebar' ? <SidebarTrigger className="hp-panel-navigation-toggle" /> : <Button aria-expanded={navigationOpen} aria-label="Toggle navigation" className="hp-panel-navigation-toggle" onClick={() => setNavigationOpen(open => !open)} size="icon" variant="ghost"><PanelsIcon name="menu" /></Button>}
+        {manifest.navigationMode === 'sidebar' ? <Separator className="hp:mr-2 hp:h-4" orientation="vertical" /> : null}
+        {manifest.navigationMode === 'topbar' ? <>{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}<nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation--topbar hp:hidden hp:items-center hp:gap-1 hp:lg:flex"><NavigationItems activeId={state.activeNavigationId} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav></> : null}
+        {renderHook(PanelsRenderHook.GLOBAL_SEARCH_BEFORE)}
+        {manifest.globalSearch ? <div className="hp-panel-topbar-center hp:mx-auto hp:min-w-0 hp:max-w-md hp:flex-1"><PanelGlobalSearch configuration={manifest.globalSearchConfiguration} end={renderHook(PanelsRenderHook.GLOBAL_SEARCH_END)} panelId={state.panelId} start={renderHook(PanelsRenderHook.GLOBAL_SEARCH_START)} /></div> : <div className="hp-panel-topbar-center hp:flex-1" />}
+        {renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER)}
+        <div className="hp-panel-header-actions hp-panel-actions--compact hp:ml-auto hp:flex hp:shrink-0 hp:items-center hp:gap-2">
+          {payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}
+          {notificationConfiguration?.placement === 'topbar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}
+          {accountMenu}
+        </div>
+        <div className="hp-panel-topbar-end hp:contents">{renderHook(PanelsRenderHook.TOPBAR_END)}</div>
+      </header>}
+      {renderHook(PanelsRenderHook.TOPBAR_AFTER)}
+      <div className="hp-panel-main hp-panel-main-body hp:mx-auto hp:flex hp:w-full hp:flex-1 hp:flex-col hp:gap-6 hp:p-4 hp:pt-6 hp:md:p-6" style={{ maxWidth: 'var(--hp-content-max-width)' }}>
+        {manifest.layout?.breadcrumbs !== false && payload.page.breadcrumbs.length > 0 ? <Breadcrumb className="hp-panel-breadcrumbs"><BreadcrumbList>{payload.page.breadcrumbs.map((item, index) => <Fragment key={item.path}><BreadcrumbItem>{index === payload.page.breadcrumbs.length - 1 ? <BreadcrumbPage>{item.label}</BreadcrumbPage> : <BreadcrumbLink href={item.path}>{item.label}</BreadcrumbLink>}</BreadcrumbItem>{index < payload.page.breadcrumbs.length - 1 ? <BreadcrumbSeparator /> : null}</Fragment>)}</BreadcrumbList></Breadcrumb> : null}
+        {renderHook(PanelsRenderHook.PAGE_START, payload.page.data)}
+        <div className="hp-panel-page-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between"><div className="hp:space-y-1">{renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, payload.page.data)}<h1 className="hp:text-3xl hp:font-bold hp:tracking-tight">{payload.page.heading ?? payload.page.title}</h1>{payload.page.subheading ? <p className="hp:text-muted-foreground">{payload.page.subheading}</p> : null}{renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, payload.page.data)}</div><div aria-label="Page actions" className="hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2" role="group">{renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, payload.page.data)}<div className="hp:contents" ref={setPageActionsContainer} />{renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, payload.page.data)}</div></div>
+        <section className="hp-panel-page hp:flex hp:flex-col hp:gap-6" data-page={payload.page.manifest.id} data-slot="page">
+          {renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, payload.page.data)}<ResolvedWidgetGrid label="Page header widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.header} />{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_END, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER, payload.page.data)}
+          {body?.component === 'resource-page' ? <Suspense fallback={<div aria-busy="true">Loading resource…</div>}><LazyResourcePage createRedirect={manifest.runtime?.resourceCreatePageRedirect ?? 'edit'} data={payload.page.data} editRedirect={manifest.runtime?.resourceEditPageRedirect ?? null} effects={effects} panelId={state.panelId} panelManifest={manifest} panelPath={manifest.path} properties={body.properties} readOnlyRelations={manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true} registry={registry} renderHookScopes={pageScopes} unsavedChangesAlerts={manifest.runtime?.unsavedChangesAlerts ?? false} /></Suspense> : hasPageData(payload.page.data) ? <div className="hp-panel-page-surface">{displayJson(payload.page.data)}</div> : null}
+          {renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_START, payload.page.data)}<ResolvedWidgetGrid label="Page footer widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.footer} />{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_END, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER, payload.page.data)}
+        </section>
+        {renderHook(PanelsRenderHook.PAGE_END, payload.page.data)}
       </div>
-    </header>}
-    {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? <>
-      <button aria-hidden={!mobileNavigation || !navigationOpen ? 'true' : undefined} aria-label="Close navigation" className="hp-panel-navigation-backdrop" data-open={navigationOpen ? 'true' : 'false'} data-slot="navigation-backdrop" hidden={!mobileNavigation || !navigationOpen} onClick={dismissMobileNavigation} tabIndex={-1} type="button" />
-      {SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <aside aria-hidden={mobileNavigation && !navigationOpen ? 'true' : undefined} className="hp-panel-sidebar" data-open={navigationOpen ? 'true' : 'false'} data-slot="sidebar" id={navigationId} inert={mobileNavigation && !navigationOpen ? true : undefined}>
-        <nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation-body" data-open={navigationOpen ? 'true' : 'false'} data-slot="sidebar-content"><NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => setNavigationOpen(false)} /></nav>
-        {notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-navigation-footer hp-panel-actions--compact"><div className="hp-panel-notification-action hp-panel-action--compact">{notificationTrigger}</div></div> : null}
-      </aside>}
-    </> : null}
-    <main className="hp-panel-content" data-slot="sidebar-inset">
-      {manifest.layout?.breadcrumbs !== false && payload.page.breadcrumbs.length > 0 ? <nav aria-label="Breadcrumbs" className="hp-panel-breadcrumbs"><ol>{payload.page.breadcrumbs.map(item => <li key={item.path}><a href={item.path}>{item.label}</a></li>)}</ol></nav> : null}
-      <header className="hp-panel-page-header hp-panel-main-header" data-slot="page-header"><div><h1>{payload.page.heading ?? payload.page.title}</h1>{payload.page.subheading ? <p>{payload.page.subheading}</p> : null}</div></header>
-      <section className="hp-panel-page hp-panel-main-body" data-page={payload.page.manifest.id} data-slot="page">
-        <ResolvedWidgetGrid label="Page header widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.header} />
-        {body?.component === 'resource-page'
-          ? <Suspense fallback={<div aria-busy="true">Loading resource…</div>}><LazyResourcePage createRedirect={manifest.runtime?.resourceCreatePageRedirect ?? 'edit'} data={payload.page.data} editRedirect={manifest.runtime?.resourceEditPageRedirect ?? null} effects={effects} panelId={state.panelId} panelPath={manifest.path} properties={body.properties} readOnlyRelations={manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true} registry={registry} unsavedChangesAlerts={manifest.runtime?.unsavedChangesAlerts ?? false} /></Suspense>
-          : hasPageData(payload.page.data) ? <div className="hp-panel-page-surface">{displayJson(payload.page.data)}</div> : null}
-        <ResolvedWidgetGrid label="Page footer widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.footer} />
-      </section>
-    </main>
-    <ReactToastViewport navigate={browserNavigate} store={toastStore} />
-  </div></PanelsPortalProvider>
+      {renderHook(PanelsRenderHook.CONTENT_END)}
+    </SidebarInset>
+    {renderHook(PanelsRenderHook.CONTENT_AFTER)}
+  </>
+  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-panel={state.panelId} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
+    {renderHook(PanelsRenderHook.BODY_START)}{renderHook(PanelsRenderHook.LAYOUT_START)}
+    {manifest.assets?.map(asset => asset.type === 'css' ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" /> : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
+    {renderHook(PanelsRenderHook.TOPBAR_BEFORE)}
+    <SidebarProvider onOpenChange={open => setSidebarCollapsed(!open)} open={!sidebarCollapsed}>
+      {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'}>
+        {renderHook(PanelsRenderHook.SIDEBAR_START)}
+        <SidebarHeader className="hp-panel-navigation-header">{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}</SidebarHeader>
+        <SidebarContent className="hp-panel-navigation-body">{renderHook(PanelsRenderHook.SIDEBAR_NAV_START)}<NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => undefined} />{renderHook(PanelsRenderHook.SIDEBAR_NAV_END)}</SidebarContent>
+        <SidebarFooter>{notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}{renderHook(PanelsRenderHook.SIDEBAR_FOOTER)}</SidebarFooter><SidebarRail />
+      </Sidebar> : null}
+      {page}
+    </SidebarProvider>
+    {renderHook(PanelsRenderHook.FOOTER)}<ReactToastViewport navigate={browserNavigate} store={toastStore} />{renderHook(PanelsRenderHook.LAYOUT_END)}{renderHook(PanelsRenderHook.BODY_END)}
+  </div></PanelsPortalProvider></PanelsPageActionsProvider></ReactPanelsRenderHookProvider></ReactFeedbackProvider>
 }

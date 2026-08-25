@@ -1,11 +1,17 @@
 import { defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
+import { resolve as resolvePath } from 'node:path'
+
+const vuePath = resolvePath(import.meta.dirname, '../../node_modules/vue')
+const aliases = [
+  { find: '#imports', replacement: fileURLToPath(new URL('./tests/nuxt-imports.ts', import.meta.url)) },
+  { find: /^vue\/(.+)$/u, replacement: `${vuePath}/$1` },
+  { find: 'vue', replacement: vuePath },
+]
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '#imports': fileURLToPath(new URL('./tests/nuxt-imports.ts', import.meta.url)),
-    },
+    alias: aliases,
     dedupe: ['vue', '@vue/runtime-core'],
   },
   ssr: { noExternal: ['reka-ui'] },
@@ -20,9 +26,7 @@ export default defineConfig({
       },
       {
         resolve: {
-          alias: {
-            '#imports': fileURLToPath(new URL('./tests/nuxt-imports.ts', import.meta.url)),
-          },
+          alias: aliases,
           dedupe: ['vue', '@vue/runtime-core'],
         },
         ssr: { noExternal: ['reka-ui'] },

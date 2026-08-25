@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Select from '../components/Select.svelte'
+  import { Button } from '../ui/button'
+  import { Input } from '../ui/input'
+  import { NativeSelect as Select } from '../ui/native-select'
   import type { NavigationKey } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'
   import type { SvelteNavigationSearchRendererProps } from './contracts'

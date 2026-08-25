@@ -1,7 +1,10 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Textarea from '../components/Textarea.svelte'
+  import { Checkbox } from '../ui/checkbox'
+  import { Input } from '../ui/input'
+  import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '../ui/input-group'
+  import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
+  import { Switch } from '../ui/switch'
+  import { Textarea } from '../ui/textarea'
   import type { OptionValue } from '@holo-js/panels-client'
   import type { HTMLInputAttributes } from 'svelte/elements'
   import { toSvelteState } from '../stores'
@@ -70,6 +73,11 @@
     writeFieldValue(form, definition.path, next)
   }
 
+  function setRadioValue(next: string): void {
+    const option = radioOptions.find(candidate => String(candidate.value) === next)
+    if (option) setRadio(option.value)
+  }
+
   function dateInputValue(input: unknown): string {
     const date = input instanceof Date ? input : new Date(typeof input === 'string' || typeof input === 'number' ? input : '')
     if (Number.isNaN(date.getTime())) return ''
@@ -90,26 +98,31 @@
 </script>
 
 {#if presentation.visible}
-  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} required={presentation.required}>
+  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
     {#snippet children(attributes)}
       {#if kind === 'textarea'}
         <Textarea {...attributes} data-autosize={booleanProperty(properties, 'autosize') || undefined} data-slot="textarea" disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} rows={numberProperty(properties, 'rows') ?? 4} maxlength={numberProperty(properties, 'maximumLength')} value={typeof value === 'string' ? value : ''} oninput={updateTextarea}></Textarea>
       {:else if kind === 'checkbox' || kind === 'toggle'}
-        <Input {...attributes} type="checkbox" role={kind === 'toggle' ? 'switch' : undefined} data-slot={kind === 'toggle' ? 'switch' : 'checkbox'} checked={Boolean(value)} disabled={presentation.disabled || presentation.readOnly} required={presentation.required} aria-readonly={presentation.readOnly} onchange={update} />
+        {#if kind === 'toggle'}<Switch {...attributes} checked={Boolean(value)} disabled={presentation.disabled || presentation.readOnly} aria-readonly={presentation.readOnly} onCheckedChange={(checked) => writeFieldValue(form, definition.path, checked)} />{:else}<Checkbox {...attributes} checked={Boolean(value)} disabled={presentation.disabled || presentation.readOnly} aria-readonly={presentation.readOnly} onCheckedChange={(checked) => writeFieldValue(form, definition.path, checked)} />{/if}
         {#if stateLabel}<span class="hp-field-toggle-label">{stateLabel}</span>{/if}
       {:else if kind === 'slider'}
         <Input {...attributes} type="range" data-slot="slider" value={typeof value === 'number' ? value : numberProperty(properties, 'minimum') ?? 0} min={numberProperty(properties, 'minimum')} max={numberProperty(properties, 'maximum')} step={numberProperty(properties, 'step')} disabled={presentation.disabled} readonly={presentation.readOnly} aria-readonly={presentation.readOnly} oninput={update} />
       {:else if kind === 'radio' && radioOptions.length > 0}
-        <div {...attributes} role="radiogroup">
+        <RadioGroup {...attributes} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} onValueChange={setRadioValue}>
           {#each radioOptions as option (option.value)}
-            <label><Input type="radio" data-slot="radio-group-item" name={inputId} value={option.value} checked={value === option.value} disabled={presentation.disabled || presentation.readOnly} onchange={() => setRadio(option.value)} /> {option.label}</label>
+            <label class="hp:flex hp:items-center hp:gap-2"><RadioGroupItem value={String(option.value)} disabled={presentation.disabled || presentation.readOnly} />{option.label}</label>
           {/each}
-        </div>
+        </RadioGroup>
       {:else}
-        {#if prefix}<span class="hp-field-prefix">{prefix}</span>{/if}
-        <Input {...attributes} type={inputType} data-slot="input" value={kind === 'date' ? dateInputValue(value) : typeof value === 'string' || typeof value === 'number' ? value : ''} disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} {autocomplete} data-mask={mask} list={datalistId} minlength={numberProperty(properties, 'minimumLength')} maxlength={numberProperty(properties, 'maximumLength')} min={typeof properties.minimum === 'string' || typeof properties.minimum === 'number' ? properties.minimum : undefined} max={typeof properties.maximum === 'string' || typeof properties.maximum === 'number' ? properties.maximum : undefined} step={numberProperty(properties, 'step')} spellcheck={booleanProperty(properties, 'spellcheck', true)} oninput={update} />
-        {#if suffix}<span class="hp-field-suffix">{suffix}</span>{/if}
-        {#if revealable}<Button type="button" aria-controls={inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onclick={() => { passwordVisible = !passwordVisible }}>{passwordVisible ? 'Hide' : 'Show'}</Button>{/if}
+        {#if prefix || suffix || revealable}
+          <InputGroup>
+            {#if prefix}<InputGroupAddon align="inline-start"><InputGroupText class="hp-field-prefix">{prefix}</InputGroupText></InputGroupAddon>{/if}
+            <InputGroupInput {...attributes} type={inputType} value={kind === 'date' ? dateInputValue(value) : typeof value === 'string' || typeof value === 'number' ? value : ''} disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} {autocomplete} data-mask={mask} list={datalistId} minlength={numberProperty(properties, 'minimumLength')} maxlength={numberProperty(properties, 'maximumLength')} min={typeof properties.minimum === 'string' || typeof properties.minimum === 'number' ? properties.minimum : undefined} max={typeof properties.maximum === 'string' || typeof properties.maximum === 'number' ? properties.maximum : undefined} step={numberProperty(properties, 'step')} spellcheck={booleanProperty(properties, 'spellcheck', true)} oninput={update} />
+            {#if suffix || revealable}<InputGroupAddon align="inline-end">{#if suffix}<InputGroupText class="hp-field-suffix">{suffix}</InputGroupText>{/if}{#if revealable}<InputGroupButton aria-controls={inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onclick={() => { passwordVisible = !passwordVisible }}>{passwordVisible ? 'Hide' : 'Show'}</InputGroupButton>{/if}</InputGroupAddon>{/if}
+          </InputGroup>
+        {:else}
+          <Input {...attributes} type={inputType} data-slot="input" value={kind === 'date' ? dateInputValue(value) : typeof value === 'string' || typeof value === 'number' ? value : ''} disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} {autocomplete} data-mask={mask} list={datalistId} minlength={numberProperty(properties, 'minimumLength')} maxlength={numberProperty(properties, 'maximumLength')} min={typeof properties.minimum === 'string' || typeof properties.minimum === 'number' ? properties.minimum : undefined} max={typeof properties.maximum === 'string' || typeof properties.maximum === 'number' ? properties.maximum : undefined} step={numberProperty(properties, 'step')} spellcheck={booleanProperty(properties, 'spellcheck', true)} oninput={update} />
+        {/if}
         {#if datalistId}<datalist id={datalistId}>{#each datalist as option (option)}<option value={option}></option>{/each}</datalist>{/if}
       {/if}
     {/snippet}

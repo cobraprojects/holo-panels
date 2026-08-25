@@ -1,5 +1,6 @@
 import { panelNotification, type PanelNotificationPresentation } from '@holo-js/panels-core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { publishPanelError, publishPanelErrorTo, registerPanelNotificationStore } from '../src/notifications/feedback'
 import { ClientToastStore } from '../src/notifications/toast-store'
 
 const stores: ClientToastStore[] = []
@@ -83,5 +84,44 @@ describe('P13-A client toast state', () => {
       { id: 'dismiss', kind: 'dismiss', label: 'Dismiss', url: null },
     ])
     await expect(toasts.trigger('client.notice', 'read')).rejects.toThrow('Unknown notification action')
+  })
+
+  it('publishes renderer failures through the active panel notification store', () => {
+    const toasts = store()
+    const unregister = registerPanelNotificationStore('admin', toasts)
+
+    expect(publishPanelError('admin', 'Delete failed', 'The record is locked.')).toBe(true)
+    expect(toasts.state.items).toEqual([
+      expect.objectContaining({
+        body: 'The record is locked.',
+        status: 'danger',
+        title: 'Delete failed',
+      }),
+    ])
+
+    expect(publishPanelError('admin', 'Update failed')).toBe(true)
+    expect(toasts.state.items.at(-1)).toMatchObject({
+      body: 'The operation could not be completed.',
+      status: 'danger',
+      title: 'Update failed',
+    })
+
+    unregister()
+    expect(publishPanelError('admin', 'Ignored')).toBe(false)
+    expect(toasts.state.items).toHaveLength(2)
+  })
+
+  it('publishes renderer failures directly to the mounted notification store', () => {
+    const toasts = store()
+
+    publishPanelErrorTo(toasts, 'Publish selected failed')
+
+    expect(toasts.state.items).toEqual([
+      expect.objectContaining({
+        body: 'The operation could not be completed.',
+        status: 'danger',
+        title: 'Publish selected failed',
+      }),
+    ])
   })
 })

@@ -1,0 +1,41 @@
+@layer theme, hp-panels, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme) prefix(hp);
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(hp) source(none);
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --color-background: var(--hp-background);
+  --color-foreground: var(--hp-foreground);
+  --color-card: var(--hp-card);
+  --color-card-foreground: var(--hp-card-foreground);
+  --color-popover: var(--hp-popover);
+  --color-popover-foreground: var(--hp-popover-foreground);
+  --color-primary: var(--hp-primary);
+  --color-primary-foreground: var(--hp-primary-foreground);
+  --color-secondary: var(--hp-secondary);
+  --color-secondary-foreground: var(--hp-secondary-foreground);
+  --color-muted: var(--hp-muted);
+  --color-muted-foreground: var(--hp-muted-foreground);
+  --color-accent: var(--hp-accent);
+  --color-accent-foreground: var(--hp-accent-foreground);
+  --color-destructive: var(--hp-destructive);
+  --color-destructive-foreground: var(--hp-destructive-foreground);
+  --color-border: var(--hp-border);
+  --color-input: var(--hp-input);
+  --color-ring: var(--hp-ring);
+  --color-sidebar: var(--hp-sidebar);
+  --color-sidebar-foreground: var(--hp-sidebar-foreground);
+  --color-sidebar-primary: var(--hp-primary);
+  --color-sidebar-primary-foreground: var(--hp-primary-foreground);
+  --color-sidebar-accent: var(--hp-sidebar-accent);
+  --color-sidebar-accent-foreground: var(--hp-sidebar-accent-foreground);
+  --color-sidebar-border: var(--hp-sidebar-border);
+  --color-sidebar-ring: var(--hp-ring);
+  --radius-sm: calc(var(--hp-radius) - 4px);
+  --radius-md: calc(var(--hp-radius) - 2px);
+  --radius-lg: var(--hp-radius);
+  --radius-xl: calc(var(--hp-radius) + 4px);
+  --font-sans: var(--holo-font-sans);
+  --font-mono: var(--holo-font-mono);
+}

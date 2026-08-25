@@ -1,29 +1,36 @@
-import { createSSRApp } from 'vue'
-import { renderToString } from 'vue/server-renderer'
-import { describe, expect, it } from 'vitest'
+import { createApp, nextTick } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PanelLoginPage } from '../src/login-page'
 
 describe('Nuxt panel login page', () => {
-  it('renders the internal themed component with configured account links', async () => {
-    const html = await renderToString(createSSRApp(PanelLoginPage, {
+  afterEach(() => {
+    document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+  })
+
+  it('loads branding, links, theme, and width from the panel presentation endpoint', async () => {
+    const fetcher = vi.fn(async () => Response.json({
+      appearance: { colors: { primary: '#7c3aed' }, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
       brandName: 'Control Center',
       forgotPasswordPath: '/admin/forgot-password',
-      panelId: 'admin',
+      loginPath: '/admin/login',
       registrationPath: '/admin/register',
       simplePageMaxContentWidth: 'screen-sm',
       theme: 'system',
-      themeColors: { primary: '#7c3aed' },
     }))
+    vi.stubGlobal('fetch', fetcher)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(PanelLoginPage, { panelId: 'admin' })
+    app.mount(container)
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    await nextTick()
 
-    expect(html).toContain('data-holo-panel')
-    expect(html).toContain('data-slot="card"')
-    expect(html).toContain('data-slot="input"')
-    expect(html).toContain('data-slot="button"')
-    expect(html).toContain('data-theme="system"')
-    expect(html).toContain('--holo-color-primary:#7c3aed')
-    expect(html).toContain('--hp-auth-max-width:40rem')
-    expect(html).toContain('href="/admin/forgot-password"')
-    expect(html).toContain('href="/admin/register"')
-    expect(html).toContain('Control Center')
+    expect(container.textContent).toContain('Control Center')
+    expect(container.querySelector('a[href="/admin/forgot-password"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/admin/register"]')).not.toBeNull()
+    expect(container.querySelector('main')?.getAttribute('style')).toContain('--hp-auth-max-width: 40rem')
+    expect(fetcher).toHaveBeenCalledWith('/holo/panels/admin/auth/presentation', expect.any(Object))
+    app.unmount()
   })
 })

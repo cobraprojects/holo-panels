@@ -29,9 +29,15 @@ export type {
   RecordPath,
   RecordPathFor,
   RecordPathValue,
+  RegisteredPanelRecordForPath,
+  RegisteredPanelRecordForPathValue,
+  RegisteredPanelRecord,
+  RegisteredPanelRecordPath,
+  RegisteredPanelRecordPathFor,
   RelatedRecord,
   RelationPath,
   TextFormatter,
+  PanelRecordTypeRegistry,
 } from './types'
 export type {
   InlineEditActionExecutor,

@@ -1,4 +1,31 @@
-import { ShadcnButton, ShadcnInput, ShadcnTable } from '../internal-ui'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+  Field,
+  FieldGroup,
+  FieldLabel,
+  Input,
+  PanelsIcon,
+  Skeleton,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../internal-ui'
 import { safeExternalUrl } from '@holo-js/panels-client'
 import { panelColorAppearance } from '@holo-js/panels-ui'
 import {
@@ -75,7 +102,7 @@ function sparkline(values: readonly number[], label: string): VNode | null {
 
 function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAction']): VNode {
   const content = [
-    stat.icon ? h('span', { 'aria-hidden': 'true', 'data-icon': stat.icon }) : null,
+    stat.icon ? PanelsIcon(stat.icon) : null,
     h('span', { class: 'hp-widget-stat__label' }, stat.label),
     h('strong', { class: 'hp-widget-stat__value' }, String(stat.value)),
     stat.description ? h('span', { class: 'hp-widget-stat__description' }, stat.description) : null,
@@ -89,13 +116,14 @@ function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAc
     'data-color': appearance.attribute,
     style: appearance.custom ? { '--hp-widget-color': appearance.custom } : undefined,
   }
-  if (url) return h('a', { ...attributes, href: url }, content)
-  if (stat.action && onAction) return h(ShadcnButton, {
+  if (url) return h(Button, { ...attributes, as: 'a', href: url, variant: 'ghost' }, () => content)
+  if (stat.action && onAction) return h(Button, {
     ...attributes,
     type: 'button',
+    variant: 'ghost',
     onClick: () => void onAction(stat.action!, stat),
-  }, content)
-  return h('div', attributes, content)
+  }, () => content)
+  return h(Card, attributes, () => h(CardContent, {}, () => content))
 }
 
 function renderStats(data: VueStatsWidgetData, props: VueWidgetRendererProps): VNodeChild {
@@ -199,12 +227,12 @@ function renderChart(data: VueChartWidgetData, heading: string): VNodeChild {
   return h('figure', { class: `hp-widget-chart hp-widget-chart--${data.type}` }, [
     h('svg', { 'aria-hidden': 'true', focusable: 'false', viewBox: '0 0 100 40' }, chartMarks(data, labels)),
     h('figcaption', [h('strong', data.summary), h('span', data.description)]),
-    h(ShadcnTable, { 'aria-label': `${heading} chart data` }, [
-      h('caption', data.summary),
-      h('thead', [h('tr', [h('th', { scope: 'col' }, 'Category'), ...data.series.map(series => h('th', { key: series.id, scope: 'col' }, series.label))])]),
-      h('tbody', labels.map(label => h('tr', { key: label }, [
-        h('th', { scope: 'row' }, label),
-        ...data.series.map(series => h('td', { key: series.id }, series.points.find(point => point.label === label)?.value ?? '—')),
+    h(Table, { 'aria-label': `${heading} chart data` }, () => [
+      h(TableCaption, {}, () => data.summary),
+      h(TableHeader, {}, () => h(TableRow, {}, () => [h(TableHead, {}, () => 'Category'), ...data.series.map(series => h(TableHead, { key: series.id }, () => series.label))])),
+      h(TableBody, {}, () => labels.map(label => h(TableRow, { key: label }, () => [
+        h(TableHead, {}, () => label),
+        ...data.series.map(series => h(TableCell, { key: series.id }, () => series.points.find(point => point.label === label)?.value ?? '—')),
       ]))),
     ]),
   ])
@@ -237,26 +265,25 @@ function filterControl(props: VueWidgetRendererProps, state: VueWidgetStore['sna
   const value = state.filters[filter.id] ?? filter.defaultValue
   const inputId = `hp-widget-${props.manifest.id}-filter-${filter.id}`
   if (typeof filter.defaultValue === 'boolean') {
-    return h('label', { for: inputId }, [
-      h(ShadcnInput, {
-        checked: value === true,
+    return h(Field, { orientation: 'horizontal' }, () => [
+      h(Checkbox, {
         disabled: state.loading,
         id: inputId,
-        type: 'checkbox',
-        onChange: (event: Event) => void props.store.setFilter(filter.id, (event.currentTarget as HTMLInputElement).checked),
+        modelValue: value === true,
+        'onUpdate:modelValue': (next: boolean | 'indeterminate') => void props.store.setFilter(filter.id, next === true),
       }),
-      filter.label,
+      h(FieldLabel, { for: inputId }, () => filter.label),
     ])
   }
   const type = typeof filter.defaultValue === 'number' ? 'number' : 'text'
   const displayValue = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
-  return h('label', { for: inputId }, [
-    h('span', filter.label),
-    h(ShadcnInput, {
+  return h(Field, {}, () => [
+    h(FieldLabel, { for: inputId }, () => filter.label),
+    h(Input, {
       disabled: state.loading,
       id: inputId,
       type,
-      value: displayValue,
+      modelValue: displayValue,
       onChange: (event: Event) => {
         const input = event.currentTarget as HTMLInputElement
         void props.store.setFilter(filter.id, type === 'number' ? input.valueAsNumber : input.value)
@@ -267,10 +294,9 @@ function filterControl(props: VueWidgetRendererProps, state: VueWidgetStore['sna
 
 function filterControls(props: VueWidgetRendererProps, state: VueWidgetStore['snapshot']): VNode | null {
   if (props.manifest.filters.length === 0) return null
-  return h('fieldset', { class: 'hp-widget-filters', disabled: state.loading }, [
-    h('legend', 'Filters'),
+  return h(FieldGroup, { class: 'hp-widget-filters' }, () => [
     ...props.manifest.filters.map(filter => h('div', { key: filter.id }, [filterControl(props, state, filter)])),
-    h(ShadcnButton, { type: 'button', onClick: () => void props.store.resetFilters() }, 'Reset filters'),
+    h(Button, { disabled: state.loading, type: 'button', variant: 'outline', onClick: () => void props.store.resetFilters() }, () => [PanelsIcon('restore'), 'Reset filters']),
   ])
 }
 
@@ -314,26 +340,30 @@ export const VueWidgetRenderer = defineComponent({
       const manifest = componentProps.widget.manifest
       const headingId = `hp-widget-${manifest.id}-heading`
       const content = state.value.status === 'loading'
-        ? h('div', { 'aria-live': 'polite', role: 'status' }, 'Loading widget')
+        ? h(Skeleton, { 'aria-label': 'Loading widget', class: 'hp:h-24 hp:w-full', role: 'status' })
         : state.value.status === 'error'
-          ? h('div', { role: 'alert' }, state.value.error ?? manifest.errorState)
+          ? h(Alert, { variant: 'destructive' }, () => h(AlertDescription, {}, () => state.value.error ?? manifest.errorState))
           : state.value.status === 'ready'
             ? readyContent(componentProps.widget, state.value.data)
             : manifest.lazy
-              ? h(ShadcnButton, { type: 'button', onClick: activate }, `Load ${manifest.heading ?? manifest.id}`)
+              ? h(Button, { type: 'button', onClick: activate }, `Load ${manifest.heading ?? manifest.id}`)
               : null
       const empty = state.value.status === 'ready' && content === null
-      return h('section', {
+      return h(Card, {
         ref: host,
         'aria-labelledby': manifest.heading ? headingId : undefined,
         class: `hp-widget hp-widget--${manifest.family}`,
         'data-slot': 'card',
         'data-widget-id': manifest.id,
-      }, [
-        manifest.heading ? h('h2', { 'data-slot': 'card-title', id: headingId }, manifest.heading) : null,
-        manifest.description ? h('p', { 'data-slot': 'card-description' }, manifest.description) : null,
-        filterControls(componentProps.widget, state.value),
-        empty ? h('div', { class: 'hp-widget-empty' }, manifest.emptyState) : content,
+      }, () => [
+        manifest.heading || manifest.description ? h(CardHeader, {}, () => [
+          manifest.heading ? h(CardTitle, { id: headingId }, () => manifest.heading) : null,
+          manifest.description ? h(CardDescription, {}, () => manifest.description) : null,
+        ]) : null,
+        h(CardContent, {}, () => [
+          filterControls(componentProps.widget, state.value),
+          empty ? h(Empty, { class: 'hp-widget-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No data'), h(EmptyDescription, {}, () => manifest.emptyState)])) : content,
+        ]),
       ])
     }
   },

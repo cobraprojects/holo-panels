@@ -1,6 +1,24 @@
-import { PanelsDropdown, type PanelsDropdownItem } from '../primitives'
+import {
+  Button,
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  PanelsIcon,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../internal-ui'
 import type { PanelShellStore, PanelTenantSwitcherTransport } from '@holo-js/panels-client'
-import { defineComponent, h, onScopeDispose, shallowRef, type PropType, type VNodeChild } from 'vue'
+import { defineComponent, h, onScopeDispose, ref, shallowRef, type PropType, type VNodeChild } from 'vue'
+
+interface TenantMenuItem {
+  readonly disabled?: boolean
+  readonly icon?: string | null
+  readonly id: string
+  readonly label: string
+}
 
 export interface VueTenantSwitcherProps {
   readonly onError?: (error: unknown) => void
@@ -16,6 +34,7 @@ export const VueTenantSwitcher = defineComponent({
     shell: { type: Object as PropType<VueTenantSwitcherProps>, required: true },
   },
   setup(componentProps) {
+    const open = ref(false)
     const state = shallowRef(componentProps.shell.store.snapshot)
     const unsubscribe = componentProps.shell.store.subscribe(next => {
       state.value = next
@@ -25,7 +44,7 @@ export const VueTenantSwitcher = defineComponent({
       const tenancy = state.value.tenancy
       const configuration = state.value.manifest?.tenancy
       if (!tenancy || !configuration || configuration.menu === false) return null
-      const items: PanelsDropdownItem[] = configuration.switcher === false
+      const items: TenantMenuItem[] = configuration.switcher === false
         ? []
         : tenancy.memberships.memberships.map(tenant => ({
             disabled: tenant.routeKey === tenancy.active?.routeKey,
@@ -40,12 +59,8 @@ export const VueTenantSwitcher = defineComponent({
       ]
       items.push(...routes.map(item => ({ icon: item.icon, id: `menu:${item.id}`, label: item.label })))
       if (items.length === 0) return null
-      return h(PanelsDropdown, {
-        ariaLabel: 'Tenant menu',
-        items,
-        label: tenancy.active?.label ?? 'Select tenant',
-        searchable: configuration.searchableMenu ?? tenancy.memberships.memberships.length > 10,
-        onSelect: (id: string) => {
+      const selectItem = (id: string): void => {
+        open.value = false
           if (id.startsWith('tenant:')) {
             const routeKey = id.slice('tenant:'.length)
             void componentProps.shell.store.switchTenant(routeKey, componentProps.shell.transport)
@@ -57,7 +72,44 @@ export const VueTenantSwitcher = defineComponent({
           if (!route) return
           if (componentProps.shell.onNavigate) componentProps.shell.onNavigate(route.path)
           else if (typeof window !== 'undefined') window.location.assign(route.path)
-        },
+      }
+      return h(Popover, {
+        open: open.value,
+        'onUpdate:open': (nextOpen: boolean) => { open.value = nextOpen },
+      }, {
+        default: () => [
+          h(PopoverTrigger, { asChild: true }, {
+            default: () => h(Button, {
+              'aria-expanded': open.value,
+              'aria-label': 'Tenant menu',
+              role: 'combobox',
+              variant: 'outline',
+            }, () => [
+              h('span', tenancy.active?.label ?? 'Select tenant'),
+              PanelsIcon('chevron-down', 'hp:ml-auto hp:opacity-50'),
+            ]),
+          }),
+          h(PopoverContent, { align: 'start', class: 'hp:w-(--reka-popover-trigger-width) hp:p-0' }, {
+            default: () => h(Command, {}, () => [
+              configuration.searchableMenu ?? tenancy.memberships.memberships.length > 10
+                ? h(CommandInput, { placeholder: 'Search tenants…' })
+                : null,
+              h(CommandList, {}, () => [
+                h(CommandEmpty, {}, () => 'No tenant found.'),
+                ...items.map(item => h(CommandItem, {
+                  disabled: item.disabled,
+                  key: item.id,
+                  value: item.id,
+                  onSelect: () => selectItem(item.id),
+                }, () => [
+                  item.icon ? PanelsIcon(item.icon) : null,
+                  h('span', item.label),
+                  item.disabled ? PanelsIcon('check', 'hp:ml-auto') : null,
+                ])),
+              ]),
+            ]),
+          }),
+        ],
       })
     }
   },

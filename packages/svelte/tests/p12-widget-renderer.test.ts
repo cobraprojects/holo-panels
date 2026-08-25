@@ -110,7 +110,8 @@ describe('P12 Svelte widget and dashboard renderer', () => {
       widget('revenue', 'chart', { description: 'Revenue for each month', series: [{ color: '#2563eb', id: 'net', label: 'Net', points: [{ label: 'Jan', value: 10 }, { label: 'Feb', value: 18 }] }], summary: 'Monthly revenue', type: 'line' }),
     ])
 
-    expect(container.querySelector('dl')?.textContent).toMatch(/Revenue\s+\$12k/u)
+    expect(container.querySelector('.hp-widget-stat')?.textContent).toContain('Revenue')
+    expect(container.querySelector('.hp-widget-stat')?.textContent).toContain('$12k')
     expect(container.querySelector('[aria-label="Trend up"]')?.textContent).toBe('↑')
     const stats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
     expect(stats[0]?.dataset.color).toBe('success')
@@ -169,8 +170,8 @@ describe('P12 Svelte widget and dashboard renderer', () => {
 
     expect(container.querySelector('[data-panels-widget="lazy"] [role="status"]')?.textContent).toBe('Loading widget')
     expect(container.querySelector('form[aria-label="lazy filters"] input')?.getAttribute('value')).toBe('month')
-    expect(container.querySelector('[data-panels-widget="broken"] [role="alert"]')?.textContent).toBe('Request failed')
-    expect(container.querySelector('[data-panels-widget="private"] [role="status"]')?.textContent).toBe('Widget unavailable')
+    expect(container.querySelector('[data-panels-widget="broken"] [role="alert"]')?.textContent).toContain('Request failed')
+    expect(container.querySelector('[data-panels-widget="private"] [role="status"]')?.textContent).toContain('Widget unavailable')
     expect(container.querySelector('[data-panels-widget="hidden"]')).toBeNull()
   })
 

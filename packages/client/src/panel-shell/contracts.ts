@@ -90,6 +90,7 @@ export interface PanelShellManifest {
     unsavedChangesAlerts: boolean
   }
   sidebarCollapsible: boolean
+  slots: PanelManifest['slots']
   theme: {
     colors: JsonObject
     darkMode: 'dark' | 'light' | 'system'

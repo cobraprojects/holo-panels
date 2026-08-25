@@ -182,7 +182,7 @@ describe('P7-B column inference and built-ins', () => {
 })
 
 describe('P7-B text formatting and manifest security', () => {
-  it('places configured resource widgets on every generated resource page', () => {
+  it('places resource widgets on the list page without leaking them into record forms', () => {
     const manifests = generatedResourcePageManifests({
       panelPath: '/admin',
       resource: {
@@ -201,7 +201,42 @@ describe('P7-B text formatting and manifest security', () => {
     })
 
     expect(manifests).toHaveLength(4)
-    expect(manifests.every(manifest => manifest.widgets.header.join(',') === 'post-stats,recent-comments')).toBe(true)
+    expect(manifests.find(manifest => manifest.pageType === 'list')?.widgets.header).toEqual(['post-stats', 'recent-comments'])
+    expect(manifests.filter(manifest => manifest.pageType !== 'list').every(manifest => manifest.widgets.header.length === 0)).toBe(true)
+  })
+
+  it('reactively derives a conventional slug field from the title without extra resource configuration', () => {
+    const create = generatedResourcePageManifests({
+      panelPath: '/admin',
+      resource: {
+        capabilities: { delete: true, forceDelete: false, restore: false },
+        form: {
+          fields: [
+            { path: 'title', properties: {}, type: 'text' },
+            { path: 'slug', properties: {}, type: 'text' },
+          ],
+        },
+        id: 'posts',
+        kind: 'resource',
+        model: { definition: { primaryKey: 'id' } },
+        recordTitle: 'title',
+        routeKey: 'id',
+      },
+    }).find(manifest => manifest.pageType === 'create')
+
+    const resource = create?.body?.properties.resource
+    const form = resource && typeof resource === 'object' && !Array.isArray(resource) ? resource.form : null
+
+    expect(form).toMatchObject({
+      dependencies: [{
+        patches: [{ path: 'slug', resolver: { input: { source: 'title' }, name: 'slug' } }],
+        paths: ['title'],
+      }],
+      fields: [
+        expect.objectContaining({ path: 'title', type: 'text' }),
+        expect.objectContaining({ path: 'slug', properties: expect.objectContaining({ source: 'title', specialization: 'slug' }), type: 'slug' }),
+      ],
+    })
   })
 
   it('preserves complete column presentation through generated resource pages', () => {
@@ -237,6 +272,49 @@ describe('P7-B text formatting and manifest security', () => {
       searchable: true,
       sortable: true,
     })
+  })
+
+  it('publishes table filters in the renderer protocol shape', () => {
+    const manifests = generatedResourcePageManifests({
+      panelPath: '/admin',
+      resource: {
+        capabilities: { delete: true, forceDelete: false, restore: false },
+        form: { fields: [] },
+        id: 'posts',
+        kind: 'resource',
+        model: { definition: { primaryKey: 'id' } },
+        recordTitle: 'title',
+        routeKey: 'id',
+        table: {
+          columns: [],
+          filters: [{ defaultValue: null, id: 'status', label: 'Status', multiple: true, options: { draft: 'Draft', published: 'Published' }, type: 'select' }],
+        },
+      },
+    })
+    const resource = manifests[0]?.body?.properties.resource
+    const table = resource && typeof resource === 'object' && !Array.isArray(resource) && resource.table && typeof resource.table === 'object' && !Array.isArray(resource.table)
+      ? resource.table
+      : null
+
+    expect(table?.filters).toEqual([{
+      defaultValue: null,
+      id: 'status',
+      label: 'Status',
+      layout: {},
+      mode: 'live',
+      properties: {
+        multiple: true,
+        options: [
+          { disabled: false, label: 'Draft', value: 'draft' },
+          { disabled: false, label: 'Published', value: 'published' },
+        ],
+        preload: false,
+        relationship: null,
+        schema: null,
+        searchable: false,
+      },
+      type: 'select',
+    }])
   })
 
   it('publishes configured resource actions on record and table surfaces', () => {

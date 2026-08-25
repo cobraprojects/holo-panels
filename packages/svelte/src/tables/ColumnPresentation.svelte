@@ -1,7 +1,7 @@
 <script lang="ts" generics="TRecord extends object">
   import Copy from 'lucide-svelte/icons/copy'
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
+  import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
   import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
   import type { SvelteComponentRegistry } from '../registry'
   import type { SvelteCustomColumnProps, SvelteTableColumn, SvelteTableColumnPath, SvelteTableColumnValue } from './types'
@@ -68,7 +68,7 @@
     {@const color = safeTableColor(value)}
     {#if color}<span><span aria-hidden="true" class="hp-table-color" style:background-color={color}></span>{color}</span>{:else}{formatted}{/if}
   {:else if (column.manifest.type === 'checkbox' || column.manifest.type === 'toggle') && !column.manifest.inlineEditor}
-    <Input aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled readonly type="checkbox" />
+    <Checkbox aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled />
   {:else if badge}
     <span class="hp-table-badge"><span style={contentStyle}>{formatted}</span></span>
   {:else}

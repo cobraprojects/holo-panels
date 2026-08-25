@@ -1,7 +1,11 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Table from '../components/Table.svelte'
+  import { Button } from '../ui/button'
+  import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
+  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'
+  import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '../ui/empty'
+  import { Field, FieldGroup, FieldLabel } from '../ui/field'
+  import { Input } from '../ui/input'
+  import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
   import { panelColorAppearance } from '@holo-js/panels-ui'
   import { onMount, type Component } from 'svelte'
   import { toSvelteSnapshot } from '../stores'
@@ -115,7 +119,7 @@
     if (!registry) throw new Error(`[Holo Panels] A Svelte component registry is required for custom widget "${manifest.id}".`)
     return registry.resolve<SvelteCustomWidgetProps>(custom.component, panelId, `widget "${manifest.id}"`)
   })
-  let root = $state<HTMLElement>()
+  let root = $state<HTMLElement | null>(null)
 
   onMount(() => {
     if (!manifest.lazy) {
@@ -140,37 +144,37 @@
 </script>
 
 {#if $widgetState.status !== 'hidden'}
-  <section bind:this={root} aria-busy={$widgetState.loading} aria-labelledby={`${manifest.id}-heading`} class="hp-widget" data-panels-widget={manifest.id} data-placement={placement} data-slot="card" data-widget-family={manifest.family}>
-    <header data-slot="card-header">
-      <h2 data-slot="card-title" id={`${manifest.id}-heading`}>{widgetLabel(manifest)}</h2>
-      {#if manifest.description}<p data-slot="card-description">{manifest.description}</p>{/if}
-    </header>
+  <Card bind:ref={root} aria-busy={$widgetState.loading} aria-labelledby={`${manifest.id}-heading`} class="hp-widget" data-panels-widget={manifest.id} data-placement={placement} data-widget-family={manifest.family}>
+    <CardHeader>
+      <CardTitle id={`${manifest.id}-heading`}>{widgetLabel(manifest)}</CardTitle>
+      {#if manifest.description}<CardDescription>{manifest.description}</CardDescription>{/if}
+    </CardHeader>
+    <CardContent>
     {#if $widgetState.status === 'unauthorized'}
-      <p role="status">Widget unavailable</p>
+      <Empty role="status"><EmptyHeader><EmptyTitle>Widget unavailable</EmptyTitle><EmptyDescription>You do not have access to this widget.</EmptyDescription></EmptyHeader></Empty>
     {:else if $widgetState.status === 'error'}
-      <p role="alert">{$widgetState.error ?? manifest.errorState}</p>
-      <Button type="button" onclick={() => void store.load()}>Retry</Button>
+      <Alert variant="destructive"><AlertTitle>{$widgetState.error ?? manifest.errorState}</AlertTitle><AlertDescription>The widget could not be loaded.</AlertDescription><Button type="button" onclick={() => void store.load()}>Retry</Button></Alert>
     {:else if $widgetState.loading || $widgetState.status === 'idle'}
-      <p aria-live="polite" role="status">Loading widget</p>
+      <p aria-live="polite" class="hp:text-sm hp:text-muted-foreground" role="status">Loading widget</p>
     {:else if manifest.family === 'stats'}
-      {#if stats.length === 0}<p>{manifest.emptyState}</p>{/if}
-      <dl class="hp-widget-stats">
+      {#if stats.length === 0}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
+      <dl class="hp-widget-stats hp:grid hp:gap-4 hp:sm:grid-cols-2 hp:xl:grid-cols-4">
         {#each stats as stat (stat.id)}
           {@const appearance = panelColorAppearance(stat.color)}
-          <div
+          <Card
             class="hp-widget-stat"
             data-color={appearance.attribute}
             data-trend={stat.trend}
             style={appearance.custom ? `--hp-widget-color: ${appearance.custom}` : undefined}
           >
-            <dt class="hp-widget-stat-label">{#if stat.icon}<span aria-hidden="true" data-icon={stat.icon}></span>{/if}{stat.label}</dt>
-            <dd class="hp-widget-stat-value">{stat.value}</dd>
-            {#if stat.description}<dd class="hp-widget-stat-description">{stat.description}</dd>{/if}
-            {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`} class="hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}">{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
-            {#if stat.chart.length > 0}<dd><span aria-label={`${stat.label} trend: ${stat.chart.join(', ')}`} class="hp-widget-sparkline" role="img">{stat.chart.join(' · ')}</span></dd>{/if}
-            {#if stat.action}<dd><Button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</Button></dd>{/if}
-            {#if safeWidgetUrl(stat.url)}<dd><a href={safeWidgetUrl(stat.url) ?? undefined}>View {stat.label}</a></dd>{/if}
-          </div>
+            <CardHeader><dt><CardDescription class="hp-widget-stat-label">{stat.label}</CardDescription></dt><dd><CardTitle class="hp-widget-stat-value hp:text-2xl">{stat.value}</CardTitle></dd></CardHeader>
+            <CardContent>
+              {#if stat.description}<dd class="hp-widget-stat-description hp:text-sm hp:text-muted-foreground">{stat.description}</dd>{/if}
+              {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`} class="hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}">{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
+              {#if stat.chart.length > 0}<dd><span aria-label={`${stat.label} trend: ${stat.chart.join(', ')}`} class="hp-widget-sparkline" role="img">{stat.chart.join(' · ')}</span></dd>{/if}
+            </CardContent>
+            {#if stat.action || safeWidgetUrl(stat.url)}<CardFooter>{#if stat.action}<dd><Button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</Button></dd>{/if}{#if safeWidgetUrl(stat.url)}<dd><Button href={safeWidgetUrl(stat.url) ?? undefined} variant="outline">View {stat.label}</Button></dd>{/if}</CardFooter>{/if}
+          </Card>
         {/each}
       </dl>
     {:else if manifest.family === 'chart'}
@@ -191,16 +195,17 @@
             {/if}
           </svg>
           <p id={`${manifest.id}-chart-description`}>{chart.description}</p>
-          <Table aria-describedby={`${manifest.id}-chart-description`}><caption>{chart.summary}</caption><thead><tr><th scope="col">Label</th>{#each chart.series as series (series.id)}<th scope="col">{series.label}</th>{/each}</tr></thead><tbody>{#each chartLabels(chart) as label (label)}<tr><th scope="row">{label}</th>{#each chart.series as series (series.id)}<td>{chartValue(series, label) ?? '—'}</td>{/each}</tr>{/each}</tbody></Table>
+          <Table aria-describedby={`${manifest.id}-chart-description`}><TableCaption>{chart.summary}</TableCaption><TableHeader><TableRow><TableHead scope="col">Label</TableHead>{#each chart.series as series (series.id)}<TableHead scope="col">{series.label}</TableHead>{/each}</TableRow></TableHeader><TableBody>{#each chartLabels(chart) as label (label)}<TableRow><TableHead scope="row">{label}</TableHead>{#each chart.series as series (series.id)}<TableCell>{chartValue(series, label) ?? '—'}</TableCell>{/each}</TableRow>{/each}</TableBody></Table>
         </figure>
-      {:else}<p>{manifest.emptyState}</p>{/if}
+      {:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {:else if manifest.family === 'table'}
-      {#if table && tableRenderer}{@const Table = tableRenderer}<Table result={table.result} tableId={table.tableId} widgetId={manifest.id} />{:else}<p>{manifest.emptyState}</p>{/if}
+      {#if table && tableRenderer}{@const TableRenderer = tableRenderer}<TableRenderer result={table.result} tableId={table.tableId} widgetId={manifest.id} />{:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {:else if manifest.family === 'custom'}
-      {#if custom && Custom}<Custom properties={custom.properties} widgetId={manifest.id} />{:else}<p>{manifest.emptyState}</p>{/if}
+      {#if custom && Custom}<Custom properties={custom.properties} widgetId={manifest.id} />{:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {/if}
+    </CardContent>
     {#if manifest.filters.length > 0}
-      <form aria-label={`${widgetLabel(manifest)} filters`} onsubmit={(event) => event.preventDefault()}>{#each manifest.filters as filter (filter.id)}<label>{filter.label}<Input value={String($widgetState.filters[filter.id] ?? '')} onchange={(event) => void store.setFilter(filter.id, event.currentTarget.value)} /></label>{/each}</form>
+      <CardFooter><form class="hp:w-full" aria-label={`${widgetLabel(manifest)} filters`} onsubmit={(event) => event.preventDefault()}><FieldGroup>{#each manifest.filters as filter (filter.id)}<Field><FieldLabel for={`${manifest.id}-${filter.id}`}>{filter.label}</FieldLabel><Input id={`${manifest.id}-${filter.id}`} value={String($widgetState.filters[filter.id] ?? '')} onchange={(event) => void store.setFilter(filter.id, event.currentTarget.value)} /></Field>{/each}</FieldGroup></form></CardFooter>
     {/if}
-  </section>
+  </Card>
 {/if}

@@ -1,4 +1,4 @@
-import { ShadcnButton, ShadcnInput, ShadcnSelect } from '../internal-ui'
+import { Button, Input, NativeSelect } from '../internal-ui'
 import type { NavigationKey } from '@holo-js/panels-client'
 import { defineComponent, h, onBeforeUnmount, onMounted, type PropType, type VNodeChild } from 'vue'
 import { usePanelsStore } from '../stores'
@@ -47,11 +47,11 @@ export const VueNavigationSearchRenderer = defineComponent({
       const state = navigation.value
       const results = search.value
       return h('div', { class: ['hp-navigation-search', `hp-navigation-search--${state.manifest.layout}`], 'data-panels-component': 'navigation-search' }, [
-        h(ShadcnButton, { 'aria-expanded': state.menuOpen, 'aria-label': 'Toggle navigation', type: 'button', onClick: () => componentProps.shell.navigation.toggleMenu() }, 'Menu'),
-        state.manifest.panels.length > 1 ? h('label', ['Panel', h(ShadcnSelect, { 'aria-label': 'Panel', value: state.manifest.panelId, onChange: (event: Event) => componentProps.shell.onNavigate?.(componentProps.shell.navigation.switchPanel(target<HTMLSelectElement>(event).value)) }, state.manifest.panels.map(panel => h('option', { key: panel.id, value: panel.id }, panel.label)))]) : null,
+        h(Button, { 'aria-expanded': state.menuOpen, 'aria-label': 'Toggle navigation', type: 'button', onClick: () => componentProps.shell.navigation.toggleMenu() }, 'Menu'),
+        state.manifest.panels.length > 1 ? h('label', ['Panel', h(NativeSelect, { 'aria-label': 'Panel', modelValue: state.manifest.panelId, onChange: (event: Event) => componentProps.shell.onNavigate?.(componentProps.shell.navigation.switchPanel(target<HTMLSelectElement>(event).value)) }, state.manifest.panels.map(panel => h('option', { key: panel.id, value: panel.id }, panel.label)))]) : null,
         h('nav', { 'aria-label': 'Panel navigation', hidden: !state.menuOpen && state.manifest.layout === 'sidebar', onKeydown: navigateKey }, [
-          ...state.manifest.groups.map(group => h(ShadcnButton, { 'aria-expanded': !state.collapsedGroups.has(group.id), key: group.id, type: 'button', onClick: () => componentProps.shell.navigation.toggleGroup(group.id) }, group.label)),
-          ...state.manifest.clusters.map(cluster => h(ShadcnButton, { 'aria-expanded': !state.collapsedClusters.has(cluster.id), key: cluster.id, type: 'button', onClick: () => componentProps.shell.navigation.toggleCluster(cluster.id) }, cluster.label)),
+          ...state.manifest.groups.map(group => h(Button, { 'aria-expanded': !state.collapsedGroups.has(group.id), key: group.id, type: 'button', onClick: () => componentProps.shell.navigation.toggleGroup(group.id) }, group.label)),
+          ...state.manifest.clusters.map(cluster => h(Button, { 'aria-expanded': !state.collapsedClusters.has(cluster.id), key: cluster.id, type: 'button', onClick: () => componentProps.shell.navigation.toggleCluster(cluster.id) }, cluster.label)),
           h('ul', componentProps.shell.navigation.visibleItems.map(item => h('li', { 'data-cluster': item.cluster, 'data-group': item.group, 'data-parent': item.parent, key: item.id }, h('a', {
             'aria-current': item.id === state.focusedItemId || item.active ? 'page' : undefined,
             href: item.path,
@@ -60,12 +60,12 @@ export const VueNavigationSearchRenderer = defineComponent({
           }, [item.icon ? h('span', { 'aria-hidden': 'true', 'data-icon': item.icon }) : null, item.label, item.badge ? h('span', item.badge) : null, item.variant ? h('small', item.variant) : null])))),
         ]),
         h('div', { class: 'hp-global-search', role: 'search' }, [
-          h('label', ['Global search', h(ShadcnInput, {
+          h('label', ['Global search', h(Input, {
             'aria-controls': 'hp-global-search-results',
             'aria-expanded': results.open,
             placeholder: 'Search…',
             role: 'combobox',
-            value: results.term,
+            modelValue: results.term,
             onFocus: () => componentProps.shell.search.open(),
             onInput: (event: Event) => componentProps.shell.search.input(target<HTMLInputElement>(event).value),
             onKeydown: searchKey,

@@ -1,6 +1,10 @@
 import type { PanelShellStore, PanelTenantSwitcherTransport } from '@holo-js/panels-client'
 import type { ReactNode } from 'react'
-import { PanelsAvatar, PanelsDropdown, type PanelsDropdownItem } from '../primitives'
+import { ChevronsUpDown } from 'lucide-react'
+import { PanelsIcon } from '../internal-ui'
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar'
+import { Button } from '../ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { usePanelsStore } from '../store'
 
 export interface ReactTenantSwitcherProps {
@@ -28,28 +32,33 @@ export function ReactTenantSwitcher(props: ReactTenantSwitcherProps): ReactNode 
     if (props.onNavigate) props.onNavigate(path)
     else if (typeof window !== 'undefined') window.location.assign(path)
   }
-  const items: PanelsDropdownItem[] = configuration.switcher === false
-    ? []
-    : tenancy.memberships.memberships.map(tenant => ({
-        disabled: tenant.routeKey === tenancy.active?.routeKey,
-        id: `tenant:${tenant.routeKey}`,
-        label: tenant.label,
-        onSelect: () => switchTenant(tenant.routeKey),
-        textValue: tenant.label,
-      }))
+  const memberships = configuration.switcher === false ? [] : tenancy.memberships.memberships
   const routes = [
     ...(configuration.profile ? [{ icon: 'user', id: 'profile', label: 'Tenant profile', path: configuration.profile.path }] : []),
     ...(configuration.billing ? [{ icon: 'billing', id: 'billing', label: 'Billing', path: configuration.billing.path }] : []),
     ...(configuration.menuItems ?? []),
     ...(configuration.registration ? [{ icon: 'plus', id: 'registration', label: 'Create tenant', path: configuration.registration.path }] : []),
   ]
-  items.push(...routes.map(item => ({ icon: item.icon, id: `menu:${item.id}`, label: item.label, onSelect: () => navigate(item.path) })))
-  if (items.length === 0) return null
+  if (memberships.length === 0 && routes.length === 0) return null
   const active = tenancy.active
-  return <PanelsDropdown
-    ariaLabel="Tenant menu"
-    items={items}
-    label={<><PanelsAvatar alt={active?.label ?? 'Tenant'} fallback={active?.label.slice(0, 2)} src={active?.avatarUrl ?? undefined} />{active?.label ?? 'Select tenant'}</>}
-    searchable={configuration.searchableMenu ?? tenancy.memberships.memberships.length > 10}
-  />
+  const activeLabel = active?.label ?? 'Select tenant'
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button aria-label="Tenant menu" className="hp:justify-between" variant="outline">
+        <span className="hp:flex hp:min-w-0 hp:items-center hp:gap-2">
+          <Avatar size="sm">{active?.avatarUrl ? <AvatarImage alt={activeLabel} src={active.avatarUrl} /> : null}<AvatarFallback>{activeLabel.slice(0, 2)}</AvatarFallback></Avatar>
+          <span className="hp:truncate">{activeLabel}</span>
+        </span>
+        <ChevronsUpDown className="hp:opacity-50" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" className="hp:min-w-56" data-holo-panel="">
+      {memberships.length > 0 ? <DropdownMenuLabel>Tenants</DropdownMenuLabel> : null}
+      {memberships.map(tenant => <DropdownMenuItem disabled={tenant.routeKey === active?.routeKey} key={tenant.routeKey} onSelect={() => switchTenant(tenant.routeKey)}>
+        <Avatar size="sm">{tenant.avatarUrl ? <AvatarImage alt={tenant.label} src={tenant.avatarUrl} /> : null}<AvatarFallback>{tenant.label.slice(0, 2)}</AvatarFallback></Avatar>{tenant.label}
+      </DropdownMenuItem>)}
+      {memberships.length > 0 && routes.length > 0 ? <DropdownMenuSeparator /> : null}
+      {routes.map(item => <DropdownMenuItem key={item.id} onSelect={() => navigate(item.path)}><PanelsIcon name={item.icon ?? 'circle'} />{item.label}</DropdownMenuItem>)}
+    </DropdownMenuContent>
+  </DropdownMenu>
 }

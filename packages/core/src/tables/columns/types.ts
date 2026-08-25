@@ -2,6 +2,12 @@ import type { JsonObject, JsonValue } from '../../protocol/json'
 
 type AtomicValue = bigint | boolean | Date | number | string | symbol | null | undefined
 
+declare const panelRecordTypeRegistryMarker: unique symbol
+
+export interface PanelRecordTypeRegistry {
+  readonly [panelRecordTypeRegistryMarker]?: never
+}
+
 export type RecordPath<TRecord> = TRecord extends AtomicValue
   ? never
   : TRecord extends readonly (infer TItem)[]
@@ -33,6 +39,32 @@ export type RecordPathValue<TRecord, TPath extends string> = TPath extends keyof
 export type RecordPathFor<TRecord, TValue> = {
   [TPath in RecordPath<TRecord>]: NonNullable<RecordPathValue<TRecord, TPath>> extends TValue ? TPath : never
 }[RecordPath<TRecord>]
+
+type RegisteredPanelRecordValue = NonNullable<PanelRecordTypeRegistry[keyof PanelRecordTypeRegistry]>
+export type RegisteredPanelRecord = [RegisteredPanelRecordValue] extends [never]
+  ? Record<string, unknown>
+  : RegisteredPanelRecordValue
+type PanelRecordCandidate = RegisteredPanelRecord
+
+export type RegisteredPanelRecordPath = PanelRecordCandidate extends infer TRecord
+  ? TRecord extends object ? RecordPath<TRecord> : never
+  : never
+
+export type RegisteredPanelRecordForPath<TPath extends string> = PanelRecordCandidate extends infer TRecord
+  ? TRecord extends object
+    ? TPath extends RecordPath<TRecord> ? TRecord : never
+    : never
+  : never
+
+export type RegisteredPanelRecordPathFor<TValue> = PanelRecordCandidate extends infer TRecord
+  ? TRecord extends object ? RecordPathFor<TRecord, TValue> : never
+  : never
+
+export type RegisteredPanelRecordForPathValue<TPath extends string, TValue> = PanelRecordCandidate extends infer TRecord
+  ? TRecord extends object
+    ? TPath extends RecordPathFor<TRecord, TValue> ? TRecord : never
+    : never
+  : never
 
 export type RelationPath<TRecord> = {
   [TPath in RecordPath<TRecord>]: NonNullable<RecordPathValue<TRecord, TPath>> extends readonly object[] | object

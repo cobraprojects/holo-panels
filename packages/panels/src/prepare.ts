@@ -1,8 +1,9 @@
-import { readFile } from 'node:fs/promises'
+import { lstat, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
   DiscoveryCompiler,
   PanelsDiscoveryError,
+  buildPanelTheme,
   createProjectDiscoveryModuleLoader,
   planFrameworkArtifacts,
   type DiscoveredPanelAppearance,
@@ -85,6 +86,33 @@ function rendererFramework(framework: FrameworkId): 'react' | 'svelte' | 'vue' {
   return 'svelte'
 }
 
+function rendererRegistryType(framework: 'react' | 'svelte' | 'vue'): string {
+  return framework === 'svelte' ? 'SvelteComponentRegistry' : 'ComponentRegistry'
+}
+
+async function applicationRendererModule(projectRoot: string, framework: FrameworkId): Promise<string> {
+  const renderer = rendererFramework(framework)
+  const candidates = await Promise.all(['ts', 'mts', 'js', 'mjs'].map(async extension => {
+    const path = resolve(projectRoot, `resources/panels/renderers/${renderer}.${extension}`)
+    const metadata = await lstat(path).catch(() => undefined)
+    return metadata?.isFile() && !metadata.isSymbolicLink() ? extension : undefined
+  }))
+  const extensions = candidates.filter((extension): extension is string => extension !== undefined)
+  if (extensions.length > 1) throw new Error(`[Holo Panels] Only one application ${renderer} renderer registration module may exist.`)
+  const registryType = rendererRegistryType(renderer)
+  const rendererPackage = `@holo-js/panels-${renderer}`
+  const lines = [`import type { ${registryType} } from '${rendererPackage}'`]
+  if (extensions.length > 0) lines.unshift(`import registerApplicationRenderers from '../../../resources/panels/renderers/${renderer}'`)
+  lines.push(
+    '',
+    `export function registerPanelApplicationRenderers(registry: ${registryType}): ${registryType} {`,
+    extensions.length > 0 ? '  return registerApplicationRenderers(registry)' : '  return registry',
+    '}',
+    '',
+  )
+  return lines.join('\n')
+}
+
 function isCompatibility(value: unknown): value is PluginCompatibility {
   if (!isRecord(value) || !isRecord(value.panels) || !isRecord(value.protocol)) return false
   return typeof value.panels.minimum === 'string' && typeof value.protocol.minimum === 'string'
@@ -153,7 +181,7 @@ function discoveryFailure(error: PanelsDiscoveryError): HoloProjectPrepareError 
   })
 }
 
-export const preparer = defineHoloProjectPreparer({
+const preparer = defineHoloProjectPreparer({
   apiVersion: HOLO_PROJECT_PREPARE_API_VERSION,
   async prepare(context) {
     context.signal.throwIfAborted()
@@ -175,6 +203,9 @@ export const preparer = defineHoloProjectPreparer({
         result.relationManagerTypeBindings,
       )
       const discoveryArtifacts = [...result.artifacts, resourceTypeBindings]
+      const panelTheme = await buildPanelTheme({ projectRoot: context.projectRoot })
+      discoveryArtifacts.push({ path: 'theme.css', contents: panelTheme })
+      const watchRoots = [...new Set([...result.watchRoots, 'resources'])]
       const activeFramework = frameworkId(context.framework?.id)
       const pluginInputs = result.definitions
         .filter(definition => definition.kind === 'panel')
@@ -185,7 +216,7 @@ export const preparer = defineHoloProjectPreparer({
         return {
           kind: 'prepared',
           generatedArtifacts: discoveryArtifacts,
-          watch: { roots: result.watchRoots },
+          watch: { roots: watchRoots },
         } as const
       }
 
@@ -260,6 +291,7 @@ export const preparer = defineHoloProjectPreparer({
         projectRoot: context.projectRoot,
         usedExtensions: extensionTypeIds(pluginInputs),
       })
+      const applicationRenderers = await applicationRendererModule(context.projectRoot, activeFramework)
       const ownershipPath = resolve(context.pluginGeneratedRoot, 'framework-artifacts.json')
       const previousOwnership = parseFrameworkOwnership(await readOptional(ownershipPath))
       const preliminary = planFrameworkArtifacts({
@@ -295,6 +327,7 @@ export const preparer = defineHoloProjectPreparer({
         ? { path: artifact.path, contents: `${JSON.stringify(plan.ownership, null, 2)}\n` }
         : artifact)
       generatedArtifacts.push(
+        { path: 'application-renderers.ts', contents: applicationRenderers },
         { path: 'plugin-renderers.ts', contents: preparedPlugins.rendererModule },
         {
           path: 'plugins.json',
@@ -313,7 +346,7 @@ export const preparer = defineHoloProjectPreparer({
         kind: 'prepared',
         generatedArtifacts,
         managedArtifacts,
-        watch: { roots: result.watchRoots },
+        watch: { roots: watchRoots },
       } as const
     } catch (error) {
       if (error instanceof PanelsDiscoveryError) throw discoveryFailure(error)

@@ -46,6 +46,7 @@ function adapter(): UploadClientAdapter {
         name: input.name,
         panelId: scope.panelId,
         resourceId: scope.resourceId,
+        sessionId: 'upload-session-1',
         size: input.size,
         state: 'pending',
         token: `token-${sequence}`,
@@ -69,6 +70,7 @@ function adapter(): UploadClientAdapter {
         panelId: scope.panelId,
         previewUrl: `https://private.test/${upload.id}`,
         resourceId: scope.resourceId,
+        sessionId: upload.sessionId,
         size: upload.size,
         state: 'stored',
       }
@@ -119,7 +121,7 @@ describe('upload client store', () => {
       const body = init?.body as FormData
       expect(body.get('_token')).toBe('csrf-token')
       const request = JSON.parse(String(body.get(TRANSPORT_REQUEST_FIELD))) as { readonly id: string, readonly payload: Record<string, unknown> }
-      expect(request.payload).toMatchObject({ action: 'write', fieldId: 'avatar', intent: 'edit', recordId: 'user-1', resourceId: 'users' })
+      expect(request.payload).toMatchObject({ action: 'write', fieldId: 'avatar', intent: 'edit', recordId: 'user-1', resourceId: 'users', sessionId: expect.any(String) })
       const contents = body.get('contents')
       expect(contents).toBeInstanceOf(Blob)
       expect((contents as Blob).size).toBe(4)
@@ -134,6 +136,7 @@ describe('upload client store', () => {
           name: 'avatar.png',
           panelId: 'admin',
           resourceId: 'users',
+          sessionId: request.payload.sessionId,
           size: 4,
           state: 'stored',
         },

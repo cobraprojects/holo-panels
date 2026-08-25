@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from 'react'
 import type { JsonObject, SchemaComponentManifest } from '@holo-js/panels-client'
-import { ShadcnButton } from '../internal-ui'
+import { Button } from '../internal-ui'
+import { Collapsible as ShadcnCollapsible, CollapsibleContent, CollapsibleTrigger } from '../ui'
 import type { ComponentRegistry } from '../registry'
 import type {
   ReactSchemaCustomRendererProps,
@@ -127,10 +128,10 @@ function Collapsible({ children, component, label }: {
   const key = collapse?.persistenceKey ? storageKey('collapse', collapse.persistenceKey) : undefined
   const [open, setOpen] = usePersistentOpen(key, !(collapse?.collapsed ?? false))
   if (!collapse?.collapsible) return children
-  return <details onToggle={event => setOpen(event.currentTarget.open)} open={open}>
-    <summary>{label}</summary>
-    {children}
-  </details>
+  return <ShadcnCollapsible onOpenChange={setOpen} open={open}>
+    <CollapsibleTrigger asChild><Button type="button" variant="ghost">{label}</Button></CollapsibleTrigger>
+    <CollapsibleContent>{children}</CollapsibleContent>
+  </ShadcnCollapsible>
 }
 
 interface ComponentRendererProps<TValues extends object = Record<string, unknown>> extends Omit<ReactSchemaRendererProps<TValues>, 'schema'> {
@@ -152,7 +153,7 @@ function TabsRenderer<TValues extends object>({ component, ...props }: Component
   }
   return <div className="hp-schema-tabs">
     <div aria-label={component.properties.label ?? component.properties.heading ?? 'Tabs'} role="tablist">
-      {children.map((child, index) => <ShadcnButton
+      {children.map((child, index) => <Button
         aria-controls={`${instanceId}-${child.id}-panel`}
         aria-selected={index === selected}
         id={`${instanceId}-${child.id}-tab`}
@@ -162,7 +163,7 @@ function TabsRenderer<TValues extends object>({ component, ...props }: Component
         role="tab"
         tabIndex={index === selected ? 0 : -1}
         type="button"
-      >{child.properties.label ?? `Tab ${index + 1}`}</ShadcnButton>)}
+      >{child.properties.label ?? `Tab ${index + 1}`}</Button>)}
     </div>
     {children.map((child, index) => <div
       aria-labelledby={`${instanceId}-${child.id}-tab`}
@@ -182,13 +183,13 @@ function WizardRenderer<TValues extends object>({ component, ...props }: Compone
   return <div className="hp-schema-wizard">
     <nav aria-label={component.properties.label ?? component.properties.heading ?? 'Wizard progress'}>
       <ol>{children.map((child, index) => <li aria-current={index === selected ? 'step' : undefined} key={child.key}>
-        <ShadcnButton onClick={() => select(index)} type="button">{child.properties.label ?? `Step ${index + 1}`}</ShadcnButton>
+        <Button onClick={() => select(index)} type="button">{child.properties.label ?? `Step ${index + 1}`}</Button>
       </li>)}</ol>
     </nav>
     {active ? <ComponentRenderer component={active} {...props} /> : null}
     {children.length > 1 ? <div className="hp-schema-wizard-navigation">
-      <ShadcnButton disabled={selected === 0} onClick={() => select(selected - 1)} type="button">Previous</ShadcnButton>
-      <ShadcnButton disabled={selected === children.length - 1} onClick={() => select(selected + 1)} type="button">Next</ShadcnButton>
+      <Button disabled={selected === 0} onClick={() => select(selected - 1)} type="button">Previous</Button>
+      <Button disabled={selected === children.length - 1} onClick={() => select(selected + 1)} type="button">Next</Button>
     </div> : null}
   </div>
 }

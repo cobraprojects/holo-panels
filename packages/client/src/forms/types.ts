@@ -63,6 +63,7 @@ export type FormOperation =
 
 export interface FormDependencyContext<TValues> {
   readonly changedPaths: ReadonlySet<string>
+  readonly touchedPaths: ReadonlySet<string>
   get<TPath extends FormPath<TValues>>(path: TPath): FormValueAtPath<TValues, TPath>
 }
 

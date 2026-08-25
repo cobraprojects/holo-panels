@@ -6,7 +6,7 @@ import type { JsonObject } from '../protocol/json'
 import type { PanelPluginInstallation } from '../plugins/panel-plugin'
 import type { PluginCompatibility } from '../plugins/compatibility'
 import type { CompiledPanelTenancy, PanelTenancyManifest, PanelTenantBootstrap } from '../tenancy/contracts'
-import type { PanelRenderSlot, ScopedRenderSlots } from './render-slots'
+import type { RenderHook, ScopedRenderSlots } from './render-slots'
 
 export type PanelNavigationMode = 'sidebar' | 'topbar'
 export type PanelDatabaseNotificationPlacement = 'sidebar' | 'topbar'
@@ -217,7 +217,7 @@ export interface PanelManifest {
   readonly routing?: PanelRoutingConfiguration
   readonly runtime?: PanelRuntimeConfiguration
   readonly sidebarCollapsible: boolean
-  readonly slots: ScopedRenderSlots<PanelRenderSlot>
+  readonly slots: ScopedRenderSlots<RenderHook>
   readonly theme: PanelTheme
   readonly icons?: JsonObject
   readonly tenancy: PanelTenancyManifest | null

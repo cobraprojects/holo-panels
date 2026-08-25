@@ -26,7 +26,9 @@ export interface SvelteFieldFrameProps {
   readonly hint?: string
   readonly inputId: string
   readonly label: string
+  readonly path: string
   readonly required?: boolean
+  readonly type: string
 }
 
 export type SvelteFieldPath<TValues extends object> = [FormPath<TValues>] extends [never] ? string : FormPath<TValues>

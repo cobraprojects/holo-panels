@@ -54,7 +54,7 @@ import type {
   PanelUserMenuItem,
 } from './contracts'
 import { compilePanelRoutes } from './routes'
-import { appendScopedRenderSlot, type PanelRenderSlot, type ScopedRenderSlots } from './render-slots'
+import { appendScopedRenderSlot, type RenderHook, type ScopedRenderSlots } from './render-slots'
 
 const IDENTIFIER = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u
@@ -144,7 +144,7 @@ interface PanelState<TActor> {
   plugins: readonly PanelPlugin<TActor>[]
   registered: readonly PanelRegisteredDefinition[]
   sidebarCollapsible: boolean
-  slots: ScopedRenderSlots<PanelRenderSlot>
+  slots: ScopedRenderSlots<RenderHook>
   theme: PanelTheme
   tenancy: {
     compile: (resolver: PanelTenantResolver<TActor> | null) => CompiledPanelTenancy<TActor>
@@ -515,7 +515,7 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
         readOnlyRelationManagersOnResourceViewPagesByDefault: true,
         resourceCreatePageRedirect: 'edit',
         resourceEditPageRedirect: null,
-        spa: false,
+        spa: true,
         spaPrefetching: false,
         spaUrlExceptions: [],
         strictAuthorization: false,
@@ -757,10 +757,6 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
 
   defaults(...defaults: readonly ComponentDefault[]): this {
     return this.writeState('defaults', [...this.readState().defaults, ...defaults])
-  }
-
-  slot(slot: PanelRenderSlot, reference: string | RenderSlotReference): this {
-    return this.writeState('slots', appendScopedRenderSlot(this.readState().slots, slot, reference, 'panel'))
   }
 
   tenancy<
@@ -1287,8 +1283,8 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
     return this.register('cluster', definitions)
   }
 
-  renderHook(slot: PanelRenderSlot, reference: string | RenderSlotReference): this {
-    return this.slot(slot, reference)
+  renderHook(hook: RenderHook, reference: string | RenderSlotReference): this {
+    return this.writeState('slots', appendScopedRenderSlot(this.readState().slots, hook, reference, 'panel'))
   }
 
   compileDiscoveryDefinition(): DiscoverableDefinition<'panel', PanelDiscoveryServer> {

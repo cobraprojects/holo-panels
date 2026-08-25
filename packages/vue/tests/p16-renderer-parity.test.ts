@@ -123,6 +123,7 @@ describe('Vue renderer parity', () => {
     const input = container.querySelector<HTMLInputElement>('input')
 
     expect(input?.type).toBe('password')
+    expect(input?.closest('[data-slot="input-group"]')).not.toBeNull()
     expect(input?.dataset.mask).toBe('credential')
     expect(container.querySelector('.hp-field-prefix')?.textContent).toBe('@')
     expect(container.querySelector('.hp-field-suffix')?.textContent).toBe('.internal')
@@ -145,7 +146,7 @@ describe('Vue renderer parity', () => {
 
     const toggleContainer = mountField('enabled', 'toggle', { offLabel: 'Disabled', onLabel: 'Enabled' }, values)
     expect(toggleContainer.querySelector('.hp-field-toggle-label')?.textContent).toBe('Disabled')
-    toggleContainer.querySelector<HTMLInputElement>('input')?.click()
+    toggleContainer.querySelector<HTMLButtonElement>('[data-slot="switch"]')?.click()
     await nextTick()
     expect(toggleContainer.querySelector('.hp-field-toggle-label')?.textContent).toBe('Enabled')
 

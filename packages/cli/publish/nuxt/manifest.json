@@ -8,7 +8,7 @@
     },
     {
       "path": "composable.ts",
-      "checksum": "02b93560a8e89f7ee1b133910a57aa9619d2eaf490c05580a4128f54c57a2f40"
+      "checksum": "193776b2576be12381fa527bd84607f7d818698a41b087cf65061f315a09c910"
     },
     {
       "path": "contracts.ts",
@@ -16,11 +16,11 @@
     },
     {
       "path": "internal-ui.ts",
-      "checksum": "2503a0c589b60e10ed1906ee5526fbbd17830858071c0e30f59777221518bc07"
+      "checksum": "a2a091b9d32d188a703470b4d2d5b44435afcc46a5a716e98a85a666cc7e0346"
     },
     {
       "path": "page.ts",
-      "checksum": "a9319a58c0f8f2b614244401ec17d4dc9736eae83989d4dac55a9f3ea29de85a"
+      "checksum": "c2f1a460436902ce504ee40aa447ee465d885f7cbad89e57ea30fbd6e2622ab7"
     },
     {
       "path": "validation.ts",

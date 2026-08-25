@@ -229,7 +229,7 @@ describe('P10 relation managers', () => {
       'list', 'view', 'create', 'edit', 'associate', 'dissociate', 'delete',
     ])
     expect(allowedRelationOperations(belongsToMany(() => RelatedModel, 'owner_related', 'owner_id', 'related_id'))).toEqual([
-      'list', 'view', 'attach', 'detach', 'create', 'edit', 'editPivot',
+      'list', 'view', 'attach', 'detach', 'create', 'edit', 'delete', 'editPivot',
     ])
     expect(allowedRelationOperations(morphOne(() => RelatedModel, 'commentable'))).toEqual(['view', 'create', 'edit', 'delete'])
     expect(allowedRelationOperations(morphMany(() => RelatedModel, 'commentable'))).toContain('associate')

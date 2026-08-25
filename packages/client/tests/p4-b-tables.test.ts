@@ -81,6 +81,23 @@ describe('P4-B table query state', () => {
     expect(store.snapshot.selection).toEqual({ mode: 'explicit', selectedRecordIds: [], excludedRecordIds: [] })
   })
 
+  it('preserves explicit selections while the user changes pages, filters, search, and sorting', () => {
+    const store = table()
+    store.selectPage(['1', '3'])
+    store.setPage(2)
+    store.setFilter('status', 'published')
+    store.setSearch('second page')
+    store.setSort([{ column: 'title', direction: 'asc' }])
+    store.selectRecord('8')
+
+    expect(store.snapshot.selection).toEqual({
+      mode: 'explicit',
+      selectedRecordIds: ['1', '3', '8'],
+      excludedRecordIds: [],
+    })
+    expect(store.selectionPayload()).toEqual({ mode: 'explicit', recordIds: ['1', '3', '8'] })
+  })
+
   it('does not let stale responses or stale errors replace newer state', () => {
     const store = table()
     store.setSearch('old')

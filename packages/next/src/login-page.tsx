@@ -2,18 +2,12 @@
 
 import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-react'
 import { useState, type CSSProperties, type FormEvent } from 'react'
-import { nextPanelAuthAppearanceVariables, type NextPanelAuthAppearance } from './auth-appearance'
-import { ShadcnButton, ShadcnCard, ShadcnCardContent, ShadcnCardHeader, ShadcnIcon, ShadcnInput, ShadcnLabel } from './internal-ui'
+import { nextPanelAuthAppearanceVariables } from './auth-appearance'
+import { useNextPanelAuthPresentation } from './auth-presentation'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PanelsIcon, Input, Label } from './internal-ui'
 
 export interface NextPanelLoginPageProps {
-  readonly appearance?: NextPanelAuthAppearance
-  readonly brandName: string
-  readonly forgotPasswordPath?: string
   readonly panelId: string
-  readonly registrationPath?: string
-  readonly simplePageMaxContentWidth?: string
-  readonly theme?: 'dark' | 'light' | 'system'
-  readonly themeColors?: Readonly<Record<string, string>>
 }
 
 function cookie(name: string): string {
@@ -21,9 +15,10 @@ function cookie(name: string): string {
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : ''
 }
 
-export function NextPanelLoginPage({ appearance, brandName, forgotPasswordPath, panelId, registrationPath, simplePageMaxContentWidth, theme = 'system', themeColors }: NextPanelLoginPageProps) {
+export function NextPanelLoginPage({ panelId }: NextPanelLoginPageProps) {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
+  const presentation = useNextPanelAuthPresentation(panelId)
 
   async function login(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
@@ -46,19 +41,21 @@ export function NextPanelLoginPage({ appearance, brandName, forgotPasswordPath, 
     }
   }
 
-  const style = { ...nextPanelAuthAppearanceVariables(appearance, themeColors), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
-  return <main className="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={style}>
-    <ShadcnCard className="hp-auth-card">
-      <ShadcnCardHeader><span className="hp-auth-brand-mark"><ShadcnIcon name="key" /></span><div><p>Administration</p><h1>{brandName}</h1><span>Sign in to your account</span></div></ShadcnCardHeader>
-      <ShadcnCardContent>
-        <form onSubmit={login}>
-          <div className="hp-auth-field"><ShadcnLabel htmlFor={`${panelId}-email`}>Email</ShadcnLabel><ShadcnInput autoComplete="email" id={`${panelId}-email`} name="email" type="email" required /></div>
-          <div className="hp-auth-field"><div className="hp-auth-field-heading"><ShadcnLabel htmlFor={`${panelId}-password`}>Password</ShadcnLabel>{forgotPasswordPath ? <a href={forgotPasswordPath}>Forgot password?</a> : null}</div><ShadcnInput autoComplete="current-password" id={`${panelId}-password`} name="password" type="password" required /></div>
-          {error ? <p className="hp-auth-error" role="alert">{error}</p> : null}
-          <ShadcnButton className="hp-button hp-button-primary" disabled={pending} type="submit">{pending ? 'Signing in…' : 'Sign in'}</ShadcnButton>
+  if (!presentation) return <main className="hp-auth-page hp:flex hp:min-h-svh hp:items-center hp:justify-center hp:bg-muted/40 hp:p-4" data-holo-panel><Card className="hp-auth-card hp:h-80 hp:w-full hp:max-w-md hp:animate-pulse" /></main>
+  const { appearance, brandName, forgotPasswordPath, registrationPath, simplePageMaxContentWidth, theme } = presentation
+  const style = { ...nextPanelAuthAppearanceVariables(appearance), '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } as CSSProperties
+  return <main className="hp-auth-page hp:flex hp:min-h-svh hp:items-center hp:justify-center hp:bg-muted/40 hp:p-4" data-density={appearance.density} data-holo-panel data-theme={theme} style={style}>
+    <Card className="hp-auth-card hp:w-full hp:max-w-md">
+      <CardHeader className="hp:space-y-2"><span className="hp:flex hp:size-10 hp:items-center hp:justify-center hp:rounded-md hp:bg-primary hp:text-primary-foreground"><PanelsIcon name="key" /></span><div className="hp:space-y-1"><p className="hp:text-sm hp:font-medium hp:text-muted-foreground">Administration</p><CardTitle className="hp:text-2xl">{brandName}</CardTitle><CardDescription>Sign in to your account</CardDescription></div></CardHeader>
+      <CardContent className="hp:space-y-4">
+        <form className="hp:space-y-4" onSubmit={login}>
+          <div className="hp-auth-field hp:grid hp:gap-2"><Label htmlFor={`${panelId}-email`}>Email</Label><Input autoComplete="email" id={`${panelId}-email`} name="email" type="email" required /></div>
+          <div className="hp-auth-field hp:grid hp:gap-2"><div className="hp:flex hp:items-center hp:justify-between"><Label htmlFor={`${panelId}-password`}>Password</Label>{forgotPasswordPath ? <a className="hp:text-sm hp:underline hp:underline-offset-4" href={forgotPasswordPath}>Forgot password?</a> : null}</div><Input autoComplete="current-password" id={`${panelId}-password`} name="password" type="password" required /></div>
+          {error ? <p className="hp:text-sm hp:text-destructive" role="alert">{error}</p> : null}
+          <Button className="hp:w-full" disabled={pending} type="submit">{pending ? 'Signing in…' : 'Sign in'}</Button>
         </form>
-        {registrationPath ? <p className="hp-auth-footer">Need an account? <a href={registrationPath}>Register</a></p> : null}
-      </ShadcnCardContent>
-    </ShadcnCard>
+        {registrationPath ? <p className="hp:text-center hp:text-sm hp:text-muted-foreground">Need an account? <a className="hp:text-foreground hp:underline hp:underline-offset-4" href={registrationPath}>Register</a></p> : null}
+      </CardContent>
+    </Card>
   </main>
 }

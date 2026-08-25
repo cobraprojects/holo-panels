@@ -79,6 +79,12 @@ export class SvelteComponentRegistry {
   }
 }
 
+export type SveltePanelRendererRegistration = (registry: SvelteComponentRegistry) => SvelteComponentRegistry
+
+export function defineSveltePanelRenderers(registration: SveltePanelRendererRegistration): SveltePanelRendererRegistration {
+  return registration
+}
+
 export function registerSvelteExtensionRenderer<TProperties extends object>(
   registry: SvelteComponentRegistry,
   kind: RegistryKind,

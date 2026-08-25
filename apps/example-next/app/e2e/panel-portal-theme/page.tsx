@@ -1,9 +1,17 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  PanelsDropdown,
-  PanelsModal,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   PanelsPortalProvider,
 } from '@holo-js/panels-react'
 import '@holo-js/panels-react/style.css'
@@ -18,8 +26,7 @@ interface PanelFixtureProps {
 
 function PanelFixture({ overlay, theme }: PanelFixtureProps): ReactNode {
   const [modalOpen, setModalOpen] = useState(false)
-  const [portalContainer, setPortalContainer] =
-    useState<HTMLElement | null>(null)
+  const portalContainer = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const container = globalThis.document.createElement('div')
@@ -29,9 +36,12 @@ function PanelFixture({ overlay, theme }: PanelFixtureProps): ReactNode {
     container.dataset.panel = `e2e-${theme}`
     container.dataset.theme = theme
     globalThis.document.body.append(container)
-    setPortalContainer(container)
+    portalContainer.current = container
 
-    return () => container.remove()
+    return () => {
+      portalContainer.current = null
+      container.remove()
+    }
   }, [theme])
 
   return (
@@ -45,34 +55,30 @@ function PanelFixture({ overlay, theme }: PanelFixtureProps): ReactNode {
       <h2>{theme === 'light' ? 'Light panel' : 'Dark panel'}</h2>
       <PanelsPortalProvider container={portalContainer}>
         {overlay === 'dropdown' ? (
-          <PanelsDropdown
-            ariaLabel="Open light panel menu"
-            items={[
-              {
-                id: 'light-action',
-                label: 'Light panel action',
-                onSelect: () => undefined,
-              },
-            ]}
-            label="Open light panel menu"
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button aria-label="Open light panel menu" variant="outline">Open light panel menu</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>Light panel action</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <>
-            <button
-              className="hp-button"
+            <Button
               onClick={() => setModalOpen(true)}
               type="button"
             >
               Open dark panel modal
-            </button>
-            <PanelsModal
-              labelledBy="dark-panel-modal-title"
-              onClose={() => setModalOpen(false)}
-              open={modalOpen}
-            >
-              <h2 id="dark-panel-modal-title">Dark panel modal</h2>
-              <p>This dialog belongs to the dark panel.</p>
-            </PanelsModal>
+            </Button>
+            <Dialog onOpenChange={setModalOpen} open={modalOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Dark panel modal</DialogTitle>
+                  <DialogDescription>This dialog belongs to the dark panel.</DialogDescription>
+                </DialogHeader>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </PanelsPortalProvider>

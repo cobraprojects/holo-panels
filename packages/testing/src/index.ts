@@ -5,11 +5,6 @@ export {
   assertRendererAvailable,
   stateRoundTrip,
 } from './contracts/index'
-export {
-  verifyRendererFoundation,
-  type RendererFoundationContract,
-  type RendererFoundationReport,
-} from './renderer-contract'
 export * from './relation-acceptance'
 export * from './navigation-search-acceptance'
 export * from './widget-acceptance'

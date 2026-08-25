@@ -1,7 +1,9 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { PanelsRenderHook as BrowserPanelsRenderHook } from '../src/browser'
 import { componentDefault, definePanelsConfig } from '../src/defaults/component-default'
 import { defineCustomPage, defineListPage, type PageBuilder } from '../src/pages/page'
 import { definePanel, type PanelBuilder } from '../src/panels/panel'
+import { ActionsRenderHook, PanelsRenderHook, TablesRenderHook, WidgetsRenderHook } from '../src/panels/render-slots'
 import { definePanelPlugin, type PanelPluginBuilder } from '../src/plugins/panel-plugin'
 import { createExtensionTypeId } from '../src/plugins/type-id'
 import type { JsonObject } from '../src/protocol/json'
@@ -93,18 +95,27 @@ describe('P16 plugin authoring', () => {
 })
 
 describe('P16 defaults and scoped registrations', () => {
+  it('uses the Filament 5 render hook identifiers without compatibility aliases', () => {
+    expect(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE).toBe('panels::page.header.actions.before')
+    expect(BrowserPanelsRenderHook).toBe(PanelsRenderHook)
+    expect(ActionsRenderHook.MODAL_SCHEMA_AFTER).toBe('actions::modal.schema.after')
+    expect(TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE).toBe('tables::toolbar.toggle-column-trigger.before')
+    expect(WidgetsRenderHook.TABLE_WIDGET_START).toBe('widgets::table-widget.start')
+    expect(definePanel('admin').renderHook(TablesRenderHook.TOOLBAR_START, 'app.table-leading').compile().manifest.slots[TablesRenderHook.TOOLBAR_START]).toHaveLength(1)
+  })
+
   it('retains server-only defaults and ordered panel slots outside executable client values', () => {
     const apply = (builder: object): object => builder
     const defaultValue = componentDefault('field', 'text', apply)
     const configuration = definePanelsConfig({ defaults: [defaultValue] })
     const panel = definePanel('admin')
       .defaults(defaultValue)
-      .slot('topbar-after', 'app.user-menu')
-      .slot('topbar-after', { component: 'app.notifications', order: -10, properties: { compact: true } })
+      .renderHook(PanelsRenderHook.TOPBAR_AFTER, 'app.user-menu')
+      .renderHook(PanelsRenderHook.TOPBAR_AFTER, { component: 'app.notifications', order: -10, properties: { compact: true } })
       .compile()
 
     expect(configuration.defaults).toEqual([defaultValue])
-    expect(panel.manifest.slots['topbar-after']).toEqual([
+    expect(panel.manifest.slots[PanelsRenderHook.TOPBAR_AFTER]).toEqual([
       { component: 'app.notifications', order: -10, properties: { compact: true }, source: 'panel' },
       { component: 'app.user-menu', order: 0, properties: {}, source: 'panel' },
     ])
@@ -113,17 +124,14 @@ describe('P16 defaults and scoped registrations', () => {
     expect(() => componentDefault<object>('field', 'text', () => []).apply({})).toThrow('same concrete builder subtype')
   })
 
-  it('creates independent configured pages and appends JSON-safe page slots', () => {
-    const original = defineCustomPage('dashboard').title('Dashboard').slot('above-content', 'app.banner')
+  it('creates independent configured pages', () => {
+    const original = defineCustomPage('dashboard').title('Dashboard')
     const variant = original.configured('regional-dashboard', page => page
-      .path('/regional')
-      .slot('above-content', { component: 'app.region', order: 20 }))
+      .path('/regional'))
 
     expectTypeOf(variant).toEqualTypeOf<PageBuilder>()
     expect(original.compile().manifest).toMatchObject({ id: 'dashboard', path: '/dashboard' })
     expect(variant.compile().manifest).toMatchObject({ id: 'regional-dashboard', path: '/regional' })
-    expect(variant.compile().manifest.slots['above-content']).toHaveLength(2)
-    expect(() => defineCustomPage('duplicate').slot('above-content', 'app.banner').slot('above-content', 'app.banner')).toThrow('Duplicate')
   })
 
   it('registers configured resource and page variants independently in multiple panels', () => {
@@ -163,13 +171,9 @@ describe('P16 defaults and scoped registrations', () => {
       .writableAttributes(['title'])
       .baseQuery(query => ({ ...query, tenant: 9 }))
       .singular({ resolve })
-      .slot('form-before', 'app.account-notice')
       .compile()
 
     expect(singular.singular?.resolve).toBe(resolve)
-    expect(singular.slots['form-before']).toEqual([
-      { component: 'app.account-notice', order: 0, properties: {}, source: 'resource' },
-    ])
     const authorizeClass = vi.fn(async () => undefined)
     const authorizeRecord = vi.fn(async () => undefined)
     const executor = new ResourceExecutor(singular, { authorization: { authorizeClass, authorizeRecord } })
@@ -195,6 +199,6 @@ describe('P16 defaults and scoped registrations', () => {
   })
 
   it('preserves concrete panel builder types', () => {
-    expectTypeOf(definePanel('admin').slot('footer', 'app.footer')).toEqualTypeOf<PanelBuilder>()
+    expectTypeOf(definePanel('admin').renderHook(PanelsRenderHook.FOOTER, 'app.footer')).toEqualTypeOf<PanelBuilder>()
   })
 })

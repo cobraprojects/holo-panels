@@ -17,6 +17,7 @@ export type PanelAuthOperation =
   | 'mfa-status'
   | 'password-reset-request'
   | 'password-reset'
+  | 'presentation'
   | 'profile-read'
   | 'profile-update'
   | 'registration'
@@ -37,6 +38,23 @@ export type PanelAuthOperationOutcome = Readonly<{
   readonly redirectTo: string | null
   readonly status: 200 | 204 | 303
 }>
+
+export interface PanelAuthPresentation {
+  readonly appearance: Readonly<{
+    readonly colors: Readonly<Record<string, string>>
+    readonly density: 'comfortable' | 'compact'
+    readonly fontFamily: string | null
+    readonly monoFontFamily: string | null
+    readonly serifFontFamily: string | null
+    readonly tokens: Readonly<Record<string, string>>
+  }>
+  readonly brandName: string
+  readonly forgotPasswordPath: string | null
+  readonly loginPath: string | null
+  readonly registrationPath: string | null
+  readonly simplePageMaxContentWidth: string
+  readonly theme: 'dark' | 'light' | 'system'
+}
 
 type Input = Readonly<Record<string, unknown>>
 
@@ -96,11 +114,36 @@ function redirectOutcome(cookies: readonly string[], data: unknown, redirectTo: 
   return Object.freeze({ cookies: Object.freeze([...cookies]), data: toJsonValue(data), redirectTo, status: 303 })
 }
 
+export function panelAuthPresentation<TActor>(panel: CompiledPanelDefinition<TActor>): PanelAuthPresentation {
+  return Object.freeze({
+    appearance: Object.freeze({
+      colors: Object.freeze({ ...panel.manifest.theme.colors }) as Readonly<Record<string, string>>,
+      density: panel.manifest.theme.density,
+      fontFamily: panel.manifest.theme.fontFamily,
+      monoFontFamily: panel.manifest.theme.monoFontFamily ?? null,
+      serifFontFamily: panel.manifest.theme.serifFontFamily ?? null,
+      tokens: Object.freeze({ ...panel.manifest.theme.tokens }) as Readonly<Record<string, string>>,
+    }),
+    brandName: panel.manifest.branding.name,
+    forgotPasswordPath: panel.manifest.auth?.passwordReset?.requestPath ?? null,
+    loginPath: panel.manifest.auth?.login?.path ?? null,
+    registrationPath: panel.manifest.auth?.registration?.path ?? null,
+    simplePageMaxContentWidth: panel.manifest.layout?.simplePageMaxContentWidth ?? 'lg',
+    theme: panel.manifest.theme.darkMode,
+  })
+}
+
 export async function executePanelAuthOperation<TActor, TTenant, TServices>(
   options: ExecutePanelAuthOperationOptions<TActor, TTenant, TServices>,
 ): Promise<PanelAuthOperationOutcome> {
-  const controller = createPanelAuthController(options)
   const input = inputObject(options.payload)
+
+  if (options.operation === 'presentation') {
+    exactInput(input, [])
+    return outcome(panelAuthPresentation(options.panel))
+  }
+
+  const controller = createPanelAuthController(options)
 
   switch (options.operation) {
     case 'login': {

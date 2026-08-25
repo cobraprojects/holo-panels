@@ -95,7 +95,6 @@ const page: PanelResolvedPageData = {
     path: '/admin/posts',
     renderer: null,
     schemaId: 'posts.table',
-    slots: {},
     widgets: { footer: [], header: [] },
   },
   schema: { components: [], id: 'posts.table', kind: 'schema' },

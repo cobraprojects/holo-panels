@@ -74,7 +74,7 @@ describe('P12 React widget renderer', () => {
     expect(widgetRegion?.classList.contains('hp-widget-stats')).toBe(false)
     expect(widgetRegion?.querySelector(':scope > .hp-widget-stats')).not.toBeNull()
     expect(container.textContent).toContain('Revenue$42Since last monthup')
-    const stats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
+    const stats = container.querySelectorAll<HTMLElement>('li.hp-widget-stat')
     expect(stats[0]?.dataset.color).toBe('#123456')
     expect(stats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('#123456')
     expect(stats[1]?.dataset.color).toBe('success')

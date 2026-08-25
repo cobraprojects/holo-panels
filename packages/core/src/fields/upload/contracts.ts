@@ -30,6 +30,7 @@ export interface TemporaryUploadDescriptor {
   readonly name: string
   readonly panelId: string
   readonly resourceId: string
+  readonly sessionId: string
   readonly size: number
   readonly state: 'pending' | 'stored'
   readonly tenantId?: string
@@ -74,7 +75,7 @@ export interface UploadStorageAdapter {
   list(directory: string, request: UploadStorageListRequest): Promise<UploadStorageListPage>
   put(path: string, contents: Uint8Array): Promise<void>
   putJson(path: string, value: unknown): Promise<void>
-  temporaryUrl(path: string, expiresInSeconds: number): Promise<string>
+  temporaryUrl(path: string, expiresInSeconds: number): Promise<string | null>
 }
 
 export interface UploadMimeInspector {
@@ -94,20 +95,22 @@ export interface TemporaryUploadServiceOptions {
 export interface CreateTemporaryUploadInput extends UploadActorContext {
   readonly declaredMimeType: string
   readonly name: string
+  readonly sessionId: string
   readonly size: number
 }
 
 export interface WriteTemporaryUploadInput extends UploadActorContext {
   readonly contents: Uint8Array
   readonly id: string
+  readonly sessionId: string
   readonly token: string
 }
 
 export type UploadEndpointBody =
-  | { readonly action: 'create', readonly declaredMimeType: string, readonly name: string, readonly size: number }
-  | { readonly action: 'delete', readonly id: string, readonly token: string }
-  | { readonly action: 'resolve', readonly id: string, readonly token: string }
-  | { readonly action: 'write', readonly contents: Uint8Array, readonly id: string, readonly token: string }
+  | { readonly action: 'create', readonly declaredMimeType: string, readonly name: string, readonly sessionId: string, readonly size: number }
+  | { readonly action: 'delete', readonly id: string, readonly sessionId: string, readonly token: string }
+  | { readonly action: 'resolve', readonly id: string, readonly sessionId: string, readonly token: string }
+  | { readonly action: 'write', readonly contents: Uint8Array, readonly id: string, readonly sessionId: string, readonly token: string }
 
 export interface UploadEndpointRequest {
   readonly body: UploadEndpointBody
@@ -119,11 +122,13 @@ export type UploadEndpointResponse = TemporaryUploadDescriptor | StoredUploadDes
 
 export interface ResolveTemporaryUploadInput extends UploadActorContext {
   readonly id: string
+  readonly sessionId: string
   readonly token: string
 }
 
 export interface DeleteTemporaryUploadInput extends UploadActorContext {
   readonly id: string
+  readonly sessionId: string
   readonly token: string
 }
 

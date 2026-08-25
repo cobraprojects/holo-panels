@@ -4,6 +4,7 @@ import { reactNotificationRendererName } from './renderer'
 import type { ReactCustomNotificationProps } from './types'
 
 export { ReactNotificationInbox, ReactToastViewport, reactNotificationRendererName } from './renderer'
+export { ReactFeedbackProvider, useReactFeedback, type ReactFeedback } from './feedback'
 export { ReactNotificationInboxTrigger } from './trigger'
 
 export function registerReactNotificationRenderer(registry: ComponentRegistry, type: string, component: ComponentType<ReactCustomNotificationProps>): ComponentRegistry {

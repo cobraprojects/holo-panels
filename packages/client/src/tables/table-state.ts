@@ -135,7 +135,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
   setSearch(search: string): void {
     const normalized = search.trim().slice(0, 500)
     if (normalized === this.#state.search) return
-    this.#invalidate({ search: normalized, page: 1 }, true)
+    this.#invalidate({ search: normalized, page: 1 }, this.#queryChangeResetsSelection())
   }
 
   setSort(sort: readonly TableSort[]): void {
@@ -148,7 +148,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     }
     const normalized = sort.map(item => Object.freeze({ ...item }))
     if (JSON.stringify(normalized) === JSON.stringify(this.#state.sort)) return
-    this.#invalidate({ sort: normalized, page: 1 }, true)
+    this.#invalidate({ sort: normalized, page: 1 }, this.#queryChangeResetsSelection())
   }
 
   setGrouping(grouping: TableGrouping | null): void {
@@ -157,7 +157,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
       if (grouping.direction !== 'asc' && grouping.direction !== 'desc') throw new Error('[Holo Panels] Invalid table grouping direction.')
     }
     if (JSON.stringify(grouping) === JSON.stringify(this.#state.grouping)) return
-    this.#invalidate({ grouping, page: 1 }, true)
+    this.#invalidate({ grouping, page: 1 }, this.#queryChangeResetsSelection())
   }
 
   setVisibleColumns(columns: readonly string[]): void {
@@ -176,7 +176,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
       return
     }
     const applied = draft
-    this.#invalidate({ filters: { ...this.#state.filters, applied, draft }, page: 1 }, true)
+    this.#invalidate({ filters: { ...this.#state.filters, applied, draft }, page: 1 }, this.#queryChangeResetsSelection())
   }
 
   removeFilter(filterId: string): void {
@@ -188,7 +188,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
       this.#publish({ ...this.#state, filters: { ...this.#state.filters, draft: frozenDraft } })
       return
     }
-    this.#invalidate({ filters: { ...this.#state.filters, applied: frozenDraft, draft: frozenDraft }, page: 1 }, true)
+    this.#invalidate({ filters: { ...this.#state.filters, applied: frozenDraft, draft: frozenDraft }, page: 1 }, this.#queryChangeResetsSelection())
   }
 
   applyDeferredFilters(): void {
@@ -197,12 +197,12 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     this.#invalidate({
       filters: { ...this.#state.filters, applied: this.#state.filters.draft },
       page: 1,
-    }, true)
+    }, this.#queryChangeResetsSelection())
   }
 
   resetFilters(): void {
     if (Object.keys(this.#state.filters.applied).length === 0 && Object.keys(this.#state.filters.draft).length === 0) return
-    this.#invalidate({ filters: { ...this.#state.filters, applied: {}, draft: {} }, page: 1 }, true)
+    this.#invalidate({ filters: { ...this.#state.filters, applied: {}, draft: {} }, page: 1 }, this.#queryChangeResetsSelection())
   }
 
   selectRecord(recordId: TRecordId, selected = true): void {
@@ -305,10 +305,10 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
       || JSON.stringify(visibleColumns) !== JSON.stringify(this.#state.visibleColumns)
       || JSON.stringify(appliedFilters) !== JSON.stringify(this.#state.filters.applied)
     if (!queryChanged) return
-    const selectionChanged = search !== this.#state.search
+    const selectionChanged = this.#queryChangeResetsSelection() && (search !== this.#state.search
       || JSON.stringify(sort) !== JSON.stringify(this.#state.sort)
       || JSON.stringify(grouping) !== JSON.stringify(this.#state.grouping)
-      || JSON.stringify(appliedFilters) !== JSON.stringify(this.#state.filters.applied)
+      || JSON.stringify(appliedFilters) !== JSON.stringify(this.#state.filters.applied))
     this.#invalidate({
       page,
       perPage,
@@ -322,6 +322,10 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
 
   #setSelection(selection: TableSelection<TRecordId>): void {
     this.#publish({ ...this.#state, selection })
+  }
+
+  #queryChangeResetsSelection(): boolean {
+    return this.#state.selection.mode === 'all-matching'
   }
 
   #invalidate(

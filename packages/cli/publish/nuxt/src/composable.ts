@@ -1,8 +1,10 @@
 import type { NuxtPanelPage, UsePanelPageOptions } from './contracts'
+import { shallowReactive, watch } from 'vue'
 import { assertPanelId, normalizePanelLocation } from './validation'
 
 interface NuxtImports {
   createError(input: { readonly statusCode: number, readonly statusMessage: string }): Error
+  showError(input: Error): void
   useAsyncData<TValue>(key: string, handler: () => Promise<TValue>): Promise<{ readonly data: { readonly value: TValue | null }, readonly error: { readonly value: Error | null } }>
   useRequestFetch(): (path: string, options: Readonly<Record<string, unknown>>) => Promise<unknown>
   useRoute(): { readonly fullPath: string }
@@ -26,20 +28,47 @@ function isPage(value: unknown): value is NuxtPanelPage {
     && typeof page.page === 'object'
 }
 
+async function loadPage(
+  imports: NuxtImports,
+  panelId: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<NuxtPanelPage> {
+  const payload = await imports.useRequestFetch()(pageEndpoint(panelId), { method: 'GET', query: { path }, signal })
+  if (!isPage(payload)) throw imports.createError({ statusCode: 500, statusMessage: 'The generated Holo Panels registry returned an invalid page payload.' })
+  return payload
+}
+
 export async function usePanelPage(options: UsePanelPageOptions): Promise<NuxtPanelPage> {
   assertPanelId(options.panelId)
-  const imports = options.path ? null : await nuxtImports()
-  const path = normalizePanelLocation(options.path ?? imports?.useRoute().fullPath ?? '/')
+  if (options.load) {
+    const path = normalizePanelLocation(options.path ?? '/')
+    return await options.load({ panelId: options.panelId, path, signal: new AbortController().signal })
+  }
+  const imports = await nuxtImports()
+  const route = imports.useRoute()
+  const path = normalizePanelLocation(options.path ?? route.fullPath)
   const controller = new AbortController()
-  if (options.load) return await options.load({ panelId: options.panelId, path, signal: controller.signal })
-  if (!imports) throw new Error('Nuxt panel page loading requires a Nuxt request context')
-  const requestFetch = imports.useRequestFetch()
   const state = await imports.useAsyncData(`holo-panels:${options.panelId}:${path}`, async () => {
-    const payload = await requestFetch(pageEndpoint(options.panelId), { method: 'GET', query: { path }, signal: controller.signal })
-    if (!isPage(payload)) throw imports.createError({ statusCode: 500, statusMessage: 'The generated Holo Panels registry returned an invalid page payload.' })
-    return payload
+    return await loadPage(imports, options.panelId, path, controller.signal)
   })
   if (state.error.value) throw state.error.value
   if (!state.data.value) throw imports.createError({ statusCode: 503, statusMessage: 'Run holo prepare to generate the Holo Panels server registry.' })
-  return state.data.value
+  const currentPage = shallowReactive(state.data.value)
+  if (!options.path) {
+    let navigationController: AbortController | undefined
+    watch(() => route.fullPath, (nextLocation) => {
+      const nextPath = normalizePanelLocation(nextLocation)
+      if (nextPath === currentPage.path) return
+      navigationController?.abort()
+      navigationController = new AbortController()
+      const activeController = navigationController
+      void loadPage(imports, options.panelId, nextPath, activeController.signal).then((nextPage) => {
+        if (!activeController.signal.aborted) Object.assign(currentPage, nextPage)
+      }).catch((error: unknown) => {
+        if (!activeController.signal.aborted) imports.showError(error instanceof Error ? error : new Error('The panel page could not be loaded.'))
+      })
+    })
+  }
+  return currentPage
 }

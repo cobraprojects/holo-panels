@@ -95,6 +95,18 @@ export interface ReactTableAction {
   readonly url?: (recordId: TableRecordId) => string
 }
 
+export interface ReactTableActionGroup {
+  readonly actions: readonly ReactTableAction[]
+  readonly color?: string | null
+  readonly icon?: string | null
+  readonly id: string
+  readonly kind: 'action-group'
+  readonly label?: string | null
+  readonly scope: 'bulk' | 'header' | 'row'
+}
+
+export type ReactTableActionItem = ReactTableAction | ReactTableActionGroup
+
 export interface ReactTableActionRequest<TRecordId extends TableRecordId> {
   readonly actionId: string
   readonly recordId?: TRecordId
@@ -138,7 +150,7 @@ export interface ReactTableRendererProps<
   TRecordId extends TableRecordId,
 > {
   readonly actionTransport?: ReactTableActionTransport<TRecordId>
-  readonly actions?: readonly ReactTableAction[]
+  readonly actions?: readonly ReactTableActionItem[]
   readonly caption: string
   readonly columns: readonly ReactTableColumn<TRecord>[]
   readonly emptyMessage?: string

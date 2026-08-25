@@ -1,7 +1,6 @@
-import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnTable } from '../internal-ui'
+import { Badge, Button, Checkbox, PanelsIcon, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../internal-ui'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import type { FormPath, FormValueAtPath } from '@holo-js/panels-client'
-import { ChevronDown } from 'lucide-vue-next'
 import { defineComponent, h, ref, type PropType, type VNode, type VNodeChild } from 'vue'
 import type { ComponentRegistry } from '../registry'
 import type { VueCustomColumnProps, VueTableColumn } from './types'
@@ -172,8 +171,8 @@ export interface VueTablePresentationProps<TRecord extends object = object> {
 
 function tableSummaryRows(columnCount: number, summaries: readonly VueTablePresentationSummary[]): VNode | null {
   if (summaries.length === 0) return null
-  return h('tfoot', summaries.map(summary => h('tr', { class: 'hp-table-total-summary', key: summary.id }, [
-    h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, ['Total · ', summary.label, ': ', summary.value]),
+  return h(TableFooter, {}, () => summaries.map(summary => h(TableRow, { class: 'hp-table-total-summary', key: summary.id }, () => [
+    h(TableHead, { colspan: Math.max(1, columnCount), scope: 'row' }, () => ['Total · ', summary.label, ': ', summary.value]),
   ])))
 }
 
@@ -185,11 +184,11 @@ function presentationRows(
   const nodes: VNodeChild[] = []
   const columnCount = presentation.columns.length + (presentation.leading ? 1 : 0) + (presentation.trailing ? 1 : 0)
   if (group) {
-    nodes.push(h('tr', { class: 'hp-table-group', key: `group-${group.key}` }, [
-      h('th', { colspan: Math.max(1, columnCount), scope: 'rowgroup' }, [
+    nodes.push(h(TableRow, { class: 'hp-table-group', key: `group-${group.key}` }, () => [
+      h(TableHead, { colspan: Math.max(1, columnCount), scope: 'rowgroup' }, () => [
         group.collapsible
-          ? h(ShadcnButton, { 'aria-expanded': !group.collapsed, type: 'button', onClick: group.onToggle }, {
-              default: () => [h(ChevronDown, { 'aria-hidden': 'true' }), h('span', group.title), h('span', { class: 'hp-table-group-count' }, records.length)],
+          ? h(Button, { 'aria-expanded': !group.collapsed, type: 'button', onClick: group.onToggle }, {
+              default: () => [PanelsIcon('chevron-down'), h('span', group.title), h(Badge, { variant: 'secondary' }, () => records.length)],
             })
           : group.title,
         group.description ? h('small', group.description) : null,
@@ -198,9 +197,9 @@ function presentationRows(
   }
   if (!group?.collapsed) {
     for (const record of records) {
-      nodes.push(h('tr', { key: presentation.rowKey(record) }, [
-        presentation.leading ? h('td', { 'data-label': presentation.leading.label }, [presentation.leading.render(record)]) : null,
-        ...presentation.columns.map(column => h('td', {
+      nodes.push(h(TableRow, { key: presentation.rowKey(record) }, () => [
+        presentation.leading ? h(TableCell, { 'data-label': presentation.leading.label }, () => presentation.leading!.render(record)) : null,
+        ...presentation.columns.map(column => h(TableCell, {
           'data-label': column.label,
           key: column.key,
           style: {
@@ -208,14 +207,14 @@ function presentationRows(
             whiteSpace: column.wrap === false ? 'nowrap' : undefined,
             width: column.width ?? undefined,
           },
-        }, [column.render(record)])),
-        presentation.trailing ? h('td', { class: 'hp-table-row-actions', 'data-label': presentation.trailing.label }, [presentation.trailing.render(record)]) : null,
+        }, () => column.render(record))),
+        presentation.trailing ? h(TableCell, { class: 'hp-table-row-actions', 'data-label': presentation.trailing.label }, () => presentation.trailing!.render(record)) : null,
       ]))
     }
   }
   for (const summary of group?.summaries ?? []) {
-    nodes.push(h('tr', { class: 'hp-table-group-summary', key: `${group?.key}-${summary.id}` }, [
-      h('th', { colspan: Math.max(1, columnCount), scope: 'row' }, [group?.title, ' subtotal · ', summary.label, ': ', summary.value]),
+    nodes.push(h(TableRow, { class: 'hp-table-group-summary', key: `${group?.key}-${summary.id}` }, () => [
+      h(TableHead, { colspan: Math.max(1, columnCount), scope: 'row' }, () => [group?.title, ' subtotal · ', summary.label, ': ', summary.value]),
     ]))
   }
   return nodes
@@ -241,19 +240,14 @@ export const VueTablePresentation = defineComponent({
         role: 'region',
         tabindex: 0,
       }, [
-        h(ShadcnTable, null, () => [
-          h('caption', { class: 'hp-visually-hidden' }, presentation.caption),
-          h('thead', [h('tr', [
-            presentation.leading ? h('th', { scope: 'col' }, [presentation.leading.header]) : null,
-            ...presentation.columns.map(column => h('th', {
-              'aria-sort': column.ariaSort,
-              key: column.key,
-              scope: 'col',
-              style: { textAlign: column.alignment },
-            }, [column.header])),
-            presentation.trailing ? h('th', { scope: 'col' }, [presentation.trailing.header]) : null,
-          ])]),
-          h('tbody', rows),
+        h(Table, null, () => [
+          h(TableCaption, { class: 'hp-visually-hidden' }, () => presentation.caption),
+          h(TableHeader, {}, () => h(TableRow, {}, () => [
+            presentation.leading ? h(TableHead, { scope: 'col' }, () => presentation.leading?.header ?? presentation.leading?.label) : null,
+            ...presentation.columns.map(column => h(TableHead, { 'aria-sort': column.ariaSort, key: column.key, scope: 'col', style: { textAlign: column.alignment } }, () => column.header)),
+            presentation.trailing ? h(TableHead, { scope: 'col' }, () => presentation.trailing?.header ?? presentation.trailing?.label) : null,
+          ])),
+          h(TableBody, {}, () => rows),
           tableSummaryRows(columnCount, presentation.summaries ?? []),
         ]),
       ])
@@ -314,10 +308,10 @@ export const VueTableColumnPresentation = defineComponent({
         const color = safeColor(value)
         content = color ? h('span', [h('span', { 'aria-hidden': 'true', class: 'hp-table-color', style: { backgroundColor: color } }), color]) : formatted
       } else if ((type === 'checkbox' || type === 'toggle') && !column.manifest.inlineEditor) {
-        content = h(ShadcnInput, { 'aria-label': column.manifest.label ?? column.manifest.path, checked: value === true, disabled: true, readonly: true, type: 'checkbox' })
+        content = h(Checkbox, { 'aria-label': column.manifest.label ?? column.manifest.path, disabled: true, modelValue: value === true })
       } else {
         const text = h('span', { style: contentStyle }, formatted)
-        content = badge ? h('span', { class: 'hp-table-badge' }, [text]) : text
+        content = badge ? h(Badge, { class: 'hp-table-badge', variant: 'secondary' }, () => text) : text
       }
       const linked = url ? h('a', { href: url, rel: url.startsWith('/') ? undefined : 'noopener noreferrer' }, [content]) : content
       const copy = async (): Promise<void> => {
@@ -335,7 +329,7 @@ export const VueTableColumnPresentation = defineComponent({
       return h('span', { class: 'hp-table-cell', title: typeof tooltip === 'string' ? tooltip : undefined }, [
         linked,
         column.manifest.copyable && !column.manifest.inlineEditor
-          ? h(ShadcnButton, { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, class: 'hp-table-copy', type: 'button', onClick: () => void copy() }, { default: () => ShadcnIcon('copy') })
+          ? h(Button, { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, class: 'hp-table-copy', size: 'icon', type: 'button', variant: 'ghost', onClick: () => void copy() }, { default: () => PanelsIcon('copy') })
           : null,
         h('span', { 'aria-live': 'polite', class: 'hp-visually-hidden' }, copyStatus.value),
       ])

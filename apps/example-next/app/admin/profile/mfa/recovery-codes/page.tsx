@@ -1,9 +1,9 @@
-// @holo-panels-managed sha256:2883700186c7385b8b0a77491fbe8a4c102b0d28e7c970a3a714031097e14776
+// @holo-panels-managed sha256:c30ae40027b9ca8c50defaa0df398e19612fd5352af2d64dc017de9f937194c6
 'use client'
 
-import '@holo-js/panels-react/style.css'
+import '../../../../../.holo-js/generated/panels/theme.css'
 import { NextPanelMultiFactorPage } from '@holo-js/panels-next/client'
 
 export default function AuthPage() {
-  return <NextPanelMultiFactorPage brandName={"Holo Panels Admin"} panelId="admin" simplePageMaxContentWidth="lg" theme="system" appearance={{"colors":{"primary":"#7c3aed"},"density":"comfortable","fontFamily":null,"monoFontFamily":null,"serifFontFamily":null,"tokens":{}}} />
+  return <NextPanelMultiFactorPage panelId="admin" />
 }

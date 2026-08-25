@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Textarea from '../components/Textarea.svelte'
+  import { Textarea } from '../ui/textarea'
   import type { SvelteEditorProps } from './contracts'
 
   let { value, disabled, readOnly, label, inputId, describedBy, errorMessageId, invalid, setValue }: SvelteEditorProps = $props()

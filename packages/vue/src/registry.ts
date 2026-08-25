@@ -70,6 +70,12 @@ export function createComponentRegistry(): ComponentRegistry {
   return new ComponentRegistry()
 }
 
+export type VuePanelRendererRegistration = (registry: ComponentRegistry) => ComponentRegistry
+
+export function defineVuePanelRenderers(registration: VuePanelRendererRegistration): VuePanelRendererRegistration {
+  return registration
+}
+
 export function registerVueExtensionRenderer(
   registry: ComponentRegistry,
   kind: RegistryKind,

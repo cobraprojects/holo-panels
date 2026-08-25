@@ -78,6 +78,41 @@ describe('panel auth operation dispatcher', () => {
     expect(guard.login).toHaveBeenCalledWith({ email: 'ava@example.com', password: 'secret' })
   })
 
+  it('returns only the public authentication presentation compiled from the panel', async () => {
+    const { common } = fixture()
+    const panel = definePanel('admin')
+      .auth({ login: true, passwordReset: { broker: 'admins' }, registration: true })
+      .brandName('Control Center')
+      .colors({ primary: '#7c3aed' })
+      .simplePageMaxContentWidth('screen-sm')
+      .theme({ darkMode: 'system', density: 'compact' })
+      .compile()
+
+    const result = await executePanelAuthOperation({ ...common, operation: 'presentation', panel, payload: {} })
+
+    expect(result).toEqual({
+      cookies: [],
+      data: {
+        appearance: {
+          colors: { primary: '#7c3aed' },
+          density: 'compact',
+          fontFamily: null,
+          monoFontFamily: null,
+          serifFontFamily: null,
+          tokens: {},
+        },
+        brandName: 'Control Center',
+        forgotPasswordPath: '/admin/forgot-password',
+        loginPath: '/admin/login',
+        registrationPath: '/admin/register',
+        simplePageMaxContentWidth: 'screen-sm',
+        theme: 'system',
+      },
+      redirectTo: null,
+      status: 200,
+    })
+  })
+
   it('registers through the configured Holo guard and redirects inside the panel', async () => {
     const { common, guard } = fixture()
     const result = await executePanelAuthOperation({

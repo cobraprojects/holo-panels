@@ -1,7 +1,9 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Select from '../components/Select.svelte'
+  import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
+  import { Input } from '../ui/input'
+  import { NativeSelect as Select } from '../ui/native-select'
+  import { Switch } from '../ui/switch'
   import type { TableRecordId } from '@holo-js/panels-client'
   import ColumnPresentation from './ColumnPresentation.svelte'
   import { displayValue, optionValue, recordValue } from './helpers'
@@ -79,7 +81,7 @@
   <Button type="button" aria-label="Edit {column.manifest.label ?? column.manifest.path}" onclick={begin}><ColumnPresentation {column} panelId={table.panelId} {record} registry={table.registry} value={original} /></Button>
 {:else if kind === 'checkbox' || kind === 'toggle'}
   <span>
-    <Input type="checkbox" aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onchange={(event) => { value = (event.currentTarget as HTMLInputElement).checked; void save(value) }} />
+    {#if kind === 'toggle'}<Switch aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onCheckedChange={(checked) => { value = checked; void save(value) }} />{:else}<Checkbox aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onCheckedChange={(checked) => { value = checked; void save(value) }} />{/if}
     {#if error}<span role="alert">{error}</span>{/if}
   </span>
 {:else if kind === 'select'}

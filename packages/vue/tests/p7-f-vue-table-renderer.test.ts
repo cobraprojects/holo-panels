@@ -1,4 +1,4 @@
-import { TableStateStore, type FilterCollectionPresentation } from '@holo-js/panels-client'
+import { ClientToastStore, TableStateStore, type FilterCollectionPresentation } from '@holo-js/panels-client'
 import {
   createApp,
   createSSRApp,
@@ -154,13 +154,13 @@ describe('P7-F Vue table renderer', () => {
     expect(container.querySelector('form[aria-label="Table filters"]')).toBeNull()
     Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Filters')?.click()
     await nextTick()
-    const form = container.querySelector('form[aria-label="Table filters"]')
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+    const form = document.querySelector('form[aria-label="Table filters"]')
+    expect(document.querySelector('[data-slot="popover-content"]')).not.toBeNull()
     expect(form?.getAttribute('data-filter-placement')).toBe('dropdown')
     expect(form?.getAttribute('style')).toContain('--hp-filter-columns-md: 3')
     expect(Array.from(form?.querySelectorAll('label') ?? []).map(label => label.textContent)).toEqual(['Status filter', 'Title filter'])
-    expect(container.querySelector('[data-filter-slot="before"]')?.textContent).toBe('before filters')
-    expect(container.querySelector('[data-filter-slot="after"]')?.textContent).toBe('after filters')
+    expect(document.querySelector('[data-filter-slot="before"]')?.textContent).toBe('before filters')
+    expect(document.querySelector('[data-filter-slot="after"]')?.textContent).toBe('after filters')
   })
 
   it('mounts an export action with configured format, columns, selection, and progress', async () => {
@@ -172,10 +172,10 @@ describe('P7-F Vue table renderer', () => {
     })
     Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Export posts')?.click()
     await flush()
-    Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click()
+    Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click()
     await flush()
     expect(startExport).toHaveBeenCalledWith(expect.objectContaining({ columnIds: ['title'], definitionId: 'posts.export', formatId: 'csv', selection: { mode: 'explicit', recordIds: [] } }), expect.any(AbortSignal))
-    expect(container.querySelector('progress[aria-label="Transfer progress"]')).not.toBeNull()
+    expect(document.querySelector('[role="progressbar"][aria-label="Transfer progress"]')).not.toBeNull()
   })
 
   it('renders structured, extension, multi-select, and positioned filters without scalar fallback', async () => {
@@ -299,10 +299,10 @@ describe('P7-F Vue table renderer', () => {
     await nextTick()
     expect(store.snapshot.filters.applied.status).toBe('draft')
 
-    container.querySelector<HTMLButtonElement>('.hp-column-manager > button')?.click()
+    container.querySelector<HTMLButtonElement>('.hp-column-manager')?.click()
     await nextTick()
-    const statusColumn = Array.from(container.querySelectorAll<HTMLInputElement>('.hp-column-manager input'))
-      .find(control => control.parentElement?.textContent === 'Status')
+    const statusColumn = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'))
+      .find(control => control.textContent === 'Status')
     statusColumn?.click()
     await nextTick()
     expect(store.snapshot.visibleColumns).toEqual(['title'])
@@ -346,7 +346,7 @@ describe('P7-F Vue table renderer', () => {
     expect(execute).toHaveBeenCalledWith({ actionId: 'posts.export' }, expect.any(AbortSignal))
     expect(execute).toHaveBeenCalledWith({ actionId: 'posts.inspect', recordId: 1 }, expect.any(AbortSignal))
 
-    container.querySelector<HTMLInputElement>('input[aria-label="Select page"]')?.click()
+    container.querySelector<HTMLButtonElement>('[data-slot="checkbox"][aria-label="Select page"]')?.click()
     await nextTick()
     expect(store.snapshot.selection.selectedRecordIds).toEqual([1, 2])
     const selectAll = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
@@ -365,6 +365,89 @@ describe('P7-F Vue table renderer', () => {
       actionId: 'posts.publish',
       selection: expect.objectContaining({ mode: 'all-matching', excludedRecordIds: [] }),
     }), expect.any(AbortSignal))
+  })
+
+  it('requires the panel confirmation UI before destructive actions execute', async () => {
+    const execute = vi.fn(async () => undefined)
+    const container = mountTable({
+      ...baseProps(createStore()),
+      actions: [{ color: 'danger', confirmation: 'Delete this record?', icon: 'delete', id: 'posts.delete', label: 'Delete', scope: 'row' }],
+      actionTransport: { execute },
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action="posts.delete"]')
+    expect(trigger?.getAttribute('data-variant')).toBe('destructive')
+    trigger?.click()
+    await flush()
+    expect(execute).not.toHaveBeenCalled()
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain('Delete this record?')
+    const confirm = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === 'Confirm')
+    confirm?.click()
+    await flush()
+    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.delete', recordId: 1 }, expect.any(AbortSignal))
+  })
+
+  it('keeps grouped action confirmation mounted after its dropdown closes', async () => {
+    const execute = vi.fn(async () => undefined)
+    const container = mountTable({
+      ...baseProps(createStore()),
+      actions: [{
+        actions: [{ confirmation: 'Publish selected records?', icon: 'check', id: 'posts.publish', label: 'Publish selected', scope: 'bulk' }],
+        id: 'posts.bulk',
+        kind: 'action-group',
+        label: 'Bulk actions',
+        scope: 'bulk',
+      }],
+      actionTransport: { execute },
+    })
+    container.querySelector<HTMLButtonElement>('[aria-label="Select page"]')?.click()
+    await flush()
+    container.querySelector<HTMLButtonElement>('[aria-label="Bulk actions"]')?.click()
+    await flush()
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === 'Publish selected')?.click()
+    await flush()
+
+    expect(execute).not.toHaveBeenCalled()
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain('Publish selected records?')
+    Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === 'Confirm')?.click()
+    await flush()
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+      actionId: 'posts.publish',
+      selection: { mode: 'explicit', recordIds: [1, 2] },
+    }), expect.any(AbortSignal))
+  })
+
+  it('publishes grouped action failures to the mounted panel notification store', async () => {
+    const notificationStore = new ClientToastStore()
+    const container = mountTable({
+      ...baseProps(createStore()),
+      actions: [{
+        actions: [{ icon: 'check', id: 'posts.publish', label: 'Publish selected', scope: 'bulk' }],
+        id: 'posts.bulk',
+        kind: 'action-group',
+        label: 'Bulk actions',
+        scope: 'bulk',
+      }],
+      actionTransport: { execute: async () => { throw new Error('Private server detail') } },
+      notificationStore,
+    })
+    container.querySelector<HTMLButtonElement>('[aria-label="Select page"]')?.click()
+    await flush()
+    container.querySelector<HTMLButtonElement>('[aria-label="Bulk actions"]')?.click()
+    await flush()
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === 'Publish selected')?.click()
+    await flush()
+
+    expect(notificationStore.state.items).toEqual([
+      expect.objectContaining({
+        body: 'The operation could not be completed.',
+        status: 'danger',
+        title: 'Publish selected failed',
+      }),
+    ])
+    notificationStore.dispose()
   })
 
   it('executes only compiled inline actions and supports Enter and Escape', async () => {
@@ -451,6 +534,7 @@ describe('P7-F Vue table renderer', () => {
     await nextTick()
 
     expect(warn).not.toHaveBeenCalled()
-    expect(container.innerHTML).toBe(normalizedServerHtml)
+    const normalizeTeleportMarkers = (markup: string): string => markup.replace(/<!--(?:v-if|teleport start|teleport end)-->/gu, '')
+    expect(normalizeTeleportMarkers(container.innerHTML)).toBe(normalizeTeleportMarkers(normalizedServerHtml))
   })
 })

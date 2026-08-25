@@ -7,10 +7,10 @@ import { createComponentRegistry } from '../src/registry'
 
 const manifest: ClientActionManifest = {
   badge: null,
-  color: null,
+  color: 'danger',
   confirmation: 'Delete this record?',
   disabled: false,
-  icon: 'check',
+  icon: 'delete',
   id: 'posts.delete',
   kind: 'delete',
   label: 'Delete',
@@ -75,11 +75,11 @@ describe('P8-B Vue action renderer', () => {
     mounted.push({ app, container })
     Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Publishing')?.click()
     await flush()
-    Array.from(container.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === 'Delete')?.click()
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === 'Delete')?.click()
     await flush()
-    const dialog = container.querySelector('[role="dialog"]')
-    expect(dialog?.classList.contains('hp-slide-over')).toBe(true)
-    expect(dialog?.querySelector('[data-modal-width]')?.getAttribute('data-modal-width')).toBe('large')
+    const dialog = document.querySelector('[data-slot="sheet-content"]')
+    expect(dialog?.getAttribute('data-panels-component')).toBe('slide-over')
+    expect(dialog?.getAttribute('data-modal-width')).toBe('large')
     expect(dialog?.textContent).toContain('Delete post')
     expect(dialog?.textContent).toContain('Review deletion')
     expect(dialog?.textContent).toContain('Body slot')
@@ -96,27 +96,31 @@ describe('P8-B Vue action renderer', () => {
     const app = createApp(defineComponent(() => () => h(VueActionRenderer, { action: manifest, recordIds: [9], store })))
     app.mount(container)
     mounted.push({ app, container })
-    expect(container.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action-id="posts.delete"]')
+    expect(trigger?.classList.contains('hp-action-trigger')).toBe(true)
+    expect(trigger?.getAttribute('data-variant')).toBe('destructive')
+    expect(trigger?.querySelector('[data-icon="delete"][data-slot="icon"]')).not.toBeNull()
 
     container.querySelector<HTMLButtonElement>('button')?.click()
     await flush()
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Delete this record?')
-    Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Confirm')?.click()
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('Delete this record?')
+    expect(Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Confirm')?.querySelector('[data-icon="delete"]')).not.toBeNull()
+    Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Confirm')?.click()
     await flush()
-    expect(container.querySelector('[data-schema-id="delete-reason"]')).not.toBeNull()
+    expect(document.querySelector('[data-schema-id="delete-reason"]')).not.toBeNull()
     store.setInput({ reason: 'Duplicate' })
-    container.querySelector<HTMLFormElement>('form')?.requestSubmit()
+    document.querySelector<HTMLFormElement>('[data-panels-component="modal"] form')?.requestSubmit()
     await flush()
     expect(store.activeFrame?.phase).toBe('succeeded')
 
     store.mount({ ...manifest, confirmation: null, id: 'posts.notice', label: 'Notice', modal: null, mount: 'notification' })
     await flush()
-    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Notice')
-    container.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Notice')
+    document.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
     await flush()
     expect(store.activeFrame?.manifest.id).toBe('posts.delete')
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Delete')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Delete')
   })
 
   it('hydrates deterministic server-rendered action markup without diagnostics', async () => {
@@ -132,7 +136,7 @@ describe('P8-B Vue action renderer', () => {
     app.mount(container)
     mounted.push({ app, container })
     await flush()
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull()
     expect(consoleError).not.toHaveBeenCalled()
   })
 })

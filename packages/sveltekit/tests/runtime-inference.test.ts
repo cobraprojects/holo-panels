@@ -11,7 +11,7 @@ describe('SvelteKit runtime inference', () => {
       operations: {
         action: input => ({ data: { actor: input.scope.actor.id, tenant: input.tenant?.slug ?? null } }),
       },
-      resolvePage: input => ({ breadcrumbs: [], data: { actor: input.scope.actor.id, tenant: input.tenant?.slug ?? null }, heading: null, manifest: { actions: { footer: [], header: [] }, body: null, id: 'dashboard', navigation: null, pageType: 'custom', path: '/admin', renderer: null, schemaId: null, slots: {}, widgets: { footer: [], header: [] } }, schema: null, subheading: null, title: 'Dashboard' }),
+      resolvePage: input => ({ breadcrumbs: [], data: { actor: input.scope.actor.id, tenant: input.tenant?.slug ?? null }, heading: null, manifest: { actions: { footer: [], header: [] }, body: null, id: 'dashboard', navigation: null, pageType: 'custom', path: '/admin', renderer: null, schemaId: null, widgets: { footer: [], header: [] } }, schema: null, subheading: null, title: 'Dashboard' }),
       resolveTenant: () => ({ slug: 'acme' }),
     })
 

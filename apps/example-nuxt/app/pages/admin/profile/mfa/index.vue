@@ -1,12 +1,9 @@
-<!-- @holo-panels-managed sha256:2486c689ad416092a7ae515eddf8d41799f369059776e9bf0cba983174ddbee9 -->
+<!-- @holo-panels-managed sha256:903cca96faeea7fd2f39957013f382d825da000e31c5bfa3c2dd33afeb0ded3a -->
 <script setup lang="ts">
-import '@holo-js/panels-vue/style.css'
+import '../../../../../.holo-js/generated/panels/theme.css'
 import { PanelMultiFactorPage } from '@holo-js/panels-nuxt'
-
-const brandName = "Holo Panels Admin"
-const appearance = {"colors":{"primary":"#7c3aed"},"density":"comfortable","fontFamily":null,"monoFontFamily":null,"serifFontFamily":null,"tokens":{}} as const
 </script>
 
 <template>
-  <PanelMultiFactorPage :appearance="appearance" :brand-name="brandName" panel-id="admin" simple-page-max-content-width="lg" theme="system" />
+  <PanelMultiFactorPage panel-id="admin" />
 </template>

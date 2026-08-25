@@ -12,6 +12,7 @@ export {
 } from './builtins'
 export { ActionEngine, ActionExecutionError } from './engine'
 export { actionGroup, ActionGroupBuilder } from './groups'
+export { builtInActionPresentation, type BuiltInActionPresentation } from './presentation'
 export type {
   ActionContext,
   ActionDefinition,

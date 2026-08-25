@@ -1,4 +1,4 @@
-import { ShadcnButton, ShadcnInput } from '../internal-ui'
+import { Button, Input, Progress } from '../internal-ui'
 import type { ClientUploadFile } from '@holo-js/panels-client'
 import { defineComponent, getCurrentScope, h, onScopeDispose, readonly, shallowRef, type PropType, type VNode } from 'vue'
 import { requireStore } from './shared'
@@ -38,7 +38,7 @@ export const VueUploadField = defineComponent({
           field.context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null,
         ]),
         description ? h('div', { id: descriptionId }, description) : null,
-        h(ShadcnInput, {
+        h(Input, {
           id: field.context.inputId,
           type: 'file',
           multiple: true,
@@ -51,12 +51,12 @@ export const VueUploadField = defineComponent({
         h('ul', state.value.items.map((item, index) => h('li', { key: item.id }, [
           item.previewUrl ? h('img', { alt: `Preview of ${item.name}`, src: item.previewUrl }) : null,
           h('span', item.name),
-          h('progress', { 'aria-label': `Upload progress for ${item.name}`, max: 1, value: item.progress }),
+          h(Progress, { 'aria-label': `Upload progress for ${item.name}`, max: 1, modelValue: item.progress }),
           h('span', { 'aria-live': 'polite' }, item.status),
           item.error ? h('span', { role: 'alert' }, item.error) : null,
-          h(ShadcnButton, { type: 'button', 'aria-label': `Move ${item.name} up`, disabled: disabled || index === 0, onClick: () => store.reorder(index, index - 1) }, '↑'),
-          h(ShadcnButton, { type: 'button', 'aria-label': `Move ${item.name} down`, disabled: disabled || index === state.value.items.length - 1, onClick: () => store.reorder(index, index + 1) }, '↓'),
-          h(ShadcnButton, { type: 'button', 'aria-label': `Remove ${item.name}`, disabled, onClick: () => void store.remove(item.id) }, 'Remove'),
+          h(Button, { type: 'button', 'aria-label': `Move ${item.name} up`, disabled: disabled || index === 0, onClick: () => store.reorder(index, index - 1) }, '↑'),
+          h(Button, { type: 'button', 'aria-label': `Move ${item.name} down`, disabled: disabled || index === state.value.items.length - 1, onClick: () => store.reorder(index, index + 1) }, '↓'),
+          h(Button, { type: 'button', 'aria-label': `Remove ${item.name}`, disabled, onClick: () => void store.remove(item.id) }, 'Remove'),
         ]))),
         field.context.errors.length > 0 ? h('ul', { id: errorId, role: 'alert' }, field.context.errors.map(error => h('li', { key: error }, error))) : null,
       ])

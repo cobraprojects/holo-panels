@@ -1,6 +1,7 @@
 import type {
   ClientTransferManifest,
   ClientTransferTransport,
+  ClientToastStore,
   FilterCollectionPresentation,
   FormPath,
   FormValueAtPath,
@@ -95,6 +96,18 @@ export interface VueTableAction {
   readonly scope: 'bulk' | 'header' | 'row'
 }
 
+export interface VueTableActionGroup {
+  readonly actions: readonly VueTableAction[]
+  readonly color?: string | null
+  readonly icon?: string | null
+  readonly id: string
+  readonly kind: 'action-group'
+  readonly label?: string | null
+  readonly scope: 'bulk' | 'header' | 'row'
+}
+
+export type VueTableActionItem = VueTableAction | VueTableActionGroup
+
 export interface VueTableActionRequest<TRecordId extends TableRecordId> {
   readonly actionId: string
   readonly recordId?: TRecordId
@@ -157,7 +170,7 @@ export interface VueTableRendererProps<
   TRecordId extends TableRecordId,
 > {
   readonly actionTransport?: VueTableActionTransport<TRecordId>
-  readonly actions?: readonly VueTableAction[]
+  readonly actions?: readonly VueTableActionItem[]
   readonly caption: string
   readonly columns: readonly VueTableColumn<TRecord>[]
   readonly emptyMessage?: string
@@ -167,6 +180,7 @@ export interface VueTableRendererProps<
   readonly getRecordVersion?: (record: Readonly<TRecord>) => string | undefined
   readonly groups?: readonly VueTableGroup<TRecord>[]
   readonly inlineEditTransport?: VueInlineEditTransport<TRecordId>
+  readonly notificationStore?: ClientToastStore
   readonly onQueryChange?: () => void
   readonly panelId?: string
   readonly registry?: ComponentRegistry

@@ -3,7 +3,7 @@ import { builtinModules } from 'node:module'
 import ts from 'typescript'
 
 const packagesRoot = new URL('../packages/', import.meta.url)
-const sourceExtensions = ['.css', '.js', '.jsx', '.mjs', '.mts', '.svelte', '.ts', '.tsx']
+const sourceExtensions = ['.css', '.js', '.jsx', '.mjs', '.mts', '.svelte', '.ts', '.tsx', '.vue']
 const builtinPackageNames = new Set([
   ...builtinModules,
   ...builtinModules.map(name => `node:${name}`),
@@ -39,6 +39,7 @@ const rendererPackages = new Set([
   '@holo-js/panels-svelte',
   '@holo-js/panels-vue',
 ])
+const sonnerPackages = new Set(['sonner', 'svelte-sonner', 'vue-sonner'])
 const allowedWorkspaceDependencies = new Map([
   ['@holo-js/panels', new Set([
     '@holo-js/panels-actions',
@@ -54,7 +55,7 @@ const allowedWorkspaceDependencies = new Map([
     '@holo-js/panels-ui',
   ])],
   ['@holo-js/panels-actions', new Set(['@holo-js/panels-core', '@holo-js/panels-schemas'])],
-  ['@holo-js/panels-cli', new Set(['@holo-js/panels-core'])],
+  ['@holo-js/panels-cli', new Set(['@holo-js/panels-core', '@holo-js/panels-ui'])],
   ['@holo-js/panels-client', new Set(['@holo-js/panels-core'])],
   ['@holo-js/panels-core', new Set()],
   ['@holo-js/panels-forms', new Set(['@holo-js/panels-core', '@holo-js/panels-schemas'])],
@@ -157,12 +158,15 @@ function isPackageSpecifier(specifier) {
   return !specifier.startsWith('.')
     && !specifier.startsWith('/')
     && !specifier.startsWith('#')
+    && !specifier.startsWith('$')
     && !builtinPackageNames.has(specifier)
 }
 
-function extractModuleImports(source) {
-  const imports = [...source.matchAll(/@import\s+(?:url\()?['"]([^'"]+)['"]/gu)]
-    .map(match => ({ eager: true, specifier: match[1] }))
+function extractModuleImports(source, css) {
+  const imports = css
+    ? [...source.matchAll(/@import\s+(?:url\()?['"]([^'"]+)['"]/gu)]
+      .map(match => ({ eager: true, specifier: match[1] }))
+    : []
   const sourceFile = ts.createSourceFile(
     'architecture-source.ts',
     source,
@@ -203,6 +207,14 @@ function extractModuleImports(source) {
     }
 
     if (ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.getText(sourceFile) === 'import.meta.resolve'
+      && node.arguments.length === 1
+      && ts.isStringLiteral(node.arguments[0])) {
+      imports.push({ eager: true, specifier: node.arguments[0].text })
+    }
+
+    if (ts.isCallExpression(node)
       && ts.isIdentifier(node.expression)
       && node.expression.text === 'require'
       && node.arguments.length === 1
@@ -228,9 +240,17 @@ function packageExportsSubpath(manifest, exportKey) {
   if (exportKey === '.' && typeof manifest.exports === 'string') {
     return true
   }
-  return typeof manifest.exports === 'object'
-    && manifest.exports !== null
-    && Object.hasOwn(manifest.exports, exportKey)
+  if (typeof manifest.exports !== 'object' || manifest.exports === null) return false
+  if (Object.hasOwn(manifest.exports, exportKey)) return true
+  return Object.keys(manifest.exports).some(pattern => {
+    const wildcardIndex = pattern.indexOf('*')
+    if (wildcardIndex < 0) return false
+    const prefix = pattern.slice(0, wildcardIndex)
+    const suffix = pattern.slice(wildcardIndex + 1)
+    return exportKey.length >= prefix.length + suffix.length
+      && exportKey.startsWith(prefix)
+      && exportKey.endsWith(suffix)
+  })
 }
 
 function validateDomainImport(packageName, importedPackage, eager) {
@@ -259,13 +279,22 @@ function validateSourceDependencies(packageName, manifest, sources) {
   ])
   const importedPackages = new Set()
 
-  for (const source of sources) {
-    for (const { eager, specifier } of extractModuleImports(source)) {
-      if (!isPackageSpecifier(specifier)) {
+  for (const sourceInput of sources) {
+    const source = typeof sourceInput === 'string' ? sourceInput : sourceInput.content
+    const css = typeof sourceInput === 'string' ? false : sourceInput.css
+    const sourcePath = typeof sourceInput === 'string' ? null : sourceInput.path ?? null
+    for (const { eager, specifier } of extractModuleImports(source, css)) {
+      if (specifier.startsWith('@/') || !isPackageSpecifier(specifier)) {
         continue
       }
 
       const importedPackage = packageNameFromSpecifier(specifier)
+      if (sourcePath
+        && sonnerPackages.has(importedPackage)
+        && !sourcePath.includes('/notifications/')
+        && !sourcePath.includes('/ui/sonner')) {
+        throw new Error(`${packageName} may import ${importedPackage} only from its notification renderer`)
+      }
       importedPackages.add(importedPackage)
       validateDomainImport(packageName, importedPackage, eager)
 
@@ -343,7 +372,11 @@ for (const [packageName, { manifest, packageRoot }] of [...manifests].map(([name
   },
 ])) {
   const sourceFiles = await collectSourceFiles(new URL('src/', packageRoot))
-  const sources = await Promise.all(sourceFiles.map(sourceFile => readFile(sourceFile, 'utf8')))
+  const sources = await Promise.all(sourceFiles.map(async sourceFile => ({
+    content: await readFile(sourceFile, 'utf8'),
+    css: sourceFile.pathname.endsWith('.css'),
+    path: sourceFile.pathname,
+  })))
   validateSourceDependencies(packageName, manifest, sources)
 }
 
@@ -352,6 +385,23 @@ assertDependencyValidationFails(
   {},
   ["import 'undeclared-runtime'"],
   'imports undeclared dependency undeclared-runtime',
+)
+assertDependencyValidationFails(
+  '@fixture/undeclared-resolution',
+  {},
+  ["import.meta.resolve('undeclared-runtime')"],
+  'imports undeclared dependency undeclared-runtime',
+)
+assertDependencyValidationFails(
+  '@fixture/css',
+  {},
+  [{ content: "@import 'undeclared-runtime';", css: true }],
+  'imports undeclared dependency undeclared-runtime',
+)
+validateSourceDependencies(
+  '@fixture/generated-css',
+  {},
+  ["export const source = `@import '${runtimePath}';`"],
 )
 assertDependencyValidationFails(
   '@holo-js/panels-client',
@@ -364,6 +414,17 @@ assertDependencyValidationFails(
   { dependencies: { '@holo-js/db': '1.0.0' } },
   ["import type { Model } from '@holo-js/db'"],
   'must not import server domain @holo-js/db',
+)
+assertDependencyValidationFails(
+  '@holo-js/panels-react',
+  { dependencies: { sonner: '1.0.0' } },
+  [{ content: "import { toast } from 'sonner'", css: false, path: '/packages/react/src/actions/renderer.tsx' }],
+  'may import sonner only from its notification renderer',
+)
+validateSourceDependencies(
+  '@holo-js/panels-react',
+  { dependencies: { sonner: '1.0.0' } },
+  [{ content: "import { toast } from 'sonner'", css: false, path: '/packages/react/src/notifications/renderer.tsx' }],
 )
 assertDependencyValidationFails(
   '@holo-js/panels-cli',

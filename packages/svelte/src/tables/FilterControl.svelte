@@ -1,7 +1,8 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Select from '../components/Select.svelte'
+  import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
+  import { Input } from '../ui/input'
+  import { NativeSelect as Select } from '../ui/native-select'
   import type { Component } from 'svelte'
   import type { JsonValue } from '@holo-js/panels-client'
   import type { SvelteComponentRegistry } from '../registry'
@@ -138,7 +139,7 @@
     </Select>
   {:else if filter.manifest.type.includes('boolean') || typeof value === 'boolean'}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
-    <Input {id} type="checkbox" checked={value === true} onchange={(event) => update(event.currentTarget.checked)} />
+    <Checkbox {id} checked={value === true} onCheckedChange={(checked) => update(checked)} />
   {:else}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
     <Input {id} type="search" value={typeof value === 'number' || typeof value === 'string' ? String(value) : ''} oninput={(event) => update(event.currentTarget.value)} />

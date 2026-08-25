@@ -147,7 +147,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       const items = executions.map(execution => execution.item)
       const succeeded = items.every(item => item.status === 'succeeded')
       const effects = succeeded
-        ? await this.successEffects(definition, executions.flatMap(execution => execution.item.status === 'succeeded' && 'result' in execution.item ? [{ context: execution.context, result: execution.item.result as TResult }] : []))
+        ? await this.successEffects(definition, executions.flatMap(execution => execution.item.status === 'succeeded' ? [{ context: execution.context, result: execution.item.result as TResult }] : []))
         : await this.failureEffects(definition, executions.filter(execution => execution.item.status !== 'succeeded').map(execution => execution.context))
       return Object.freeze({
         effects,
@@ -159,7 +159,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     try {
       const result = await this.executeWithContext(definition, request.input, context)
       const effects = await this.successEffects(definition, [{ context, result }])
-      return Object.freeze({ effects, items: Object.freeze([]), result, status: 'succeeded' })
+      return Object.freeze({ effects, items: Object.freeze([]), ...(typeof result === 'undefined' ? {} : { result }), status: 'succeeded' })
     } catch (cause: unknown) {
       if (!definition.failureNotification) throw cause
       const effects = await this.failureEffects(definition, [context])
@@ -181,7 +181,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     if (expected !== undefined && this.options.records.version(record) !== expected) return Object.freeze({ context, item: Object.freeze({ recordId, status: 'stale' }) })
     try {
       const result = await this.executeWithContext(definition, request.input, context)
-      const item: ActionItemResult<TRecordId, TResult> = Object.freeze({ recordId, result, status: 'succeeded' })
+      const item: ActionItemResult<TRecordId, TResult> = Object.freeze({ recordId, ...(typeof result === 'undefined' ? {} : { result }), status: 'succeeded' })
       return Object.freeze({ context, item })
     } catch (cause: unknown) {
       if (cause instanceof ActionExecutionError && cause.code === 'denied') {

@@ -1,26 +1,11 @@
 import { resolve } from 'node:path'
-import { flushSync as flushClient, hydrate as hydrateClient, mount as mountClient, unmount as unmountClient, type Component } from 'svelte'
+import { mount as mountClient, unmount as unmountClient, type Component } from 'svelte'
 import type { render } from 'svelte/server'
 import { get } from 'svelte/store'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { createServer, type ViteDevServer } from 'vite'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import {
-  PanelsModal,
-  PanelsSlideOver,
-  panelsSvelteStyle,
-  SvelteButton,
-  SvelteComponentRegistry,
-  SvelteModal,
-  svelteShellPrimitives,
-  toSvelteState,
-  toSvelteSchema,
-  toSvelteSnapshot,
-  type SveltePanelComponent,
-} from '../src/index'
-import ShellFixture from './ShellFixture.svelte'
-import InteractiveFixture from './InteractiveFixture.svelte'
-import PortalFixture from './PortalFixture.svelte'
+import { panelsSvelteStyle, SvelteComponentRegistry, toSvelteState, toSvelteSchema, toSvelteSnapshot, type SveltePanelComponent } from '../src/index'
 import RelationNoOperationsFixture from './RelationNoOperationsFixture.svelte'
 import RelationSelectorFixture from './RelationSelectorFixture.svelte'
 import RelationViewFixture from './RelationViewFixture.svelte'
@@ -29,7 +14,7 @@ const Component = (() => undefined) as unknown as SveltePanelComponent
 const Override = (() => undefined) as unknown as SveltePanelComponent
 const mounted: Array<{ readonly component: Record<PropertyKey, unknown>, readonly container: HTMLDivElement }> = []
 let ssrServer: ViteDevServer
-let ServerShellFixture: Component<{ dialogsOpen?: boolean; onselect?: (id: string) => void }>
+let ServerHookFixture: Component
 let renderServer: typeof render
 
 beforeAll(async () => {
@@ -56,8 +41,8 @@ beforeAll(async () => {
     root: process.cwd(),
     server: { middlewareMode: true },
   })
-  const module = await ssrServer.ssrLoadModule('/tests/ShellFixture.svelte')
-  ServerShellFixture = module.default as Component<{ dialogsOpen?: boolean; onselect?: (id: string) => void }>
+  const hookModule = await ssrServer.ssrLoadModule('/tests/HookFixture.svelte')
+  ServerHookFixture = hookModule.default as Component
   const svelteServer = await ssrServer.ssrLoadModule('svelte/server')
   renderServer = svelteServer.render as typeof render
 })
@@ -75,6 +60,12 @@ afterEach(async () => {
 })
 
 describe('Svelte renderer foundation', () => {
+  it('renders registered hook components with properties, page data, and scopes without a wrapper', () => {
+    const rendered = renderServer(ServerHookFixture)
+
+    expect(rendered.body).toContain('<strong data-record="42" data-scope="posts:edit">Notice</strong>')
+  })
+
   it('loads and submits a related record through the relation selector', async () => {
     const container = document.createElement('div')
     document.body.append(container)
@@ -85,6 +76,7 @@ describe('Svelte renderer foundation', () => {
     expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
+    expect(container.querySelector('[data-operation="attach"] [data-icon="link"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
     container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
@@ -194,96 +186,7 @@ describe('Svelte renderer foundation', () => {
     expect(get(schemaStore)).toBe(schema)
   })
 
-  it('exposes every shell primitive with shared styling and accessible semantics', () => {
-    expect(Object.keys(svelteShellPrimitives)).toHaveLength(16)
+  it('exports the isolated dashboard stylesheet', () => {
     expect(panelsSvelteStyle).toBe('@holo-js/panels-svelte/style.css')
-    expect(SvelteButton.attributes.type).toBe('button')
-    expect(SvelteModal.attributes).toMatchObject({ role: 'dialog', 'aria-modal': 'true' })
-    expect(PanelsSlideOver).not.toBe(PanelsModal)
-    expect(svelteShellPrimitives['toast-viewport'].attributes).toMatchObject({
-      role: 'status',
-      'aria-live': 'polite',
-    })
-  })
-
-  it('renders all actual shell components with accessible semantics', () => {
-    const { body } = renderServer(ServerShellFixture)
-    const container = document.createElement('div')
-    container.innerHTML = body
-    const expected = [
-      'button', 'link', 'badge', 'avatar', 'icon-button', 'input-wrapper', 'loading-indicator', 'dropdown',
-      'modal', 'slide-over', 'tabs', 'section', 'empty-state', 'pagination', 'toast-viewport', 'error-boundary',
-    ]
-
-    for (const name of expected) expect(container.querySelector(`[data-panels-component="${name}"]`)).not.toBeNull()
-    expect(container.querySelector('[data-panels-component="modal"]')?.getAttribute('aria-modal')).toBe('true')
-    expect(container.querySelector('[data-panels-component="slide-over"]')?.classList.contains('hp-slide-over')).toBe(true)
-    expect(container.querySelector('[data-panels-component="tabs"] [role="tablist"]')).not.toBeNull()
-    expect(container.querySelector('[data-panels-component="pagination"]')?.getAttribute('aria-label')).toBe('Pagination')
-    expect(container.querySelector('[data-panels-component="toast-viewport"]')?.getAttribute('role')).toBe('region')
-    expect(container.querySelector('[data-panels-component="error-boundary"]')?.getAttribute('role')).toBe('alert')
-  })
-
-  it('targets a panel-scoped portal container for dialogs and slide-overs', async () => {
-    const container = document.createElement('div')
-    const portal = document.createElement('div')
-    document.body.append(container, portal)
-    const component = mountClient(PortalFixture, { target: container, props: { target: portal } })
-    flushClient()
-
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
-    expect(portal.querySelectorAll('[data-slot="dialog-overlay"]')).toHaveLength(2)
-    expect(portal.querySelector('[data-panels-component="modal"]')).not.toBeNull()
-    expect(portal.querySelector('[data-panels-component="slide-over"]')).not.toBeNull()
-
-    await unmountClient(component)
-    container.remove()
-    portal.remove()
-  })
-
-  it('hydrates genuine SSR output without mismatch diagnostics', () => {
-    const container = document.createElement('div')
-    container.innerHTML = renderServer(ServerShellFixture, { props: { dialogsOpen: false } }).body
-    document.body.append(container)
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const component = hydrateClient(ShellFixture, {
-      props: { dialogsOpen: false },
-      target: container,
-    })
-    mounted.push({ component, container })
-    flushClient()
-
-    expect(consoleError).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-panels-component="dropdown"]')).not.toBeNull()
-    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2)
-  })
-
-  it('supports dropdown selection and tab activation after client mount', async () => {
-    const selected: string[] = []
-    const container = document.createElement('div')
-    document.body.append(container)
-    const component = mountClient(InteractiveFixture, { props: { onselect: (id: string) => selected.push(id) }, target: container })
-    mounted.push({ component, container })
-    const dropdownTrigger = container.querySelector<HTMLButtonElement>('[data-panels-component="dropdown"] > button')
-
-    expect(dropdownTrigger).not.toBeNull()
-    dropdownTrigger?.focus()
-    dropdownTrigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }))
-    flushClient()
-    await new Promise(resolve => setTimeout(resolve, 0))
-    flushClient()
-    expect(dropdownTrigger?.getAttribute('aria-expanded')).toBe('true')
-    await vi.waitFor(() => expect(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).toHaveLength(2))
-    const menuItems = document.querySelectorAll<HTMLElement>('[role="menuitem"]')
-    menuItems[1]?.click()
-    flushClient()
-    expect(selected).toEqual(['delete'])
-
-    const tabs = container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    tabs[1]?.click()
-    flushClient()
-    await Promise.resolve()
-    flushClient()
-    expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
   })
 })

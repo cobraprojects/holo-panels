@@ -1,5 +1,8 @@
 <script lang="ts">
-  import Dropdown from '../components/Dropdown.svelte'
+  import ChevronsUpDown from 'lucide-svelte/icons/chevrons-up-down'
+  import { Button } from '../ui/button'
+  import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
+  import * as Popover from '../ui/popover'
   import { toSvelteSnapshot } from '../stores'
   import type { SvelteTenantSwitcherProps } from './contracts'
 
@@ -28,6 +31,9 @@
       ...routes.map(item => ({ icon: item.icon, id: `menu:${item.id}`, label: item.label })),
     ]
   })
+  const searchable = $derived($tenantState.manifest?.tenancy?.searchableMenu ?? ($tenantState.tenancy?.memberships.memberships.length ?? 0) > 10)
+  const activeTenantLabel = $derived($tenantState.tenancy?.active?.label ?? 'Select tenant')
+  let open = $state(false)
 
   function selectItem(id: string): void {
     if (id.startsWith('menu:')) {
@@ -35,15 +41,29 @@
       if (!route) return
       if (shell.onNavigate) shell.onNavigate(route.path)
       else if (typeof window !== 'undefined') window.location.assign(route.path)
+      open = false
       return
     }
     const routeKey = id.slice('tenant:'.length)
     void shell.store.switchTenant(routeKey, shell.transport)
       .then(() => shell.onSwitched?.(routeKey))
       .catch(error => shell.onError?.(error))
+    open = false
   }
 </script>
 
 {#if $tenantState.tenancy && $tenantState.manifest?.tenancy?.menu !== false && items.length > 0}
-  <Dropdown ariaLabel="Tenant menu" {items} label={$tenantState.tenancy.active?.label ?? 'Select tenant'} onselect={selectItem} searchable={$tenantState.manifest?.tenancy?.searchableMenu ?? $tenantState.tenancy.memberships.memberships.length > 10} />
+  <Popover.Root bind:open>
+    <Popover.Trigger>
+      {#snippet child({ props })}<Button {...props} aria-label="Tenant menu" role="combobox" variant="outline">{activeTenantLabel}<ChevronsUpDown /></Button>{/snippet}
+    </Popover.Trigger>
+    <Popover.Content align="end" class="hp:w-64 hp:p-0" data-holo-panel>
+      <Command>
+        {#if searchable}<CommandInput placeholder="Search tenants..." />{/if}
+        <CommandList><CommandEmpty>No tenants found.</CommandEmpty><CommandGroup>
+          {#each items as item (item.id)}<CommandItem disabled={'disabled' in item && item.disabled} value={item.label} onclick={() => selectItem(item.id)}>{item.label}</CommandItem>{/each}
+        </CommandGroup></CommandList>
+      </Command>
+    </Popover.Content>
+  </Popover.Root>
 {/if}

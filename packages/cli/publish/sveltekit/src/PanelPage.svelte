@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation'
   import { onMount, tick, untrack } from 'svelte'
   import {
     ClientEffectSession,
@@ -7,15 +8,14 @@
     GlobalSearchStore,
     installPanelSpaNavigation,
     DashboardRenderer,
-    PanelsAvatar,
-    PanelsBadge,
-    PanelsDropdown,
-    PanelsEmptyState,
-    PanelsLink,
+    PanelsRenderHook,
+    PanelsRenderHookRenderer,
     PanelsTransport,
     PanelShellStore,
     WidgetStore,
     panelConfigurationStyleAttribute,
+    providePanelsRenderHooks,
+    registerPanelNotificationStore,
     setPanelsPortalTarget,
     SvelteNotificationInboxTrigger,
     SvelteNotificationToastViewport,
@@ -32,10 +32,18 @@
     type SveltePanelComponent,
     type SvelteWidgetManifest,
   } from '@holo-js/panels-svelte'
+  import { Avatar, AvatarFallback, AvatarImage } from '@holo-js/panels-svelte/ui/avatar'
+  import { Badge } from '@holo-js/panels-svelte/ui/badge'
+  import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@holo-js/panels-svelte/ui/breadcrumb'
+  import { Button } from '@holo-js/panels-svelte/ui/button'
+  import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@holo-js/panels-svelte/ui/collapsible'
+  import { Command, CommandEmpty, CommandItem, CommandList } from '@holo-js/panels-svelte/ui/command'
+  import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@holo-js/panels-svelte/ui/dropdown-menu'
+  import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@holo-js/panels-svelte/ui/empty'
+  import { InputGroup, InputGroupAddon, InputGroupInput } from '@holo-js/panels-svelte/ui/input-group'
+  import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from '@holo-js/panels-svelte/ui/sidebar'
   import type { PanelPageProps } from './contracts'
   import ResourcePage from './ResourcePage.svelte'
-  import Button from './Button.svelte'
-  import Input from './Input.svelte'
   import Icon from './Icon.svelte'
 
   const REALTIME_CHANNEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u
@@ -44,13 +52,12 @@
   let { data, notificationRealtime, registry }: PanelPageProps = $props()
   let searchState = $state<ClientSearchState | null>(null)
   let viewportWidth = $state(1280)
-  let mobileNavigation = $state(false)
   let navigationOpen = $state(false)
   let sidebarCollapsed = $state(false)
   let selectedColorMode = $state<PanelColorMode | null>(null)
-  let shellElement: HTMLDivElement
-  let portalElement = $state<HTMLDivElement>()
-  setPanelsPortalTarget(() => portalElement)
+  let pageActionsElement = $state<HTMLDivElement>()
+  let shellElement = $state<HTMLDivElement>()
+  setPanelsPortalTarget(() => shellElement)
   const initialPanelId = untrack(() => data.panel.manifest.id)
   const navigationId = `hp-panel-navigation-${initialPanelId}`
   const navigationToggleId = `hp-panel-navigation-toggle-${initialPanelId}`
@@ -61,18 +68,15 @@
   const NotificationTrigger = $derived(notificationConfiguration?.component && registry
     ? registry.resolve<SvelteNotificationInboxTriggerProps>(notificationConfiguration.component, data.panel.manifest.id, 'database notification component')
     : SvelteNotificationInboxTrigger) as SveltePanelComponent<SvelteNotificationInboxTriggerProps>
-  const clientSession = $derived.by(() => {
-    const toastStore = new ClientToastStore()
-    const effects = new ClientEffectSession({
-      panelId: data.panel.manifest.id,
-      redirect: effect => navigate(effect.url, effect.replace),
-      toastStore,
-    })
-    void effects.apply({ data: null, effects: [...data.effects], id: 'session-effects', ok: true, protocolVersion: '1.0' }).catch(() => undefined)
-    return { effects, toastStore }
+  const toastStore = new ClientToastStore()
+  const effects = new ClientEffectSession({
+    panelId: initialPanelId,
+    redirect: effect => navigate(effect.url, effect.replace),
+    toastStore,
   })
-  const effects = $derived(clientSession.effects)
-  const toastStore = $derived(clientSession.toastStore)
+  let appliedEffects = untrack(() => data.effects)
+  let effectBatch = 0
+  void effects.apply({ data: null, effects: [...appliedEffects], id: 'session-effects-0', ok: true, protocolVersion: '1.0' }).catch(() => undefined)
   const notificationStore = $derived.by(() => notificationConfiguration
     ? new ClientNotificationInboxStore({
         polling: notificationConfiguration.polling,
@@ -84,6 +88,16 @@
       })
     : null)
   const body = $derived(data.page.manifest.body)
+  const pageScopes = $derived([
+    data.page.manifest.id,
+    ...(typeof body?.properties.resourceId === 'string' ? [body.properties.resourceId] : []),
+  ])
+  providePanelsRenderHooks({
+    get data() { return data.page.data },
+    get manifest() { return data.panel.manifest },
+    get registry() { return registry },
+    get scopes() { return pageScopes },
+  })
   const resourceBody = $derived(body?.component === 'resource-page')
   const Body = $derived(body && !resourceBody && registry
     ? registry.resolve<Record<string, unknown>>(body.component, data.panel.manifest.id, `page "${data.page.manifest.id}"`)
@@ -185,16 +199,11 @@
   }
 
   function toggleNavigation(): void {
-    if (mobileNavigation || data.panel.manifest.navigationMode === 'topbar') {
+    if (data.panel.manifest.navigationMode === 'topbar') {
       navigationOpen = !navigationOpen
       return
     }
     if (data.panel.manifest.sidebarCollapsible) sidebarCollapsed = !sidebarCollapsed
-  }
-
-  function dismissMobileNavigation(): void {
-    navigationOpen = false
-    window.queueMicrotask(() => window.document.getElementById(navigationToggleId)?.focus())
   }
 
   type PanelNavigationItem = PanelPageProps['data']['panel']['manifest']['navigation'][number]
@@ -264,8 +273,13 @@
 
   async function navigate(url: string, replace = false): Promise<void> {
     await tick()
-    if (replace) globalThis.location.replace(url)
-    else globalThis.location.assign(url)
+    const destination = new URL(url, globalThis.location.href)
+    if (destination.origin !== globalThis.location.origin) {
+      if (replace) globalThis.location.replace(destination.href)
+      else globalThis.location.assign(destination.href)
+      return
+    }
+    await goto(`${destination.pathname}${destination.search}${destination.hash}`, { replaceState: replace })
   }
 
   function realtimeConnection(enabled: boolean, channel: string | null): ClientNotificationRealtime | undefined {
@@ -295,60 +309,42 @@
     }
   }
 
-  $effect(() => () => effects.dispose())
   $effect(() => {
-    if (!portalElement) return
-    portalElement.dataset.density = data.panel.manifest.theme.density
-    portalElement.dataset.theme = colorMode
-    portalElement.style.cssText = panelConfigurationStyleAttribute(data.panel.manifest)
+    if (data.effects !== appliedEffects) {
+      appliedEffects = data.effects
+      effectBatch += 1
+      void effects.apply({ data: null, effects: [...appliedEffects], id: `session-effects-${effectBatch}`, ok: true, protocolVersion: '1.0' }).catch(() => undefined)
+    }
   })
   onMount(() => {
-    const portal = window.document.createElement('div')
-    portal.className = 'hp-panel-portal'
-    portal.dataset.holoPanel = ''
-    portal.dataset.panel = data.panel.manifest.id
-    const owner = shellElement ?? window.document.documentElement
-    portal.dir = owner.closest<HTMLElement>('[dir="rtl"], [dir="ltr"]')?.dir
-      ?? window.getComputedStyle(owner).direction
-    window.document.body.append(portal)
-    portalElement = portal
+    const panelElement = shellElement
+    if (!panelElement) throw new Error('Panel shell did not mount')
+    const unregisterNotificationStore = registerPanelNotificationStore(data.panel.manifest.id, toastStore)
     const storedColorMode = window.localStorage.getItem(`holo-panels:${data.panel.manifest.id}:color-mode`)
     if (isPanelColorMode(storedColorMode)) selectedColorMode = storedColorMode
     const updateWidth = (): void => { viewportWidth = window.innerWidth }
     updateWidth()
     window.addEventListener('resize', updateWidth)
-    const mobileQuery = window.matchMedia('(width <= 48rem)')
-    const updateMobileNavigation = (): void => { mobileNavigation = mobileQuery.matches }
-    updateMobileNavigation()
-    mobileQuery.addEventListener('change', updateMobileNavigation)
     const searchShortcut = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && mobileNavigation && navigationOpen) {
-        event.preventDefault()
-        dismissMobileNavigation()
-        return
-      }
       if (!globalSearchStore?.shortcut(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey })) return
       event.preventDefault()
       window.document.querySelector<HTMLInputElement>('[data-panel-global-search]')?.focus()
     }
     window.addEventListener('keydown', searchShortcut)
     const runtime = data.panel.manifest.runtime
-    const unregisterSpa = runtime?.spa
-      ? installPanelSpaNavigation(shellElement, {
-          exceptions: runtime.spaUrlExceptions,
-          navigate: url => {
-            window.history.pushState({}, '', url)
-            window.dispatchEvent(new PopStateEvent('popstate'))
-          },
-          prefetching: runtime.spaPrefetching ?? false,
+    const unregisterSpa = runtime?.spa !== false
+      ? installPanelSpaNavigation(panelElement, {
+          exceptions: runtime?.spaUrlExceptions ?? [],
+          navigate: url => goto(url),
+          prefetching: runtime?.spaPrefetching ?? false,
         })
       : undefined
     return () => {
-      portal.remove()
+      effects.dispose()
+      unregisterNotificationStore()
       unregisterSpa?.()
       window.removeEventListener('keydown', searchShortcut)
       window.removeEventListener('resize', updateWidth)
-      mobileQuery.removeEventListener('change', updateMobileNavigation)
     }
   })
 
@@ -393,9 +389,10 @@
   {/each}
 </svelte:head>
 
+<SidebarProvider open={!sidebarCollapsed} onOpenChange={(open) => { sidebarCollapsed = !open }}>
 <div
   bind:this={shellElement}
-  class="hp-panel hp-panel-shell"
+  class="hp-panel hp-panel-shell hp:grid hp:min-h-svh hp:w-full hp:grid-cols-[auto_minmax(0,1fr)] hp:grid-rows-[auto_minmax(0,1fr)]"
   data-holo-panel
   data-navigation={data.panel.manifest.navigationMode}
   data-navigation-open={navigationOpen}
@@ -403,107 +400,127 @@
   data-sidebar-collapsed={sidebarCollapsed}
   data-sidebar-collapsible={data.panel.manifest.sidebarCollapsible}
   data-sidebar-fully-collapsible={data.panel.manifest.layout?.sidebarFullyCollapsible ?? false}
-  data-slot="sidebar-wrapper"
   data-theme={colorMode}
   data-density={data.panel.manifest.theme.density}
   data-width={data.panel.manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'}
   style={panelConfigurationStyleAttribute(data.panel.manifest)}
 >
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.BODY_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.LAYOUT_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   {#if data.panel.manifest.layout?.topbar !== false}
-  {#if TopbarComponent}<TopbarComponent actor={data.panel.actor} manifest={data.panel.manifest} page={data.page} />{:else}<header class="hp-panel-header">
-    {#if data.panel.manifest.navigationEnabled !== false}<Button aria-controls={data.panel.manifest.navigationMode === 'topbar' || !SidebarComponent ? navigationId : undefined} aria-expanded={mobileNavigation ? navigationOpen : !sidebarCollapsed} aria-label="Toggle navigation" class="hp-panel-navigation-toggle hp-panel-topbar-start-action" data-variant="ghost" id={navigationToggleId} onclick={toggleNavigation} type="button"><Icon aria-hidden="true" name="menu" /></Button>{/if}
-    <PanelsLink class={`hp-panel-brand hp-panel-topbar-start${data.panel.manifest.navigationMode === 'sidebar' ? ' hp-panel-navigation-header' : ''}`} href={data.panel.manifest.routing?.homeUrl ?? data.panel.manifest.path}>{#if data.panel.manifest.branding.logo}<img alt="" src={data.panel.manifest.branding.logo} />{:else}<span aria-hidden="true" class="hp-panel-brand-mark">H</span>{/if}<strong>{data.panel.manifest.branding.name}</strong></PanelsLink>
+  {#if TopbarComponent}<TopbarComponent actor={data.panel.actor} manifest={data.panel.manifest} page={data.page} />{:else}<header class="hp-panel-header hp:sticky hp:top-0 hp:z-20 hp:col-start-2 hp:row-start-1 hp:flex hp:h-16 hp:min-w-0 hp:items-center hp:gap-2 hp:border-b hp:bg-background hp:px-4">
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    {#if data.panel.manifest.navigationEnabled !== false}{#if data.panel.manifest.navigationMode === 'sidebar' && !SidebarComponent}<SidebarTrigger aria-label="Toggle navigation" class="hp-panel-navigation-toggle hp-panel-topbar-start-action" id={navigationToggleId} />{:else}<Button aria-controls={navigationId} aria-expanded={navigationOpen} aria-label="Toggle navigation" class="hp-panel-navigation-toggle hp-panel-topbar-start-action" id={navigationToggleId} onclick={toggleNavigation} size="icon" type="button" variant="ghost"><Icon aria-hidden="true" name="menu" /></Button>{/if}{/if}
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_LOGO_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <Button class={`hp-panel-brand hp-panel-topbar-start${data.panel.manifest.navigationMode === 'sidebar' ? ' hp-panel-navigation-header' : ''}`} href={data.panel.manifest.routing?.homeUrl ?? data.panel.manifest.path} variant="ghost">{#if data.panel.manifest.branding.logo}<img alt="" src={data.panel.manifest.branding.logo} />{:else}<span aria-hidden="true" class="hp-panel-brand-mark">H</span>{/if}<strong>{data.panel.manifest.branding.name}</strong></Button>
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_LOGO_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if data.panel.manifest.navigationEnabled !== false && data.panel.manifest.navigationMode === 'topbar'}
       <nav aria-label="Panel navigation" class="hp-panel-navigation hp-panel-navigation--topbar hp-panel-navigation-body hp-panel-topbar-center" data-open={navigationOpen} id={navigationId}>
         {#each navigation as entry (entry.item.id)}
-          <PanelsLink current={data.page.manifest.path === entry.item.path} data-slot="sidebar-menu-button" href={entry.item.path} onclick={() => { navigationOpen = false }} style={`--hp-navigation-depth:${entry.depth}`}>
+          <Button aria-current={data.page.manifest.path === entry.item.path ? 'page' : undefined} href={entry.item.path} onclick={() => { navigationOpen = false }} style={`--hp-navigation-depth:${entry.depth}`} variant="ghost">
             {#if entry.item.icon}<Icon aria-hidden="true" class="hp-panel-icon" name={configuredIcon(entry.item.icon)} />{/if}
             <span>{entry.item.label}</span>
-            {#if entry.item.badge}<PanelsBadge>{entry.item.badge}</PanelsBadge>{/if}
-          </PanelsLink>
+            {#if entry.item.badge}<Badge variant="secondary">{entry.item.badge}</Badge>{/if}
+          </Button>
         {/each}
       </nav>
     {/if}
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.GLOBAL_SEARCH_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if globalSearchStore && searchState}
-      <div class="hp-global-search hp-panel-topbar-center" data-slot="command" role="search">
-        <label><span class="hp-sr-only">Global search</span><Icon aria-hidden="true" class="hp-global-search-icon" name="search" /><Input aria-controls="hp-global-search-results" aria-expanded={searchState.open} data-panel-global-search="" placeholder={data.panel.manifest.globalSearchConfiguration?.fieldSuffix ?? 'Search…'} role="combobox" value={searchState.term} onfocus={() => globalSearchStore?.open()} oninput={(event) => globalSearchStore?.input(event.currentTarget.value)} onkeydown={(event) => {
+      <div class="hp-global-search hp-panel-topbar-center hp:relative hp:w-full hp:max-w-md" role="search">
+        <PanelsRenderHookRenderer hook={PanelsRenderHook.GLOBAL_SEARCH_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+        <InputGroup><InputGroupAddon><Icon name="search" /></InputGroupAddon><InputGroupInput aria-controls="hp-global-search-results" aria-expanded={searchState.open} data-panel-global-search="" placeholder="Search…" value={searchState.term} onfocus={() => globalSearchStore?.open()} oninput={(event) => globalSearchStore?.input(event.currentTarget.value)} onkeydown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') globalSearchStore?.move(event.key === 'ArrowDown' ? 1 : -1)
           else if (event.key === 'Enter') {
             const url = globalSearchStore?.selectedUrl()
             if (url) void navigate(url)
           } else if (event.key === 'Escape') globalSearchStore?.close()
-        }} />{#if data.panel.manifest.globalSearchConfiguration?.keybindingSuffix}<kbd>{data.panel.manifest.globalSearchConfiguration.keybindingSuffix}</kbd>{/if}</label>
-        {#if searchState.loading}<span aria-live="polite" role="status">Searching…</span>{/if}
-        {#if searchState.error}<span role="alert">{searchState.error}</span>{/if}
-        <ul data-slot="command-list" id="hp-global-search-results" role="listbox">{#each searchState.results as result, index (`${result.resourceId}:${result.id}`)}<li aria-selected={index === searchState.selectedIndex} data-slot="command-item" role="option"><a href={result.url}>{result.title}</a></li>{/each}</ul>
+        }} />{#if data.panel.manifest.globalSearchConfiguration?.fieldSuffix}<InputGroupAddon align="inline-end">{data.panel.manifest.globalSearchConfiguration.fieldSuffix}</InputGroupAddon>{/if}{#if data.panel.manifest.globalSearchConfiguration?.keybindingSuffix}<InputGroupAddon align="inline-end"><kbd class="hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground">{data.panel.manifest.globalSearchConfiguration.keybindingSuffix}</kbd></InputGroupAddon>{/if}</InputGroup>
+        {#if searchState.open && searchState.term}<Command class="hp:absolute hp:left-0 hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md"><CommandList id="hp-global-search-results">{#if searchState.loading}<CommandEmpty>Searching…</CommandEmpty>{:else if searchState.error}<CommandEmpty>{searchState.error}</CommandEmpty>{:else if searchState.results.length === 0}<CommandEmpty>No results found.</CommandEmpty>{/if}{#each searchState.results as result, index (`${result.resourceId}:${result.id}`)}<CommandItem aria-selected={index === searchState.selectedIndex} value={result.title} onclick={() => void navigate(result.url)}>{result.title}</CommandItem>{/each}</CommandList></Command>{/if}
+        <PanelsRenderHookRenderer hook={PanelsRenderHook.GLOBAL_SEARCH_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
       </div>
     {/if}
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.GLOBAL_SEARCH_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <div class="hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact">
       {#if data.panel.tenancy && data.panel.manifest.tenancy?.switcher !== false}<div class="hp-panel-tenant-action hp-panel-action--compact"><SvelteTenantSwitcher shell={{ onSwitched: () => window.location.reload(), store: tenantStore, transport: tenantTransport }} /></div>{/if}
       {#if notificationStore && notificationConfiguration?.placement === 'topbar'}
         <div class="hp-panel-notification-action hp-panel-action--compact"><NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={navigate} panelId={data.panel.manifest.id} placement="topbar" {registry} store={notificationStore} /></div>
       {/if}
-      {#if data.panel.manifest.userMenuEnabled !== false}<div class="hp-panel-user-trigger hp-panel-user-action hp-panel-action--compact">{#if AvatarComponent}<AvatarComponent actor={data.panel.actor} label={account} />{:else if avatarUrl}<PanelsAvatar alt={account} src={avatarUrl} />{:else}<span aria-hidden="true" class="hp-avatar hp-panel-user-avatar hp-panel-user-glyph" data-slot="avatar-fallback"><Icon aria-hidden="true" name="user" /></span>{/if}<PanelsDropdown items={userMenuItems} label={account} onselect={selectUserMenuItem} /></div>{/if}
+      {#if data.panel.manifest.userMenuEnabled !== false}<DropdownMenu><DropdownMenuTrigger>{#snippet child({ props })}<Button {...props} aria-label="Account menu" class="hp-panel-user-trigger hp-panel-user-action hp-panel-action--compact" variant="outline">{#if AvatarComponent}<AvatarComponent actor={data.panel.actor} label={account} />{:else}<Avatar class="hp-panel-user-glyph hp:size-6">{#if avatarUrl}<AvatarImage alt={account} src={avatarUrl} />{/if}<AvatarFallback>{account.slice(0, 2).toLocaleUpperCase()}</AvatarFallback></Avatar>{/if}<span>{account}</span><Icon aria-hidden="true" name="chevrons-up-down" /></Button>{/snippet}</DropdownMenuTrigger><DropdownMenuContent align="end" data-holo-panel>{#each userMenuItems as item (item.id)}<DropdownMenuItem variant={item.id === 'panel-logout' ? 'destructive' : 'default'} onSelect={() => selectUserMenuItem(item.id)}>{#if 'icon' in item && item.icon}<Icon name={item.icon} />{/if}{item.label}</DropdownMenuItem>{/each}</DropdownMenuContent></DropdownMenu>{/if}
     </div>
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   </header>{/if}
   {/if}
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
 
   {#if data.panel.manifest.navigationEnabled !== false && data.panel.manifest.navigationMode === 'sidebar'}
-  <button aria-hidden={!mobileNavigation || !navigationOpen ? 'true' : undefined} aria-label="Close navigation" class="hp-panel-navigation-backdrop" data-open={navigationOpen} data-slot="navigation-backdrop" hidden={!mobileNavigation || !navigationOpen} onclick={dismissMobileNavigation} tabindex="-1" type="button"></button>
-  {#if SidebarComponent}<SidebarComponent actor={data.panel.actor} manifest={data.panel.manifest} page={data.page} />{:else}<aside aria-hidden={mobileNavigation && !navigationOpen ? 'true' : undefined} class="hp-panel-sidebar" data-open={navigationOpen} data-slot="sidebar" inert={mobileNavigation && !navigationOpen ? true : undefined}>
-    <nav aria-label="Panel navigation" class="hp-panel-navigation hp-panel-navigation-body" data-open={navigationOpen} data-slot="sidebar-content" id={navigationId}>
+  {#if SidebarComponent}<SidebarComponent actor={data.panel.actor} manifest={data.panel.manifest} page={data.page} />{:else}<Sidebar class="hp-panel-sidebar" collapsible={data.panel.manifest.sidebarCollapsible ? (data.panel.manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon') : 'none'}>
+    <SidebarHeader><Button class="hp-panel-brand hp:w-full hp:justify-start" href={data.panel.manifest.routing?.homeUrl ?? data.panel.manifest.path} variant="ghost">{#if data.panel.manifest.branding.logo}<img alt="" src={data.panel.manifest.branding.logo} />{:else}<span aria-hidden="true" class="hp-panel-brand-mark">H</span>{/if}<strong>{data.panel.manifest.branding.name}</strong></Button></SidebarHeader>
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_NAV_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <SidebarContent><nav aria-label="Panel navigation" class="hp-panel-navigation hp-panel-navigation-body" id={navigationId}>
       {#each navigationSections as section, index (`${section.group ?? 'item'}:${index}`)}
-        {#if section.group}<details class="hp-panel-navigation-section" data-collapsible={isNavigationGroupCollapsible(section.group)} open><summary aria-disabled={!isNavigationGroupCollapsible(section.group)} class="hp-panel-navigation-group" onclick={(event) => { if (!isNavigationGroupCollapsible(section.group!)) event.preventDefault() }} title={section.group}>{section.group}</summary>
-          {#each section.entries as entry (entry.item.id)}
-            <PanelsLink current={data.page.manifest.path === entry.item.path} data-slot="sidebar-menu-button" href={entry.item.path} onclick={() => { navigationOpen = false }} style={`--hp-navigation-depth:${entry.depth}`} title={entry.item.label}>
-              {#if entry.item.icon}<Icon aria-hidden="true" class="hp-panel-icon" name={configuredIcon(entry.item.icon)} />{/if}
-              <span>{entry.item.label}</span>
-              {#if entry.item.badge}<PanelsBadge>{entry.item.badge}</PanelsBadge>{/if}
-            </PanelsLink>
-          {/each}
-        </details>{:else}
-          {@const entry = section.entries[0]!}
-          <PanelsLink current={data.page.manifest.path === entry.item.path} data-slot="sidebar-menu-button" href={entry.item.path} onclick={() => { navigationOpen = false }} style={`--hp-navigation-depth:${entry.depth}`} title={entry.item.label}>
-            {#if entry.item.icon}<Icon aria-hidden="true" class="hp-panel-icon" name={configuredIcon(entry.item.icon)} />{/if}
-            <span>{entry.item.label}</span>
-            {#if entry.item.badge}<PanelsBadge>{entry.item.badge}</PanelsBadge>{/if}
-          </PanelsLink>
-        {/if}
+        <Collapsible open={!section.group || !isNavigationGroupCollapsible(section.group) ? true : undefined}>
+          <SidebarGroup>
+            {#if section.group}{#if isNavigationGroupCollapsible(section.group)}<CollapsibleTrigger>{#snippet child({ props })}<SidebarGroupLabel {...props}>{section.group}</SidebarGroupLabel>{/snippet}</CollapsibleTrigger>{:else}<SidebarGroupLabel>{section.group}</SidebarGroupLabel>{/if}{/if}
+            <CollapsibleContent><SidebarGroupContent><SidebarMenu>
+              {#each section.entries as entry (entry.item.id)}
+                <SidebarMenuItem><SidebarMenuButton isActive={data.page.manifest.path === entry.item.path} tooltipContent={entry.item.label}>{#snippet child({ props })}<a {...props} aria-current={data.page.manifest.path === entry.item.path ? 'page' : undefined} href={entry.item.path} onclick={() => { navigationOpen = false }}>{#if entry.item.icon}<Icon aria-hidden="true" name={configuredIcon(entry.item.icon)} />{/if}<span>{entry.item.label}</span>{#if entry.item.badge}<SidebarMenuBadge>{entry.item.badge}</SidebarMenuBadge>{/if}</a>{/snippet}</SidebarMenuButton></SidebarMenuItem>
+              {/each}
+            </SidebarMenu></SidebarGroupContent></CollapsibleContent>
+          </SidebarGroup>
+        </Collapsible>
       {/each}
-    </nav>
-    {#if notificationStore && notificationConfiguration?.placement === 'sidebar'}
-      <div class="hp-panel-navigation-footer hp-panel-actions--compact"><div class="hp-panel-notification-action hp-panel-action--compact"><NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={navigate} panelId={data.panel.manifest.id} placement="sidebar" {registry} store={notificationStore} /></div></div>
-    {/if}
-  </aside>{/if}
+    </nav></SidebarContent>
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_NAV_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <SidebarFooter>{#if notificationStore && notificationConfiguration?.placement === 'sidebar'}<NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={navigate} panelId={data.panel.manifest.id} placement="sidebar" {registry} store={notificationStore} />{/if}<PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_FOOTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></SidebarFooter>
+  </Sidebar>{/if}
   {/if}
 
-  <main class="hp-panel-content" data-slot="sidebar-inset">
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+  <SidebarInset class="hp-panel-content hp:col-start-2 hp:row-start-2 hp:mx-auto hp:flex hp:w-full hp:min-w-0 hp:flex-col hp:gap-6 hp:p-4 hp:pt-6 hp:md:p-6" style="max-width: var(--hp-content-max-width)">
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if data.panel.manifest.layout?.breadcrumbs !== false && data.page.breadcrumbs.length > 0}
-      <nav aria-label="Breadcrumbs" class="hp-panel-breadcrumbs">
-        <ol>{#each data.page.breadcrumbs as breadcrumb}<li><PanelsLink href={breadcrumb.path}>{breadcrumb.label}</PanelsLink></li>{/each}</ol>
-      </nav>
+      <Breadcrumb class="hp-panel-breadcrumbs"><BreadcrumbList>{#each data.page.breadcrumbs as breadcrumb, index (breadcrumb.path)}<BreadcrumbItem>{#if index === data.page.breadcrumbs.length - 1}<BreadcrumbPage>{breadcrumb.label}</BreadcrumbPage>{:else}<BreadcrumbLink href={breadcrumb.path}>{breadcrumb.label}</BreadcrumbLink>{/if}</BreadcrumbItem>{#if index < data.page.breadcrumbs.length - 1}<BreadcrumbSeparator />{/if}{/each}</BreadcrumbList></Breadcrumb>
     {/if}
-    <header class="hp-panel-page-header hp-panel-main-header"><div><h1>{data.page.heading ?? data.page.title}</h1>
-    {#if data.page.subheading}<p>{data.page.subheading}</p>{/if}</div></header>
-    <div class="hp-panel-main-body">
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <header class="hp-panel-page-header hp-panel-main-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between"><div class="hp:space-y-1"><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} /><h1 class="hp:text-3xl hp:font-bold hp:tracking-tight">{data.page.heading ?? data.page.title}</h1>
+    {#if data.page.subheading}<p class="hp:text-muted-foreground">{data.page.subheading}</p>{/if}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_HEADING_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></div><div aria-label="Page actions" class="hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2" role="group"><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} /><div bind:this={pageActionsElement} class="hp:contents"></div><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></div></header>
+    <div class="hp-panel-main-body hp:flex hp:flex-col hp:gap-6">
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if headerWidgets.length > 0}
       <DashboardRenderer label="Page header widgets" widgets={headerWidgets} width={viewportWidth} />
     {/if}
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if resourceBody}
-      <ResourcePage {data} {effects} />
+      <ResourcePage {data} {effects} pageActionsTarget={pageActionsElement} {registry} />
     {:else if Body && body}
       <Body {...body.properties} />
     {:else if ['create', 'edit', 'list', 'view'].includes(data.page.manifest.pageType)}
-      <ResourcePage {data} {effects} />
+      <ResourcePage {data} {effects} pageActionsTarget={pageActionsElement} {registry} />
     {:else if data.page.schema}
       <section aria-label={data.page.title} data-panels-schema={data.page.manifest.schemaId}></section>
     {:else if headerWidgets.length === 0 && footerWidgets.length === 0}
-      <PanelsEmptyState heading={data.page.title} description="This page has no configured content." />
+      <Empty><EmptyHeader><EmptyTitle>{data.page.title}</EmptyTitle><EmptyDescription>This page has no configured content.</EmptyDescription></EmptyHeader></Empty>
     {/if}
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if footerWidgets.length > 0}
       <DashboardRenderer label="Page footer widgets" widgets={footerWidgets} width={viewportWidth} />
     {/if}
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     </div>
-  </main>
+    <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+  </SidebarInset>
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.FOOTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   <SvelteNotificationToastViewport navigate={navigate} store={toastStore} />
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.LAYOUT_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+  <PanelsRenderHookRenderer hook={PanelsRenderHook.BODY_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
 </div>
+</SidebarProvider>

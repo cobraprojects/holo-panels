@@ -91,7 +91,7 @@ describe('client effect session', () => {
     expect(redirect).toHaveBeenCalledTimes(1)
   })
 
-  it('isolates response IDs between panels, fails on unhandled effects, and disposes safely', async () => {
+  it('isolates response IDs between panels, fails on unhandled effects, and ignores late responses after disposal', async () => {
     const firstToasts = new ClientToastStore()
     const secondToasts = new ClientToastStore()
     const dispose = vi.spyOn(firstToasts, 'dispose')
@@ -110,6 +110,9 @@ describe('client effect session', () => {
     first.dispose()
     first.dispose()
     expect(dispose).toHaveBeenCalledTimes(1)
-    await expect(first.apply(response('after-dispose', []))).rejects.toThrow('disposed')
+    await expect(first.apply(response('after-dispose', [
+      { kind: 'toast', level: 'danger', message: 'Obsolete response' },
+    ]))).resolves.toBeUndefined()
+    expect(firstToasts.state.items).toHaveLength(1)
   })
 })

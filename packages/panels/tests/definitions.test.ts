@@ -1,5 +1,9 @@
 import { belongsTo, column as databaseColumn, defineGeneratedTable, defineModel } from '@holo-js/db'
+import { Action, ActionGroup, CreateAction, DeleteAction, DeleteBulkAction, EditAction, ViewAction } from '@holo-js/panels-actions'
+import { Checkbox, TextInput } from '@holo-js/panels-forms'
+import { TextEntry } from '@holo-js/panels-infolists'
 import { CreateRecord, EditRecord, ListRecords, RelationManager, Resource, ViewRecord } from '@holo-js/panels-resources'
+import { TextColumn } from '@holo-js/panels-tables'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   configureNotificationSender,
@@ -29,6 +33,14 @@ const Post = defineModel(posts, {
   relations: { author: belongsTo(() => Author, 'authorId') },
 })
 type PostRecord = ResourceRecordFor<typeof Post>
+type AuthorRecord = ResourceRecordFor<typeof Author>
+
+declare module '@holo-js/panels-core' {
+  interface PanelRecordTypeRegistry {
+    readonly author: AuthorRecord
+    readonly post: PostRecord
+  }
+}
 
 function typecheckOnly(): boolean { return false }
 
@@ -36,7 +48,7 @@ class ListPosts extends ListRecords {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return PostResource.actions(action => [action.create().label('New post')])
+    return [CreateAction.make().label('New post')]
   }
 }
 
@@ -48,7 +60,7 @@ class EditPost extends EditRecord {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return PostResource.actions(action => [action.view(), action.delete().requiresConfirmation()])
+    return [ViewAction.make(), DeleteAction.make().requiresConfirmation()]
   }
 }
 
@@ -56,7 +68,7 @@ class ViewPost extends ViewRecord {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return PostResource.actions(action => [action.edit()])
+    return [EditAction.make()]
   }
 }
 
@@ -64,8 +76,8 @@ class PostResource extends Resource {
   protected static override model = Post
   static override recordTitleAttribute = this.attribute('title')
 
-  static form = this.configureForm(schema => schema.components(field => [
-    field.textInput('title')
+  static form = this.configureForm(schema => schema.components([
+    TextInput.make('title')
       .required()
       .maxLength(120)
       .disabled(({ get, record, set }) => {
@@ -74,54 +86,68 @@ class PostResource extends Resource {
         set('published', true)
         return false
       }),
-    field.checkbox('published'),
+    Checkbox.make('published'),
+  ]))
+
+  static infolist = this.configureInfolist(schema => schema.components([
+    TextEntry.make('title'),
+    TextEntry.make('author.name'),
   ]))
 
   static table = this.configureTable(table => table
-    .columns(column => [
-      column.text('title').searchable().sortable(),
-      column.text('author.name'),
+    .columns([
+      TextColumn.make('title').searchable().sortable(),
+      TextColumn.make('author.name'),
     ])
-    .recordActions(action => [
-      action.view(),
-      action.edit(),
-      action.delete(),
+    .recordActions([
+      ViewAction.make(),
+      EditAction.make(),
+      DeleteAction.make(),
     ])
-    .toolbarActions(action => [
-      action.group([
-        action.deleteBulk(),
+    .toolbarActions([
+      ActionGroup.make([
+        DeleteBulkAction.make(),
       ]),
     ])
   )
 
-  static publishAction = this.action(action => action.make('publish')
+  static publishAction = this.action(Action.make('publish'))
     .authorize(({ record }) => {
       expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
       return record !== null
     })
-    .schema(field => [
-      field.textInput('title'),
+    .schema([
+      TextInput.make('title'),
     ])
     .action((_data, { record, selectedRecords }) => {
       expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
       expectTypeOf(selectedRecords).toEqualTypeOf<readonly PostRecord[]>()
       return record?.title
-    }))
+    })
 
   static invalidForm = typecheckOnly()
-    ? this.configureForm(schema => schema.components(field => [
-        // @ts-expect-error missing is not a Post field
-        field.textInput('missing'),
-        // @ts-expect-error title is not a boolean field
-        field.checkbox('title'),
-      ]))
+    ? this.configureForm(schema => {
+        // @ts-expect-error name is not a Post field
+        return schema.components([TextInput.make('name')])
+      })
     : undefined
 
   static invalidTable = typecheckOnly()
-    ? this.configureTable(table => table.columns(column => [
-        // @ts-expect-error missing is not a loaded author field
-        column.text('author.missing'),
-      ]))
+    ? this.configureTable((table) => {
+        // @ts-expect-error name is not a Post table path
+        return table.columns([TextColumn.make('name')])
+      })
+    : undefined
+
+  static invalidComponents = typecheckOnly()
+    ? [
+        // @ts-expect-error missing is not a generated model field
+        TextInput.make('missing'),
+        // @ts-expect-error title is not a generated boolean field
+        Checkbox.make('title'),
+        // @ts-expect-error author.missing is not a generated relation path
+        TextColumn.make('author.missing'),
+      ]
     : undefined
 
   static getPages() {
@@ -134,6 +160,11 @@ class PostResource extends Resource {
   }
 }
 
+class SharedPostResource extends Resource {
+  protected static override model = Post
+  protected static override isScopedToTenant = false
+}
+
 declare module '@holo-js/panels-resources' {
   interface ResourceTypeRegistry {
     readonly post: { readonly model: typeof Post, readonly resource: typeof PostResource }
@@ -143,13 +174,13 @@ declare module '@holo-js/panels-resources' {
 class AuthorRelationManager extends RelationManager {
   protected static override relationship = 'author'
 
-  static form = this.configureForm(schema => schema.components(field => [
-    field.textInput('name'),
+  static form = this.configureForm(schema => schema.components([
+    TextInput.make('name'),
   ]))
 
   static table = this.configureTable(table => table
-    .columns(column => [column.text('name')])
-    .recordActions(action => [action.edit(), action.delete()])
+    .columns([TextColumn.make('name')])
+    .recordActions([EditAction.make(), DeleteAction.make()])
   )
 }
 
@@ -164,6 +195,10 @@ declare module '@holo-js/panels-resources' {
 }
 
 describe('Filament 5-shaped public API', () => {
+  it('opts shared resources out of tenant scoping through the resource property', () => {
+    expect(SharedPostResource.compile().shared).toBe(true)
+  })
+
   it('compiles resource pages and explicit page and table actions', () => {
     const pages = generatedResourcePageManifests({ panelPath: '/admin', resource: PostResource })
     const listResource = pages[0]?.body?.properties.resource
@@ -177,15 +212,15 @@ describe('Filament 5-shaped public API', () => {
     ])
     expect(listResource && typeof listResource === 'object' && !Array.isArray(listResource) ? listResource.table : null).toMatchObject({
       actions: [
-        expect.objectContaining({ id: 'view', scope: 'row' }),
-        expect.objectContaining({ id: 'edit', scope: 'row' }),
-        expect.objectContaining({ id: 'delete', scope: 'row' }),
-        expect.objectContaining({ id: 'delete', scope: 'bulk' }),
+        expect.objectContaining({ icon: 'view', id: 'view', scope: 'row' }),
+        expect.objectContaining({ icon: 'edit', id: 'edit', scope: 'row' }),
+        expect.objectContaining({ color: 'danger', confirmation: expect.any(String), icon: 'delete', id: 'delete', scope: 'row' }),
+        expect.objectContaining({ actions: [expect.objectContaining({ color: 'danger', confirmation: expect.any(String), icon: 'delete', id: 'delete', scope: 'bulk' })], id: 'delete', scope: 'bulk' }),
       ],
     })
     expect(editResource && typeof editResource === 'object' && !Array.isArray(editResource) ? editResource.actions : null).toEqual([
-      expect.objectContaining({ id: 'view', kind: 'view' }),
-      expect.objectContaining({ confirmation: 'Are you sure?', id: 'delete', kind: 'delete' }),
+      expect.objectContaining({ icon: 'view', id: 'view', kind: 'view' }),
+      expect.objectContaining({ color: 'danger', confirmation: 'Are you sure?', icon: 'delete', id: 'delete', kind: 'delete' }),
     ])
   })
 

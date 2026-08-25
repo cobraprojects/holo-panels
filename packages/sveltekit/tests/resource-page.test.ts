@@ -124,7 +124,6 @@ function pageData(pageType: 'create' | 'edit' | 'list' | 'view'): PanelPageData 
         path,
         renderer: null,
         schemaId: null,
-        slots: {},
         widgets: { footer: [], header: [] },
       },
       schema: null,
@@ -233,13 +232,10 @@ describe('SvelteKit resource page acceptance', () => {
     expect(list).toContain('hp-panel-navigation-body')
     expect(list).toContain('hp-panel-main-header')
     expect(list).toContain('hp-panel-main-body')
-    expect(list).toContain('hp-panel-navigation-backdrop')
-    expect(list).toContain('title="Posts"')
     expect(list).toContain('hp-panel-user-glyph')
-    expect(list).toContain('data-icon="user"')
     expect(list).toContain('hp-panel-user-action')
     expect(list).toContain('hp-panel-actions--compact')
-    expect(list).not.toContain('>AD<')
+    expect(list).toContain('AD')
     expect(create).toContain('Save post')
     expect(create).toContain('Category')
     expect(view).toContain('First post')
@@ -399,7 +395,7 @@ describe('SvelteKit resource page acceptance', () => {
       },
     }).body
 
-    expect(html).toContain('data-placement="topbar"')
+    expect(html).toContain('hp-panel-notification-action')
     expect(html).toContain('aria-label="Notifications"')
     expect(html).not.toContain('unread notifications')
     expect(realtimeCalls).toBe(0)

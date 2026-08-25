@@ -5,6 +5,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { generatorCommands, publishUiCommand } from './commands'
 import type { GeneratorProject } from './generators'
+import { watchPanelTheme, writePanelTheme } from './theme'
 
 export {
   planFrameworkArtifacts,
@@ -46,6 +47,7 @@ export {
   renderPanelArtifacts,
 } from './generated'
 export type { GeneratedPanelsRegistry } from './generated'
+export { buildPanelTheme, PANEL_THEME_ARTIFACT_PATH, PANEL_THEME_CUSTOMIZATION_PATH } from './theme'
 
 const PANELS_PACKAGE = '@holo-js/panels'
 const OWNERSHIP_PATH = '.holo-js/panels/install.json'
@@ -528,6 +530,21 @@ export const commands: readonly PanelsCommand[] = Object.freeze([
     description: 'Remove only files and dependencies owned by the Holo Panels installer.',
     usage: 'holo panels:uninstall',
     run: uninstall,
+  }),
+  Object.freeze({
+    name: 'panels:theme:build',
+    description: 'Build the isolated Holo Panels stylesheet.',
+    usage: 'holo panels:theme:build',
+    async run(context: PanelsCommandContext) {
+      const output = await writePanelTheme({ projectRoot: context.projectRoot })
+      writeOutput(`[Holo Panels] Built panel theme at ${relative(context.projectRoot, output)}.`)
+    },
+  }),
+  Object.freeze({
+    name: 'panels:theme:watch',
+    description: 'Watch panel customization sources and rebuild the isolated stylesheet.',
+    usage: 'holo panels:theme:watch',
+    run: (context: PanelsCommandContext) => watchPanelTheme({ projectRoot: context.projectRoot }),
   }),
   publishUiCommand,
   ...generatorCommands,

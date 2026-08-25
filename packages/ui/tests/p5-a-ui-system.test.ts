@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   accessibilityPatterns,
-  componentConformanceFixtures,
   createFieldAccessibilityIds,
   darkPanelTheme,
   definePanelIcon,
@@ -16,7 +15,6 @@ import {
   PanelIconRegistry,
   panelTokenNames,
   panelTokenVariable,
-  shellPrimitiveNames,
   shellReferenceStates,
 } from '../src/index'
 
@@ -238,8 +236,7 @@ describe('P5-A accessibility and conformance contracts', () => {
     expect(() => createFieldAccessibilityIds(' ')).toThrow('cannot be empty')
   })
 
-  it('defines every renderer primitive and deterministic visual reference state', () => {
-    expect(componentConformanceFixtures.map(fixture => fixture.component).sort()).toEqual([...shellPrimitiveNames].sort())
+  it('defines deterministic visual reference states', () => {
     expect(new Set(shellReferenceStates.map(state => state.id)).size).toBe(shellReferenceStates.length)
     expect(shellReferenceStates).toContainEqual(expect.objectContaining({ direction: 'rtl' }))
     expect(shellReferenceStates).toContainEqual(expect.objectContaining({ state: 'validation-errors' }))
@@ -247,77 +244,35 @@ describe('P5-A accessibility and conformance contracts', () => {
   })
 })
 
-describe('P5-A compiled semantic CSS', () => {
-  it('ships framework-neutral states without Tailwind directives', async () => {
+describe('P5-A isolated Tailwind source', () => {
+  it('scopes the shadcn theme and reset to panel roots', async () => {
     const cssPath = fileURLToPath(new URL('../src/style.css', import.meta.url))
     const css = await readFile(cssPath, 'utf8')
 
-    for (const selector of [
-      '.hp-panel-shell',
-      '.hp-panel-navigation',
-      '.hp-field',
-      '.hp-table',
-      '.hp-dialog',
-      '.hp-panel-popover',
-      '.hp-notification',
-      '.hp-panel-loading',
-      '.hp-auth-page',
-      '.hp-auth-card',
-      '.hp-panel-main-header',
-      '.hp-panel-main-body',
-      '.hp-panel-actions--compact',
-      '.hp-notification-inbox-header',
-      '.hp-notification-item-content',
-      '.hp-notification-toast-content',
-      '.hp-relation-manager-header',
-      '.hp-table-responsive',
-      '.hp-relation-dialog-footer',
+    for (const source of [
+      '../../react/src/**/*.{ts,tsx}',
+      '../../vue/src/**/*.{ts,vue}',
+      '../../svelte/src/**/*.svelte',
+      '../../next/src/**/*.{ts,tsx}',
+      '../../nuxt/src/**/*.{ts,vue}',
+      '../../sveltekit/src/**/*.svelte',
     ]) {
-      expect(css).toContain(selector)
+      expect(css).toContain(`@source '${source}'`)
     }
-    for (const tokenName of panelTokenNames) {
-      expect(css).toContain(`${panelTokenVariable(tokenName)}:`)
-    }
+    expect(css).toContain("@import './theme-source.css'")
+    expect(css).toContain("@import 'tw-animate-css'")
+    expect(css).toContain(':where([data-holo-panel])')
+    expect(css).toContain(':where([data-holo-panel][data-theme=\'dark\'])')
+    expect(css).toContain(':where(body:has([data-holo-panel]))')
+    expect(css).toContain('--hp-primary: var(--holo-color-primary)')
+    expect(css).toContain('--hp-destructive: var(--holo-color-danger)')
+    expect(css).toContain('--hp-ring: var(--holo-focus-ring-color)')
     expect(css).toContain('@media (prefers-reduced-motion: reduce)')
-    expect(css).toMatch(/\[data-theme=["']dark["']\]/u)
     expect(css.match(/@layer hp-panels/gu)).toHaveLength(1)
-    expect(css).not.toContain('!important')
     expect(css).not.toContain('@tailwind')
     expect(css).not.toContain('@apply')
-    expect(css).not.toContain(':root:has(.hp-panel')
-    expect(css).not.toMatch(/\/\s*span\s+var\(--hp-filter-column-span-/u)
-    expect(css).toContain(
-      'var(--hp-filter-column-span-default, span 1)',
-    )
-    expect(css).toContain(
-      '.hp-panel-navigation--topbar[data-open="true"]',
-    )
-    expect(css).toMatch(
-      /\[dir="rtl"\] \.hp-panel-sidebar\)[^{]*\{[^}]*transform: translateX\(105%\)/u,
-    )
-    for (const color of ['primary', 'success', 'warning', 'danger', 'info']) {
-      expect(css).toContain(`.hp-widget-stat[data-color="${color}"]`)
-    }
-    expect(css).toContain(
-      'color: var(--hp-widget-color, var(--holo-color-content))',
-    )
-
-    const defaultsEnd = css.indexOf('\n  :where(.hp-panel, [data-holo-panel]) {')
-    expect(defaultsEnd).toBeGreaterThan(0)
-    const darkThemeStart = css.indexOf('\n  :where(.hp-panel, [data-holo-panel])[data-theme="dark"]')
-    expect(darkThemeStart).toBeGreaterThan(defaultsEnd)
-    const panelScope = css.slice(defaultsEnd, darkThemeStart)
-    for (const semantic of [
-      '--holo-shell-background: var(--holo-color-background)',
-      '--holo-button-primary-background: var(--holo-color-primary)',
-      '--holo-input-background: var(--holo-color-surface)',
-      '--holo-table-background: var(--holo-color-surface)',
-      '--holo-relation-content: var(--holo-color-content)',
-      '--holo-widget-background: var(--holo-color-surface)',
-    ]) expect(panelScope).toContain(semantic)
-
-    const componentRules = css.slice(defaultsEnd)
-    expect(componentRules).not.toMatch(/#[0-9a-f]{3,8}\b/iu)
-    expect(componentRules).not.toMatch(/\brgba?\(/iu)
+    expect(css).not.toContain(':root')
+    expect(css).not.toContain('html {')
+    expect(css).not.toContain('body {')
   })
 })

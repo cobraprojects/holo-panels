@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { executePanelAuthRequest, panelContentWidthValue } from '@holo-js/panels-svelte'
+  import { executePanelAuthRequest, loadPanelAuthPresentation, panelContentWidthValue, type PanelAuthPresentation } from '@holo-js/panels-svelte'
   import { onMount } from 'svelte'
-  import { svelteKitPanelAuthAppearanceStyleAttribute, type SvelteKitPanelAuthAppearance } from './auth-appearance'
-  import Button from './Button.svelte'
+  import { svelteKitPanelAuthAppearanceStyleAttribute } from './auth-appearance'
+  import { Button } from '@holo-js/panels-svelte/ui/button'
+  import { Alert, AlertDescription } from '@holo-js/panels-svelte/ui/alert'
+  import { Card, CardContent, CardDescription, CardHeader } from '@holo-js/panels-svelte/ui/card'
+  import { Checkbox } from '@holo-js/panels-svelte/ui/checkbox'
+  import { Field, FieldLabel } from '@holo-js/panels-svelte/ui/field'
   import Icon from './Icon.svelte'
-  import Input from './Input.svelte'
+  import { Input } from '@holo-js/panels-svelte/ui/input'
 
   interface Props {
-    appearance?: SvelteKitPanelAuthAppearance
-    brandName: string
     panelId: string
-    simplePageMaxContentWidth?: string
-    theme?: 'dark' | 'light' | 'system'
-    themeColors?: Readonly<Record<string, string>>
   }
 
-  let { appearance, brandName, panelId, simplePageMaxContentWidth, theme = 'system', themeColors }: Props = $props()
+  let { panelId }: Props = $props()
+  let presentation = $state<PanelAuthPresentation | null>(null)
   let values = $state<Readonly<Record<string, unknown>>>({})
   let error = $state('')
   let saved = $state(false)
@@ -36,6 +36,7 @@
   }
 
   onMount(() => {
+    void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
     void executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation: 'profile-read', panelId, payload: {} }).then((result) => {
       if (!result.ok || typeof result.data !== 'object' || result.data === null || !('values' in result.data) || typeof result.data.values !== 'object' || result.data.values === null || Array.isArray(result.data.values)) error = 'The profile could not be loaded.'
       else values = result.data.values as Readonly<Record<string, unknown>>
@@ -44,6 +45,10 @@
 
   function update(field: string, current: unknown, input: HTMLInputElement): void {
     values = { ...values, [field]: typeof current === 'boolean' ? input.checked : typeof current === 'number' ? input.valueAsNumber : input.value }
+  }
+
+  function updateBoolean(field: string, checked: boolean): void {
+    values = { ...values, [field]: checked }
   }
 
   async function save(event: SubmitEvent): Promise<void> {
@@ -56,9 +61,13 @@
   }
 </script>
 
-<main class="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(appearance, themeColors)}${simplePageMaxContentWidth ? `--hp-auth-max-width:${panelContentWidthValue(simplePageMaxContentWidth)};` : ''}`}>
-  <section class="hp-auth-card" data-slot="card">
-    <div data-slot="card-header"><span class="hp-auth-brand-mark"><Icon name="user" /></span><div><p>{brandName}</p><h1>Profile</h1><span>Manage your account information.</span></div></div>
-    <div data-slot="card-content"><form onsubmit={save}>{#each Object.entries(values) as [field, value] (field)}<div class="hp-auth-field"><label data-slot="label" for={`${panelId}-${field}`}>{label(field)}</label><Input autocomplete={field === 'email' ? 'email' : field === 'name' ? 'name' : undefined} checked={typeof value === 'boolean' ? value : undefined} id={`${panelId}-${field}`} name={field} type={inputType(field, value)} value={typeof value === 'boolean' ? undefined : String(value ?? '')} oninput={(event) => update(field, value, event.currentTarget)} /></div>{/each}{#if error}<p class="hp-auth-error" role="alert">{error}</p>{/if}{#if saved}<p class="hp-auth-success" role="status">Profile saved.</p>{/if}<Button class="hp-button hp-button-primary" type="submit">Save changes</Button></form></div>
-  </section>
+{#if presentation}
+<main class="hp-auth-page" data-density={presentation.appearance.density} data-holo-panel data-theme={presentation.theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(presentation.appearance)}--hp-auth-max-width:${panelContentWidthValue(presentation.simplePageMaxContentWidth)};`}>
+  <Card class="hp-auth-card hp:w-full hp:max-w-md">
+    <CardHeader><span class="hp-auth-brand-mark"><Icon name="user" /></span><CardDescription>{presentation.brandName}</CardDescription><h1 class="hp:text-2xl hp:font-semibold hp:leading-none">Profile</h1><CardDescription>Manage your account information.</CardDescription></CardHeader>
+    <CardContent><form class="hp:space-y-4" onsubmit={save}>{#each Object.entries(values) as [field, value] (field)}<Field orientation={typeof value === 'boolean' ? 'horizontal' : 'vertical'}><FieldLabel for={`${panelId}-${field}`}>{label(field)}</FieldLabel>{#if typeof value === 'boolean'}<Checkbox checked={value} id={`${panelId}-${field}`} name={field} onCheckedChange={(checked) => updateBoolean(field, checked)} />{:else}<Input autocomplete={field === 'email' ? 'email' : field === 'name' ? 'name' : undefined} id={`${panelId}-${field}`} name={field} type={inputType(field, value)} value={String(value ?? '')} oninput={(event) => update(field, value, event.currentTarget)} />{/if}</Field>{/each}{#if error}<Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>{/if}{#if saved}<Alert><AlertDescription>Profile saved.</AlertDescription></Alert>{/if}<Button class="hp:w-full" type="submit">Save changes</Button></form></CardContent>
+  </Card>
 </main>
+{:else}
+<main class="hp-auth-page" data-holo-panel><Card class="hp-auth-card hp:h-80 hp:animate-pulse" /></main>
+{/if}

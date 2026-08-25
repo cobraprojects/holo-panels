@@ -3,6 +3,7 @@ import type { ExtensionTypeId } from '../plugins/type-id'
 import { ComponentDefaultsApplicator } from '../defaults/apply-defaults'
 import type { ContextTypeSources, OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import type { ActionDefinition, ActionKind, ActionMount } from './contracts'
+import { builtInActionPresentation } from './presentation'
 
 export interface ActionPersistence<TRecord, TInput extends JsonObject, TResult> {
   create?(input: TInput): Promise<TResult>
@@ -52,6 +53,7 @@ export function createBuiltinAction<TRecord, TInput extends JsonObject, TResult,
 ): ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices> {
   const operation = operationName(kind)
   const defaultLabel = new ActionDefaultBuilder(kind).configuredLabel
+  const presentation = builtInActionPresentation(kind)
   return Object.freeze({
     authorize: options.authorize,
     handle: async (
@@ -68,6 +70,9 @@ export function createBuiltinAction<TRecord, TInput extends JsonObject, TResult,
       return (handler as (record: TRecord) => Promise<TResult>)(context.record)
     },
     id: options.id ?? kind,
+    color: presentation?.color ?? undefined,
+    confirmation: presentation?.confirmation ?? undefined,
+    icon: presentation?.icon,
     kind,
     label: options.label ?? defaultLabel ?? kind.split('-').map(value => value[0]?.toUpperCase() + value.slice(1)).join(' '),
     mount: options.mount ?? (kind === 'create' ? 'page' : 'record'),
@@ -154,6 +159,7 @@ export function createViewAction<TRecord, TActor, TTenant, TServices>(
   },
 ): ActionDefinition<TRecord, JsonObject, TRecord, TActor, TTenant, TServices> {
   const defaultLabel = new ActionDefaultBuilder('view').configuredLabel
+  const presentation = builtInActionPresentation('view')
   return Object.freeze({
     authorize: options.authorize,
     handle: async (
@@ -164,6 +170,8 @@ export function createViewAction<TRecord, TActor, TTenant, TServices>(
       return context.record
     },
     id: options.id ?? 'view',
+    color: presentation?.color ?? undefined,
+    icon: presentation?.icon,
     kind: 'view',
     label: options.label ?? defaultLabel ?? 'View',
     mount: 'record',
@@ -171,7 +179,7 @@ export function createViewAction<TRecord, TActor, TTenant, TServices>(
   })
 }
 
-export function createCustomAction<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices>(
+function createCustomAction<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices>(
   definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices> & {
     readonly type?: ExtensionTypeId<'action'>
   },

@@ -14,6 +14,12 @@ import { createNextPanelsAcceptanceRuntime, nextPanelAcceptanceFixture } from '.
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
+const routerPush = vi.hoisted(() => vi.fn())
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}))
+
 vi.mock('@holo-js/security/next/server', () => ({
   csrfProtection: () => (request: Request) => request.headers.get('x-csrf-token') === 'valid'
     ? undefined
@@ -69,6 +75,7 @@ function operationRequest(panelId: string, operation: string, payload: JsonObjec
 }
 
 afterEach(() => {
+  routerPush.mockReset()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -139,7 +146,6 @@ describe('Next panel adapter', () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
-    const pushState = vi.spyOn(globalThis.history, 'pushState')
     await act(async () => root.render(<NextPanelClient payload={payload} />))
     const postsLink = [...container.querySelectorAll('a')].find(anchor => anchor.textContent === 'Posts')
     const externalLink = [...container.querySelectorAll('a')].find(anchor => anchor.textContent === 'External')
@@ -150,7 +156,7 @@ describe('Next panel adapter', () => {
     const internalClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
     postsLink.dispatchEvent(internalClick)
     expect(internalClick.defaultPrevented).toBe(true)
-    expect(pushState).toHaveBeenCalledWith({}, '', '/admin/posts')
+    expect(routerPush).toHaveBeenCalledWith('/admin/posts')
     const excludedClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
     externalLink.dispatchEvent(excludedClick)
     expect(excludedClick.defaultPrevented).toBe(false)
@@ -222,8 +228,6 @@ describe('Next panel adapter', () => {
     expect(markup).toContain('hp-panel-navigation-body')
     expect(markup).toContain('hp-panel-main-header')
     expect(markup).toContain('hp-panel-main-body')
-    expect(markup).toContain('hp-panel-navigation-backdrop')
-    expect(markup).toContain('title="Posts"')
     expect(markup).toContain('hp-panel-user-glyph')
     expect(markup).toContain('hp-panel-user-action')
     expect(markup).toContain('hp-panel-actions--compact')
@@ -231,7 +235,7 @@ describe('Next panel adapter', () => {
     expect(markup).not.toContain('>AC<')
   })
 
-  it('creates a scoped body portal host and removes it on unmount', async () => {
+  it('portals overlays into the owning panel root and removes them on unmount', async () => {
     const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
     const container = document.createElement('div')
     container.dir = 'rtl'
@@ -239,19 +243,19 @@ describe('Next panel adapter', () => {
     const root = createRoot(container)
 
     await act(async () => root.render(<NextPanelClient payload={payload} />))
-    const host = document.body.querySelector<HTMLElement>('.hp-panel-portal-host[data-panel="admin"]')
-    expect(host?.parentElement).toBe(document.body)
+    const host = container.querySelector<HTMLElement>('[data-holo-panel][data-panel="admin"]')
+    expect(host?.parentElement).toBe(container)
     expect(host?.hasAttribute('data-holo-panel')).toBe(true)
     expect(host?.dataset.theme).toBe(payload.bootstrap.manifest.theme.darkMode)
     expect(host?.dataset.density).toBe(payload.bootstrap.manifest.theme.density)
-    expect(host?.dir).toBe('rtl')
+    expect(host?.closest('[dir="rtl"]')).toBe(container)
     expect(host?.style.getPropertyValue('--hp-sidebar-width')).not.toBe('')
 
     const account = container.querySelector<HTMLButtonElement>('[aria-label="Account menu"]')
     await act(async () => {
       account?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }))
     })
-    await vi.waitFor(() => expect(host?.querySelector('.hp-dropdown')).not.toBeNull())
+    await vi.waitFor(() => expect(host?.querySelector('[data-slot="dropdown-menu-content"]')).not.toBeNull())
 
     await act(async () => root.unmount())
     expect(document.body.contains(host)).toBe(false)
@@ -260,54 +264,42 @@ describe('Next panel adapter', () => {
 
   it('dismisses the mobile drawer with Escape or its backdrop and restores toggle focus', async () => {
     const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime())
-    let mobileListener: EventListener | undefined
     const mediaQueryState = {
-      addEventListener: vi.fn((_type: string, listener: EventListener) => { mobileListener = listener }),
+      addEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
       matches: true,
-      media: '(width <= 48rem)',
+      media: '(max-width: 767px)',
       onchange: null,
       removeEventListener: vi.fn(),
     }
     const mediaQuery = mediaQueryState as unknown as MediaQueryList
     const matchMedia = vi.spyOn(globalThis, 'matchMedia').mockReturnValue(mediaQuery)
+    vi.stubGlobal('innerWidth', 600)
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
 
     await act(async () => root.render(<NextPanelClient payload={payload} />))
     const toggle = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-toggle')!
-    const sidebar = container.querySelector<HTMLElement>('.hp-panel-sidebar')!
-    const backdrop = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-backdrop')!
-    expect(sidebar.getAttribute('aria-hidden')).toBe('true')
-    expect(sidebar.hasAttribute('inert')).toBe(true)
-    expect(matchMedia).toHaveBeenCalledWith('(width <= 48rem)')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 767px)')
     expect(mediaQueryState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
 
-    mediaQueryState.matches = false
-    await act(async () => mobileListener?.(new Event('change')))
-    expect(sidebar.hasAttribute('aria-hidden')).toBe(false)
-    expect(sidebar.hasAttribute('inert')).toBe(false)
-
-    mediaQueryState.matches = true
-    await act(async () => mobileListener?.(new Event('change')))
-    expect(sidebar.getAttribute('aria-hidden')).toBe('true')
-    expect(sidebar.hasAttribute('inert')).toBe(true)
-
     await act(async () => toggle.click())
-    expect(container.querySelector('[data-holo-panel]')?.getAttribute('data-navigation-open')).toBe('true')
-    expect(backdrop.hidden).toBe(false)
-    expect(sidebar.hasAttribute('inert')).toBe(false)
-    backdrop.focus()
-    await act(async () => globalThis.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
-    await Promise.resolve()
-    expect(backdrop.hidden).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('[data-panels-component="slide-over"][data-mobile="true"]')).not.toBeNull()
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' })))
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(toggle)
 
     await act(async () => toggle.click())
-    backdrop.focus()
-    await act(async () => backdrop.click())
-    await Promise.resolve()
+    const backdrop = container.querySelector<HTMLElement>('[data-slot="sheet-overlay"][data-state="open"]')!
+    await act(async () => new Promise<void>(resolve => setTimeout(resolve, 0)))
+    await act(async () => {
+      backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 100, clientY: 100, pointerType: 'mouse' }))
+      backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, clientX: 100, clientY: 100 }))
+    })
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(toggle)
     await act(async () => root.unmount())
     expect(mediaQueryState.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
@@ -808,13 +800,21 @@ describe('Next panel adapter', () => {
       records: listRecords,
     }} panelId="admin" panelPath="/admin" properties={listProperties} />))
     expect(container.textContent).toContain('Post: First post')
-    await change(input('input[type="search"]'), 'guide')
+    const tableSearch = input('input[type="search"]')
+    expect(tableSearch.closest('[data-slot="input-group"]')).not.toBeNull()
+    const selectPage = container.querySelector<HTMLButtonElement>('[role="checkbox"][aria-label="Select page"]')
+    expect(selectPage).not.toBeNull()
+    await act(async () => selectPage?.click())
+    expect(container.textContent).toContain('2 records selected')
+    expect([...container.querySelectorAll<HTMLButtonElement>('button')].some(button => button.textContent === 'Bulk actions')).toBe(true)
+    await change(tableSearch, 'guide')
     await vi.waitFor(() => {
       expect(container.textContent).toContain('City guide')
       expect(container.textContent).not.toContain('First post')
     })
     vi.stubGlobal('confirm', vi.fn(() => true))
     await click('Delete')
+    await click('Confirm')
     await vi.waitFor(() => expect(container.textContent).not.toContain('City guide'))
     const createProperties = structuredClone(properties(1))
     const createResource = createProperties.resource
@@ -829,10 +829,10 @@ describe('Next panel adapter', () => {
     await click('Save post')
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('required')
     await change(input('[data-field-path="title"] input'), 'My New Post')
+    expect(input('[data-field-path="slug"] input').value).toBe('my-new-post')
     const beforeUnload = new Event('beforeunload', { cancelable: true })
     globalThis.dispatchEvent(beforeUnload)
     expect(beforeUnload.defaultPrevented).toBe(true)
-    await change(input('[data-field-path="slug"] input'), 'my-new-post')
     await choose('Guides')
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0))
@@ -847,7 +847,7 @@ describe('Next panel adapter', () => {
     await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Alexandria', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))
     expect(input('[data-field-path="title"] input').value).toBe('First post')
     await change(input('[data-field-path="title"] input'), 'Edited post')
-    await change(input('[data-field-path="slug"] input'), 'edited-post')
+    expect(input('[data-field-path="slug"] input').value).toBe('edited-post')
     await click('Save post')
     fail = true
     await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))

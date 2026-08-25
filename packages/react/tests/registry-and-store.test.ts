@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { FormStore } from '@holo-js/panels-client'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  Button,
   ComponentRegistry,
-  PanelsButton,
   createDefaultComponentRegistry,
   useFormStore,
 } from '../src/index'
@@ -19,23 +19,23 @@ afterEach(() => {
 })
 
 describe('React renderer registry', () => {
-  it('resolves built-ins, named registrations, and explicit panel overrides', () => {
+  it('resolves named registrations and explicit panel overrides', () => {
     const CustomButton: ComponentType<{ readonly label: string }> = ({ label }) => createElement('button', null, label)
     const PanelButton: ComponentType<{ readonly label: string }> = ({ label }) => createElement('button', null, `Panel ${label}`)
     const registry = createDefaultComponentRegistry()
       .register('application-widget', CustomButton, 'app/panels/components.ts')
       .override('staff', 'application-widget', PanelButton, 'app/panels/staff.ts')
 
-    expect(registry.resolve('button')).toBe(PanelsButton)
+    expect(registry.has('button')).toBe(false)
     expect(registry.resolve('application-widget')).toBe(CustomButton)
     expect(registry.resolve('application-widget', 'staff')).toBe(PanelButton)
     expect(registry.has('application-widget', 'staff')).toBe(true)
   })
 
   it('rejects duplicates and reports registration sources for missing components', () => {
-    const registry = new ComponentRegistry().register('field', PanelsButton, 'plugin-a/renderer.ts')
+    const registry = new ComponentRegistry().register('field', Button, 'plugin-a/renderer.ts')
 
-    expect(() => registry.register('field', PanelsButton, 'plugin-b/renderer.ts')).toThrow(
+    expect(() => registry.register('field', Button, 'plugin-b/renderer.ts')).toThrow(
       'plugin-b/renderer.ts conflicts with its registration from plugin-a/renderer.ts',
     )
     expect(() => registry.resolve('missing', 'admin', 'app/panels/posts.ts:42')).toThrow(

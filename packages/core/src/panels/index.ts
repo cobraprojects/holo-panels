@@ -27,9 +27,9 @@ export type {
   PanelTenantRegistrationOptions,
 } from '../tenancy/contracts'
 export type {
-  PanelRenderSlot,
+  RenderHook,
   RenderSlotSource,
-  ResourceRenderSlot,
   ScopedRenderSlotManifest,
   ScopedRenderSlots,
 } from './render-slots'
+export { ActionsRenderHook, PanelsRenderHook, TablesRenderHook, WidgetsRenderHook } from './render-slots'

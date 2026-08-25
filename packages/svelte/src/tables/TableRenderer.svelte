@@ -1,10 +1,20 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
+  import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
+  import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
+  import { NativeSelect } from '../ui/native-select'
+  import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
+  import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '../ui/empty'
+  import { Skeleton } from '../ui/skeleton'
   import type { JsonValue, TableRecordId } from '@holo-js/panels-client'
-  import Dialog from '../components/Dialog.svelte'
+  import { TablesRenderHook } from '@holo-js/panels-core'
+  import * as Dialog from '../ui/dialog'
+  import * as DropdownMenu from '../ui/dropdown-menu'
+  import * as Popover from '../ui/popover'
+  import RenderHook from '../components/RenderHook.svelte'
   import { toSvelteSnapshot } from '../stores'
   import ActionButton from './ActionButton.svelte'
+  import ActionGroupButton from './ActionGroupButton.svelte'
   import FilterCollectionSlot from './FilterCollectionSlot.svelte'
   import { filterCollectionStyle, pageCount, paginationRange, perPageOptions, visibleColumns } from './helpers'
   import InlineCell from './InlineCell.svelte'
@@ -21,6 +31,8 @@
   import Search from 'lucide-svelte/icons/search'
   import type {
     SvelteTableColumn,
+    SvelteTableActionGroup,
+    SvelteTableActionItem,
     SvelteTableFilter,
     SvelteTableRendererProps,
   } from './types'
@@ -138,6 +150,10 @@
     const direction = $snapshotStore.sort.find(item => item.column === column.manifest.path)?.direction
     return direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'
   }
+
+  function isActionGroup(action: SvelteTableActionItem): action is SvelteTableActionGroup {
+    return 'kind' in action && action.kind === 'action-group'
+  }
 </script>
 
 {#snippet filterForm()}
@@ -166,52 +182,62 @@
   data-panels-component="table"
   data-state={$snapshotStore.error ? 'error' : $snapshotStore.loading ? 'loading' : $snapshotStore.records.length === 0 ? 'empty' : 'ready'}
 >
+  <RenderHook hook={TablesRenderHook.HEADER_BEFORE} />
   <h2 id={captionId}>{table.caption}</h2>
+  <RenderHook hook={TablesRenderHook.HEADER_AFTER} />
+  <RenderHook hook={TablesRenderHook.TOOLBAR_BEFORE} />
   <div class="hp-table-toolbar">
-    <label><Search aria-hidden="true" /><span class="hp-visually-hidden">Search</span><Input placeholder="Search records…" type="search" value={$snapshotStore.search} oninput={search} /></label>
-    <div class="hp-column-manager">
-      <Button type="button" aria-expanded={columnsOpen} aria-haspopup="menu" onclick={() => { columnsOpen = !columnsOpen }}><Columns3 aria-hidden="true" />Columns</Button>
-      {#if columnsOpen}
-        <div role="menu" aria-label="Visible columns">
+    <RenderHook hook={TablesRenderHook.TOOLBAR_START} />
+    <RenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_BEFORE} />
+    <label class="hp:min-w-48 hp:flex-1"><span class="hp-visually-hidden">Search</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput placeholder="Search records…" type="search" value={$snapshotStore.search} oninput={search} /></InputGroup></label>
+    <RenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_AFTER} />
+    <RenderHook hook={TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE} />
+    <div>
+      <DropdownMenu.Root bind:open={columnsOpen}>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}<Button {...props} class="hp-column-manager" variant="outline"><Columns3 aria-hidden="true" />Columns</Button>{/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end" data-holo-panel>
           {#each table.columns.filter(column => column.manifest.toggleable) as column (column.manifest.path)}
-            <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-            <label aria-checked={currentColumns.has(column.manifest.path)} role="menuitemcheckbox">
-              <Input type="checkbox" checked={currentColumns.has(column.manifest.path)} onchange={(event) => toggleColumn(column.manifest.path, (event.currentTarget as HTMLInputElement).checked)} />
-              {column.manifest.label ?? column.manifest.path}
-            </label>
+            <DropdownMenu.CheckboxItem checked={currentColumns.has(column.manifest.path)} onCheckedChange={(checked) => toggleColumn(column.manifest.path, checked)}>{column.manifest.label ?? column.manifest.path}</DropdownMenu.CheckboxItem>
           {/each}
-        </div>
-      {/if}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     </div>
+    <RenderHook hook={TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_AFTER} />
     {#if (table.filters?.length ?? 0) > 0}
       {#if filterPlacement === 'inline'}
         {@render filterForm()}
       {:else}
-        <div class="hp-table-filters-dropdown">
-          <Button type="button" aria-expanded={filtersOpen} aria-haspopup="dialog" onclick={() => { filtersOpen = !filtersOpen }}><ListFilter aria-hidden="true" />Filters</Button>
-          {#if filterPlacement === 'dropdown' && filtersOpen}
-            <div aria-label="Filter options" role="dialog">{@render filterForm()}</div>
-          {:else if filterPlacement === 'modal'}
-            <Dialog labelledBy={`${captionId}-filters-title`} onclose={() => { filtersOpen = false }} open={filtersOpen}>
-              <h3 id={`${captionId}-filters-title`}>Filters</h3>
-              {@render filterForm()}
-            </Dialog>
-          {/if}
-        </div>
+        {#if filterPlacement === 'dropdown'}
+          <Popover.Root bind:open={filtersOpen}>
+            <Popover.Trigger>{#snippet child({ props })}<Button {...props} variant="outline"><ListFilter aria-hidden="true" />Filters</Button>{/snippet}</Popover.Trigger>
+            <Popover.Content align="end" class="hp:w-80" data-holo-panel>{@render filterForm()}</Popover.Content>
+          </Popover.Root>
+        {:else if filterPlacement === 'modal'}
+          <Button type="button" variant="outline" onclick={() => { filtersOpen = true }}><ListFilter aria-hidden="true" />Filters</Button>
+          <Dialog.Root bind:open={filtersOpen}>
+            <Dialog.Content data-holo-panel><Dialog.Header><Dialog.Title id={`${captionId}-filters-title`}>Filters</Dialog.Title><Dialog.Description>Filter the records in this table.</Dialog.Description></Dialog.Header>{@render filterForm()}</Dialog.Content>
+          </Dialog.Root>
+        {/if}
       {/if}
     {/if}
     {#each headerActions as action (action.id)}
-      <ActionButton {action} {table} />
+      {#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionButton {action} {table} />{/if}
     {/each}
     {#each table.transfers ?? [] as manifest (manifest.id)}
       <TransferAction {manifest} {table} />
     {/each}
+    <RenderHook hook={TablesRenderHook.TOOLBAR_END} />
   </div>
+  <RenderHook hook={TablesRenderHook.TOOLBAR_AFTER} />
 
   {#if hasSelection}
     <div aria-live="polite" class="hp-table-bulk-actions">
       <span>{$snapshotStore.selection.mode === 'all-matching' ? `All ${$snapshotStore.total} matching records selected` : `${$snapshotStore.selection.selectedRecordIds.length} records selected`}</span>
-      {#each bulkActions as action (action.id)}<ActionButton {action} {table} />{/each}
+      <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
+      {#each bulkActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionButton {action} {table} />{/if}{/each}
+      <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
       <Button type="button" onclick={() => table.store.clearSelection()}>Clear selection</Button>
     </div>
   {/if}
@@ -220,11 +246,11 @@
   {/if}
 
   {#if $snapshotStore.error}
-    <div class="hp-table-error" data-slot="table-error" role="alert"><strong>Unable to load table</strong><span>{$snapshotStore.error.message}</span></div>
+    <Alert class="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{$snapshotStore.error.message}</AlertDescription></Alert>
   {/if}
-  {#if $snapshotStore.loading}<div aria-live="polite" class="hp-table-loading" data-slot="table-loading" role="status">Loading records…</div>{/if}
+  {#if $snapshotStore.loading}<div aria-label="Loading records" aria-live="polite" class="hp-table-loading hp:space-y-2" data-slot="table-loading" role="status"><Skeleton class="hp:h-10 hp:w-full" /><Skeleton class="hp:h-10 hp:w-full" /><Skeleton class="hp:h-10 hp:w-full" /></div>{/if}
   {#if !$snapshotStore.loading && !$snapshotStore.error && $snapshotStore.records.length === 0}
-    <div class="hp-table-empty" data-slot="table-empty">{table.emptyMessage ?? 'No records found.'}</div>
+    <Empty class="hp-table-empty" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{table.emptyMessage ?? 'No records found.'}</EmptyDescription></EmptyHeader></Empty>
   {/if}
 
   {#if $snapshotStore.records.length > 0}
@@ -232,7 +258,7 @@
       {@const column = columns.find(candidate => candidate.manifest.path === presentationColumn.key)}
       {@const direction = $snapshotStore.sort.find(item => item.column === presentationColumn.key)?.direction}
       {#if column?.manifest.sortable}
-        <Button class="hp-table-sort" data-sorted={direction} type="button" onclick={() => sort(column)}>
+        <Button class="hp-table-sort hp:-ml-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground" data-sorted={direction} size="sm" type="button" variant="ghost" onclick={() => sort(column)}>
           {presentationColumn.label}
           {#if direction === 'asc'}<ChevronUp aria-hidden="true" data-icon="chevron-up" data-slot="icon" />{:else if direction === 'desc'}<ChevronDown aria-hidden="true" data-icon="chevron-down" data-slot="icon" />{:else}<ArrowUpDown aria-hidden="true" data-icon="sort" data-slot="icon" />{/if}
         </Button>
@@ -241,18 +267,18 @@
       {/if}
     {/snippet}
     {#snippet leadingHeader()}
-      <Input aria-label="Select page" type="checkbox" checked={selectedOnPage} onchange={(event) => table.store.selectPage(recordIds, (event.currentTarget as HTMLInputElement).checked)} />
+      <Checkbox aria-label="Select page" checked={selectedOnPage} onCheckedChange={(checked) => table.store.selectPage(recordIds, checked)} />
     {/snippet}
     {#snippet leadingCell(record: Readonly<TRecord>)}
       {@const recordId = table.getRecordId(record)}
-      <Input type="checkbox" aria-label="Select record {String(recordId)}" checked={table.store.isSelected(recordId)} onchange={(event) => table.store.selectRecord(recordId, (event.currentTarget as HTMLInputElement).checked)} />
+      <Checkbox aria-label="Select record {String(recordId)}" checked={table.store.isSelected(recordId)} onCheckedChange={(checked) => table.store.selectRecord(recordId, checked)} />
     {/snippet}
     {#snippet tableCell(record: Readonly<TRecord>, presentationColumn: { readonly key: string })}
       {@const column = columns.find(candidate => candidate.manifest.path === presentationColumn.key)}
       {#if column}<InlineCell {column} {record} {table} />{/if}
     {/snippet}
     {#snippet trailingCell(record: Readonly<TRecord>)}
-      {#each rowActions as action (action.id)}<ActionButton {action} {record} {table} />{/each}
+      {#each rowActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {record} {table} />{:else}<ActionButton {action} {record} {table} />{/if}{/each}
     {/snippet}
     <TablePresentation
       caption={table.caption}
@@ -272,11 +298,11 @@
     <span aria-live="polite" class="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{$snapshotStore.total}</strong> results</span>
     {#if typeof table.store.setPerPage === 'function'}
       <label class="hp-table-pagination-per-page">
-        <select aria-label="Results per page" data-slot="select" disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
+        <NativeSelect aria-label="Results per page" disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
           {#each perPageOptions($snapshotStore.perPage) as value (value)}
             <option value={String(value)}>{value}</option>
           {/each}
-        </select>
+        </NativeSelect>
         <span>per page</span>
       </label>
     {/if}

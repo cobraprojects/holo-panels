@@ -31,6 +31,7 @@ function freezeState(state: PanelShellState): PanelShellState {
         ? Object.freeze({ ...state.manifest.databaseNotifications })
         : null,
       navigation: Object.freeze(state.manifest.navigation.map(item => Object.freeze({ ...item }))),
+      slots: Object.freeze(Object.fromEntries(Object.entries(state.manifest.slots).map(([hook, references]) => [hook, Object.freeze([...(references ?? [])])]))),
       theme: Object.freeze({ ...state.manifest.theme, colors: Object.freeze({ ...state.manifest.theme.colors }) }),
       userMenu: Object.freeze(state.manifest.userMenu.map(item => Object.freeze({ ...item }))),
     }) : null,

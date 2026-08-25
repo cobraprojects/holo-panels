@@ -1,7 +1,9 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Select from '../components/Select.svelte'
+  import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
+  import { Input } from '../ui/input'
+  import { NativeSelect as Select } from '../ui/native-select'
+  import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
   import type { OptionValue } from '@holo-js/panels-client'
   import { toSvelteState } from '../stores'
   import type { SvelteFieldRendererProps } from './contracts'
@@ -80,25 +82,18 @@
 </script>
 
 {#if presentation.visible}
-  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} required={presentation.required}>
+  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
     {#snippet children(attributes)}
       {#if Boolean(definition.properties?.searchable)}
         <Input aria-label="Search {definition.label}" disabled={presentation.disabled || $optionState?.disabled} oninput={search} value={$optionState?.search ?? ''} />
       {/if}
       {#if kind === 'checkbox-list' || kind === 'toggle-buttons'}
-        <div {...attributes} role={kind === 'toggle-buttons' ? 'group' : 'group'} aria-readonly={presentation.readOnly}>
-          {#each options as option (option.value)}
-            <label>
-              <Input type={multiple ? 'checkbox' : 'radio'} name={inputId} value={option.value} checked={selected(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} onchange={(event) => toggle(option.value, (event.currentTarget as HTMLInputElement).checked)} />
-              {option.label}
-            </label>
-          {/each}
-        </div>
+        {#if multiple}<div {...attributes} class="hp:space-y-2" role="group">{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><Checkbox checked={selected(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} onCheckedChange={(checked) => toggle(option.value, checked)} />{option.label}</label>{/each}</div>{:else}<RadioGroup {...attributes} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} onValueChange={(next) => { const option = options.find(candidate => String(candidate.value) === next); if (option) setSelection(option.value) }}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><RadioGroupItem value={String(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} />{option.label}</label>{/each}</RadioGroup>{/if}
       {:else}
         <Select {...attributes} {multiple} value={selectValue()} disabled={presentation.disabled || presentation.readOnly || $optionState?.disabled} required={presentation.required} onchange={changeSelect}>
           {#if !multiple}<option value="">{definition.placeholder ?? 'Select an option'}</option>{/if}
           {#each options as option (option.value)}
-            <option value={option.value} disabled={option.disabled}>{option.label}</option>
+            <option value={String(option.value)} disabled={option.disabled}>{option.label}</option>
           {/each}
         </Select>
       {/if}

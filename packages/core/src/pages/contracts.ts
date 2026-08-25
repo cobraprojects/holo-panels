@@ -1,10 +1,8 @@
 import type { JsonObject } from '../protocol/json'
 import type { ExtensionTypeId } from '../plugins/type-id'
 import type { CompiledSchema, SchemaManifest } from '../schemas/contracts'
-import type { ScopedRenderSlots } from '../panels/render-slots'
 
 export type PageType = 'create' | 'custom' | 'edit' | 'list' | 'related-record' | 'singular' | 'view'
-export type PageLayoutSlot = 'above-content' | 'after-content' | 'before-content' | 'below-content'
 
 export interface PageContext<TActor, TTenant, TServices> {
   readonly actor: TActor
@@ -61,7 +59,6 @@ export interface PageManifest {
   readonly path: string
   readonly renderer: PageRendererManifest | null
   readonly schemaId: string | null
-  readonly slots: ScopedRenderSlots<PageLayoutSlot>
   readonly widgets: { readonly footer: readonly string[], readonly header: readonly string[] }
 }
 

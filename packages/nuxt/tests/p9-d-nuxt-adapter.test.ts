@@ -3,7 +3,7 @@ import { createApp as createH3App, createRouter, defineEventHandler, toWebHandle
 import { createApp, createSSRApp, defineComponent, h, nextTick, shallowRef, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { configureNuxtImports } from './nuxt-imports'
+import { configureNuxtImports, configureNuxtNavigation } from './nuxt-imports'
 
 const security = vi.hoisted(() => ({ calls: [] as string[], reject: false }))
 
@@ -39,6 +39,7 @@ const page: NuxtPanelPage = {
       navigationMode: 'sidebar',
       path: '/admin',
       sidebarCollapsible: true,
+      slots: {},
       tenancy: null,
       theme: { colors: {}, darkMode: 'system', density: 'comfortable', fontFamily: null, width: 'constrained' },
       userMenu: [],
@@ -118,6 +119,17 @@ function runtime(
 }
 
 beforeEach(() => {
+  configureNuxtNavigation(async () => undefined)
+  vi.stubGlobal('matchMedia', vi.fn((media: string) => ({
+    addEventListener: vi.fn(),
+    addListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+    matches: false,
+    media,
+    onchange: null,
+    removeEventListener: vi.fn(),
+    removeListener: vi.fn(),
+  } satisfies MediaQueryList)))
   security.calls.length = 0
   security.reject = false
 })
@@ -172,10 +184,11 @@ describe('P9-D Nuxt adapter', () => {
     const container = document.createElement('div')
     document.body.append(container)
     const app = createApp(PanelPage, { page: configured })
-    const pushState = vi.spyOn(window.history, 'pushState')
+    const routerPush = vi.fn(async () => undefined)
+    configureNuxtNavigation(routerPush)
     app.mount(container)
-    const postsLink = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === 'Posts')
-    const externalLink = Array.from(container.querySelectorAll('a')).find(anchor => anchor.textContent === 'External')
+    const postsLink = container.querySelector<HTMLAnchorElement>('a[href="/admin/posts"]')
+    const externalLink = container.querySelector<HTMLAnchorElement>('a[href="/admin/external-report"]')
     if (!postsLink || !externalLink) throw new Error('SPA navigation links did not render')
 
     postsLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
@@ -183,7 +196,7 @@ describe('P9-D Nuxt adapter', () => {
     const internalClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
     postsLink.dispatchEvent(internalClick)
     expect(internalClick.defaultPrevented).toBe(true)
-    expect(pushState).toHaveBeenCalledWith({}, '', '/admin/posts')
+    expect(routerPush).toHaveBeenCalledWith('/admin/posts')
     const excludedClick = new MouseEvent('click', { bubbles: true, button: 0, cancelable: true })
     externalLink.dispatchEvent(excludedClick)
     expect(excludedClick.defaultPrevented).toBe(false)
@@ -240,6 +253,19 @@ describe('P9-D Nuxt adapter', () => {
     expect(staff.path).toBe('/staff')
     expect(requests[0]).toContain('/holo/panels/admin/page-data')
     expect(requests[0]).toContain('/admin/posts')
+    configureNuxtImports({
+      path: '/admin/posts/post-1/edit',
+      fetch: async (_path, options) => ({
+        ...page,
+        page: { ...page.page, title: 'Edit Post' },
+        path: String((options.query as { readonly path?: unknown }).path),
+      }),
+    })
+    await nextTick()
+    await Promise.resolve()
+    await nextTick()
+    expect(admin.path).toBe('/admin/posts/post-1/edit')
+    expect(admin.page.title).toBe('Edit Post')
     await expect(usePanelPage({ panelId: '../admin', path: '/admin', load: async () => page })).rejects.toThrow('stable panel IDs')
   })
 
@@ -259,14 +285,11 @@ describe('P9-D Nuxt adapter', () => {
     expect(html).toContain('hp-panel-navigation-body')
     expect(html).toContain('hp-panel-main-header')
     expect(html).toContain('hp-panel-main-body')
-    expect(html).toContain('hp-panel-navigation-backdrop')
-    expect(html).toContain('title="Posts"')
     expect(html).toContain('hp-panel-user-glyph')
-    expect(html).toContain('data-icon="user"')
     expect(html).toContain('hp-panel-user-action')
     expect(html).toContain('hp-panel-actions--compact')
     expect(html).toContain('aria-label="Account menu"')
-    expect(html).not.toContain('>AC<')
+    expect(html).toContain('AC')
     expect(html).not.toContain('function')
     const container = document.createElement('div')
     container.dir = 'rtl'
@@ -277,10 +300,10 @@ describe('P9-D Nuxt adapter', () => {
     await nextTick()
     expect(container.querySelector('[data-panels-panel="admin"]')?.getAttribute('data-panels-ready')).toBe('true')
     expect(container.querySelector('[data-panels-panel="admin"]')?.hasAttribute('inert')).toBe(false)
-    const portal = document.body.querySelector<HTMLElement>('.hp-panel-portal-host[data-panel="admin"]')
+    const portal = container.querySelector<HTMLElement>('[data-holo-panel][data-panels-panel="admin"]')
     expect(portal?.dataset.theme).toBe('system')
     expect(portal?.dataset.density).toBe('comfortable')
-    expect(portal?.dir).toBe('rtl')
+    expect(portal?.closest('[dir="rtl"]')).toBe(container)
     expect(container.querySelector('[aria-current="page"]')?.textContent).toContain('Posts')
     await vi.waitFor(() => expect(container.querySelector('[data-resource="posts"]')?.textContent).toBe('Loaded posts'))
     hydrated.unmount()
@@ -289,15 +312,17 @@ describe('P9-D Nuxt adapter', () => {
   })
 
   it('dismisses the mobile drawer with Escape or its backdrop and restores toggle focus', async () => {
-    const mediaQuery = {
+    const mediaQueryState = {
       addEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
       matches: true,
-      media: '(width <= 48rem)',
+      media: '(max-width: 768px)',
       onchange: null,
       removeEventListener: vi.fn(),
-    } as unknown as MediaQueryList
-    const matchMedia = vi.spyOn(window, 'matchMedia').mockReturnValue(mediaQuery)
+    }
+    const mediaQuery = mediaQueryState as unknown as MediaQueryList
+    const matchMedia = vi.fn(() => mediaQuery)
+    vi.stubGlobal('matchMedia', matchMedia)
     const container = document.createElement('div')
     document.body.append(container)
     const app = createSSRApp(PanelPage, { page })
@@ -305,33 +330,34 @@ describe('P9-D Nuxt adapter', () => {
     await nextTick()
 
     const toggle = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-toggle')!
-    const sidebar = container.querySelector<HTMLElement>('.hp-panel-sidebar')!
-    const backdrop = container.querySelector<HTMLButtonElement>('.hp-panel-navigation-backdrop')!
-    expect(sidebar.getAttribute('aria-hidden')).toBe('true')
-    expect(sidebar.hasAttribute('inert')).toBe(true)
-    expect(matchMedia).toHaveBeenCalledWith('(width <= 48rem)')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 768px)')
+    expect(mediaQueryState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function), { passive: true })
 
     toggle.click()
     await nextTick()
-    expect(container.querySelector('[data-panels-panel]')?.getAttribute('data-navigation-open')).toBe('true')
-    expect(backdrop.hidden).toBe(false)
-    backdrop.focus()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('[data-panels-component="slide-over"][data-mobile="true"]')).not.toBeNull()
+    document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
     await nextTick()
     await Promise.resolve()
-    expect(backdrop.hidden).toBe(true)
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(toggle)
 
     toggle.click()
     await nextTick()
-    backdrop.focus()
-    backdrop.click()
+    const backdrop = container.querySelector<HTMLElement>('[data-slot="sheet-overlay"][data-state="open"]')!
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }))
+    backdrop.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerType: 'mouse' }))
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }))
     await nextTick()
     await Promise.resolve()
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(toggle)
     app.unmount()
+    expect(mediaQueryState.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function), { passive: true })
     container.remove()
-    matchMedia.mockRestore()
   })
 
   it('renders top navigation without a sidebar when the panel selects topbar mode', async () => {
@@ -633,8 +659,6 @@ describe('P9-D Nuxt adapter', () => {
     const listApp = createApp(PanelPage, { page: { ...resourcePage, page: { ...resourcePage.page, manifest: { ...resourcePage.page.manifest, pageType: 'list' as const } } } })
     const actionRequests: Request[] = []
     document.cookie = 'XSRF-TOKEN=signed; path=/'
-    const confirmAction = vi.fn(() => true)
-    vi.stubGlobal('confirm', confirmAction)
     const fetchAction = vi.spyOn(window, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? new Request(input, init) : new Request(new URL(String(input), 'http://localhost'), init)
       actionRequests.push(request)
@@ -652,12 +676,16 @@ describe('P9-D Nuxt adapter', () => {
     expect(container.querySelector('a[href="/control/articles/guide"]')?.textContent).toBe('Guide')
     expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent === 'Edit')).toBe(true)
     expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent === 'Remove')).toBe(true)
-    expect(container.querySelector('[aria-current="page"]')?.getAttribute('href')).toBe('/control/articles')
     const remove = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Remove')
     expect(remove).toBeDefined()
     remove?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await nextTick()
-    expect(confirmAction).toHaveBeenCalledWith('Delete this article?')
+    await Promise.resolve()
+    await nextTick()
+    await vi.waitFor(() => expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('Delete this article?'))
+    const confirmAction = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Confirm')
+    expect(confirmAction).toBeDefined()
+    confirmAction?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await vi.waitFor(() => expect(actionRequests.length + (container.querySelector('[role="alert"]') ? 1 : 0)).toBeGreaterThan(0))
     expect(container.querySelector('[role="alert"]')?.textContent).toBeUndefined()
     expect(actionRequests).toHaveLength(1)

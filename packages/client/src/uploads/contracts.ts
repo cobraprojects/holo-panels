@@ -22,6 +22,7 @@ export interface ClientUploadItem {
   readonly previewUrl?: string
   readonly progress: number
   readonly size: number
+  readonly sessionId?: string
   readonly status: ClientUploadStatus
   readonly token?: string
 }

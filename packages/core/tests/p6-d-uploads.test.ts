@@ -55,7 +55,7 @@ class MemoryUploadStorage implements UploadStorageAdapter {
     this.json.set(path, structuredClone(value))
   }
 
-  async temporaryUrl(path: string, expiresInSeconds: number): Promise<string> {
+  async temporaryUrl(path: string, expiresInSeconds: number): Promise<string | null> {
     return `https://private.test/${path}?expires=${expiresInSeconds}`
   }
 }
@@ -78,6 +78,7 @@ const context = {
   fieldId: 'avatar',
   panelId: 'admin',
   resourceId: 'users',
+  sessionId: 'upload-session-1',
   tenantId: 'tenant-1',
 } as const
 
@@ -112,18 +113,18 @@ describe('temporary upload security and Holo integration', () => {
   it('executes the temporary handshake behind a CSRF-verified framework endpoint boundary', async () => {
     const uploads = service(new MemoryUploadStorage())
     await expect(handleUploadEndpoint(uploads, {
-      body: { action: 'create', declaredMimeType: 'image/png', name: 'avatar.png', size: png.length },
+      body: { action: 'create', declaredMimeType: 'image/png', name: 'avatar.png', sessionId: context.sessionId, size: png.length },
       context,
       csrfVerified: false,
     })).rejects.toThrow(/CSRF/)
     const created = await handleUploadEndpoint(uploads, {
-      body: { action: 'create', declaredMimeType: 'image/png', name: 'avatar.png', size: png.length },
+      body: { action: 'create', declaredMimeType: 'image/png', name: 'avatar.png', sessionId: context.sessionId, size: png.length },
       context,
       csrfVerified: true,
     })
     if (!('token' in created)) throw new Error('Expected a temporary upload descriptor')
     const stored = await handleUploadEndpoint(uploads, {
-      body: { action: 'write', contents: png, id: created.id, token: created.token },
+      body: { action: 'write', contents: png, id: created.id, sessionId: context.sessionId, token: created.token },
       context,
       csrfVerified: true,
     })
@@ -153,7 +154,7 @@ describe('temporary upload security and Holo integration', () => {
     const created = await executeGeneratedUploadOperation(resource, {
       context: generatedContext,
       panelId: 'admin',
-      payload: { action: 'create', declaredMimeType: 'image/png', fieldId: 'avatar', name: 'avatar.png', resourceId: 'users', size: png.length },
+      payload: { action: 'create', declaredMimeType: 'image/png', fieldId: 'avatar', name: 'avatar.png', resourceId: 'users', sessionId: context.sessionId, size: png.length },
     })
     expect(created).toMatchObject({ id: expect.any(String), state: 'pending', token: expect.any(String) })
     if (typeof created.id !== 'string' || typeof created.token !== 'string') throw new Error('Expected generated upload credentials')
@@ -161,12 +162,12 @@ describe('temporary upload security and Holo integration', () => {
       contents: png,
       context: generatedContext,
       panelId: 'admin',
-      payload: { action: 'write', fieldId: 'avatar', id: created.id, resourceId: 'users', token: created.token },
+      payload: { action: 'write', fieldId: 'avatar', id: created.id, resourceId: 'users', sessionId: context.sessionId, token: created.token },
     })).resolves.toMatchObject({ id: created.id, state: 'stored' })
     await expect(executeGeneratedUploadOperation(resource, {
       context: generatedContext,
       panelId: 'admin',
-      payload: { action: 'create', declaredMimeType: 'image/png', fieldId: 'missing', name: 'avatar.png', resourceId: 'users', size: png.length },
+      payload: { action: 'create', declaredMimeType: 'image/png', fieldId: 'missing', name: 'avatar.png', resourceId: 'users', sessionId: context.sessionId, size: png.length },
     })).rejects.toThrow(/not registered/)
   })
 
@@ -198,6 +199,18 @@ describe('temporary upload security and Holo integration', () => {
     expect(storage.bytes.size).toBe(1)
   })
 
+  it('stores uploads on disks that do not support temporary preview URLs', async () => {
+    const storage = new MemoryUploadStorage()
+    vi.spyOn(storage, 'temporaryUrl').mockResolvedValue(null)
+    const uploads = service(storage)
+    const descriptor = await uploads.create({ ...context, declaredMimeType: 'image/png', name: 'avatar.png', size: png.length })
+
+    const stored = await uploads.write({ ...context, contents: png, id: descriptor.id, token: descriptor.token })
+    expect(stored.state).toBe('stored')
+    expect(stored).not.toHaveProperty('previewUrl')
+    expect(storage.bytes.has('panels/uploads/temporary/upload-1.png')).toBe(true)
+  })
+
   it('re-authorizes deletion on the server before touching Holo Storage', async () => {
     const storage = new MemoryUploadStorage()
     const uploads = createTemporaryUploadService({
@@ -226,6 +239,19 @@ describe('temporary upload security and Holo integration', () => {
     const results = await Promise.allSettled(requests)
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
     expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+  })
+
+  it('does not let an abandoned upload block a new form session', async () => {
+    const uploads = service(new MemoryUploadStorage(), { maximumFiles: 1 })
+    await uploads.create({ ...context, declaredMimeType: 'image/png', name: 'abandoned.png', size: png.length })
+
+    await expect(uploads.create({
+      ...context,
+      declaredMimeType: 'image/png',
+      name: 'replacement.png',
+      sessionId: 'upload-session-2',
+      size: png.length,
+    })).resolves.toMatchObject({ name: 'replacement.png', sessionId: 'upload-session-2' })
   })
 
   it('attaches stored bytes through the public Holo Media shape and removes temporary data', async () => {

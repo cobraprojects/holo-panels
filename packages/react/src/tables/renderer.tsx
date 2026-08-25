@@ -12,14 +12,55 @@ import {
   type ReactNode,
 } from 'react'
 import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
-import { ChevronLeft, ChevronRight, Columns3, ListFilter, Search, X } from 'lucide-react'
-import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect } from '../internal-ui'
-import { PanelsModal } from '../primitives'
+import { TablesRenderHook } from '@holo-js/panels-core'
+import { ChevronDown, ChevronLeft, ChevronRight, Columns3, ListFilter, MoreHorizontal, Search, X } from 'lucide-react'
+import { Button, PanelsIcon, Input, NativeSelect } from '../internal-ui'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Progress,
+  Skeleton,
+  Switch,
+} from '../ui'
+import { ReactPanelsRenderHook } from '../render-hooks'
+import { useReactFeedback } from '../notifications/feedback'
 import { useTableStore } from '../store'
 import { displayValue, pages, paginationRange, perPageOptions, recordValue, visibleColumns } from './helpers'
 import { ReactTableColumnPresentation, TablePresentation, type TablePresentationColumn, type TablePresentationGroup, type TablePresentationPlacement } from './presentation'
 import type {
   ReactTableAction,
+  ReactTableActionGroup,
+  ReactTableActionItem,
   ReactTableColumn,
   ReactTableFilter,
   ReactCustomFilterProps,
@@ -101,7 +142,7 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
   const placement = presentation?.placement ?? 'inline'
   const content = <form
     aria-label="Table filters"
-    className="hp-table-filters"
+    className="hp-table-filters hp:grid hp:gap-4"
     data-filter-placement={placement}
     style={collectionStyle(presentation?.columns ?? { default: 1 })}
     onSubmit={event => {
@@ -120,6 +161,7 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
       const label = filter.manifest.label ?? filter.manifest.id
       const layout = filter.manifest.layout ?? {}
       const wrap = (control: ReactNode): ReactNode => <div
+        className="hp:grid hp:gap-2"
         data-filter-column-span={layout.columnSpan ? JSON.stringify(layout.columnSpan) : undefined}
         data-filter-column-start={layout.columnStart ? JSON.stringify(layout.columnStart) : undefined}
         key={filter.manifest.id}
@@ -130,19 +172,19 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
         const from = typeof Reflect.get(range, 'from') === 'string' ? String(Reflect.get(range, 'from')) : ''
         const to = typeof Reflect.get(range, 'to') === 'string' ? String(Reflect.get(range, 'to')) : ''
         return wrap(<fieldset><legend>{label}</legend>
-          <label htmlFor={`${id}-from`}>From<ShadcnInput id={`${id}-from`} onChange={event => update({ from: event.currentTarget.value || null, to: to || null })} type="date" value={from} /></label>
-          <label htmlFor={`${id}-to`}>To<ShadcnInput id={`${id}-to`} onChange={event => update({ from: from || null, to: event.currentTarget.value || null })} type="date" value={to} /></label>
+          <label htmlFor={`${id}-from`}>From<Input id={`${id}-from`} onChange={event => update({ from: event.currentTarget.value || null, to: to || null })} type="date" value={from} /></label>
+          <label htmlFor={`${id}-to`}>To<Input id={`${id}-to`} onChange={event => update({ from: from || null, to: event.currentTarget.value || null })} type="date" value={to} /></label>
         </fieldset>)
       }
       if (filter.manifest.type === 'ternary') {
-        return wrap(<label htmlFor={id}>{label}<ShadcnSelect id={id} onChange={event => update(event.currentTarget.value)} value={typeof value === 'string' ? value : 'all'}>
+        return wrap(<label htmlFor={id}>{label}<NativeSelect id={id} onChange={event => update(event.currentTarget.value)} value={typeof value === 'string' ? value : 'all'}>
           <option value="all">All</option><option value="true">Yes</option><option value="false">No</option>
-        </ShadcnSelect></label>)
+        </NativeSelect></label>)
       }
       if (filter.manifest.type === 'trashed') {
-        return wrap(<label htmlFor={id}>{label}<ShadcnSelect id={id} onChange={event => update(event.currentTarget.value)} value={typeof value === 'string' ? value : 'without'}>
+        return wrap(<label htmlFor={id}>{label}<NativeSelect id={id} onChange={event => update(event.currentTarget.value)} value={typeof value === 'string' ? value : 'without'}>
           <option value="without">Without trashed</option><option value="with">With trashed</option><option value="only">Only trashed</option>
-        </ShadcnSelect></label>)
+        </NativeSelect></label>)
       }
       if (filter.manifest.type === 'advanced-query') return wrap(<AdvancedFilter filter={filter} update={update} value={value} />)
       if (filter.manifest.type === 'custom' || filter.manifest.type.includes(':filter:')) {
@@ -154,7 +196,7 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
       const multiple = filter.manifest.properties.multiple === true
       const selectedValues = Array.isArray(value) ? value.map(String) : [String(value ?? '')]
       return wrap(<label htmlFor={id}>{label}{filter.options
-          ? <ShadcnSelect id={id} multiple={multiple} onChange={event => {
+          ? <NativeSelect id={id} multiple={multiple} onChange={event => {
               if (multiple) {
                 update([...event.currentTarget.selectedOptions].map(option => filter.options?.find(item => String(item.value ?? '') === option.value)?.value ?? null))
                 return
@@ -164,23 +206,23 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
             }} value={multiple ? selectedValues : selectedValues[0]}>
               {!multiple ? <option value="">All</option> : null}
               {filter.options.map(option => <option disabled={option.disabled} key={String(option.value)} value={String(option.value ?? '')}>{option.label}</option>)}
-            </ShadcnSelect>
+            </NativeSelect>
           : filter.manifest.type.includes('boolean') || typeof value === 'boolean'
-            ? <ShadcnInput checked={value === true} id={id} onChange={event => update(event.currentTarget.checked)} type="checkbox" />
-            : <ShadcnInput id={id} onChange={event => update(event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
+            ? <Checkbox checked={value === true} id={id} onCheckedChange={checked => update(checked === true)} />
+            : <Input id={id} onChange={event => update(event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
       </label>)
     })}
-    {state.filters.mode === 'deferred' ? <ShadcnButton type="submit">Apply filters</ShadcnButton> : null}
-    <ShadcnButton onClick={() => {
+    {state.filters.mode === 'deferred' ? <Button type="submit">Apply filters</Button> : null}
+    <Button onClick={() => {
       props.store.resetFilters()
       notifyQueryChange(props.onQueryChange)
-    }} type="button">Reset filters</ShadcnButton>
+    }} type="button">Reset filters</Button>
     <FilterCollectionSlot placement="after" props={props} />
   </form>
   if (placement === 'inline') return content
-  const trigger = <ShadcnButton aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} type="button"><ListFilter aria-hidden="true" />Filters</ShadcnButton>
-  if (placement === 'dropdown') return <div className="hp-table-filters-dropdown">{trigger}{open ? <div role="dialog">{content}</div> : null}</div>
-  return <Fragment>{trigger}<PanelsModal labelledBy={modalTitleId} onClose={() => setOpen(false)} open={open}><h3 id={modalTitleId}>Filters</h3>{content}</PanelsModal></Fragment>
+  const trigger = <Button aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} type="button"><ListFilter aria-hidden="true" />Filters</Button>
+  if (placement === 'dropdown') return <Popover onOpenChange={setOpen} open={open}><PopoverTrigger asChild>{trigger}</PopoverTrigger><PopoverContent align="end" className="hp:w-96">{content}</PopoverContent></Popover>
+  return <Fragment>{trigger}<Dialog onOpenChange={setOpen} open={open}><DialogContent aria-labelledby={modalTitleId}><DialogHeader><DialogTitle id={modalTitleId}>Filters</DialogTitle><DialogDescription>Refine the records shown in this table.</DialogDescription></DialogHeader>{content}</DialogContent></Dialog></Fragment>
 }
 
 function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): ReactNode {
@@ -193,7 +235,7 @@ function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): Reac
       : condition)
     update({ conditions: updated })
   }
-  return <fieldset><legend>{filter.manifest.label ?? filter.manifest.id}</legend>
+  return <fieldset className="hp:grid hp:gap-3"><legend className="hp:text-sm hp:font-medium">{filter.manifest.label ?? filter.manifest.id}</legend>
     {conditions.map((condition, index) => {
       if (typeof condition !== 'object' || condition === null || Array.isArray(condition)) return null
       const columnId = typeof condition.column === 'string' ? condition.column : ''
@@ -204,19 +246,19 @@ function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): Reac
       const inputValue = Array.isArray(condition.value)
         ? condition.value.join(', ')
         : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
-      return <div data-advanced-condition key={index}>
-        <ShadcnSelect aria-label="Column" onChange={event => change(index, 'column', event.currentTarget.value)} value={columnId}>{normalizedColumns.map(item => <option key={String(item.id)} value={String(item.id)}>{String(item.id)}</option>)}</ShadcnSelect>
-        <ShadcnSelect aria-label="Operator" onChange={event => change(index, 'operator', event.currentTarget.value)} value={operator}>{operators.map(item => <option key={item} value={item}>{item}</option>)}</ShadcnSelect>
-        {!['null', 'not-null'].includes(operator) ? <ShadcnInput aria-label="Value" onChange={event => change(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} /> : null}
-        <ShadcnButton onClick={() => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) })} type="button">Remove condition</ShadcnButton>
+      return <div className="hp:grid hp:grid-cols-1 hp:gap-2 hp:md:grid-cols-4" data-advanced-condition key={index}>
+        <NativeSelect aria-label="Column" onChange={event => change(index, 'column', event.currentTarget.value)} value={columnId}>{normalizedColumns.map(item => <option key={String(item.id)} value={String(item.id)}>{String(item.id)}</option>)}</NativeSelect>
+        <NativeSelect aria-label="Operator" onChange={event => change(index, 'operator', event.currentTarget.value)} value={operator}>{operators.map(item => <option key={item} value={item}>{item}</option>)}</NativeSelect>
+        {!['null', 'not-null'].includes(operator) ? <Input aria-label="Value" onChange={event => change(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} /> : null}
+        <Button onClick={() => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) })} type="button">Remove condition</Button>
       </div>
     })}
-    <ShadcnButton disabled={normalizedColumns.length === 0} onClick={() => {
+    <Button disabled={normalizedColumns.length === 0} onClick={() => {
       const column = normalizedColumns[0]
       const operator = Array.isArray(column?.operators) ? column.operators.find(item => typeof item === 'string') : undefined
       if (typeof column?.id !== 'string' || typeof operator !== 'string') return
       update({ conditions: [...conditions, { column: column.id, operator, value: null }] })
-    }} type="button">Add condition</ShadcnButton>
+    }} type="button">Add condition</Button>
   </fieldset>
 }
 
@@ -236,33 +278,38 @@ function ColumnManager<TRecord extends object, TRecordId extends TableRecordId>(
   const current = state.visibleColumns.length > 0
     ? new Set(state.visibleColumns)
     : new Set(props.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path))
-  return <div className="hp-column-manager">
-    <ShadcnButton aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)} type="button"><Columns3 aria-hidden="true" />Columns</ShadcnButton>
-    {open ? <div aria-label="Visible columns" role="menu">{props.columns.filter(column => column.manifest.toggleable).map(column => <label key={column.manifest.path} role="menuitemcheckbox" aria-checked={current.has(column.manifest.path)}>
-      <ShadcnInput checked={current.has(column.manifest.path)} onChange={event => {
+  return <Popover onOpenChange={setOpen} open={open}>
+    <PopoverTrigger asChild><Button aria-expanded={open} aria-haspopup="menu" className="hp-column-manager" type="button"><Columns3 aria-hidden="true" />Columns</Button></PopoverTrigger>
+    <PopoverContent align="end" aria-label="Visible columns" className="hp:w-64">{props.columns.filter(column => column.manifest.toggleable).map(column => {
+      const id = `hp-column-${column.manifest.path.replace(/[^a-z0-9_-]/giu, '-')}`
+      return <div className="hp:flex hp:items-center hp:gap-2 hp:py-1.5 hp:text-sm" key={column.manifest.path}>
+      <Checkbox checked={current.has(column.manifest.path)} id={id} onCheckedChange={checked => {
         const next = new Set(current)
-        if (event.currentTarget.checked) next.add(column.manifest.path)
+        if (checked === true) next.add(column.manifest.path)
         else next.delete(column.manifest.path)
         props.store.setVisibleColumns([...next])
         notifyQueryChange(props.onQueryChange)
-      }} type="checkbox" />{column.manifest.label ?? column.manifest.path}
-    </label>)}</div> : null}
-  </div>
+      }} /><label htmlFor={id}>{column.manifest.label ?? column.manifest.path}</label>
+    </div>
+    })}</PopoverContent>
+  </Popover>
 }
 
-function ActionButton<TRecord extends object, TRecordId extends TableRecordId>({ action, props, record }: {
+function ActionButton<TRecord extends object, TRecordId extends TableRecordId>({ action, menuItem = false, onComplete, props, record }: {
   readonly action: ReactTableAction
+  readonly menuItem?: boolean
+  readonly onComplete?: () => void
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
   readonly record?: Readonly<TRecord>
 }): ReactNode {
+  const feedback = useReactFeedback()
   const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const run = async (): Promise<void> => {
     const transport = props.actionTransport
     if (!transport) throw new Error('[Holo Panels] React table actions require an action transport.')
-    if (action.confirmation && !globalThis.confirm(action.confirmation)) return
     setPending(true)
-    setError(null)
+    setConfirming(false)
     const controller = new AbortController()
     try {
       await transport.execute({
@@ -271,15 +318,50 @@ function ActionButton<TRecord extends object, TRecordId extends TableRecordId>({
         ...(action.scope === 'bulk' ? { selection: props.store.selectionPayload() } : {}),
       }, controller.signal)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Action failed')
+      feedback.error(`${action.label} failed`, cause)
     } finally {
       setPending(false)
+      onComplete?.()
     }
   }
-  const inferredIcon = action.id.includes('delete') ? 'delete' : action.id.includes('edit') ? 'edit' : action.id.includes('view') ? 'view' : null
-  const icon = action.icon ?? inferredIcon
-  if (record && action.url) return <a className="hp-button hp-button-ghost hp-table-action" data-action={action.id} data-color={action.color ?? undefined} href={action.url(props.getRecordId(record))}>{icon ? <ShadcnIcon name={icon} /> : null}<span>{action.label}</span></a>
-  return <span><ShadcnButton className="hp-table-action" data-action={action.id} data-color={action.color ?? undefined} disabled={pending} onClick={() => void run()} type="button">{icon ? <ShadcnIcon name={icon} /> : null}<span>{pending ? 'Working…' : action.label}</span></ShadcnButton>{error ? <span role="alert">{error}</span> : null}</span>
+  const activate = (): void => {
+    if (action.confirmation) setConfirming(true)
+    else void run()
+  }
+  const triggerClass = 'hp-action-trigger hp-table-action'
+  const variant = action.color === 'danger' ? 'destructive' : 'outline'
+  const content = <Fragment>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>{pending ? 'Working…' : action.label}</span></Fragment>
+  const trigger = menuItem
+    ? record && action.url
+      ? <DropdownMenuItem asChild variant={action.color === 'danger' ? 'destructive' : 'default'}><a data-action={action.id} data-color={action.color ?? undefined} href={action.url(props.getRecordId(record))}>{content}</a></DropdownMenuItem>
+      : <DropdownMenuItem data-action={action.id} data-color={action.color ?? undefined} disabled={pending} onSelect={event => { event.preventDefault(); activate() }} variant={action.color === 'danger' ? 'destructive' : 'default'}>{content}</DropdownMenuItem>
+    : record && action.url
+      ? <Button asChild className={triggerClass} variant={variant}><a data-action={action.id} data-color={action.color ?? undefined} href={action.url(props.getRecordId(record))}>{content}</a></Button>
+      : <Button className={triggerClass} data-action={action.id} data-color={action.color ?? undefined} disabled={pending} onClick={activate} type="button" variant={variant}>{content}</Button>
+  return <Fragment>{trigger}{confirming ? <AlertDialog onOpenChange={setConfirming} open><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{action.label}</AlertDialogTitle><AlertDialogDescription>{action.confirmation}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="hp-action-trigger" data-action={action.id} data-color={action.color ?? undefined} onClick={() => void run()} variant={action.color === 'danger' ? 'destructive' : 'default'}>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>Confirm</span></AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog> : null}</Fragment>
+}
+
+function ActionGroupButton<TRecord extends object, TRecordId extends TableRecordId>({ group, props, record }: {
+  readonly group: ReactTableActionGroup
+  readonly props: ReactTableRendererProps<TRecord, TRecordId>
+  readonly record?: Readonly<TRecord>
+}): ReactNode {
+  const [open, setOpen] = useState(false)
+  const label = group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : 'Actions')
+  return <DropdownMenu onOpenChange={setOpen} open={open}>
+    <DropdownMenuTrigger asChild><Button aria-label={label} className="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} type="button" variant="outline">{group.icon ? <PanelsIcon name={group.icon} /> : group.scope === 'row' ? <MoreHorizontal aria-hidden="true" /> : null}<span>{label}</span>{group.scope === 'row' ? null : <ChevronDown aria-hidden="true" />}</Button></DropdownMenuTrigger>
+    <DropdownMenuContent align="end">{group.actions.map(action => <ActionButton action={action} key={action.id} menuItem onComplete={() => setOpen(false)} props={props} record={record} />)}</DropdownMenuContent>
+  </DropdownMenu>
+}
+
+function isActionGroup(item: ReactTableActionItem): item is ReactTableActionGroup {
+  return 'kind' in item && item.kind === 'action-group'
+}
+
+function actionItem<TRecord extends object, TRecordId extends TableRecordId>(item: ReactTableActionItem, props: ReactTableRendererProps<TRecord, TRecordId>, record?: Readonly<TRecord>): ReactNode {
+  return isActionGroup(item)
+    ? <ActionGroupButton group={item} key={item.id} props={props} record={record} />
+    : <ActionButton action={item} key={item.id} props={props} record={record} />
 }
 
 function TransferAction<TRecord extends object, TRecordId extends TableRecordId>({ manifest, props }: {
@@ -306,36 +388,36 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
     }
   }
   return <span className="hp-transfer-action">
-    <ShadcnButton disabled={!transport} onClick={() => setOpen(true)} type="button">{manifest.label}</ShadcnButton>
-    <PanelsModal labelledBy={`${manifest.id}-title`} onClose={() => { store?.cancel(); setOpen(false) }} open={open}>
-      <h2 id={`${manifest.id}-title`}>{manifest.label}</h2>
-      <label>Format<ShadcnSelect onChange={event => setFormatId(event.currentTarget.value)} value={formatId}>{manifest.formatIds.map(id => <option key={id} value={id}>{id.toUpperCase()}</option>)}</ShadcnSelect></label>
+    <Button className="hp-action-trigger" data-action={manifest.id} disabled={!transport} onClick={() => setOpen(true)} type="button" variant="outline"><PanelsIcon name={manifest.kind === 'import' ? 'upload' : 'download'} /><span>{manifest.label}</span></Button>
+    <Dialog onOpenChange={(next) => { if (!next) store?.cancel(); setOpen(next) }} open={open}><DialogContent>
+      <DialogHeader><DialogTitle id={`${manifest.id}-title`}>{manifest.label}</DialogTitle><DialogDescription>Configure and start this {manifest.kind}.</DialogDescription></DialogHeader>
+      <label>Format<NativeSelect onChange={event => setFormatId(event.currentTarget.value)} value={formatId}>{manifest.formatIds.map(id => <option key={id} value={id}>{id.toUpperCase()}</option>)}</NativeSelect></label>
       {manifest.kind === 'import' ? <>
-        <label>CSV file<ShadcnInput accept=".csv,text/csv" onChange={event => {
+        <label>CSV file<Input accept=".csv,text/csv" onChange={event => {
           const file = event.currentTarget.files?.[0]
           if (file && store) void store.inspect(file).catch(() => undefined)
         }} type="file" /></label>
-        {state.inspection ? manifest.columns.map(column => <label key={column.key}>{column.label}<ShadcnSelect required={column.required} onChange={event => {
+        {state.inspection ? manifest.columns.map(column => <label key={column.key}>{column.label}<NativeSelect required={column.required} onChange={event => {
           const value = event.currentTarget.value
           setMappings(current => ({ ...current, [column.key]: value }))
         }} value={mappings[column.key] ?? ''}>
           <option value="">Do not import</option>{state.inspection?.headers.map(header => <option key={header} value={header}>{header}</option>)}
-        </ShadcnSelect>{column.example ? <small>Example: {column.example}</small> : null}</label>) : null}
-        {state.uploadProgress > 0 ? <progress aria-label="Upload progress" max={100} value={state.uploadProgress} /> : null}
-      </> : manifest.columns.map(column => <label key={column.id}><ShadcnInput checked={columns.has(column.id)} onChange={event => {
-        const checked = event.currentTarget.checked
+        </NativeSelect>{column.example ? <small>Example: {column.example}</small> : null}</label>) : null}
+        {state.uploadProgress > 0 ? <Progress aria-label="Upload progress" max={100} value={state.uploadProgress} /> : null}
+      </> : manifest.columns.map(column => <label key={column.id}><Checkbox checked={columns.has(column.id)} onCheckedChange={value => {
+        const checked = value === true
         setColumns(current => {
         const next = new Set(current)
         if (checked) next.add(column.id)
         else next.delete(column.id)
         return next
         })
-      }} type="checkbox" />{column.label}</label>)}
-      <ShadcnButton disabled={!store || (manifest.kind === 'import' && !state.inspection)} onClick={() => void submit().catch(() => undefined)} type="button">Start {manifest.kind}</ShadcnButton>
-      {state.progress ? <progress aria-label="Transfer progress" max={Math.max(1, state.progress.total)} value={state.progress.completed} /> : null}
+      }} />{column.label}</label>)}
+      <DialogFooter><Button disabled={!store || (manifest.kind === 'import' && !state.inspection)} onClick={() => void submit().catch(() => undefined)} type="button">Start {manifest.kind}</Button>
+      <Button onClick={() => setOpen(false)} type="button" variant="outline">Close</Button></DialogFooter>
+      {state.progress ? <Progress aria-label="Transfer progress" max={Math.max(1, state.progress.total)} value={(state.progress.completed / Math.max(1, state.progress.total)) * 100} /> : null}
       {state.error ? <div role="alert">{state.error}</div> : null}
-      <ShadcnButton onClick={() => setOpen(false)} type="button">Close</ShadcnButton>
-    </PanelsModal>
+    </DialogContent></Dialog>
   </span>
 }
 
@@ -386,18 +468,21 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
       setPending(false)
     }
   }
-  if (!editing) return <ShadcnButton aria-label={`Edit ${column.manifest.label ?? column.manifest.path}`} onClick={() => setEditing(true)} type="button">{presentation}</ShadcnButton>
-  if (kind === 'checkbox' || kind === 'toggle') return <ShadcnInput
-    aria-label={column.manifest.label ?? column.manifest.path}
-    checked={value === 'Yes' || value === 'true'}
-    disabled={pending}
-    onChange={event => {
-      setValue(event.currentTarget.checked ? 'true' : 'false')
-      void save(event.currentTarget.checked)
-    }}
-    type="checkbox"
-  />
-  if (kind === 'select') return <ShadcnSelect
+  if (!editing) return <Button aria-label={`Edit ${column.manifest.label ?? column.manifest.path}`} onClick={() => setEditing(true)} type="button">{presentation}</Button>
+  if (kind === 'checkbox' || kind === 'toggle') {
+    const Toggle = kind === 'toggle' ? Switch : Checkbox
+    return <Toggle
+      aria-label={column.manifest.label ?? column.manifest.path}
+      checked={value === 'Yes' || value === 'true'}
+      disabled={pending}
+      onCheckedChange={checked => {
+        const next = checked === true
+        setValue(next ? 'true' : 'false')
+        void save(next)
+      }}
+    />
+  }
+  if (kind === 'select') return <NativeSelect
     aria-label={column.manifest.label ?? column.manifest.path}
     disabled={pending}
     onChange={event => {
@@ -415,7 +500,7 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
       if (typeof optionValue !== 'string' && typeof optionValue !== 'number' && typeof optionValue !== 'boolean') return null
       const label = Reflect.get(option, 'label')
       return <option disabled={Reflect.get(option, 'disabled') === true} key={String(optionValue)} value={String(optionValue)}>{typeof label === 'string' ? label : `Option ${index + 1}`}</option>
-    })}</ShadcnSelect>
+    })}</NativeSelect>
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Escape') {
       setEditing(false)
@@ -425,7 +510,7 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
       void save()
     }
   }
-  return <span><ShadcnInput aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} onChange={event => setValue(event.currentTarget.value)} onKeyDown={keyDown} ref={input} value={value} />{error ? <span role="alert">{error}</span> : null}</span>
+  return <span><Input aria-label={column.manifest.label ?? column.manifest.path} disabled={pending} onChange={event => setValue(event.currentTarget.value)} onKeyDown={keyDown} ref={input} value={value} />{error ? <span role="alert">{error}</span> : null}</span>
 }
 
 export function ReactTableRenderer<TRecord extends object, TRecordId extends TableRecordId>(
@@ -461,7 +546,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
       alignment: column.manifest.alignment,
       ariaSort: direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none',
       header: column.manifest.sortable
-        ? <ShadcnButton className="hp-table-sort" data-sorted={direction ?? undefined} onClick={() => sort(column)} type="button">{label}<ShadcnIcon name={direction === 'asc' ? 'chevron-up' : direction === 'desc' ? 'chevron-down' : 'sort'} /></ShadcnButton>
+        ? <Button className="hp-table-sort hp:-ml-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground" data-sorted={direction ?? undefined} onClick={() => sort(column)} size="sm" type="button" variant="ghost">{label}<PanelsIcon name={direction === 'asc' ? 'chevron-up' : direction === 'desc' ? 'chevron-down' : 'sort'} /></Button>
         : label,
       key: column.manifest.path,
       label,
@@ -472,11 +557,11 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
   })
   const leading: TablePresentationPlacement<TRecord> | undefined = selectable
     ? {
-        header: <ShadcnInput aria-label="Select page" checked={selectedOnPage} onChange={event => props.store.selectPage(recordIds, event.currentTarget.checked)} type="checkbox" />,
+        header: <Checkbox aria-label="Select page" checked={selectedOnPage} onCheckedChange={checked => props.store.selectPage(recordIds, checked === true)} />,
         label: 'Select',
         render: record => {
           const recordId = props.getRecordId(record)
-          return <ShadcnInput aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} onChange={event => props.store.selectRecord(recordId, event.currentTarget.checked)} type="checkbox" />
+          return <Checkbox aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} onCheckedChange={checked => props.store.selectRecord(recordId, checked === true)} />
         },
       }
     : undefined
@@ -484,7 +569,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     ? {
         header: 'Actions',
         label: 'Actions',
-        render: record => rowActions.map(action => <ActionButton action={action} key={action.id} props={props} record={record} />),
+        render: record => <div className="hp:flex hp:items-center hp:justify-end hp:gap-1">{rowActions.map(action => actionItem(action, props, record))}</div>,
       }
     : undefined
   const presentationGroups: readonly TablePresentationGroup<TRecord>[] | undefined = props.groups?.map(group => ({
@@ -497,29 +582,41 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
       return next
     }),
   }))
-  return <section aria-busy={state.loading} aria-labelledby={captionId} className="hp-table-view" data-panels-component="table" data-state={state.error ? 'error' : state.loading ? 'loading' : state.records.length === 0 ? 'empty' : 'ready'}>
-    <h2 id={captionId}>{props.caption}</h2>
-    <div className="hp-table-toolbar">
-      <label><Search aria-hidden="true" /><span className="hp-visually-hidden">Search</span><ShadcnInput onChange={(event: ChangeEvent<HTMLInputElement>) => {
+  return <section aria-busy={state.loading} aria-labelledby={captionId} className="hp-table-view hp:space-y-4" data-panels-component="table" data-state={state.error ? 'error' : state.loading ? 'loading' : state.records.length === 0 ? 'empty' : 'ready'}>
+    <ReactPanelsRenderHook hook={TablesRenderHook.HEADER_BEFORE} />
+    <h2 className="hp:text-xl hp:font-semibold" id={captionId}>{props.caption}</h2>
+    <ReactPanelsRenderHook hook={TablesRenderHook.HEADER_AFTER} />
+    <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_BEFORE} />
+    <div className="hp-table-toolbar hp:flex hp:flex-wrap hp:items-center hp:gap-2">
+      <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_START} />
+      <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_BEFORE} />
+      <label className="hp:min-w-48 hp:flex-1"><span className="hp-visually-hidden">Search</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput onChange={(event: ChangeEvent<HTMLInputElement>) => {
         props.store.setSearch(event.currentTarget.value)
         notifyQueryChange(props.onQueryChange)
-      }} placeholder="Search records…" type="search" value={state.search} /></label>
+      }} placeholder="Search records…" type="search" value={state.search} /></InputGroup></label>
+      <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_AFTER} />
+      <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE} />
       <ColumnManager props={props} />
+      <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_AFTER} />
       <TableFilters filters={props.filters ?? []} props={props} />
       {props.transfers?.map(manifest => <TransferAction key={manifest.id} manifest={manifest} props={props} />)}
-      {headerActions.map(action => <ActionButton action={action} key={action.id} props={props} />)}
+      {headerActions.map(action => actionItem(action, props))}
+      <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_END} />
     </div>
-    {hasSelection ? <div aria-live="polite" className="hp-table-bulk-actions">
+    <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_AFTER} />
+    {hasSelection ? <div aria-live="polite" className="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
       <span>{state.selection.mode === 'all-matching' ? `All ${state.total} matching records selected` : `${state.selection.selectedRecordIds.length} records selected`}</span>
-      {bulkActions.map(action => <ActionButton action={action} key={action.id} props={props} />)}
-      <ShadcnButton aria-label="Clear selection" onClick={() => props.store.clearSelection()} type="button"><X aria-hidden="true" />Clear selection</ShadcnButton>
+      <ReactPanelsRenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
+      {bulkActions.map(action => actionItem(action, props))}
+      <ReactPanelsRenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
+      <Button aria-label="Clear selection" onClick={() => props.store.clearSelection()} type="button" variant="outline"><X aria-hidden="true" />Clear selection</Button>
     </div> : null}
     {state.selection.mode === 'explicit' && selectedOnPage && state.total > recordIds.length
-      ? <ShadcnButton onClick={() => props.store.selectAllMatching()} type="button">Select all {state.total} matching records</ShadcnButton>
+      ? <Button onClick={() => props.store.selectAllMatching()} type="button">Select all {state.total} matching records</Button>
       : null}
-    {state.error ? <div className="hp-table-error" data-slot="table-error" role="alert"><strong>Unable to load table</strong><span>{state.error.message}</span></div> : null}
-    {state.loading ? <div aria-live="polite" className="hp-table-loading" data-slot="table-loading" role="status">Loading records…</div> : null}
-    {!state.loading && !state.error && state.records.length === 0 ? <div className="hp-table-empty" data-slot="table-empty">{props.emptyMessage ?? 'No records found.'}</div> : null}
+    {state.error ? <Alert className="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{state.error.message}</AlertDescription></Alert> : null}
+    {state.loading ? <div aria-label="Loading records" aria-live="polite" className="hp-table-loading hp:space-y-2" data-slot="table-loading" role="status"><Skeleton className="hp:h-10 hp:w-full" /><Skeleton className="hp:h-10 hp:w-full" /><Skeleton className="hp:h-10 hp:w-full" /></div> : null}
+    {!state.loading && !state.error && state.records.length === 0 ? <Empty className="hp-table-empty" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{props.emptyMessage ?? 'No records found.'}</EmptyDescription></EmptyHeader></Empty> : null}
     {state.records.length > 0 ? <TablePresentation
       caption={props.caption}
       columns={presentationColumns}
@@ -530,25 +627,25 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
       summaries={props.summaries}
       trailing={trailing}
     /> : null}
-    <nav aria-label="Table pagination" className="hp-table-pagination" data-slot="table-pagination">
+    <nav aria-label="Table pagination" className="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4" data-slot="table-pagination">
       <span aria-live="polite" className="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{state.total}</strong> results</span>
-      <label className="hp-table-pagination-per-page">
-        <ShadcnSelect aria-label="Results per page" disabled={state.loading} onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+      <label className="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
+        <NativeSelect aria-label="Results per page" disabled={state.loading} onChange={(event: ChangeEvent<HTMLSelectElement>) => {
           props.store.setPerPage(Number(event.currentTarget.value))
           notifyQueryChange(props.onQueryChange)
         }} value={state.perPage}>
           {perPageOptions(state.perPage).map(value => <option key={value} value={value}>{value}</option>)}
-        </ShadcnSelect>
+        </NativeSelect>
         <span>per page</span>
       </label>
-      <span className="hp-table-pagination-pages">
-        <ShadcnButton aria-label="Previous page" disabled={state.page <= 1 || state.loading} onClick={() => {
+      <span className="hp-table-pagination-pages hp:flex hp:items-center hp:gap-1">
+        <Button aria-label="Previous page" disabled={state.page <= 1 || state.loading} onClick={() => {
           props.store.setPage(state.page - 1)
           notifyQueryChange(props.onQueryChange)
-        }} type="button"><ChevronLeft aria-hidden="true" /></ShadcnButton>
+        }} size="icon" type="button" variant="outline"><ChevronLeft aria-hidden="true" /></Button>
         {paginationItems.map((item, index) => item === 'ellipsis'
           ? <span aria-hidden="true" className="hp-table-pagination-ellipsis" key={`ellipsis-${index}`}>…</span>
-          : <ShadcnButton
+          : <Button
               aria-current={item === state.page ? 'page' : undefined}
               aria-label={`Page ${item}`}
               data-active={item === state.page ? 'true' : undefined}
@@ -559,11 +656,12 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
                 notifyQueryChange(props.onQueryChange)
               }}
               type="button"
-            >{item}</ShadcnButton>)}
-        <ShadcnButton aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
+              variant={item === state.page ? 'default' : 'outline'}
+            >{item}</Button>)}
+        <Button aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
           props.store.setPage(state.page + 1)
           notifyQueryChange(props.onQueryChange)
-        }} type="button"><ChevronRight aria-hidden="true" /></ShadcnButton>
+        }} size="icon" type="button" variant="outline"><ChevronRight aria-hidden="true" /></Button>
       </span>
     </nav>
   </section>

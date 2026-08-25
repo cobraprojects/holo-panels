@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    PanelsDropdown,
-    PanelsModal,
-    setPanelsPortalTarget,
-  } from '@holo-js/panels-svelte'
+  import { setPanelsPortalTarget } from '@holo-js/panels-svelte'
+  import { Button } from '@holo-js/panels-svelte/ui/button'
+  import * as Dialog from '@holo-js/panels-svelte/ui/dialog'
+  import * as DropdownMenu from '@holo-js/panels-svelte/ui/dropdown-menu'
 
   type Overlay = 'dropdown' | 'modal'
   type Theme = 'dark' | 'light'
@@ -17,10 +16,6 @@
   let { overlay, theme }: Props = $props()
   let modalOpen = $state(false)
   let portalElement = $state<HTMLElement>()
-
-  const lightItems = [
-    { id: 'light-action', label: 'Light panel action' },
-  ] as const
 
   setPanelsPortalTarget(() => portalElement)
 
@@ -47,25 +42,30 @@
 >
   <h2>{theme === 'light' ? 'Light panel' : 'Dark panel'}</h2>
   {#if overlay === 'dropdown'}
-    <PanelsDropdown
-      items={lightItems}
-      label="Open light panel menu"
-    />
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <Button {...props} aria-label="Open light panel menu" variant="outline">Open light panel menu</Button>
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content>
+        <DropdownMenu.Item>Light panel action</DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
   {:else}
-    <button
-      class="hp-button"
+    <Button
       onclick={() => modalOpen = true}
       type="button"
     >
       Open dark panel modal
-    </button>
-    <PanelsModal
-      labelledBy="dark-panel-modal-title"
-      onclose={() => modalOpen = false}
-      open={modalOpen}
-    >
-      <h2 id="dark-panel-modal-title">Dark panel modal</h2>
-      <p>This dialog belongs to the dark panel.</p>
-    </PanelsModal>
+    </Button>
+    <Dialog.Root bind:open={modalOpen}>
+      <Dialog.Content>
+        <Dialog.Header>
+          <Dialog.Title>Dark panel modal</Dialog.Title>
+          <Dialog.Description>This dialog belongs to the dark panel.</Dialog.Description>
+        </Dialog.Header>
+      </Dialog.Content>
+    </Dialog.Root>
   {/if}
 </section>

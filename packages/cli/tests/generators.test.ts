@@ -140,69 +140,19 @@ describe('Holo Panels generators', () => {
       'server/admin/resources/posts/pages/ViewPost.ts',
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
-    expect(await readFile(join(projectRoot, files[0]!), 'utf8')).toMatchInlineSnapshot(`
-      "import { Resource } from '@holo-js/panels-resources'
-      import Post from '~/models/Post'
-      import CreatePost from './pages/CreatePost'
-      import EditPost from './pages/EditPost'
-      import ListPosts from './pages/ListPosts'
-      import ViewPost from './pages/ViewPost'
-      import CommentsRelationManager from './relation-managers/CommentsRelationManager'
-
-      export default class PostResource extends Resource {
-        protected static override model = Post
-
-        static form = this.configureForm(schema => schema.components(field => [
-              field.textInput('title').required(),
-              field.checkbox('published').required(),
-              field.dateTimePicker('publishedAt'),
-          ]))
-
-        static table = this.configureTable(table => table
-          .columns(column => [
-              column.text('title'),
-              column.text('published'),
-              column.text('publishedAt').dateTime(),
-          ])
-          .recordActions(action => [
-            action.view(),
-            action.edit(),
-            action.delete(),
-          ])
-          .toolbarActions(action => [
-            action.group([
-              action.deleteBulk(),
-            ]),
-          ]))
-
-        static getPages() {
-          return {
-            index: ListPosts.route('/'),
-            create: CreatePost.route('/create'),
-            view: ViewPost.route('/{record}'),
-            edit: EditPost.route('/{record}/edit'),
-          }
-        }
-
-        static getRelations() {
-          return [CommentsRelationManager]
-        }
-      }
-      "
-    `)
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toMatchInlineSnapshot(`
-      "import { ListRecords } from '@holo-js/panels-resources'
-      import PostResource from '../PostResource'
-
-      export default class ListPosts extends ListRecords {
-        static override get resource() { return PostResource }
-
-        protected override getHeaderActions() {
-          return PostResource.actions(action => [action.create()])
-        }
-      }
-      "
-    `)
+    const resource = await readFile(join(projectRoot, files[0]!), 'utf8')
+    const listPage = await readFile(join(projectRoot, files[1]!), 'utf8')
+    expect(resource).toContain('protected static override model = Post')
+    expect(resource).toContain("TextInput.make('title').required()")
+    expect(resource).toContain("Checkbox.make('published').required()")
+    expect(resource).toContain("DateTimePicker.make('publishedAt')")
+    expect(resource).toContain("TextColumn.make('title')")
+    expect(resource).toContain('recordActions([\n      ViewAction.make(),')
+    expect(resource).toContain('ActionGroup.make([\n        DeleteBulkAction.make(),')
+    expect(resource).not.toContain('components(field =>')
+    expect(resource).not.toContain('columns(column =>')
+    expect(listPage).toContain("import { CreateAction } from '@holo-js/panels-actions'")
+    expect(listPage).toContain('return [CreateAction.make()]')
   })
 
   it('generates an empty type-safe resource when metadata generation is not requested', async () => {
@@ -211,8 +161,8 @@ describe('Holo Panels generators', () => {
     const files = await run(projectRoot, 'resource', ['Post'], { panel: 'admin' })
     const resource = await readFile(join(projectRoot, files[0]!), 'utf8')
 
-    expect(resource).toContain('schema.components(() => [\n\n    ])')
-    expect(resource).toContain('.columns(() => [\n\n    ])')
+    expect(resource).toContain('schema.components([\n\n    ])')
+    expect(resource).toContain('.columns([\n\n    ])')
     expect(resource).not.toContain("'name'")
     await expectGeneratedResourcesToTypecheck(projectRoot, files)
   })
@@ -233,8 +183,8 @@ describe('Holo Panels generators', () => {
     const contents = await readFile(join(projectRoot, files[0]!), 'utf8')
 
     expect(contents).toContain("import Post from '~/server/models/Post'")
-    expect(contents).toContain("field.textInput('id').numeric().required()")
-    expect(contents).toContain("field.dateTimePicker('published_at')")
+    expect(contents).toContain("TextInput.make('id').numeric().required()")
+    expect(contents).toContain("DateTimePicker.make('published_at')")
     expect(files).toEqual([
       'server/admin/resources/posts/PostResource.ts',
       'server/admin/resources/posts/pages/ListPosts.ts',
@@ -261,10 +211,10 @@ describe('Holo Panels generators', () => {
       'server/admin/resources/posts/pages/ViewPost.ts',
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('class PostForm')
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('static configure = configureResourceForm(Post')
-    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('class PostsTable')
-    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('recordActions(action => [')
+    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('export const PostForm = [')
+    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).not.toContain('Post from')
+    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('export const PostsTable = {')
+    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('recordActions: [')
   })
 
   it.each([false, true])('typechecks generated resources with concrete model fields in %s split mode', async (split) => {

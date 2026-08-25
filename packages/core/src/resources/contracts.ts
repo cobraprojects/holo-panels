@@ -5,7 +5,6 @@ import type {
   TableDefinition,
 } from '@holo-js/db'
 import type { ClientManifestValue, DiscoverableDefinition, DiscoveryDirectories } from '../discovery/types'
-import type { ResourceRenderSlot, ScopedRenderSlots } from '../panels/render-slots'
 
 export type ResourceIdentifier = number | string
 export type ResourceOperation = 'create' | 'delete' | 'forceDelete' | 'restore' | 'update' | 'view' | 'viewAny'
@@ -213,7 +212,6 @@ export interface ResourceDefinition<
   readonly slug: string
   readonly softDeletes: TSoftDeletes
   readonly table?: object
-  readonly slots: ScopedRenderSlots<ResourceRenderSlot>
   readonly tenantScope?: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery
   readonly validation?: ResourceValidation<TInput, ResourceExecutionContext<TActor, TTenant>>
   readonly widgets: readonly object[]

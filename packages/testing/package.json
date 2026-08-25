@@ -38,8 +38,7 @@
   },
   "dependencies": {
     "@holo-js/panels-core": "workspace:*",
-    "@holo-js/panels-client": "workspace:*",
-    "@holo-js/panels-ui": "workspace:*"
+    "@holo-js/panels-client": "workspace:*"
   },
   "peerDependencies": {
     "@holo-js/panels-react": "workspace:*",
@@ -75,6 +74,9 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@holo-js/core": "catalog:",
     "@holo-js/db": "catalog:",
     "@holo-js/notifications": "catalog:",

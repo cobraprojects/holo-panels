@@ -1,10 +1,13 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
-  import Select from '../components/Select.svelte'
+  import { Button } from '../ui/button'
+  import Icon from '../components/Icon.svelte'
+  import { Input } from '../ui/input'
+  import { Progress } from '../ui/progress'
+  import { Checkbox } from '../ui/checkbox'
+  import { NativeSelect as Select } from '../ui/native-select'
   import { ClientTransferStore, type ClientTransferManifest, type ClientTransferTransport, type TableRecordId } from '@holo-js/panels-client'
   import { untrack } from 'svelte'
-  import Dialog from '../components/Dialog.svelte'
+  import * as Dialog from '../ui/dialog'
   import { toSvelteState } from '../stores'
   import type { SvelteTableRendererProps } from './types'
 
@@ -31,9 +34,11 @@
 </script>
 
 <span class="hp-transfer-action">
-  <Button disabled={!available} onclick={() => open = true} type="button">{manifest.label}</Button>
-  <Dialog labelledBy={`${manifest.id}-title`} onclose={() => { store.cancel(); open = false }} {open}>
-    <h2 id={`${manifest.id}-title`}>{manifest.label}</h2>
+  <Button class="hp-action-trigger" data-action={manifest.id} disabled={!available} onclick={() => open = true} type="button"><Icon name={manifest.kind === 'import' ? 'upload' : 'download'} /><span>{manifest.label}</span></Button>
+  <Dialog.Root bind:open onOpenChange={(value) => { if (!value) store.cancel() }}>
+    <Dialog.Content data-holo-panel>
+    <Dialog.Header><Dialog.Title id={`${manifest.id}-title`}>{manifest.label}</Dialog.Title><Dialog.Description>Configure the {manifest.kind} operation.</Dialog.Description></Dialog.Header>
+    <div class="hp:space-y-4">
     <label>Format<Select bind:value={formatId}>{#each manifest.formatIds as id (id)}<option value={id}>{id.toUpperCase()}</option>{/each}</Select></label>
     {#if manifest.kind === 'import'}
       <label>CSV file<Input accept=".csv,text/csv" onchange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void store.inspect(file).catch(() => undefined) }} type="file" /></label>
@@ -42,13 +47,15 @@
           <label>{column.label}<Select required={column.required} value={mappings[column.key] ?? ''} onchange={(event) => mappings = { ...mappings, [column.key]: event.currentTarget.value }}><option value="">Do not import</option>{#each $transferState.inspection.headers as header (header)}<option value={header}>{header}</option>{/each}</Select></label>
         {/each}
       {/if}
-      {#if $transferState.uploadProgress > 0}<progress aria-label="Upload progress" max="100" value={$transferState.uploadProgress}></progress>{/if}
+      {#if $transferState.uploadProgress > 0}<Progress aria-label="Upload progress" max={100} value={$transferState.uploadProgress} />{/if}
     {:else}
-      {#each manifest.columns as column (column.id)}<label><Input checked={columns.has(column.id)} onchange={(event) => { const next = new Set(columns); if (event.currentTarget.checked) next.add(column.id); else next.delete(column.id); columns = next }} type="checkbox" />{column.label}</label>{/each}
+      {#each manifest.columns as column (column.id)}<label><Checkbox checked={columns.has(column.id)} onCheckedChange={(checked) => { const next = new Set(columns); if (checked) next.add(column.id); else next.delete(column.id); columns = next }} />{column.label}</label>{/each}
     {/if}
     <Button disabled={!available || (manifest.kind === 'import' && !$transferState.inspection)} onclick={() => void submit().catch(() => undefined)} type="button">Start {manifest.kind}</Button>
-    {#if $transferState.progress}<progress aria-label="Transfer progress" max={Math.max(1, $transferState.progress.total)} value={$transferState.progress.completed}></progress>{/if}
+    {#if $transferState.progress}<Progress aria-label="Transfer progress" max={Math.max(1, $transferState.progress.total)} value={$transferState.progress.completed} />{/if}
     {#if $transferState.error}<div role="alert">{$transferState.error}</div>{/if}
-    <Button onclick={() => open = false} type="button">Close</Button>
-  </Dialog>
+    <Dialog.Footer><Button onclick={() => open = false} type="button" variant="outline">Close</Button></Dialog.Footer>
+    </div>
+    </Dialog.Content>
+  </Dialog.Root>
 </span>

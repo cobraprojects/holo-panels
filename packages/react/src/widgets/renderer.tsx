@@ -21,7 +21,22 @@ import {
   type WidgetGridPlacement,
   type WidgetStat,
 } from '@holo-js/panels-client'
-import { ShadcnButton, ShadcnInput, ShadcnTable } from '../internal-ui'
+import { Button, Input } from '../internal-ui'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui'
 import type {
   ReactCustomWidgetProps,
   ReactDashboardRendererProps,
@@ -74,7 +89,7 @@ function Sparkline({ stat }: { readonly stat: WidgetStat }): ReactNode {
     const y = 28 - ((value - minimum) / range) * 24
     return `${x},${y}`
   }).join(' ')
-  return <svg aria-hidden="true" className="hp-widget-sparkline" preserveAspectRatio="none" viewBox="0 0 100 32">
+  return <svg aria-hidden="true" className="hp-widget-sparkline hp:mt-4 hp:h-8 hp:w-full hp:text-primary" preserveAspectRatio="none" viewBox="0 0 100 32">
     <polyline fill="none" points={points} stroke="currentColor" vectorEffect="non-scaling-stroke" />
   </svg>
 }
@@ -84,14 +99,7 @@ function StatContent({ action, navigate, stat }: {
   readonly navigate?: ReactWidgetRendererProps['navigate']
   readonly stat: WidgetStat
 }): ReactNode {
-  const content = <Fragment>
-    {stat.icon ? <span aria-hidden="true" className="hp-widget-stat-icon" data-icon={stat.icon} /> : null}
-    <span className="hp-widget-stat-label">{stat.label}</span>
-    <strong className="hp-widget-stat-value">{stat.value}</strong>
-    {stat.description ? <span className="hp-widget-stat-description">{stat.description}</span> : null}
-    {stat.trend ? <span className={`hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}`}>{stat.trend}</span> : null}
-    <Sparkline stat={stat} />
-  </Fragment>
+  const content = <Card className="hp-widget-stat"><CardHeader className="hp:flex hp:flex-row hp:items-center hp:justify-between hp:space-y-0 hp:pb-2"><CardTitle className="hp:text-sm hp:font-medium">{stat.label}</CardTitle>{stat.icon ? <span aria-hidden="true" className="hp:text-muted-foreground" data-icon={stat.icon} /> : null}</CardHeader><CardContent><div className="hp:text-2xl hp:font-bold">{stat.value}</div>{stat.description ? <p className="hp:text-xs hp:text-muted-foreground">{stat.description}</p> : null}{stat.trend ? <p className="hp:text-xs hp:text-muted-foreground">{stat.trend}</p> : null}<Sparkline stat={stat} /></CardContent></Card>
   const url = stat.url ? safeUrl(stat.url) : null
   if (url) {
     return <a href={url} onClick={navigate ? event => {
@@ -100,13 +108,13 @@ function StatContent({ action, navigate, stat }: {
     } : undefined}>{content}</a>
   }
   const statAction = stat.action
-  if (statAction && action) return <ShadcnButton onClick={() => void action(statAction)} type="button">{content}</ShadcnButton>
+  if (statAction && action) return <Button onClick={() => void action(statAction)} type="button">{content}</Button>
   return content
 }
 
 function StatsWidget({ data, props }: { readonly data: StatsWidgetData, readonly props: ReactWidgetRendererProps }): ReactNode {
   if (data.stats.length === 0) return <p>{props.manifest.emptyState}</p>
-  return <ul className="hp-widget-stats">{data.stats.map(stat => {
+  return <ul className="hp-widget-stats hp:grid hp:gap-4 hp:md:grid-cols-2 hp:lg:grid-cols-4">{data.stats.map(stat => {
     const appearance = panelColorAppearance(stat.color)
     const style = appearance.custom
       ? { '--hp-widget-color': appearance.custom } as CSSProperties
@@ -253,11 +261,11 @@ function ChartWidget({ data }: { readonly data: ChartWidgetData }): ReactNode {
     </svg>
     <figcaption id={descriptionId}>{model.description}</figcaption>
     <div className="hp-table-responsive" role="region" aria-label={model.caption} tabIndex={0}>
-      <ShadcnTable>
-        <caption>{model.caption}</caption>
-        <thead><tr><th scope="col">Label</th>{model.columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
-        <tbody>{model.rows.map(row => <tr key={row.label}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td key={`${row.label}-${model.columns[index] ?? index}`}>{value ?? '—'}</td>)}</tr>)}</tbody>
-      </ShadcnTable>
+      <Table>
+        <TableCaption>{model.caption}</TableCaption>
+        <TableHeader><TableRow><TableHead scope="col">Label</TableHead>{model.columns.map(column => <TableHead key={column} scope="col">{column}</TableHead>)}</TableRow></TableHeader>
+        <TableBody>{model.rows.map(row => <TableRow key={row.label}><TableHead scope="row">{row.label}</TableHead>{row.values.map((value, index) => <TableCell key={`${row.label}-${model.columns[index] ?? index}`}>{value ?? '—'}</TableCell>)}</TableRow>)}</TableBody>
+      </Table>
     </div>
   </figure>
 }
@@ -288,11 +296,11 @@ function WidgetFilters({ props, state }: { readonly props: ReactWidgetRendererPr
       const id = `${props.manifest.id}-${filter.id}`
       return <label htmlFor={id} key={filter.id}>{filter.label}
         {typeof value === 'boolean'
-          ? <ShadcnInput checked={value} id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.checked)} type="checkbox" />
-          : <ShadcnInput id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
+          ? <Checkbox checked={value} id={id} onCheckedChange={checked => void props.store.setFilter(filter.id, checked === true)} />
+          : <Input id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
       </label>
     })}
-    <ShadcnButton onClick={() => void props.store.resetFilters()} type="button">Reset filters</ShadcnButton>
+    <Button onClick={() => void props.store.resetFilters()} type="button">Reset filters</Button>
   </form>
 }
 
@@ -308,22 +316,24 @@ export function ReactWidgetRenderer(props: ReactWidgetRendererProps): ReactNode 
     return () => props.store.stop()
   }, [props.manifest.lazy, props.store])
   if (state.status === 'hidden') return null
-  return <section
-    aria-labelledby={props.manifest.heading ? headingId : undefined}
-    className={`hp-widget hp-widget--${props.manifest.family}`}
-    data-panels-component="widget"
-    data-slot="card"
-    data-widget-id={props.manifest.id}
-  >
-    {props.manifest.heading ? <h2 data-slot="card-title" id={headingId}>{props.manifest.heading}</h2> : null}
-    {props.manifest.description ? <p data-slot="card-description">{props.manifest.description}</p> : null}
+  const content = <>
     <WidgetFilters props={props} state={state} />
-    {state.status === 'idle' ? <ShadcnButton onClick={() => void props.store.activate()} type="button">Load widget</ShadcnButton> : null}
+    {state.status === 'idle' ? <Button onClick={() => void props.store.activate()} type="button">Load widget</Button> : null}
     {state.status === 'loading' ? <p aria-live="polite" role="status">Loading widget…</p> : null}
     {state.status === 'unauthorized' ? <p role="status">Widget unavailable</p> : null}
-    {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong>{state.error ? <span>{state.error}</span> : null}<ShadcnButton onClick={() => void props.store.load()} type="button">Retry</ShadcnButton></div> : null}
+    {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong>{state.error ? <span>{state.error}</span> : null}<Button onClick={() => void props.store.load()} type="button">Retry</Button></div> : null}
     {state.status === 'ready' ? <ReadyWidget props={props} state={state} /> : null}
+  </>
+  if (props.manifest.family === 'stats') return <section
+    aria-labelledby={props.manifest.heading ? headingId : undefined}
+    className="hp-widget hp-widget--stats hp:space-y-4"
+    data-panels-component="widget"
+    data-widget-id={props.manifest.id}
+  >
+    {props.manifest.heading ? <div className="hp:space-y-1"><h2 className="hp:text-xl hp:font-semibold" id={headingId}>{props.manifest.heading}</h2>{props.manifest.description ? <p className="hp:text-sm hp:text-muted-foreground">{props.manifest.description}</p> : null}</div> : null}
+    {content}
   </section>
+  return <Card aria-labelledby={props.manifest.heading ? headingId : undefined} className={`hp-widget hp-widget--${props.manifest.family}`} data-panels-component="widget" data-widget-id={props.manifest.id}><CardHeader>{props.manifest.heading ? <CardTitle id={headingId}>{props.manifest.heading}</CardTitle> : null}{props.manifest.description ? <CardDescription>{props.manifest.description}</CardDescription> : null}</CardHeader><CardContent>{content}</CardContent></Card>
 }
 
 function gridStyle(placement: WidgetGridPlacement): React.CSSProperties {
@@ -337,7 +347,7 @@ function WidgetGrid({ label, widgets, width }: ReactDashboardRendererProps): Rea
   const ordered = [...widgets].sort((left, right) => left.manifest.sort - right.manifest.sort || left.manifest.id.localeCompare(right.manifest.id))
   const placements = resolveWidgetGrid(ordered.map(widget => widget.manifest), width)
   const columns = placements[0]?.columns ?? 1
-  return <section aria-label={label} className="hp-widget-grid" data-columns={columns} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+  return <section aria-label={label} className="hp-widget-grid hp:grid hp:gap-4" data-columns={columns} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
     {ordered.map((widget, index) => {
       const placement = placements[index]
       if (!placement) return null

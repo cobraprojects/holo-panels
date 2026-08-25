@@ -62,6 +62,38 @@ function editAction(handle = vi.fn(async (input: { title: string }) => input.tit
 }
 
 describe('P8-B action execution', () => {
+  it('returns JSON-safe success results for actions without a return value', async () => {
+    const action: ActionDefinition<RecordValue, JsonObject, void, string, string, Services> = {
+      authorize: () => true,
+      handle: async () => undefined,
+      id: 'posts.delete',
+      kind: 'delete',
+      label: 'Delete',
+      mount: 'record',
+    }
+
+    const result = await engine().execute(action, {
+      idempotencyKey: 'request-void-result',
+      input: {},
+      mount: 'record',
+      recordIds: [1],
+    }, scope())
+
+    expect(result).toEqual({ effects: [], items: [{ recordId: 1, status: 'succeeded' }], status: 'succeeded' })
+  })
+
+  it('compiles canonical built-in presentation defaults into action manifests', async () => {
+    const context: ActionContext<RecordValue, string, string, Services> = { ...scope(), mount: 'record', record: records[0] as RecordValue }
+    const action = createBuiltinAction('delete', { delete: async record => record }, { authorize: async () => true })
+    const manifest = await compileActionManifest(action, 'Delete', context)
+
+    expect(manifest).toMatchObject({
+      color: 'danger',
+      confirmation: 'Are you sure you want to delete this record?',
+      icon: 'delete',
+    })
+  })
+
   it('resolves typed action state and compiles callback-free manifests', async () => {
     const definition = editAction()
     const context: ActionContext<RecordValue, string, string, Services> = { ...scope(), mount: 'record', record: records[0] as RecordValue }

@@ -4,7 +4,7 @@ import type { Effect } from '../protocol/effects'
 import type { CompiledSchema, RenderSlotReference, SchemaManifest } from '../schemas/contracts'
 import type { ExtensionTypeId } from '../plugins/type-id'
 
-export type ActionKind = 'create' | 'custom' | 'delete' | 'edit' | 'force-delete' | 'replicate' | 'restore' | 'view'
+export type ActionKind = 'associate' | 'attach' | 'create' | 'custom' | 'delete' | 'detach' | 'dissociate' | 'edit' | 'editPivot' | 'force-delete' | 'replicate' | 'restore' | 'view'
 export type ActionMount = 'bulk' | 'modal' | 'notification' | 'page' | 'record'
 
 export interface ActionContext<TRecord, TActor, TTenant, TServices> {
@@ -81,7 +81,7 @@ export interface ActionPresentationManifest {
 
 export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> extends ActionPresentationDefinition<TRecord, TActor, TTenant, TServices> {
   readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>) => boolean | Promise<boolean>
-  readonly confirmation?: string
+  readonly confirmation?: string | null
   readonly disabled?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, boolean>
   readonly failureNotification?: ActionFailureNotification<ActionContext<TRecord, TActor, TTenant, TServices>>
   readonly handle: (input: TInput, context: ActionContext<TRecord, TActor, TTenant, TServices>) => TResult | Promise<TResult>

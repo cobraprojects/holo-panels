@@ -1,4 +1,9 @@
-export * from './primitives'
+export * from './internal-ui'
+export * from './error-boundary'
+export * from './ui'
+export * from './page-actions'
+export * from './portal'
+export * from './render-hooks'
 export * from './registry'
 export * from './store'
 export * from './fields'
@@ -12,6 +17,7 @@ export * from './notifications'
 export * from './schema'
 export * from './extensions'
 export { createExtensionTypeId } from '@holo-js/panels-core'
+export { ActionsRenderHook, PanelsRenderHook, TablesRenderHook, WidgetsRenderHook } from '@holo-js/panels-core'
 export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
 export {
   ClientEffectSession,
@@ -36,10 +42,13 @@ export {
   createRequestEnvelope,
   executePanelAuthRequest,
   executePanelLogin,
+  loadPanelAuthPresentation,
   createPanelNotificationTransport,
   createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
+  publishPanelError,
+  registerPanelNotificationStore,
   toJsonValue,
 } from '@holo-js/panels-client'
 export type {
@@ -60,6 +69,7 @@ export type {
   PanelDatabaseNotificationOperationResult,
   PanelNotificationStore,
   PanelOperation,
+  PanelAuthPresentation,
   PanelAvatarComponentProps,
   PanelChromeComponentProps,
   PanelShellBootstrap,

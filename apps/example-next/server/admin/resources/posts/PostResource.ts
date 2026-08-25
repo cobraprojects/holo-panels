@@ -2,6 +2,16 @@ import {
   Resource,
   defineResourceStatsWidget,
 } from '@holo-js/panels'
+import {
+  BulkAction,
+  BulkActionGroup,
+  DeleteAction,
+  DeleteBulkAction,
+  EditAction,
+} from '@holo-js/panels-actions'
+import { FileUpload, Radio, Select, TextInput } from '@holo-js/panels-forms'
+import { TextEntry } from '@holo-js/panels-infolists'
+import { SelectFilter, TextColumn } from '@holo-js/panels-tables'
 import Post from '../../../models/Post'
 import CreatePost from './pages/CreatePost'
 import EditPost from './pages/EditPost'
@@ -37,7 +47,7 @@ export default class PostResource extends Resource {
   static override routeKeyName = this.attribute('id')
   static override slug = 'posts'
 
-  static publishSelected = this.action(action => action.bulk('publish-selected')
+  static publishSelected = this.action(BulkAction.make('publish-selected'))
     .label('Publish selected')
     .icon('check')
     .requiresConfirmation('Publish the selected posts?')
@@ -49,21 +59,21 @@ export default class PostResource extends Resource {
         await post.update({ status: 'published' })
       }
       return { published: selectedRecords.map(record => record.id) }
-    }))
+    })
 
-  static form = this.configureForm(schema => schema.components(field => [
-    field.textInput('title').required(),
-    field.textInput('slug').required(),
-    field.radio('category').options([
+  static form = this.configureForm(schema => schema.components([
+    TextInput.make('title').required(),
+    TextInput.make('slug').required(),
+    Radio.make('category').options([
       { label: 'News', value: 'News' },
       { label: 'Guides', value: 'Guides' },
     ]).required(),
-    field.select('city').options([
+    Select.make('city').options([
       { label: 'Alexandria', value: 'Alexandria' },
       { label: 'Cairo', value: 'Cairo' },
       { label: 'Giza', value: 'Giza' },
     ]).required(),
-    field.fileUpload('featuredMediaId')
+    FileUpload.make('featuredMediaId')
       .image()
       .disk('private')
       .directory('panels/uploads/posts')
@@ -71,35 +81,34 @@ export default class PostResource extends Resource {
       .maxSize(5_242_880),
   ]))
 
-  static infolist = this.configureInfolist(schema => schema.components(entry => [
-    entry.text('title').label('Title'),
-    entry.text('slug').label('Slug').copyable(),
-    entry.text('category').label('Category').badge(),
-    entry.text('city').label('City'),
+  static infolist = this.configureInfolist(schema => schema.components([
+    TextEntry.make('title').label('Title'),
+    TextEntry.make('slug').label('Slug').copyable(),
+    TextEntry.make('category').label('Category').badge(),
+    TextEntry.make('city').label('City'),
   ]))
 
   static table = this.configureTable(table => table
-    .columns(column => [
-      column.text('title').searchable().sortable(),
-      column.text('slug').copyable(),
-      column.text('category').badge(),
-      column.text('city'),
-      column.text('author.name').label('Author'),
+    .columns([
+      TextColumn.make('title').searchable().sortable(),
+      TextColumn.make('slug').copyable(),
+      TextColumn.make('category').badge(),
+      TextColumn.make('city'),
+      TextColumn.make('author.name').label('Author'),
     ])
-    .filters(filter => [
-      filter.select('category').label('Category').options({ Guides: 'Guides', News: 'News' }),
-      filter.select('city').label('City').options({ Alexandria: 'Alexandria', Cairo: 'Cairo', Giza: 'Giza' }),
+    .filters([
+      SelectFilter.make('category').label('Category').options({ Guides: 'Guides', News: 'News' }),
+      SelectFilter.make('city').label('City').options({ Alexandria: 'Alexandria', Cairo: 'Cairo', Giza: 'Giza' }),
     ])
     .deferFilters()
-    .recordActions(action => [
-      // action.view(),
-      action.edit(),
-      action.delete(),
+    .recordActions([
+      EditAction.make(),
+      DeleteAction.make(),
     ])
-    .toolbarActions(action => [
-      action.group([
+    .toolbarActions([
+      BulkActionGroup.make([
         this.publishSelected,
-        action.deleteBulk(),
+        DeleteBulkAction.make(),
       ]),
     ])
   )

@@ -33,11 +33,17 @@
     "test": "vitest --run --passWithNoTests --reporter=json"
   },
   "dependencies": {
-    "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-client": "workspace:*",
+    "@holo-js/panels-core": "workspace:*",
     "@holo-js/panels-ui": "workspace:*",
+    "@radix-ui/react-slot": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "cmdk": "catalog:",
     "lucide-react": "catalog:",
-    "radix-ui": "catalog:"
+    "radix-ui": "catalog:",
+    "sonner": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "peerDependencies": {
     "react": "catalog:",

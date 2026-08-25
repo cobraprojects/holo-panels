@@ -1,4 +1,4 @@
-import { ShadcnButton, ShadcnInput, ShadcnSelect } from '../internal-ui'
+import { Button, Checkbox, Input, NativeSelect, RadioGroup, RadioGroupItem } from '../internal-ui'
 import { computed, defineComponent, h, onMounted, ref, type PropType, type VNode } from 'vue'
 import { usePanelsStore } from '../stores'
 import { fieldFrame, property, requireStore, updateField } from './shared'
@@ -68,6 +68,21 @@ export const VueOptionField = defineComponent({
       const description = props.context.definition.helperText ?? props.context.definition.hint
       const descriptionId = description ? `${props.context.inputId}-description` : undefined
       const errorId = props.context.errors.length > 0 ? `${props.context.inputId}-errors` : undefined
+      const choices = options.value.map(option => h('label', { key: String(option.value) }, [
+        multiple()
+          ? h(Checkbox, {
+              disabled: option.disabled || props.context.readOnly,
+              modelValue: values.value.includes(option.value),
+              'onUpdate:modelValue': (checked: boolean | 'indeterminate') => updateField(props, checked === true
+                ? [...values.value, option.value]
+                : values.value.filter(value => value !== option.value)),
+            })
+          : h(RadioGroupItem, {
+              disabled: option.disabled || props.context.readOnly,
+              value: String(option.value),
+            }),
+        option.label,
+      ]))
       return h('fieldset', {
         class: 'hp-field',
         disabled: props.context.disabled || state.value.disabled,
@@ -82,69 +97,61 @@ export const VueOptionField = defineComponent({
           props.context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null,
         ]) : null,
         description ? h('div', { id: descriptionId }, description) : null,
-        ...options.value.map(option => h('label', { key: String(option.value) }, [
-          h(ShadcnInput, {
-            checked: values.value.includes(option.value),
-            disabled: option.disabled || props.context.readOnly,
-            name: props.context.definition.path,
-            type: multiple() ? 'checkbox' : 'radio',
-            onChange: (event: Event) => {
-              const checked = (event.currentTarget as HTMLInputElement).checked
-              updateField(props, checked
-                ? multiple() ? [...values.value, option.value] : option.value
-                : multiple() ? values.value.filter(value => value !== option.value) : null)
-            },
-          }),
-          option.label,
-        ])),
+        multiple()
+          ? choices
+          : h(RadioGroup, {
+              disabled: props.context.disabled || props.context.readOnly,
+              modelValue: String(values.value[0] ?? ''),
+              'onUpdate:modelValue': (raw: unknown) => updateField(props, optionValue(String(raw), options.value)),
+            }, () => choices),
         renderSearchAndPaging(),
         props.context.errors.length > 0 ? h('ul', { id: errorId, role: 'alert' }, props.context.errors.map(error => h('li', { key: error }, error))) : null,
       ])
     }
     function renderSearchAndPaging(): VNode[] {
       return [
-        property(props.context, 'searchable', false) ? h(ShadcnInput, {
+        property(props.context, 'searchable', false) ? h(Input, {
           'aria-label': `Search ${props.context.definition.label ?? 'options'}`,
           disabled: props.context.disabled || state.value.disabled,
           type: 'search',
-          value: state.value.search,
+          modelValue: state.value.search,
           onInput: (event: Event) => void store.load((event.currentTarget as HTMLInputElement).value, 1),
         }) : null,
         property(props.context, 'paginated', true) && (state.value.page > 1 || state.value.hasMore) ? h('nav', { 'aria-label': `${props.context.definition.label ?? 'Option'} pages` }, [
-          h(ShadcnButton, { type: 'button', disabled: state.value.page <= 1 || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page - 1) }, 'Previous'),
+          h(Button, { type: 'button', disabled: state.value.page <= 1 || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page - 1) }, 'Previous'),
           h('span', { 'aria-live': 'polite' }, `Page ${state.value.page}`),
-          h(ShadcnButton, { type: 'button', disabled: !state.value.hasMore || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page + 1) }, 'Next'),
+          h(Button, { type: 'button', disabled: !state.value.hasMore || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page + 1) }, 'Next'),
         ]) : null,
       ].filter((node): node is VNode => node !== null)
     }
     function renderCreateEdit(): VNode[] {
       const controls: VNode[] = []
       if (property(props.context, 'canCreateOption', false)) controls.push(h('div', [
-        h(ShadcnInput, {
+        h(Input, {
           'aria-label': `Create ${props.context.definition.label ?? 'option'} label`,
           disabled: props.context.disabled || props.context.readOnly,
-          value: createLabel.value,
+          modelValue: createLabel.value,
           onInput: (event: Event) => { createLabel.value = (event.currentTarget as HTMLInputElement).value },
         }),
-        h(ShadcnButton, { type: 'button', disabled: !createLabel.value.trim(), onClick: () => void createOption() }, 'Create option'),
+        h(Button, { type: 'button', disabled: !createLabel.value.trim(), onClick: () => void createOption() }, 'Create option'),
       ]))
       if (property(props.context, 'canEditOption', false)) controls.push(h('div', [
-        h(ShadcnInput, {
+        h(Input, {
           'aria-label': `Edit ${props.context.definition.label ?? 'option'} label`,
           disabled: props.context.disabled || props.context.readOnly || values.value.length !== 1,
-          value: editLabel.value,
+          modelValue: editLabel.value,
           onInput: (event: Event) => { editLabel.value = (event.currentTarget as HTMLInputElement).value },
         }),
-        h(ShadcnButton, { type: 'button', disabled: !editLabel.value.trim() || values.value.length !== 1, onClick: () => void editOption() }, 'Edit option'),
+        h(Button, { type: 'button', disabled: !editLabel.value.trim() || values.value.length !== 1, onClick: () => void editOption() }, 'Edit option'),
       ]))
       return controls
     }
     return (): VNode => {
       if (props.context.definition.type === 'checkbox-list' || props.context.definition.type === 'toggle-buttons') return renderChoiceGroup()
-      const select = h(ShadcnSelect, {
+      const select = h(NativeSelect, {
         disabled: props.context.disabled || props.context.readOnly || state.value.disabled,
         multiple: multiple(),
-        value: multiple() ? values.value.map(String) : String(values.value[0] ?? ''),
+        modelValue: multiple() ? values.value.map(String) : String(values.value[0] ?? ''),
         onChange: (event: Event) => {
           const element = event.currentTarget as HTMLSelectElement
           updateField(props, multiple()

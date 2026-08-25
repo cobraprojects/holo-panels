@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  PanelsDropdown,
-  PanelsModal,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   PanelsPortalProvider,
 } from '@holo-js/panels-vue'
 import '@holo-js/panels-vue/style.css'
@@ -11,10 +19,6 @@ const darkModalOpen = ref(false)
 const darkPortal = ref<HTMLElement | null>(null)
 const lightPortal = ref<HTMLElement | null>(null)
 const portalHosts: HTMLElement[] = []
-
-const lightItems = [
-  { id: 'light-action', label: 'Light panel action' },
-] as const
 
 function createPortalHost(theme: 'dark' | 'light'): HTMLElement {
   const container = window.document.createElement('div')
@@ -52,11 +56,16 @@ onBeforeUnmount(() => {
       >
         <h2>Light panel</h2>
         <PanelsPortalProvider :container="lightPortal">
-          <PanelsDropdown
-            aria-label="Open light panel menu"
-            :items="lightItems"
-            label="Open light panel menu"
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button aria-label="Open light panel menu" variant="outline">
+                Open light panel menu
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>Light panel action</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </PanelsPortalProvider>
       </section>
 
@@ -69,20 +78,20 @@ onBeforeUnmount(() => {
       >
         <h2>Dark panel</h2>
         <PanelsPortalProvider :container="darkPortal">
-          <button
-            class="hp-button"
+          <Button
             type="button"
             @click="darkModalOpen = true"
           >
             Open dark panel modal
-          </button>
-          <PanelsModal
-            :open="darkModalOpen"
-            title="Dark panel modal"
-            @close="darkModalOpen = false"
-          >
-            <p>This dialog belongs to the dark panel.</p>
-          </PanelsModal>
+          </Button>
+          <Dialog v-model:open="darkModalOpen">
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Dark panel modal</DialogTitle>
+                <DialogDescription>This dialog belongs to the dark panel.</DialogDescription>
+              </DialogHeader>
+            </DialogContent>
+          </Dialog>
         </PanelsPortalProvider>
       </section>
     </ClientOnly>

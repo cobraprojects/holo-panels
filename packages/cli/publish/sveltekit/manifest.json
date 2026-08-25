@@ -3,24 +3,16 @@
   "framework": "sveltekit",
   "files": [
     {
-      "path": "Button.svelte",
-      "checksum": "14fe56d4d49ee12c38e42a6fe320548a667cb280fc51602cea339a5e4aba5a6f"
-    },
-    {
       "path": "Icon.svelte",
-      "checksum": "480065bdea070ea2e26d8e228e1a339b9c5d98605f09d11dedd71939b68f5595"
-    },
-    {
-      "path": "Input.svelte",
-      "checksum": "c81fe120dbb73106e706718b32aa9b5f4b21cf912846ae34046442181d9c7719"
+      "checksum": "c9a0dab81db86e0f9cabc51ad58778fe3928c36b1ed12ebf134374e6f2797140"
     },
     {
       "path": "PanelPage.svelte",
-      "checksum": "8d27ac9434dc05d869d10e5dbe0a215a91cc7a621cdc5ec741975b9a3c455178"
+      "checksum": "0ef39a09dadddf18a3f10cd7e1adca893cdb4fe028b1845ee6c941da24a16364"
     },
     {
       "path": "ResourcePage.svelte",
-      "checksum": "863e3683e23b84521915007cebdfb1d4e1d132d32e4266af50861d044ed40c73"
+      "checksum": "b2d7a4e1def5eb1c63f75affb6933bb1bec0c69df074115ab54f9aa4b2304876"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -32,7 +24,7 @@
     },
     {
       "path": "resource-page.ts",
-      "checksum": "5bc733287a317f3ab7fa5d201a58120fa21ee50cc486cb6d5dfa6f0ccce9ed0a"
+      "checksum": "1ca1c0b011202cc2a755f7f05f28358ee595678bca1aa8dce8b5a7fd87442156"
     }
   ]
 }

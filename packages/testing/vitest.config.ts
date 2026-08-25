@@ -1,10 +1,12 @@
 import { resolve } from 'node:path'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
 
 function rendererResolution() {
   return {
     alias: [
+      { find: /^@\//u, replacement: `${resolve(import.meta.dirname, '../vue/src')}/` },
       { find: /^react$/u, replacement: resolve(import.meta.dirname, '../../node_modules/react/index.js') },
       { find: /^react-dom$/u, replacement: resolve(import.meta.dirname, '../../node_modules/react-dom/index.js') },
       { find: /^react-dom\/(.*)$/u, replacement: resolve(import.meta.dirname, '../../node_modules/react-dom/$1') },
@@ -19,7 +21,7 @@ function rendererResolution() {
 
 export default defineConfig({
   optimizeDeps: { exclude: ['bits-ui', 'runed', 'svelte', 'svelte-toolbelt'] },
-  plugins: [svelte()],
+  plugins: [svelte(), vue()],
   resolve: rendererResolution(),
   ssr: {
     noExternal: ['bits-ui', 'runed', 'svelte-toolbelt'],
@@ -43,7 +45,7 @@ export default defineConfig({
         },
       },
       {
-        plugins: [svelte()],
+        plugins: [svelte(), vue()],
         resolve: rendererResolution(),
         test: {
           environment: 'happy-dom',

@@ -84,7 +84,14 @@ export type {
   SchemaValueAtPath,
   TargetedSchemaPatch,
 } from './schemas/contracts'
-export type { ScopedRenderSlotManifest } from './panels/render-slots'
+export {
+  ActionsRenderHook,
+  PanelsRenderHook,
+  TablesRenderHook,
+  WidgetsRenderHook,
+  type RenderHook,
+  type ScopedRenderSlotManifest,
+} from './panels/render-slots'
 export type {
   FilterCollectionPlacement,
   FilterCollectionPresentation,
@@ -117,3 +124,4 @@ export {
   traverseSchemaManifest,
 } from './schemas/traversal'
 export { createAccessibleChartModel } from './widgets/resolution'
+export { builtInActionPresentation, type BuiltInActionPresentation } from './actions/presentation'

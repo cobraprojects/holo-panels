@@ -436,6 +436,7 @@ export class FormStore<TValues extends object> {
         const operations = dependency.recompute({
           changedPaths: working.changedPaths,
           get: path => getPathValue(working.values, path) as FormValueAtPath<TValues, typeof path>,
+          touchedPaths: working.touchedPaths,
         })
         this.applyOperations(working, operations)
       }

@@ -5,6 +5,9 @@ import type {
   SvelteFieldDefinition,
   SvelteTableColumn,
   SvelteTableFilter,
+  SvelteTableAction,
+  SvelteTableActionGroup,
+  SvelteTableActionItem,
 } from '@holo-js/panels-svelte'
 
 export interface ResourceDependency {
@@ -45,6 +48,7 @@ export interface ResourcePageMetadata {
     readonly view: string | null
   }
   readonly saveLabel: string
+  readonly tableActions: readonly SvelteTableActionItem[]
 }
 
 function objectValue(value: JsonValue | undefined): JsonObject | null {
@@ -257,27 +261,47 @@ function options(value: JsonValue | undefined): Readonly<Record<string, Resource
   })))
 }
 
-function generatedTableActions(value: JsonValue | undefined): JsonObject[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const action = objectValue(item)
-    const id = stringValue(action?.id)
-    const kind = stringValue(action?.kind)
-    const label = stringValue(action?.label)
-    const scope = stringValue(action?.scope)
-    if (!action || !id || !kind || !label) return []
-    return [{
-      ...action,
-      confirmation: typeof action.confirmation === 'string' ? action.confirmation : null,
-      disabled: action.disabled === true,
+function tableAction(value: JsonValue): SvelteTableActionItem | null {
+  const action = objectValue(value)
+  const id = stringValue(action?.id)
+  const scope = stringValue(action?.scope)
+  if (!action || !id || (scope !== 'bulk' && scope !== 'header' && scope !== 'row')) return null
+  if (action.kind === 'action-group') {
+    const actions = objectValues(action.actions).flatMap(item => {
+      const parsed = tableAction(item)
+      return parsed && !('kind' in parsed) ? [parsed] : []
+    })
+    if (actions.length === 0) return null
+    return {
+      actions,
+      color: typeof action.color === 'string' ? action.color : null,
+      icon: typeof action.icon === 'string' ? action.icon : null,
       id,
-      kind,
-      label,
-      modal: null,
-      mount: scope === 'bulk' ? 'bulk' : scope === 'header' ? 'page' : 'record',
-      type: `core:action:${kind}`,
-      visible: action.visible !== false,
-    }]
+      kind: 'action-group',
+      label: typeof action.label === 'string' ? action.label : null,
+      scope,
+    } satisfies SvelteTableActionGroup
+  }
+  const label = stringValue(action.label)
+  if (!label) return null
+  return {
+    color: typeof action.color === 'string' ? action.color : null,
+    confirmation: typeof action.confirmation === 'string' ? action.confirmation : undefined,
+    icon: typeof action.icon === 'string' ? action.icon : null,
+    id,
+    label,
+    scope,
+  } satisfies SvelteTableAction
+}
+
+function generatedActionManifests(value: JsonValue | undefined): JsonObject[] {
+  return objectValues(value).flatMap(item => item.kind === 'action-group' ? generatedActionManifests(item.actions) : [item]).flatMap((action) => {
+    const id = stringValue(action.id)
+    const kind = stringValue(action.kind)
+    const label = stringValue(action.label)
+    const scope = stringValue(action.scope)
+    if (!id || !kind || !label || (scope !== 'bulk' && scope !== 'header' && scope !== 'row')) return []
+    return [{ ...action, mount: scope === 'bulk' ? 'bulk' : scope === 'header' ? 'page' : 'record' }]
   })
 }
 
@@ -331,7 +355,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
     return id && typeof source === 'string' && target && resolver?.name === 'slug' ? [{ id, kind: 'slug', source, target }] : []
   }) : []
   return {
-    actions: generatedTableActions(table.actions),
+    actions: generatedActionManifests(table.actions),
     basePath,
     columns: Array.isArray(table.columns) ? table.columns.map(manifest => ({ manifest })) : [],
     createLabel: labels.create ?? null,
@@ -352,6 +376,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
       view: configuredRoutes ? localPath(configuredRoutes.view) : `${basePath}/:record`,
     },
     saveLabel: labels.save ?? null,
+    tableActions: Array.isArray(table.actions) ? table.actions : [],
   }
 }
 
@@ -403,6 +428,7 @@ export function resourcePageMetadata(value: JsonValue | undefined, pagePath?: st
       view: localPath(routes?.view),
     }),
     saveLabel: stringValue(resource.saveLabel) ?? `Save ${label}`,
+    tableActions: Object.freeze(Array.isArray(resource.tableActions) ? resource.tableActions.flatMap(item => tableAction(item) ?? []) : Array.isArray(resource.actions) ? resource.actions.flatMap(item => tableAction(item) ?? []) : []),
   })
 }
 

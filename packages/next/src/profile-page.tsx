@@ -2,16 +2,12 @@
 
 import { executePanelAuthRequest, panelContentWidthValue } from '@holo-js/panels-react'
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
-import { nextPanelAuthAppearanceVariables, type NextPanelAuthAppearance } from './auth-appearance'
-import { ShadcnButton, ShadcnCard, ShadcnCardContent, ShadcnCardHeader, ShadcnIcon, ShadcnInput, ShadcnLabel } from './internal-ui'
+import { nextPanelAuthAppearanceVariables } from './auth-appearance'
+import { useNextPanelAuthPresentation } from './auth-presentation'
+import { Button, Card, CardContent, CardDescription, CardHeader, PanelsIcon, Input, Label } from './internal-ui'
 
 export interface NextPanelProfilePageProps {
-  readonly appearance?: NextPanelAuthAppearance
-  readonly brandName: string
   readonly panelId: string
-  readonly simplePageMaxContentWidth?: string
-  readonly theme?: 'dark' | 'light' | 'system'
-  readonly themeColors?: Readonly<Record<string, string>>
 }
 
 function cookie(name: string): string {
@@ -29,11 +25,11 @@ function inputType(field: string, value: unknown): 'checkbox' | 'email' | 'numbe
   return field === 'email' ? 'email' : 'text'
 }
 
-export function NextPanelProfilePage({ appearance, brandName, panelId, simplePageMaxContentWidth, theme = 'system', themeColors }: NextPanelProfilePageProps) {
+export function NextPanelProfilePage({ panelId }: NextPanelProfilePageProps) {
   const [values, setValues] = useState<Readonly<Record<string, unknown>>>({})
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
-  const style = { ...nextPanelAuthAppearanceVariables(appearance, themeColors), ...(simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } : {}) } as CSSProperties
+  const presentation = useNextPanelAuthPresentation(panelId)
   useEffect(() => {
     void executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation: 'profile-read', panelId, payload: {} }).then((result) => {
       if (!result.ok || typeof result.data !== 'object' || result.data === null || !('values' in result.data) || typeof result.data.values !== 'object' || result.data.values === null || Array.isArray(result.data.values)) setError('The profile could not be loaded.')
@@ -55,5 +51,8 @@ export function NextPanelProfilePage({ appearance, brandName, panelId, simplePag
     }
   }
 
-  return <main className="hp-auth-page" data-density={appearance?.density} data-holo-panel data-theme={theme} style={style}><ShadcnCard className="hp-auth-card"><ShadcnCardHeader><span className="hp-auth-brand-mark"><ShadcnIcon name="user" /></span><div><p>{brandName}</p><h1>Profile</h1><span>Manage your account information.</span></div></ShadcnCardHeader><ShadcnCardContent><form onSubmit={submit}>{Object.entries(values).map(([field, value]) => <div className="hp-auth-field" key={field}><ShadcnLabel htmlFor={`${panelId}-${field}`}>{label(field)}</ShadcnLabel><ShadcnInput autoComplete={field === 'email' ? 'email' : field === 'name' ? 'name' : undefined} defaultChecked={typeof value === 'boolean' ? value : undefined} defaultValue={typeof value === 'boolean' ? undefined : String(value ?? '')} id={`${panelId}-${field}`} name={field} type={inputType(field, value)} /></div>)}{error ? <p className="hp-auth-error" role="alert">{error}</p> : null}{saved ? <p className="hp-auth-success" role="status">Profile saved.</p> : null}<ShadcnButton className="hp-button hp-button-primary" type="submit">Save changes</ShadcnButton></form></ShadcnCardContent></ShadcnCard></main>
+  if (!presentation) return <main className="hp-auth-page hp:flex hp:min-h-svh hp:items-center hp:justify-center hp:bg-muted/40 hp:p-4" data-holo-panel><Card className="hp-auth-card hp:h-80 hp:w-full hp:max-w-md hp:animate-pulse" /></main>
+  const { appearance, brandName, simplePageMaxContentWidth, theme } = presentation
+  const style = { ...nextPanelAuthAppearanceVariables(appearance), '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } as CSSProperties
+  return <main className="hp-auth-page hp:flex hp:min-h-svh hp:items-center hp:justify-center hp:bg-muted/40 hp:p-4" data-density={appearance.density} data-holo-panel data-theme={theme} style={style}><Card className="hp-auth-card hp:w-full hp:max-w-md"><CardHeader className="hp:space-y-2"><span className="hp:flex hp:size-10 hp:items-center hp:justify-center hp:rounded-md hp:bg-primary hp:text-primary-foreground"><PanelsIcon name="user" /></span><div className="hp:space-y-1"><p className="hp:text-sm hp:font-medium hp:text-muted-foreground">{brandName}</p><h1 className="hp:text-2xl hp:font-semibold hp:leading-none">Profile</h1><CardDescription>Manage your account information.</CardDescription></div></CardHeader><CardContent><form className="hp:space-y-4" onSubmit={submit}>{Object.entries(values).map(([field, value]) => <div className="hp-auth-field hp:grid hp:gap-2" key={field}><Label htmlFor={`${panelId}-${field}`}>{label(field)}</Label><Input autoComplete={field === 'email' ? 'email' : field === 'name' ? 'name' : undefined} defaultChecked={typeof value === 'boolean' ? value : undefined} defaultValue={typeof value === 'boolean' ? undefined : String(value ?? '')} id={`${panelId}-${field}`} name={field} type={inputType(field, value)} /></div>)}{error ? <p className="hp:text-sm hp:text-destructive" role="alert">{error}</p> : null}{saved ? <p className="hp:text-sm hp:text-muted-foreground" role="status">Profile saved.</p> : null}<Button className="hp:w-full" type="submit">Save changes</Button></form></CardContent></Card></main>
 }

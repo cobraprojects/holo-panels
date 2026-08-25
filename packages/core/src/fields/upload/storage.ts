@@ -26,8 +26,9 @@ export function createHoloUploadStorage(diskName: string): UploadStorageAdapter 
     async putJson(path: string, value: unknown): Promise<void> {
       if (!await (await disk()).putJson(path, value)) throw new Error('Holo Storage rejected the temporary upload metadata write')
     },
-    async temporaryUrl(path: string, expiresInSeconds: number): Promise<string> {
-      return (await disk()).temporaryUrl(path, { expiresIn: expiresInSeconds })
+    async temporaryUrl(path: string, expiresInSeconds: number): Promise<string | null> {
+      const storageDisk = await disk()
+      return storageDisk.driver === 's3' ? storageDisk.temporaryUrl(path, { expiresIn: expiresInSeconds }) : null
     },
   })
 }

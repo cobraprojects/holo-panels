@@ -76,9 +76,9 @@ function driver(
     async sync(operation) { update(operation) },
     async toggleColumn(label) {
       update(() => {
-        const input = Array.from(container.querySelectorAll<HTMLInputElement>('.hp-column-manager input')).find(candidate => candidate.parentElement?.textContent?.trim() === label)
-        if (!input) throw new Error('Acceptance column "' + label + '" was not rendered')
-        input.click()
+        const item = Array.from(document.body.querySelectorAll<HTMLElement>('label, [role="menuitemcheckbox"]')).find(candidate => candidate.textContent?.trim() === label)
+        if (!item) throw new Error('Acceptance column "' + label + '" was not rendered')
+        item.click()
       })
     },
   }

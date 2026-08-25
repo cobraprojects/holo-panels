@@ -35,11 +35,12 @@ const AUTH_OPERATIONS = new Set<PanelAuthOperation>([
   'mfa-status',
   'password-reset-request',
   'password-reset',
+  'presentation',
   'profile-read',
   'profile-update',
   'registration',
 ])
-const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'profile-read'])
+const GET_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['mfa-enrollment-begin', 'mfa-status', 'presentation', 'profile-read'])
 const TENANT_AWARE_AUTH_OPERATIONS = new Set<PanelAuthOperation>(['profile-read', 'profile-update'])
 const TENANT_OPERATIONS = new Set<PanelTenantOperation>(['profile-read', 'profile-update', 'register', 'switch'])
 const JSON_HEADERS = Object.freeze({ 'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8' })

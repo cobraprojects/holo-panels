@@ -55,6 +55,7 @@ function temporaryUpload(id: string, file: Pick<ClientUploadFile, 'name' | 'size
     name: file.name,
     panelId: 'admin',
     resourceId: 'posts',
+    sessionId: 'acceptance-upload-session',
     size: file.size,
     state: 'pending',
     tenantId: 'tenant',

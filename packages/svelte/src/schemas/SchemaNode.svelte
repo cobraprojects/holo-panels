@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
+  import { Button } from '../ui/button'
   import { onMount, untrack } from 'svelte'
   import type { Snippet } from 'svelte'
   import type { SchemaComponentManifest } from '@holo-js/panels-client'

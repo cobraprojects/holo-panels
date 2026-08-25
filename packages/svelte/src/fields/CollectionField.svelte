@@ -1,6 +1,7 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
-  import Input from '../components/Input.svelte'
+  import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
+  import { Input } from '../ui/input'
   import type { JsonValue } from '@holo-js/panels-client'
   import type { Component } from 'svelte'
   import { toSvelteState } from '../stores'
@@ -126,7 +127,7 @@
 </script>
 
 {#if presentation.visible}
-  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} required={presentation.required}>
+  <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
     {#snippet children(attributes)}
       {#if collectionStore}
         <div {...attributes} role="group" data-readonly={presentation.readOnly} data-panels-collection={kind}>
@@ -139,7 +140,7 @@
                   <div class="hp-collection-fields">{#each itemFields(item.value) as field (field.path)}
                     {@const current = nestedValue(itemData(item.value), field.path)}
                     {@const checkbox = field.type === 'toggle' || field.type === 'checkbox'}
-                    <label>{field.label}<Input type={checkbox ? 'checkbox' : 'text'} checked={checkbox ? current === true : undefined} value={checkbox ? undefined : typeof current === 'string' || typeof current === 'number' ? current : ''} required={field.required} disabled={presentation.disabled || presentation.readOnly} oninput={(event) => replaceItemField(index, item.value, field, checkbox ? event.currentTarget.checked : event.currentTarget.value)} /></label>
+                    <label>{field.label}{#if checkbox}<Checkbox checked={current === true} disabled={presentation.disabled || presentation.readOnly} onCheckedChange={(checked) => replaceItemField(index, item.value, field, checked)} />{:else}<Input type="text" value={typeof current === 'string' || typeof current === 'number' ? current : ''} required={field.required} disabled={presentation.disabled || presentation.readOnly} oninput={(event) => replaceItemField(index, item.value, field, event.currentTarget.value)} />{/if}</label>
                   {/each}</div>
                 {:else}
                   <Editor value={jsonValue(item.value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={`${definition.label} item ${index + 1}`} inputId={`${inputId}-${index}`} invalid={Boolean($collectionState?.errors[String(index)]?.length)} setValue={(next) => replace(index, next)} />

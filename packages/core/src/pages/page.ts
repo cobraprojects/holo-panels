@@ -5,15 +5,12 @@ import type { ExtensionTypeId } from '../plugins/type-id'
 import type { OptionalRuntimeTypeValue, RuntimeTypeSource } from '../inference/type-source'
 import { toJsonValue } from '../protocol/serialization'
 import type { CompiledSchema } from '../schemas/contracts'
-import type { RenderSlotReference } from '../schemas/contracts'
 import type { ResourceCompositionTypes } from '../resources/contracts'
-import { appendScopedRenderSlot, type ScopedRenderSlots } from '../panels/render-slots'
 import type {
   CompiledPageDefinition,
   PageBreadcrumb,
   PageComponentBody,
   PageContext,
-  PageLayoutSlot,
   PageManifest,
   PageNavigation,
   PageNavigationInput,
@@ -44,7 +41,6 @@ interface PageState<TData extends JsonObject, TActor, TTenant, TServices> {
     CompiledSchema<Readonly<Record<string, unknown>>, PageContext<TActor, TTenant, TServices>> | null
   >
   schemaId: string | null
-  slots: ScopedRenderSlots<PageLayoutSlot>
   subheading?: PageResolvable<PageContext<TActor, TTenant, TServices>, string | null>
   title?: PageResolvable<PageContext<TActor, TTenant, TServices>, string>
 }
@@ -97,7 +93,6 @@ export class PageBuilder<
       path: `/${id}`,
       renderer: null,
       schemaId: null,
-      slots: {},
     })
   }
 
@@ -113,7 +108,6 @@ export class PageBuilder<
       footerWidgets: [...state.footerWidgets],
       headerActions: [...state.headerActions],
       headerWidgets: [...state.headerWidgets],
-      slots: Object.freeze(Object.fromEntries(Object.entries(state.slots).map(([slot, references]) => [slot, Object.freeze([...(references ?? [])])]))),
     })
     const configured = configure(variant)
     if (configured.id !== id) throw new Error('Configured page callbacks must return the configured variant')
@@ -194,10 +188,6 @@ export class PageBuilder<
     return this.writeState('renderer', { properties: serialized, type })
   }
 
-  slot(slot: PageLayoutSlot, reference: string | RenderSlotReference): this {
-    return this.writeState('slots', appendScopedRenderSlot(this.readState().slots, slot, reference, 'page'))
-  }
-
   navigation(value: PageNavigationInput): this {
     if (!value.label.trim()) throw new Error('Page navigation labels cannot be empty')
     return this.writeState('navigation', {
@@ -233,7 +223,6 @@ export class PageBuilder<
       path: state.path,
       renderer: state.renderer,
       schemaId: state.schemaId,
-      slots: state.slots,
       widgets: { footer: state.footerWidgets, header: state.headerWidgets },
     }
     toJsonValue(manifest)

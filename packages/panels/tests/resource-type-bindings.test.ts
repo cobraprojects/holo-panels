@@ -42,6 +42,9 @@ describe('resource type bindings', () => {
     expect(artifact.contents).toContain('typeof import("../../../server/models/Post")["Post"]')
     expect(artifact.contents).toContain('interface RelationManagerTypeRegistry')
     expect(artifact.contents).toContain('readonly relationship: "comments"')
+    expect(artifact.contents).toContain('interface PanelRecordTypeRegistry')
+    expect(artifact.contents).toContain("import('@holo-js/panels-resources').ResourceRecordFor")
+    expect(artifact.contents).toContain("import('@holo-js/panels-resources').ResourceRelationRecordFor")
   })
 
   it('fails when a resource model is absent from Holo generated metadata', async () => {

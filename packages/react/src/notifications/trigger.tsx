@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { ShadcnButton, ShadcnIcon } from '../internal-ui'
+import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { PanelsIcon } from '../internal-ui'
+import { Badge, Button, Popover, PopoverContent, PopoverTrigger } from '../ui'
 import { ReactNotificationInbox } from './renderer'
 import type { ReactNotificationInboxTriggerProps } from './types'
 
@@ -15,7 +16,6 @@ export function ReactNotificationInboxTrigger({
 }: ReactNotificationInboxTriggerProps): ReactNode {
   const [open, setOpen] = useState(false)
   const [activated, setActivated] = useState(!lazy)
-  const container = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const reactId = useId()
   const inboxId = `hp-notification-inbox-${reactId.replaceAll(':', '')}`
@@ -24,58 +24,22 @@ export function ReactNotificationInboxTrigger({
     () => store.state,
     () => store.state,
   )
-
-  useEffect(() => {
-    if (!open) return
-    const closeAndRestoreFocus = (): void => {
-      setOpen(false)
-      trigger.current?.focus()
-    }
-    const onDocumentClick = (event: MouseEvent): void => {
-      if (event.target instanceof Node && !container.current?.contains(event.target)) closeAndRestoreFocus()
-    }
-    const onDocumentKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      closeAndRestoreFocus()
-    }
-    document.addEventListener('click', onDocumentClick)
-    document.addEventListener('keydown', onDocumentKeyDown)
-    return () => {
-      document.removeEventListener('click', onDocumentClick)
-      document.removeEventListener('keydown', onDocumentKeyDown)
-    }
-  }, [open])
-
   const resolvedLabel = label.trim() || 'Notifications'
   const accessibleLabel = state.unread > 0 ? `${resolvedLabel}, ${state.unread} unread` : resolvedLabel
   const inboxPlacement = placement === 'topbar' ? 'dropdown' : 'sidebar'
-  return <div className="hp-notification-inbox-trigger" data-placement={placement} ref={container}>
-    <ShadcnButton
-      aria-controls={inboxId}
-      aria-expanded={open}
-      aria-label={accessibleLabel}
-      className="hp-notification-inbox-trigger-button"
-      onClick={() => {
-        setActivated(true)
-        setOpen(current => !current)
-      }}
-      ref={trigger}
-      title={resolvedLabel}
-      type="button"
-    >
-      <ShadcnIcon name="bell" />
-      {state.unread > 0 ? <span aria-hidden="true" className="hp-notification-inbox-trigger-badge">{state.unread}</span> : null}
-    </ShadcnButton>
-    <div className="hp-notification-inbox-trigger-content" hidden={!open} id={inboxId}>
-      {activated ? <ReactNotificationInbox
-        emptyMessage={emptyMessage}
-        navigate={navigate}
-        panelId={panelId}
-        placement={inboxPlacement}
-        registry={registry}
-        store={store}
-      /> : null}
-    </div>
-  </div>
+
+  return <Popover onOpenChange={nextOpen => {
+    setOpen(nextOpen)
+    if (nextOpen) setActivated(true)
+  }} open={open}>
+    <PopoverTrigger asChild>
+      <Button aria-controls={inboxId} aria-label={accessibleLabel} className="hp-notification-inbox-trigger-button hp:relative" ref={trigger} size="icon" title={resolvedLabel} type="button" variant="ghost">
+        <PanelsIcon name="bell" />
+        {state.unread > 0 ? <Badge aria-hidden="true" className="hp-notification-inbox-trigger-badge hp:absolute hp:-right-1 hp:-top-1 hp:min-w-5 hp:px-1 hp:text-[10px]" variant="destructive">{state.unread}</Badge> : null}
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent align={placement === 'topbar' ? 'end' : 'start'} className="hp-notification-inbox-trigger-content hp:w-[min(28rem,calc(100vw-2rem))] hp:p-0 hp:data-[state=closed]:hidden" data-holo-panel forceMount id={inboxId} onEscapeKeyDown={() => { globalThis.queueMicrotask(() => trigger.current?.focus()) }}>
+      {activated ? <ReactNotificationInbox emptyMessage={emptyMessage} navigate={navigate} panelId={panelId} placement={inboxPlacement} registry={registry} store={store} /> : null}
+    </PopoverContent>
+  </Popover>
 }

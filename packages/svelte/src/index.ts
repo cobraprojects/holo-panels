@@ -9,37 +9,18 @@ export * from './widgets'
 export * from './notifications'
 export * from './schemas'
 export * from './extensions'
+export * from './render-hook-context'
 export * from './portal'
 export { createExtensionTypeId } from '@holo-js/panels-core'
+export { ActionsRenderHook, PanelsRenderHook, TablesRenderHook, WidgetsRenderHook } from '@holo-js/panels-core'
 export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
+export { cn } from './lib/utils'
 export {
   SvelteComponentRegistry,
   registerSvelteExtensionRenderer,
   type SvelteComponentRegistration,
   type SveltePanelComponent,
 } from './registry'
-export {
-  renderSvelteShellPrimitive,
-  SvelteAvatar,
-  SvelteBadge,
-  SvelteButton,
-  SvelteDropdown,
-  SvelteEmptyState,
-  SvelteErrorBoundary,
-  SvelteIconButton,
-  SvelteInputWrapper,
-  SvelteLink,
-  SvelteLoadingIndicator,
-  SvelteModal,
-  SveltePagination,
-  SvelteSection,
-  SvelteSlideOver,
-  SvelteTabs,
-  SvelteToastViewport,
-  svelteShellPrimitives,
-  type SvelteShellPrimitive,
-  type SvelteShellPrimitiveName,
-} from './primitives'
 export {
   toSvelteSnapshot,
   toSvelteSchema,
@@ -74,10 +55,13 @@ export {
   createRequestEnvelope,
   executePanelAuthRequest,
   executePanelLogin,
+  loadPanelAuthPresentation,
   createPanelNotificationTransport,
   createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
+  publishPanelError,
+  registerPanelNotificationStore,
   toJsonValue,
 } from '@holo-js/panels-client'
 export type {
@@ -99,6 +83,7 @@ export type {
   PanelDatabaseNotificationOperationResult,
   PanelNotificationStore,
   PanelOperation,
+  PanelAuthPresentation,
   PanelAvatarComponentProps,
   PanelChromeComponentProps,
   PanelShellBootstrap,

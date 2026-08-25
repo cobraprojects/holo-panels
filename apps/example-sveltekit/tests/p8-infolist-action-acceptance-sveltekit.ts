@@ -35,14 +35,14 @@ async function clientRuntime(): Promise<{
 
 function driver(container: HTMLDivElement, update: (operation: () => Promise<void> | void) => Promise<void>, destroy: () => Promise<void>): InfolistActionAcceptanceDriver {
   const required = <TElement extends Element>(selector: string): TElement => {
-    const elements = container.querySelectorAll<TElement>(selector)
+    const elements = document.body.querySelectorAll<TElement>(selector)
     const element = elements.item(elements.length - 1)
     if (!element) throw new Error(`Acceptance element "${selector}" was not rendered`)
     return element
   }
   return {
     clickText: text => update(() => {
-      const element = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.trim() === text)
+      const element = Array.from(document.body.querySelectorAll('button')).find(button => button.textContent?.trim() === text)
       if (!element) throw new Error(`Acceptance button "${text}" was not rendered`)
       element.click()
     }),
@@ -55,8 +55,8 @@ function driver(container: HTMLDivElement, update: (operation: () => Promise<voi
       input.value = value
       input.dispatchEvent(new Event('input', { bubbles: true }))
     }),
-    keydown: (selector, key) => update(() => { required<HTMLElement>(selector).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key })) }),
-    markup: () => container.innerHTML,
+    keydown: (selector, key) => update(() => { required<HTMLElement>(selector).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key })) }),
+    markup: () => document.body.innerHTML,
     sync: update,
   }
 }

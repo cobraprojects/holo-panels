@@ -1,12 +1,15 @@
 <script lang="ts">
-  import Button from '../components/Button.svelte'
+  import { Button } from '../ui/button'
   import Icon from '../components/Icon.svelte'
-  import type { JsonObject } from '@holo-js/panels-client'
-  import Dialog from '../components/Dialog.svelte'
-  import Dropdown from '../components/Dropdown.svelte'
-  import SlideOver from '../components/SlideOver.svelte'
+  import { publishPanelError, type JsonObject } from '@holo-js/panels-client'
+  import { ActionsRenderHook, type ActionModalWidth } from '@holo-js/panels-core'
+  import * as AlertDialog from '../ui/alert-dialog'
+  import * as Dialog from '../ui/dialog'
+  import * as DropdownMenu from '../ui/dropdown-menu'
+  import * as Sheet from '../ui/sheet'
   import { SvelteComponentRegistry } from '../registry'
   import SchemaRenderer from '../schemas/SchemaRenderer.svelte'
+  import RenderHook from '../components/RenderHook.svelte'
   import { toSvelteState } from '../stores'
   import type { SvelteActionCustomProps, SvelteActionRendererProps, SvelteActionSlotProps } from './contracts'
 
@@ -14,6 +17,14 @@
   const actionState = $derived.by(() => toSvelteState(store))
   const defaultSchemaRegistry = new SvelteComponentRegistry()
   const schemaRegistry = $derived(registry ?? defaultSchemaRegistry)
+  let lastError = $state<string | null>(null)
+
+  $effect(() => {
+    const current = $actionState.frames.at(-1)?.error ?? null
+    if (!current || current === lastError) return
+    lastError = current
+    publishPanelError(panelId ?? 'default', 'Action failed')
+  })
 
   async function submit(): Promise<void> {
     try {
@@ -32,51 +43,85 @@
   function findAction(id: string): (typeof actions)[number] | undefined {
     return actions.find(candidate => candidate.id === id)
   }
+
+  function modalWidthClass(width: ActionModalWidth): string {
+    if (width === 'small') return 'hp:w-full hp:sm:max-w-sm'
+    if (width === 'large') return 'hp:w-full hp:sm:max-w-2xl'
+    if (width === 'extra-large') return 'hp:w-full hp:sm:max-w-4xl'
+    if (width === 'screen') return 'hp:h-[calc(100vh-2rem)] hp:w-[calc(100vw-2rem)] hp:max-w-none'
+    return 'hp:w-full hp:sm:max-w-lg'
+  }
 </script>
 
 <div class="hp-action" data-action-mount={action.mount}>
   <div class="hp-action-collection">
     {#each actions.filter(candidate => !groupedActionIds.has(candidate.id)) as candidate (candidate.id)}
-      {#if candidate.visible !== false}<Button data-action-id={candidate.id} disabled={candidate.disabled === true || $actionState.frames.some(frame => frame.manifest.id === candidate.id)} onclick={() => store.mount(candidate)} type="button">{#if candidate.icon}<Icon name={candidate.icon} />{/if}<span>{candidate.label}</span></Button>{/if}
+      {#if candidate.visible !== false}<Button class="hp-action-trigger" data-action-id={candidate.id} data-color={candidate.color ?? undefined} variant={candidate.color === 'danger' ? 'destructive' : 'outline'} disabled={candidate.disabled === true || $actionState.frames.some(frame => frame.manifest.id === candidate.id)} onclick={() => store.mount(candidate)} type="button">{#if candidate.icon}<Icon name={candidate.icon} />{/if}<span>{candidate.label}</span></Button>{/if}
     {/each}
     {#each groups as group (group.id)}
-      <span data-action-color={group.color ?? undefined} data-action-icon={group.icon ?? undefined}><Dropdown label={group.label ?? 'Actions'} items={group.actions.flatMap(id => { const candidate = findAction(id); return !candidate || candidate.visible === false ? [] : [{ disabled: candidate.disabled, id, label: candidate.label }] })} onselect={(id) => { const candidate = findAction(id); if (candidate) store.mount(candidate) }} /></span>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}<Button {...props} variant="outline">{#if group.icon}<Icon name={group.icon} />{/if}{group.label ?? 'Actions'}<Icon name="chevron-down" /></Button>{/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end" data-holo-panel>
+          {#each group.actions as id (id)}
+            {@const candidate = findAction(id)}
+            {#if candidate && candidate.visible !== false}<DropdownMenu.Item disabled={candidate.disabled} variant={candidate.color === 'danger' ? 'destructive' : 'default'} onSelect={() => store.mount(candidate)}>{#if candidate.icon}<Icon name={candidate.icon} />{/if}{candidate.label}</DropdownMenu.Item>{/if}
+          {/each}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     {/each}
   </div>
   {#each $actionState.frames.slice(-1) as frame, index (`${frame.manifest.id}-${index}`)}
     {@const titleId = `hp-action-${frame.manifest.id.replace(/[^a-z0-9_-]/giu, '-')}-title-${index}`}
     {@const typeId = customTypeId(frame.manifest.id)}
     {@const Custom = registry?.hasRenderer(typeId, panelId) ? registry.resolve<SvelteActionCustomProps>(typeId, panelId, 'action modal') : undefined}
-    {@const Surface = frame.manifest.modal?.slideOver ? SlideOver : Dialog}
     {@const Content = frame.manifest.modal?.content && registry ? registry.resolve<SvelteActionSlotProps>(frame.manifest.modal.content.component, panelId, 'action modal content') : undefined}
     {@const Footer = frame.manifest.modal?.footer && registry ? registry.resolve<SvelteActionSlotProps>(frame.manifest.modal.footer.component, panelId, 'action modal footer') : undefined}
-    <Surface labelledBy={titleId} onclose={() => store.close()} open>
-      <div data-modal-width={frame.manifest.modal?.width ?? 'medium'}>
-      <h2 id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</h2>
-      {#if frame.manifest.modal?.description}<p>{frame.manifest.modal.description}</p>{/if}
+    {#snippet actionContent()}
+      <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_BEFORE} />
       {#if Content}<Content {...frame.manifest.modal?.content?.properties} {frame} />{/if}
-      {#if frame.phase === 'confirming'}
-        <p>{frame.manifest.confirmation}</p>
-        <Button onclick={() => store.confirm()} type="button">Confirm</Button>
-      {:else if Custom}
+      <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_AFTER} />
+      {#if Custom}
         <Custom {frame} setInput={(input: JsonObject) => store.setInput(input)} {submit} />
       {:else}
-        <form onsubmit={(event) => { event.preventDefault(); void submit() }}>
+        <form class="hp:space-y-4" onsubmit={(event) => { event.preventDefault(); void submit() }}>
           {#if frame.manifest.modal?.schema}
-            <SchemaRenderer panelId={panelId ?? 'default'} registry={schemaRegistry} schema={frame.manifest.modal.schema} />
+            <RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_BEFORE} /><SchemaRenderer panelId={panelId ?? 'default'} registry={schemaRegistry} schema={frame.manifest.modal.schema} /><RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} />
           {/if}
-          <Button disabled={frame.phase === 'submitting'} type="submit">{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</Button>
+          <Dialog.Footer><Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</span></Button></Dialog.Footer>
         </form>
       {/if}
       {#each frame.manifest.modal?.nestedActions ?? [] as id (id)}
         {@const nested = findAction(id)}
-        {#if nested && nested.visible !== false}<Button data-action-id={nested.id} disabled={nested.disabled} onclick={() => store.mount(nested)} type="button">{#if nested.icon}<Icon name={nested.icon} />{/if}<span>{nested.label}</span></Button>{/if}
+        {#if nested && nested.visible !== false}<Button class="hp-action-trigger" data-action-id={nested.id} data-color={nested.color ?? undefined} variant={nested.color === 'danger' ? 'destructive' : 'outline'} disabled={nested.disabled} onclick={() => store.mount(nested)} type="button">{#if nested.icon}<Icon name={nested.icon} />{/if}<span>{nested.label}</span></Button>{/if}
       {/each}
-      {#if frame.error}<div role="alert">{frame.error}</div>{/if}
       {#if frame.phase === 'succeeded'}<div aria-live="polite" role="status">Action completed</div>{/if}
+      <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_BEFORE} />
       {#if Footer}<Footer {...frame.manifest.modal?.footer?.properties} {frame} />{/if}
-      <Button onclick={() => store.close()} type="button">Close</Button>
-      </div>
-    </Surface>
+      <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_AFTER} />
+    {/snippet}
+    {#if frame.phase === 'confirming'}
+      <AlertDialog.Root open>
+        <AlertDialog.Content data-holo-panel data-panels-component="confirmation" onEscapeKeydown={() => store.close()} onInteractOutside={() => store.close()}>
+          <AlertDialog.Header><AlertDialog.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</AlertDialog.Title><AlertDialog.Description>{frame.manifest.confirmation}</AlertDialog.Description></AlertDialog.Header>
+          <AlertDialog.Footer><AlertDialog.Cancel onclick={() => store.close()}>Cancel</AlertDialog.Cancel><AlertDialog.Action variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} onclick={(event) => { event.preventDefault(); store.confirm() }}>{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}Confirm</AlertDialog.Action></AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    {:else if frame.manifest.modal?.slideOver}
+      <Sheet.Root open onOpenChange={(open) => { if (!open) store.close() }}>
+        <Sheet.Content class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="slide-over">
+          <Sheet.Header><Sheet.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</Sheet.Title>{#if frame.manifest.modal?.description}<Sheet.Description>{frame.manifest.modal.description}</Sheet.Description>{/if}</Sheet.Header>
+          <div class="hp:space-y-4 hp:p-4">{@render actionContent()}</div>
+        </Sheet.Content>
+      </Sheet.Root>
+    {:else}
+      <Dialog.Root open onOpenChange={(open) => { if (!open) store.close() }}>
+        <Dialog.Content class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="modal">
+          <Dialog.Header><Dialog.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</Dialog.Title>{#if frame.manifest.modal?.description}<Dialog.Description>{frame.manifest.modal.description}</Dialog.Description>{/if}</Dialog.Header>
+          {@render actionContent()}
+        </Dialog.Content>
+      </Dialog.Root>
+    {/if}
   {/each}
 </div>

@@ -1,7 +1,7 @@
-<!-- @holo-panels-managed sha256:8c46f5e02eef26d3acae624de3dc8b82c95ddaf1717c6ec7edfd3657a35ccce1 -->
+<!-- @holo-panels-managed sha256:ce9f3e596df3888f7c978f7d909a1ba843a450db77b9f130b883aff05ec9cd12 -->
 <script lang="ts">
-  import '@holo-js/panels-svelte/style.css'
+  import '../../../../.holo-js/generated/panels/theme.css'
   import { PanelLoginPage } from '@holo-js/panels-sveltekit'
 </script>
 
-<PanelLoginPage brandName={"Holo Panels"} panelId="admin" simplePageMaxContentWidth="lg" theme="system" appearance={{"colors":{"primary":"#7c3aed"},"density":"comfortable","fontFamily":null,"monoFontFamily":null,"serifFontFamily":null,"tokens":{}}} />
+<PanelLoginPage panelId="admin" />

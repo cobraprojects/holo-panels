@@ -1,48 +1,49 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
-  import Button from '../components/Button.svelte'
+  import { Button } from '../ui/button'
+  import * as AlertDialog from '../ui/alert-dialog'
+  import * as DropdownMenu from '../ui/dropdown-menu'
   import Icon from '../components/Icon.svelte'
   import type { TableRecordId } from '@holo-js/panels-client'
   import type { SvelteTableAction, SvelteTableRendererProps } from './types'
-  let { action, record, table }: {
+  import { executeTableAction } from './execute-action'
+  let { action, menuItem = false, record, table }: {
     readonly action: SvelteTableAction
+    readonly menuItem?: boolean
     readonly record?: Readonly<TRecord>
     readonly table: SvelteTableRendererProps<TRecord, TRecordId>
   } = $props()
   let pending = $state(false)
-  let error = $state<string | null>(null)
+  let confirming = $state(false)
   const href = $derived(record ? table.getRecordActionUrl?.(action, record) ?? null : null)
-  const destructive = $derived(action.id.includes('delete'))
-  const editable = $derived(action.id.includes('edit'))
-  const viewable = $derived(action.id.includes('view'))
-  const icon = $derived(action.icon ?? (destructive ? 'delete' : editable ? 'edit' : viewable ? 'view' : null))
-
   async function run(): Promise<void> {
-    if (!table.actionTransport) {
-      error = '[Holo Panels] Svelte table actions require an action transport.'
-      return
-    }
-    if (action.confirmation && typeof globalThis.confirm === 'function' && !globalThis.confirm(action.confirmation)) return
     pending = true
-    error = null
     try {
-      await table.actionTransport.execute({
-        actionId: action.id,
-        ...(record ? { recordId: table.getRecordId(record) } : {}),
-        ...(action.scope === 'bulk' ? { selection: table.store.selectionPayload() } : {}),
-      }, new AbortController().signal)
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Action failed'
+      await executeTableAction(action, record, table)
     } finally {
       pending = false
     }
   }
+
+  function activate(): void {
+    if (action.confirmation) confirming = true
+    else void run()
+  }
 </script>
 
-<span>
+{#if menuItem}
+  <DropdownMenu.Item data-action={action.id} data-color={action.color ?? undefined} disabled={pending} variant={action.color === 'danger' ? 'destructive' : 'default'} onSelect={activate}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{pending ? 'Working…' : action.label}</span></DropdownMenu.Item>
+{:else}<span>
   {#if href}
-    <a class="hp-button hp-button-ghost hp-table-action" data-action={action.id} data-color={action.color ?? undefined} {href}>{#if icon}<Icon name={icon} />{/if}<span>{action.label}</span></a>
+    <Button class="hp-action-trigger hp-table-action" data-action={action.id} data-color={action.color ?? undefined} data-slot="button" variant={action.color === 'danger' ? 'destructive' : 'outline'} {href}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{action.label}</span></Button>
   {:else}
-    <Button class="hp-table-action" data-action={action.id} data-color={action.color ?? undefined} type="button" disabled={pending} onclick={() => void run()}>{#if icon}<Icon name={icon} />{/if}<span>{pending ? 'Working…' : action.label}</span></Button>
+    <Button class="hp-action-trigger hp-table-action" data-action={action.id} data-color={action.color ?? undefined} variant={action.color === 'danger' ? 'destructive' : 'outline'} type="button" disabled={pending} onclick={activate}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{pending ? 'Working…' : action.label}</span></Button>
   {/if}
-  {#if error}<span role="alert">{error}</span>{/if}
-</span>
+</span>{/if}
+{#if confirming}
+  <AlertDialog.Root open onOpenChange={(open) => { confirming = open }}>
+    <AlertDialog.Content data-holo-panel>
+      <AlertDialog.Header><AlertDialog.Title id={`${action.id}-confirmation-title`}>{action.label}</AlertDialog.Title><AlertDialog.Description>{action.confirmation}</AlertDialog.Description></AlertDialog.Header>
+      <AlertDialog.Footer><AlertDialog.Cancel onclick={() => { confirming = false }}>Cancel</AlertDialog.Cancel><AlertDialog.Action variant={action.color === 'danger' ? 'destructive' : 'default'} onclick={() => { confirming = false; void run() }}>{#if action.icon}<Icon name={action.icon} />{/if}Confirm</AlertDialog.Action></AlertDialog.Footer>
+    </AlertDialog.Content>
+  </AlertDialog.Root>
+{/if}

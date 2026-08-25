@@ -1,14 +1,21 @@
-let currentPath = '/admin/posts'
+import { reactive } from 'vue'
+
+const route = reactive({ fullPath: '/admin/posts' })
+let navigate = (_path: string): Promise<void> => Promise.resolve()
 let fetcher: (path: string, options: Readonly<Record<string, unknown>>) => Promise<unknown> = async () => {
   throw new Error('Nuxt request fetch is not configured')
+}
+
+export function configureNuxtNavigation(handler: (path: string) => Promise<void>): void {
+  navigate = handler
 }
 
 export function configureNuxtImports(options: {
   readonly fetch: (path: string, request: Readonly<Record<string, unknown>>) => Promise<unknown>
   readonly path: string
 }): void {
-  currentPath = options.path
   fetcher = options.fetch
+  route.fullPath = options.path
 }
 
 export function createError(input: { readonly statusCode: number, readonly statusMessage: string }): Error {
@@ -31,5 +38,13 @@ export function useRequestFetch(): typeof fetcher {
 }
 
 export function useRoute(): { readonly fullPath: string } {
-  return { fullPath: currentPath }
+  return route
+}
+
+export function showError(input: Error): void {
+  throw input
+}
+
+export function useRouter(): { readonly push: (path: string) => Promise<void>, readonly replace: (path: string) => Promise<void> } {
+  return { push: navigate, replace: navigate }
 }

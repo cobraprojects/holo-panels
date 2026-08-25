@@ -112,9 +112,9 @@ export async function runInfolistActionAcceptanceJourney(
     await driver.clickText('Close')
     await driver.sync(() => actionStore.mount(actions.publish))
     await driver.sync(() => actionStore.mount(actions.nested))
-    const activeDialogCount = (driver.markup().match(/role="dialog"/gu) ?? []).length
+    const activeDialogCount = (driver.markup().match(/role="(?:alert)?dialog"/gu) ?? []).length
     await driver.keydown('[data-panels-component="modal"]:last-of-type', 'Escape')
-    const remainingDialogCount = (driver.markup().match(/role="dialog"/gu) ?? []).length
+    const remainingDialogCount = (driver.markup().match(/role="(?:alert)?dialog"/gu) ?? []).length
     await driver.sync(() => actionStore.close())
     await driver.sync(() => actionStore.mount(actions.denied))
     await driver.sync(async () => {

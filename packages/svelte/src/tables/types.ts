@@ -94,6 +94,18 @@ export interface SvelteTableAction {
   readonly scope: 'bulk' | 'header' | 'row'
 }
 
+export interface SvelteTableActionGroup {
+  readonly actions: readonly SvelteTableAction[]
+  readonly color?: string | null
+  readonly icon?: string | null
+  readonly id: string
+  readonly kind: 'action-group'
+  readonly label?: string | null
+  readonly scope: 'bulk' | 'header' | 'row'
+}
+
+export type SvelteTableActionItem = SvelteTableAction | SvelteTableActionGroup
+
 export interface SvelteTableActionRequest<TRecordId extends TableRecordId> {
   readonly actionId: string
   readonly recordId?: TRecordId
@@ -153,7 +165,7 @@ export interface SvelteTableStore<TRecord extends object, TRecordId extends Tabl
 
 export interface SvelteTableRendererProps<TRecord extends object, TRecordId extends TableRecordId> {
   readonly actionTransport?: SvelteTableActionTransport<TRecordId>
-  readonly actions?: readonly SvelteTableAction[]
+  readonly actions?: readonly SvelteTableActionItem[]
   readonly caption: string
   readonly columns: readonly SvelteTableColumn<TRecord>[]
   readonly emptyMessage?: string

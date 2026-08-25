@@ -121,6 +121,8 @@ describe('Holo Panels commands', () => {
     expect(commands.map(item => item.name)).toEqual([
       'panels:install',
       'panels:uninstall',
+      'panels:theme:build',
+      'panels:theme:watch',
       'panels:publish-ui',
       'make:panel',
       'make:resource',

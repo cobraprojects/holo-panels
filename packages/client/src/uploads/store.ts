@@ -174,6 +174,7 @@ export class UploadStore {
       this.replace(queued.localId, item => ({
         ...item,
         id: descriptor.id,
+        sessionId: descriptor.sessionId,
         status: 'uploading',
         token: descriptor.token,
       }))

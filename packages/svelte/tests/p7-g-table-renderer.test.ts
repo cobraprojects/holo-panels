@@ -173,13 +173,13 @@ describe('P7-G Svelte table renderer', () => {
     expect(container.querySelector('form[aria-label="Table filters"]')).toBeNull()
     Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Filters')?.click()
     flushClient()
-    const form = container.querySelector('form[aria-label="Table filters"]')
-    expect(container.querySelector('[data-panels-component="modal"]')).not.toBeNull()
+    const form = document.querySelector('form[aria-label="Table filters"]')
+    expect(document.querySelector('[data-panels-component="modal"]')).not.toBeNull()
     expect(form?.getAttribute('data-filter-placement')).toBe('modal')
     expect(form?.getAttribute('style')).toContain('--hp-filter-columns-md: 3')
     expect(Array.from(form?.querySelectorAll('label') ?? []).map(label => label.textContent)).toEqual(['Status filter', 'Title filter'])
-    expect(container.querySelector('[data-filter-slot="before"]')?.textContent).toBe('before filters')
-    expect(container.querySelector('[data-filter-slot="after"]')?.textContent).toBe('after filters')
+    expect(document.querySelector('[data-filter-slot="before"]')?.textContent).toBe('before filters')
+    expect(document.querySelector('[data-filter-slot="after"]')?.textContent).toBe('after filters')
   })
 
   it('mounts an export action with configured format, columns, selection, and progress', async () => {
@@ -191,11 +191,11 @@ describe('P7-G Svelte table renderer', () => {
     })
     Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Export posts')?.click()
     flushClient()
-    Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click()
+    Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Start export')?.click()
     await Promise.resolve()
     flushClient()
     expect(startExport).toHaveBeenCalledWith(expect.objectContaining({ columnIds: ['title'], definitionId: 'posts.export', formatId: 'csv', selection: { mode: 'explicit', recordIds: [] } }), expect.any(AbortSignal))
-    expect(container.querySelector('progress[aria-label="Transfer progress"]')).not.toBeNull()
+    expect(document.querySelector('[role="progressbar"][aria-label="Transfer progress"]')).not.toBeNull()
   })
 
   it('renders structured, extension, multi-select, and positioned filters without scalar fallback', () => {
@@ -313,14 +313,14 @@ describe('P7-G Svelte table renderer', () => {
     flushClient()
     expect(store.snapshot.filters.applied.status).toBe('draft')
 
-    container.querySelector<HTMLButtonElement>('.hp-column-manager > button')?.click()
+    container.querySelector<HTMLButtonElement>('.hp-column-manager')?.click()
     flushClient()
-    const status = Array.from(container.querySelectorAll<HTMLInputElement>('.hp-column-manager input')).find(input => input.parentElement?.textContent?.includes('Status'))
-    expect(status?.parentElement?.getAttribute('role')).toBe('menuitemcheckbox')
-    expect(status?.parentElement?.getAttribute('aria-checked')).toBe('true')
+    const status = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')).find(item => item.textContent?.includes('Status'))
+    expect(status?.getAttribute('role')).toBe('menuitemcheckbox')
+    expect(status?.getAttribute('aria-checked')).toBe('true')
     status?.click()
     flushClient()
-    expect(status?.parentElement?.getAttribute('aria-checked')).toBe('false')
+    expect(status?.getAttribute('aria-checked')).toBe('false')
     expect(store.snapshot.visibleColumns).toEqual(['title'])
 
     store.applyData({ queryVersion: store.snapshot.queryVersion, records, total: 60 })
@@ -351,7 +351,7 @@ describe('P7-G Svelte table renderer', () => {
       actionTransport: { execute },
     })
 
-    container.querySelector<HTMLInputElement>('input[aria-label="Select page"]')?.click()
+    container.querySelector<HTMLButtonElement>('[data-slot="checkbox"][aria-label="Select page"]')?.click()
     flushClient()
     expect(store.snapshot.selection.selectedRecordIds).toEqual([1, 2])
     const selectAll = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Select all 4 matching records')
@@ -368,6 +368,28 @@ describe('P7-G Svelte table renderer', () => {
       actionId: 'posts.publish',
       selection: expect.objectContaining({ excludedRecordIds: [], mode: 'all-matching' }),
     }), expect.any(AbortSignal))
+  })
+
+  it('requires the panel confirmation UI before destructive actions execute', async () => {
+    const execute = vi.fn(async () => undefined)
+    const container = mountTable({
+      ...baseTable(createStore()),
+      actions: [{ color: 'danger', confirmation: 'Delete this record?', icon: 'delete', id: 'posts.delete', label: 'Delete', scope: 'row' }],
+      actionTransport: { execute },
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action="posts.delete"]')
+    expect(trigger?.getAttribute('data-variant')).toBe('destructive')
+    trigger?.click()
+    flushClient()
+    expect(execute).not.toHaveBeenCalled()
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain('Delete this record?')
+    const confirm = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === 'Confirm')
+    confirm?.click()
+    await Promise.resolve()
+    flushClient()
+    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.delete', recordId: 1 }, expect.any(AbortSignal))
   })
 
   it('executes only compiled inline edits and supports Enter and Escape', async () => {

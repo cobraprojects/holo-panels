@@ -3,25 +3,28 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PanelsAvatar,
-  PanelsBadge,
-  PanelsButton,
-  PanelsDropdown,
-  PanelsEmptyState,
+  Avatar,
+  AvatarFallback,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  Input,
   PanelsErrorBoundary,
-  PanelsIconButton,
-  PanelsInputWrapper,
-  PanelsLink,
-  PanelsLoadingIndicator,
-  PanelsModal,
-  PanelsPagination,
-  PanelsPortalProvider,
-  PanelsSection,
-  PanelsSlideOver,
-  PanelsTab,
-  PanelsTabPanel,
-  PanelsTabs,
-  PanelsToastViewport,
+  PanelsRenderHook,
+  ReactPanelsRenderHook,
+  ComponentRegistry,
   ReactRelationManagerRenderer,
 } from '../src/index'
 
@@ -31,28 +34,24 @@ const roots: Array<{ readonly container: HTMLDivElement, readonly unmount: () =>
 
 function ShellFixture() {
   return createElement(Fragment, null,
-    createElement(PanelsButton, null, 'Save'),
-    createElement(PanelsLink, { href: '/posts' }, 'Posts'),
-    createElement(PanelsBadge, { tone: 'success' }, 'Published'),
-    createElement(PanelsAvatar, { alt: 'Ada Lovelace', fallback: 'AL' }),
-    createElement(PanelsIconButton, { label: 'Open navigation' }, '☰'),
-    createElement(PanelsInputWrapper, { inputId: 'title', label: 'Title', description: 'Public title', errors: ['Required'] },
-      createElement('input', { id: 'title' })),
-    createElement(PanelsLoadingIndicator, { label: 'Loading posts' }),
-    createElement(PanelsDropdown, { label: 'Actions', items: [{ id: 'edit', label: 'Edit', onSelect: () => undefined }] }),
-    createElement(PanelsModal, { labelledBy: 'modal-title', onClose: () => undefined, open: true },
-      createElement('h2', { id: 'modal-title' }, 'Confirm')),
-    createElement(PanelsSlideOver, { labelledBy: 'drawer-title', onClose: () => undefined, open: true },
-      createElement('h2', { id: 'drawer-title' }, 'Filters')),
-    createElement(PanelsTabs, { defaultValue: 'one', label: 'Content' },
-      createElement(PanelsTab, { value: 'one' }, 'One'),
-      createElement(PanelsTab, { value: 'two' }, 'Two'),
-      createElement(PanelsTabPanel, { value: 'one' }, 'First panel'),
-      createElement(PanelsTabPanel, { value: 'two' }, 'Second panel')),
-    createElement(PanelsSection, { heading: 'Details' }, 'Section content'),
-    createElement(PanelsEmptyState, { title: 'Nothing here' }, 'Create the first record'),
-    createElement(PanelsPagination, { onPageChange: () => undefined, page: 2, pages: 5 }),
-    createElement(PanelsToastViewport, { toasts: [{ id: 'saved', message: 'Saved', tone: 'success' }] }),
+    createElement(Button, null, 'Save'),
+    createElement(Button, { asChild: true }, createElement('a', { href: '/posts' }, 'Posts')),
+    createElement(Badge, { variant: 'secondary' }, 'Published'),
+    createElement(Avatar, null, createElement(AvatarFallback, null, 'AL')),
+    createElement(Field, null,
+      createElement(FieldLabel, { htmlFor: 'title' }, 'Title'),
+      createElement(Input, { 'aria-invalid': true, id: 'title' }),
+      createElement(FieldDescription, null, 'Public title'),
+      createElement(FieldError, { errors: [{ message: 'Required' }] })),
+    createElement(Card, null,
+      createElement(CardHeader, null,
+        createElement(CardTitle, null, 'Details'),
+        createElement(CardDescription, null, 'Record details')),
+      createElement(CardContent, null, 'Section content')),
+    createElement(Empty, null,
+      createElement(EmptyHeader, null,
+        createElement(EmptyTitle, null, 'Nothing here'),
+        createElement(EmptyDescription, null, 'Create the first record'))),
   )
 }
 
@@ -65,51 +64,38 @@ afterEach(() => {
 })
 
 describe('shared React renderer contract', () => {
-  it('renders every shell primitive with stable semantic component markers', () => {
-    const html = renderToString(createElement(ShellFixture))
-    const expected = [
-      'button', 'link', 'badge', 'avatar', 'icon-button', 'input-wrapper', 'loading-indicator', 'dropdown',
-      'tabs', 'section', 'empty-state', 'pagination', 'toast-viewport',
-    ]
+  it('renders registered hook components with properties, page data, and scopes without a wrapper', () => {
+    const registry = new ComponentRegistry().register('app.banner', ({ data, scopes, title }: { readonly data: Readonly<Record<string, unknown>>, readonly scopes: readonly string[], readonly title: string }) => createElement('strong', { 'data-record': String(data.recordId), 'data-scope': scopes.join(':') }, title))
+    const html = renderToString(createElement(ReactPanelsRenderHook, {
+      data: { recordId: 42 },
+      hook: PanelsRenderHook.PAGE_START,
+      manifest: { id: 'admin', slots: { [PanelsRenderHook.PAGE_START]: [{ component: 'app.banner', order: 0, properties: { title: 'Notice' }, source: 'panel' }] } },
+      registry,
+      scopes: ['posts', 'edit'],
+    }))
 
-    for (const name of expected) expect(html).toContain(`data-panels-component="${name}"`)
+    expect(html).toBe('<strong data-record="42" data-scope="posts:edit">Notice</strong>')
   })
 
-  it('exposes accessible names, landmarks, live regions, and dialog semantics', () => {
+  it('renders the canonical shadcn component sources', () => {
+    const html = renderToString(createElement(ShellFixture))
+    for (const slot of ['button', 'badge', 'avatar', 'field', 'input', 'card', 'empty']) {
+      expect(html).toContain(`data-slot="${slot}"`)
+    }
+    expect(html).toContain('hp:bg-primary')
+    expect(html).toContain('hp:border-input')
+  })
+
+  it('preserves accessible field semantics', () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     roots.push({ container, unmount: () => root.unmount() })
     act(() => root.render(createElement(ShellFixture)))
 
-    expect(container.querySelector('[data-panels-component="icon-button"]')?.getAttribute('aria-label')).toBe('Open navigation')
-    expect(container.querySelector('[data-panels-component="loading-indicator"]')?.getAttribute('role')).toBe('status')
-    expect(document.querySelector('[data-panels-component="modal"]')?.getAttribute('aria-modal')).toBe('true')
-    expect(document.querySelector('[data-panels-component="slide-over"]')?.getAttribute('aria-modal')).toBe('true')
-    expect(container.querySelector('[data-panels-component="tabs"]')?.getAttribute('role')).toBe('tablist')
-    expect(container.querySelector('[data-panels-component="pagination"]')?.getAttribute('aria-label')).toBe('Pagination')
-    expect(container.querySelector('[data-panels-component="toast-viewport"]')?.getAttribute('role')).toBe('region')
     expect(container.querySelector('label[for="title"]')?.textContent).toBe('Title')
-    expect(container.querySelector('#title-errors')?.getAttribute('role')).toBe('alert')
-    expect(container.querySelector('#title')?.getAttribute('aria-describedby')).toBe('title-description title-errors')
     expect(container.querySelector('#title')?.getAttribute('aria-invalid')).toBe('true')
-  })
-
-  it('targets a panel-scoped portal container when one is provided', () => {
-    const container = document.createElement('div')
-    const portal = document.createElement('div')
-    document.body.append(container, portal)
-    const root = createRoot(container)
-
-    act(() => root.render(createElement(PanelsPortalProvider, { container: portal },
-      createElement(PanelsModal, { labelledBy: 'scoped-modal-title', onClose: () => undefined, open: true },
-        createElement('h2', { id: 'scoped-modal-title' }, 'Scoped modal')))))
-
-    expect(portal.querySelector('[data-panels-component="modal"]')).not.toBeNull()
-    expect(document.body.querySelector(':scope > [data-panels-component="modal"]')).toBeNull()
-    act(() => root.unmount())
-    container.remove()
-    portal.remove()
+    expect(container.querySelector('[data-slot="field-error"]')?.textContent).toBe('Required')
   })
 
   it('hydrates deterministic SSR markup without mismatch diagnostics', async () => {
@@ -127,54 +113,9 @@ describe('shared React renderer contract', () => {
     if (!root) throw new Error('React hydration did not create a root.')
     roots.push({ container, unmount: () => root?.unmount() })
 
-    expect(serverMarkup).toContain('data-panels-component="tabs"')
-    expect(container.querySelector('[data-panels-component="tabs"]')).not.toBeNull()
+    expect(serverMarkup).toContain('data-slot="card"')
+    expect(container.querySelector('[data-slot="card"]')).not.toBeNull()
     expect(consoleError).not.toHaveBeenCalled()
-  })
-
-  it('selects dropdown actions and supports keyboard tab navigation', async () => {
-    const selected: string[] = []
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    roots.push({ container, unmount: () => root.unmount() })
-
-    act(() => root.render(createElement(Fragment, null,
-      createElement(PanelsDropdown, {
-        label: 'Actions',
-        items: [
-          { id: 'edit', label: 'Edit', onSelect: () => selected.push('edit') },
-          { id: 'delete', label: 'Delete', onSelect: () => selected.push('delete') },
-        ],
-      }),
-      createElement(PanelsTabs, { defaultValue: 'one', label: 'Keyboard tabs' },
-        createElement(PanelsTab, { value: 'one' }, 'One'),
-        createElement(PanelsTab, { value: 'two' }, 'Two'),
-        createElement(PanelsTabPanel, { value: 'one' }, 'First'),
-        createElement(PanelsTabPanel, { value: 'two' }, 'Second')),
-    )))
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-panels-component="dropdown"]')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-      await Promise.resolve()
-    })
-    const deleteItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === 'Delete')
-    await act(async () => {
-      deleteItem?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-      deleteItem?.click()
-      await Promise.resolve()
-    })
-    expect(selected).toEqual(['delete'])
-
-    const firstTab = container.querySelector<HTMLButtonElement>('[role="tab"]')
-    firstTab?.focus()
-    await act(async () => {
-      firstTab?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }))
-      await Promise.resolve()
-    })
-    const tabs = container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    await vi.waitFor(() => expect(document.activeElement).toBe(tabs[1]))
-    await vi.waitFor(() => expect(tabs[1]?.getAttribute('aria-selected')).toBe('true'))
   })
 
   it('contains renderer failures in an accessible error boundary', () => {
@@ -208,9 +149,10 @@ describe('shared React renderer contract', () => {
       managers: [{ badge: 0, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: ['attach'], pivotFields: [{ id: 'position', label: 'Position', required: false, type: 'number' }], presentation: 'inline', records: [], url: null, visible: true }],
       onOperation,
     })))
-    expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
+    expect(container.querySelector('.hp-relation-manager [data-slot="card-header"]')).not.toBeNull()
+    expect(container.querySelector('.hp-relation-manager-count[data-slot="badge"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
+    expect(container.querySelector('[data-operation="attach"] [data-icon="link"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
     await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click() })
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
@@ -218,9 +160,9 @@ describe('shared React renderer contract', () => {
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-header"]')).not.toBeNull()
     expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-footer"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-footer"]')).not.toBeNull()
     await act(async () => {
       if (!select) return
       select.value = 'tag-typescript'
@@ -255,6 +197,29 @@ describe('shared React renderer contract', () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript')
     expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
     expect(onOperation).not.toHaveBeenCalled()
+  })
+
+  it('presents detach as a destructive confirmed relation action', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    const onOperation = vi.fn(async () => undefined)
+    await act(async () => root.render(createElement(ReactRelationManagerRenderer, {
+      managers: [{ badge: 1, columns: [{ key: 'name', label: 'Name' }], group: null, id: 'tags', label: 'Tags', operations: ['detach'], presentation: 'inline', records: [{ id: 'tag-typescript', values: { name: 'TypeScript' } }], url: null, visible: true }],
+      onOperation,
+    })))
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-operation="detach"]')
+    expect(trigger?.className).toContain('hp:bg-destructive')
+    expect(trigger?.querySelector('[data-icon="unlink"]')).not.toBeNull()
+    await act(async () => trigger?.click())
+    const dialog = document.querySelector('[role="alertdialog"]')
+    expect(dialog?.textContent).toContain('Are you sure you want to detach this record?')
+    const confirm = dialog?.querySelector<HTMLButtonElement>('button[type="submit"]')
+    expect(confirm?.className).toContain('hp:bg-destructive')
+    await act(async () => confirm?.click())
+    expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'detach', recordId: 'tag-typescript' })
   })
 
   it('omits relation action structure when no operations are configured', async () => {

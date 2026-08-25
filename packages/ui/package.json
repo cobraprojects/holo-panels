@@ -10,7 +10,8 @@
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
-    "./style.css": "./dist/style.css"
+    "./style.css": "./dist/style.css",
+    "./theme-source.css": "./dist/theme-source.css"
   },
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -20,11 +21,18 @@
     "REFERENCE_STATES.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tailwindcss -i src/style.css -o dist/style.css --minify && cp src/theme-source.css dist/theme-source.css",
+    "build:theme": "tailwindcss -i src/style.css -o dist/style.css --minify",
+    "watch:theme": "tailwindcss -i src/style.css -o dist/style.css --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --run --passWithNoTests --reporter=json"
   },
+  "dependencies": {
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:"
+  },
   "devDependencies": {
+    "@tailwindcss/cli": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

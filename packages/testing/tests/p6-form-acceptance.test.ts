@@ -46,7 +46,8 @@ describe.each([
 
     const progress = reportAt(report.renderReports, 'upload-progress').markup
     expect(progress).toContain('cover.png')
-    expect(progress).toMatch(/<progress[^>]+value="0\.25"/u)
+    expect(progress).toContain('role="progressbar"')
+    expect(progress).toContain('aria-valuenow="0.25"')
     expect(progress).toContain('Upload progress for cover.png')
 
     const reordered = reportAt(report.renderReports, 'upload-reordered').markup

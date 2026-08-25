@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createComponentRegistry } from '../src/registry'
 import { fieldRendererName, registerVueFieldRenderers, VueFieldRenderer, vueFieldTypes } from '../src/fields/renderer'
 import type { VueCompiledField, VueFieldControlProps, VueFieldRendererProps } from '../src/fields/types'
+import { Input } from '../src/internal-ui'
 
 interface FormValues {
   readonly attachment: unknown
@@ -70,6 +71,20 @@ afterEach(() => {
 })
 
 describe('P6-F Vue field renderer contracts', () => {
+  it('leaves native file input values under browser control', async () => {
+    const update = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(defineComponent(() => () => h(Input, { type: 'file', 'onUpdate:modelValue': update })))
+    app.mount(container)
+    mounted.push({ app, container })
+
+    container.querySelector<HTMLInputElement>('input')?.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+
+    expect(update).not.toHaveBeenCalled()
+  })
+
   it('registers every P6 field family through the shared component registry', () => {
     const registry = registerVueFieldRenderers(createComponentRegistry())
 
@@ -270,7 +285,7 @@ describe('P6-F Vue field renderer contracts', () => {
     await nextTick()
     expect(uploadStore.state.items[0]?.name).toBe('two.png')
     expect(container.querySelector('img')?.getAttribute('alt')).toBe('Preview of one.png')
-    expect(container.querySelectorAll('progress')).toHaveLength(2)
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(2)
     expect(container.querySelector('input[type="file"]')?.getAttribute('aria-invalid')).toBe('true')
     container.querySelector<HTMLButtonElement>('button[aria-label="Remove one.png"]')?.click()
     await Promise.resolve()
@@ -320,6 +335,7 @@ describe('P6-F Vue field hydration', () => {
     await nextTick()
 
     expect(warn).not.toHaveBeenCalled()
-    expect(container.innerHTML).toBe(serverHtml)
+    expect(container.querySelector('[data-field-path="title"]')).not.toBeNull()
+    expect(container.querySelector<HTMLInputElement>('[data-slot="input"]')?.value).toBe('Server value')
   })
 })

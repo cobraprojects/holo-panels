@@ -12,6 +12,7 @@ export async function handleUploadEndpoint(
       ...context,
       declaredMimeType: body.declaredMimeType,
       name: body.name,
+      sessionId: body.sessionId,
       size: body.size,
     })
   }
@@ -20,12 +21,13 @@ export async function handleUploadEndpoint(
       ...context,
       contents: body.contents,
       id: body.id,
+      sessionId: body.sessionId,
       token: body.token,
     })
   }
   if (body.action === 'resolve') {
-    return await service.resolve({ ...context, id: body.id, token: body.token })
+    return await service.resolve({ ...context, id: body.id, sessionId: body.sessionId, token: body.token })
   }
-  await service.delete({ ...context, id: body.id, token: body.token })
+  await service.delete({ ...context, id: body.id, sessionId: body.sessionId, token: body.token })
   return Object.freeze({ deleted: true })
 }

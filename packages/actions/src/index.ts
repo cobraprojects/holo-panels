@@ -1,14 +1,19 @@
 import {
+  ActionsRenderHook,
   type ActionContext as CoreActionContext,
   type ActionKind,
   type ActionModalWidth,
   type ActionMount,
   type ActionSize,
+  builtInActionPresentation,
   type JsonObject,
   type PanelNotificationPresentation,
+  type RegisteredPanelRecord,
   toJsonValue,
 } from '@holo-js/panels-core'
-import { Schema, type SchemaComponentContract } from '@holo-js/panels-schemas'
+
+export { ActionsRenderHook }
+import { Schema, type SchemaComponentContract, type SchemaComponentFor } from '@holo-js/panels-schemas'
 
 export type ActionColor = 'danger' | 'gray' | 'info' | 'primary' | 'success' | 'warning' | string
 export type ActionAlignment = 'center' | 'end' | 'start'
@@ -30,12 +35,11 @@ type ActionHandler<TContext, TData extends object, TResult> = (data: Readonly<TD
 
 export interface ActionContract<TRecord extends object = object> {
   readonly id: string
-  readonly resourceRecordType: TRecord
   compile(): object
   manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): JsonObject
 }
 
-interface ActionModalState<TRecord extends object, TData extends object, TActor extends object, TTenant, TServices> {
+interface ActionModalState<TRecord extends object, TData extends object, TActor extends object, TTenant, TServices, TSchemaFactory> {
   alignment: ActionAlignment
   autofocus: boolean
   cancelActionLabel: string | null
@@ -48,7 +52,7 @@ interface ActionModalState<TRecord extends object, TData extends object, TActor 
   icon: string | null
   iconColor: ActionColor | null
   nestedActions: readonly Action[]
-  schema: Schema<TRecord, TData> | null
+  schema: Schema<TRecord, TData, TSchemaFactory> | null
   slideOver: boolean
   stickyFooter: boolean
   stickyHeader: boolean
@@ -68,7 +72,7 @@ function literal<TContext, TValue>(value: Resolvable<TContext, TValue>): TValue 
 }
 
 export class Action<
-  TRecord extends object = object,
+  TRecord extends object = RegisteredPanelRecord,
   TData extends object = object,
   TResult = void,
   TActor extends object = object,
@@ -95,7 +99,7 @@ export class Action<
   #icon: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
   #iconPosition: 'after' | 'before' = 'before'
   #label: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string>
-  #modal: ActionModalState<TRecord, TData, TActor, TTenant, TServices> | null = null
+  #modal: ActionModalState<TRecord, TData, TActor, TTenant, TServices, TSchemaFactory> | null = null
   #requiresConfirmation = false
   #size: ActionSize = 'medium'
   #successNotification: PanelNotificationPresentation | null = null
@@ -115,7 +119,7 @@ export class Action<
   }
 
   static make<
-    TRecord extends object = object,
+    TRecord extends object = RegisteredPanelRecord,
     TData extends object = object,
     TResult = void,
     TActor extends object = object,
@@ -283,14 +287,20 @@ export class Action<
     return this
   }
 
+  schema(schema: readonly SchemaComponentFor<TRecord>[]): this
+  schema<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(schema: Schema<TRecord, TData, TSchemaFactory> | ((factory: TSchemaFactory) => TComponents)): this
   schema<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(
-    schema: Schema<TRecord, TData> | ((factory: TSchemaFactory) => TComponents),
+    schema: readonly SchemaComponentFor<TRecord>[] | Schema<TRecord, TData, TSchemaFactory> | ((factory: TSchemaFactory) => TComponents),
   ): this {
     if (schema instanceof Schema) {
       this.modal().schema = schema
       return this
     }
     const factory = this.#schemaFactory
+    if (typeof schema !== 'function') {
+      this.modal().schema = new Schema<TRecord, TData, TSchemaFactory>(factory).components(schema)
+      return this
+    }
     if (factory === undefined) throw new Error('Action schema callbacks require a component factory')
     this.modal().schema = new Schema<TRecord, TData, TSchemaFactory>(factory).components(schema)
     return this
@@ -401,7 +411,7 @@ export class Action<
       authorize: this.#authorize,
       badge: this.#badge,
       color: this.#color,
-      confirmation: this.#confirmation ?? undefined,
+      confirmation: this.#confirmation,
       disabled: this.#disabled,
       failureNotification: this.#failureNotification ?? undefined,
       handle: this.#handler,
@@ -425,7 +435,7 @@ export class Action<
     })
   }
 
-  private modal(): ActionModalState<TRecord, TData, TActor, TTenant, TServices> {
+  private modal(): ActionModalState<TRecord, TData, TActor, TTenant, TServices, TSchemaFactory> {
     this.#modal ??= {
       alignment: 'center',
       autofocus: true,
@@ -451,7 +461,7 @@ export class Action<
 }
 
 export class BulkAction<
-  TRecord extends object = object,
+  TRecord extends object = RegisteredPanelRecord,
   TData extends object = object,
   TResult = void,
   TActor extends object = object,
@@ -464,7 +474,7 @@ export class BulkAction<
   }
 
   static override make<
-    TRecord extends object = object,
+    TRecord extends object = RegisteredPanelRecord,
     TData extends object = object,
     TResult = void,
     TActor extends object = object,
@@ -538,25 +548,45 @@ export class BulkActionGroup<TAction extends ActionContract = ActionContract> ex
 }
 
 function makeBuiltIn<TRecord extends object>(id: string, kind: ActionKind, mount: ActionMount): Action<TRecord> {
-  return new Action<TRecord>(id, kind, mount)
+  return applyBuiltInPresentation(new Action<TRecord>(id, kind, mount), id)
 }
 
 function makeBuiltInBulk<TRecord extends object>(id: string, kind: ActionKind): BulkAction<TRecord> {
-  return new BulkAction<TRecord>(id, kind)
+  return applyBuiltInPresentation(new BulkAction<TRecord>(id, kind), id)
 }
 
-export const CreateAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('create', 'create', 'page') })
-export const EditAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('edit', 'edit', 'record') })
-export const ViewAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('view', 'view', 'record') })
-export const DeleteAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn<TRecord>('delete', 'delete', 'record').color('danger').requiresConfirmation() })
-export const DeleteBulkAction = Object.freeze({ make: <TRecord extends object = object>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('delete', 'delete').color('danger').requiresConfirmation() })
-export const ReplicateAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('replicate', 'replicate', 'record') })
-export const ForceDeleteAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn<TRecord>('force-delete', 'force-delete', 'record').color('danger').requiresConfirmation() })
-export const ForceDeleteBulkAction = Object.freeze({ make: <TRecord extends object = object>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('force-delete', 'force-delete').color('danger').requiresConfirmation() })
-export const RestoreAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('restore', 'restore', 'record') })
-export const RestoreBulkAction = Object.freeze({ make: <TRecord extends object = object>(): BulkAction<TRecord> => makeBuiltInBulk('restore', 'restore') })
-export const ImportAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('import', 'custom', 'page') })
-export const ExportAction = Object.freeze({ make: <TRecord extends object = object>(): Action<TRecord> => makeBuiltIn('export', 'custom', 'page') })
+interface BuiltInActionPresenter {
+  color(value: ActionColor | null): unknown
+  icon(value: string | null): unknown
+  requiresConfirmation(value: boolean | string): unknown
+}
+
+function applyBuiltInPresentation<TAction extends BuiltInActionPresenter>(action: TAction, name: string): TAction {
+  const presentation = builtInActionPresentation(name)
+  if (!presentation) return action
+  action.color(presentation.color)
+  action.icon(presentation.icon)
+  if (presentation.confirmation) action.requiresConfirmation(presentation.confirmation)
+  return action
+}
+
+export const CreateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('create', 'create', 'page') })
+export const EditAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('edit', 'edit', 'record') })
+export const ViewAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('view', 'view', 'record') })
+export const DeleteAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('delete', 'delete', 'record') })
+export const DeleteBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('delete', 'delete') })
+export const AssociateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('associate', 'associate', 'page') })
+export const AttachAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('attach', 'attach', 'page') })
+export const DetachAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('detach', 'detach', 'record') })
+export const DissociateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('dissociate', 'dissociate', 'record') })
+export const EditPivotAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('editPivot', 'editPivot', 'record') })
+export const ReplicateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('replicate', 'replicate', 'record') })
+export const ForceDeleteAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('force-delete', 'force-delete', 'record') })
+export const ForceDeleteBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('force-delete', 'force-delete') })
+export const RestoreAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('restore', 'restore', 'record') })
+export const RestoreBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk('restore', 'restore') })
+export const ImportAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('import', 'custom', 'page') })
+export const ExportAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('export', 'custom', 'page') })
 
 export interface ActionFactory<
   TRecord extends object,
@@ -568,10 +598,15 @@ export interface ActionFactory<
 > {
   make<TResult = void>(name: string): Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>
   bulk<TResult = void>(name: string): BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>
+  associate(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
+  attach(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   create(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   delete(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   deleteBulk(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
+  detach(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
+  dissociate(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   edit(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
+  editPivot(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   export(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   forceDelete(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
   forceDeleteBulk(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
@@ -591,17 +626,22 @@ export function createActionFactory<
   TServices = object,
   TSchemaFactory = undefined,
 >(schemaFactory?: TSchemaFactory): ActionFactory<TRecord, TData, TActor, TTenant, TServices, TSchemaFactory> {
-  const action = (id: string, kind: ActionKind, mount: ActionMount): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> => new Action(id, kind, mount, schemaFactory)
-  const bulkAction = (id: string, kind: ActionKind): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> => new BulkAction(id, kind, schemaFactory)
+  const action = (id: string, kind: ActionKind, mount: ActionMount): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> => applyBuiltInPresentation(new Action(id, kind, mount, schemaFactory), id)
+  const bulkAction = (id: string, kind: ActionKind): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> => applyBuiltInPresentation(new BulkAction(id, kind, schemaFactory), id)
   return Object.freeze({
+    associate: () => action('associate', 'associate', 'page'),
+    attach: () => action('attach', 'attach', 'page'),
     bulk: <TResult = void>(name: string) => new BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>(name, 'custom', schemaFactory),
     create: () => action('create', 'create', 'page'),
-    delete: () => action('delete', 'delete', 'record').color('danger').requiresConfirmation(),
-    deleteBulk: () => bulkAction('delete', 'delete').color('danger').requiresConfirmation(),
+    delete: () => action('delete', 'delete', 'record'),
+    deleteBulk: () => bulkAction('delete', 'delete'),
+    detach: () => action('detach', 'detach', 'record'),
+    dissociate: () => action('dissociate', 'dissociate', 'record'),
     edit: () => action('edit', 'edit', 'record'),
+    editPivot: () => action('editPivot', 'editPivot', 'record'),
     export: () => action('export', 'custom', 'page'),
-    forceDelete: () => action('force-delete', 'force-delete', 'record').color('danger').requiresConfirmation(),
-    forceDeleteBulk: () => bulkAction('force-delete', 'force-delete').color('danger').requiresConfirmation(),
+    forceDelete: () => action('force-delete', 'force-delete', 'record'),
+    forceDeleteBulk: () => bulkAction('force-delete', 'force-delete'),
     group: <const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions) => ActionGroup.make(actions),
     import: () => action('import', 'custom', 'page'),
     make: <TResult = void>(name: string) => new Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>(name, 'custom', 'record', schemaFactory),

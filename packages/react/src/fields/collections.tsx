@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { CollectionStore, EditorAdapterInstance } from '@holo-js/panels-client'
-import { ShadcnButton, ShadcnInput, ShadcnTextarea } from '../internal-ui'
+import { Button, Input, Textarea } from '../internal-ui'
 import { FieldFrame, property, requireStore, updateField, useStoreState } from './shared'
 import type { ReactFieldControlProps } from './types'
 
@@ -33,7 +33,7 @@ function EditorField<TValues extends object>(props: ReactFieldControlProps<TValu
   }, [adapterId, props.context.disabled, props.context.readOnly, props.editorAdapters])
   useEffect(() => instance.current?.update(value), [value])
   if (adapterId) return <FieldFrame context={props.context}><div ref={element} tabIndex={0} /></FieldFrame>
-  return <FieldFrame context={props.context}><ShadcnTextarea
+  return <FieldFrame context={props.context}><Textarea
     disabled={props.context.disabled}
     onChange={event => updateField(props, event.currentTarget.value)}
     readOnly={props.context.readOnly}
@@ -48,10 +48,10 @@ function CollectionActions<TValue>({ disabled, index, length, store }: {
   readonly store: CollectionStore<TValue>
 }): ReactNode {
   return <span className="hp-collection-actions">
-    <ShadcnButton aria-label={`Move item ${index + 1} up`} disabled={disabled || index === 0} onClick={() => store.move(index, index - 1)} type="button">↑</ShadcnButton>
-    <ShadcnButton aria-label={`Move item ${index + 1} down`} disabled={disabled || index === length - 1} onClick={() => store.move(index, index + 1)} type="button">↓</ShadcnButton>
-    <ShadcnButton aria-label={`Clone item ${index + 1}`} disabled={disabled} onClick={() => store.clone(index)} type="button">Clone</ShadcnButton>
-    <ShadcnButton aria-label={`Remove item ${index + 1}`} disabled={disabled} onClick={() => store.delete(index)} type="button">Remove</ShadcnButton>
+    <Button aria-label={`Move item ${index + 1} up`} disabled={disabled || index === 0} onClick={() => store.move(index, index - 1)} type="button">↑</Button>
+    <Button aria-label={`Move item ${index + 1} down`} disabled={disabled || index === length - 1} onClick={() => store.move(index, index + 1)} type="button">↓</Button>
+    <Button aria-label={`Clone item ${index + 1}`} disabled={disabled} onClick={() => store.clone(index)} type="button">Clone</Button>
+    <Button aria-label={`Remove item ${index + 1}`} disabled={disabled} onClick={() => store.delete(index)} type="button">Remove</Button>
   </span>
 }
 
@@ -64,8 +64,8 @@ function KeyValueEditor({ disabled, index, store, value }: {
   const key = typeof value === 'object' && value !== null ? asString(Reflect.get(value, 'key')) : ''
   const entryValue = typeof value === 'object' && value !== null ? asString(Reflect.get(value, 'value')) : ''
   return <span className="hp-key-value-entry">
-    <ShadcnInput aria-label={`Key ${index + 1}`} disabled={disabled} onChange={event => store.replace(index, { key: event.currentTarget.value, value: entryValue })} value={key} />
-    <ShadcnInput aria-label={`Value ${index + 1}`} disabled={disabled} onChange={event => store.replace(index, { key, value: event.currentTarget.value })} value={entryValue} />
+    <Input aria-label={`Key ${index + 1}`} disabled={disabled} onChange={event => store.replace(index, { key: event.currentTarget.value, value: entryValue })} value={key} />
+    <Input aria-label={`Value ${index + 1}`} disabled={disabled} onChange={event => store.replace(index, { key, value: event.currentTarget.value })} value={entryValue} />
   </span>
 }
 
@@ -122,7 +122,7 @@ function NestedFieldsEditor({ definitions, disabled, onChange, value }: {
   return <div className="hp-collection-fields">{definitions.map((field) => {
     const current = nestedValue(value, field.path)
     const checkbox = field.type === 'toggle' || field.type === 'checkbox'
-    return <label key={field.path}>{field.label}<ShadcnInput
+    return <label key={field.path}>{field.label}<Input
       checked={checkbox ? current === true : undefined}
       disabled={disabled}
       onChange={event => onChange(withNestedValue(value, field.path, checkbox ? event.currentTarget.checked : event.currentTarget.value))}
@@ -138,7 +138,7 @@ export function ReactCollectionField<TValues extends object>(props: ReactFieldCo
   if (props.context.definition.type === 'tags') {
     const separator = property(props.context, 'separator', ',')
     const value = Array.isArray(props.context.value) ? props.context.value.filter(item => typeof item === 'string').join(`${separator} `) : ''
-    return <FieldFrame context={props.context}><ShadcnInput
+    return <FieldFrame context={props.context}><Input
       disabled={props.context.disabled}
       onChange={event => updateField(props, event.currentTarget.value.split(separator).map(item => item.trim()).filter(Boolean))}
       readOnly={props.context.readOnly}
@@ -178,7 +178,7 @@ export function ReactCollectionField<TValues extends object>(props: ReactFieldCo
             : props.renderRepeaterItem?.(item.value, index) ?? (repeaterFields.length > 0
                 ? <NestedFieldsEditor definitions={repeaterFields} disabled={disabled} onChange={next => store.replace(index, next)} value={item.value} />
                 : <span>{`Item ${index + 1}`}</span>) : null}
-        <ShadcnButton aria-expanded={!item.collapsed} disabled={disabled} onClick={() => store.toggleCollapsed(index)} type="button">{item.collapsed ? 'Expand' : 'Collapse'}</ShadcnButton>
+        <Button aria-expanded={!item.collapsed} disabled={disabled} onClick={() => store.toggleCollapsed(index)} type="button">{item.collapsed ? 'Expand' : 'Collapse'}</Button>
         <CollectionActions disabled={disabled} index={index} length={state.items.length} store={store} />
       </li>)}
     </ol>
@@ -188,18 +188,18 @@ export function ReactCollectionField<TValues extends object>(props: ReactFieldCo
           const type = Reflect.get(definition, 'type')
           if (typeof type !== 'string') return null
           const label = Reflect.get(definition, 'label')
-          return <ShadcnButton
+          return <Button
             disabled={disabled || !props.createCollectionItem || (maximum !== null && state.items.length >= maximum)}
             key={type}
             onClick={() => add(type)}
             type="button"
-          >Add {typeof label === 'string' ? label : `block ${index + 1}`}</ShadcnButton>
+          >Add {typeof label === 'string' ? label : `block ${index + 1}`}</Button>
         })
-      : <ShadcnButton
+      : <Button
           disabled={disabled || (props.context.definition.type !== 'key-value' && !props.createCollectionItem) || (maximum !== null && state.items.length >= maximum)}
           onClick={() => add()}
           type="button"
-        >Add item</ShadcnButton>}
+        >Add item</Button>}
     {props.context.errors.length > 0 ? <ul role="alert">{props.context.errors.map(error => <li key={error}>{error}</li>)}</ul> : null}
   </div>
 }

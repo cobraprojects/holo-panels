@@ -6,6 +6,7 @@ const workspaceModules = fileURLToPath(new URL('../../node_modules/', import.met
 export default defineConfig({
   resolve: {
     alias: [
+      { find: /^@\//u, replacement: fileURLToPath(new URL('./src/', import.meta.url)) },
       { find: /^react-dom\/(.+)$/u, replacement: `${workspaceModules}react-dom/$1` },
       { find: /^react\/(.+)$/u, replacement: `${workspaceModules}react/$1` },
       { find: /^react$/u, replacement: `${workspaceModules}react` },

@@ -28,33 +28,14 @@ declare module '@holo-js/panels-resources' {
     manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): object
   }
 
-  type FieldFactory<TRecord extends object> = {
-    checkbox<TPath extends RecordPath<TRecord>>(path: TPath): FieldBuilder
-    dateTimePicker<TPath extends RecordPath<TRecord>>(path: TPath): FieldBuilder
-    textInput<TPath extends RecordPath<TRecord>>(path: TPath): FieldBuilder
-  }
-
-  type ColumnFactory<TRecord extends object> = {
-    text<TPath extends RecordPath<TRecord>>(path: TPath): ColumnBuilder
-  }
-
-  type ActionFactory = {
-    create(): TableAction
-    delete(): TableAction
-    deleteBulk(): TableAction
-    edit(): TableAction
-    group(actions: readonly TableAction[]): TableAction
-    view(): TableAction
-  }
-
   class Schema<TRecord extends object> {
-    components(configure: (field: FieldFactory<TRecord>) => readonly Component[]): this
+    components(components: readonly Component[]): this
   }
 
   class Table<TRecord extends object> {
-    columns(configure: (column: ColumnFactory<TRecord>) => readonly Component[]): this
-    recordActions(configure: (action: ActionFactory) => readonly TableAction[]): this
-    toolbarActions(configure: (action: ActionFactory) => readonly TableAction[]): this
+    columns(columns: readonly Component[]): this
+    recordActions(actions: readonly TableAction[]): this
+    toolbarActions(actions: readonly TableAction[]): this
   }
 
   type SchemaConfiguration = (schema: Schema<object>) => Schema<object>
@@ -62,7 +43,6 @@ declare module '@holo-js/panels-resources' {
 
   export class Resource {
     protected static model: ModelSource
-    static actions(configure: (action: ActionFactory) => readonly TableAction[]): readonly TableAction[]
     protected static configureForm(configuration: (schema: Schema<Record<string, unknown>>) => Schema<Record<string, unknown>>): SchemaConfiguration
     protected static configureTable(configuration: (table: Table<Record<string, unknown>>) => Table<Record<string, unknown>>): TableConfiguration
   }
@@ -93,4 +73,39 @@ declare module '@holo-js/panels-resources' {
     protected static relationship: string
     protected static configureTable(configuration: (table: Table<Record<string, unknown>>) => Table<Record<string, unknown>>): TableConfiguration
   }
+}
+
+declare module '@holo-js/panels-actions' {
+  type TableAction = {
+    compile(): object
+    manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): object
+  }
+  type ActionFactory = { make(): TableAction }
+  export const CreateAction: ActionFactory
+  export const DeleteAction: ActionFactory
+  export const DeleteBulkAction: ActionFactory
+  export const EditAction: ActionFactory
+  export const ViewAction: ActionFactory
+  export const ActionGroup: { make(actions: readonly TableAction[]): TableAction }
+}
+
+declare module '@holo-js/panels-forms' {
+  type FieldBuilder = {
+    compile(): object
+    numeric(): FieldBuilder
+    required(): FieldBuilder
+  }
+  type FieldFactory = { make(path: string): FieldBuilder }
+  export const Checkbox: FieldFactory
+  export const DateTimePicker: FieldFactory
+  export const TextInput: FieldFactory
+}
+
+declare module '@holo-js/panels-tables' {
+  type ColumnBuilder = {
+    compile(): object
+    dateTime(): ColumnBuilder
+    number(): ColumnBuilder
+  }
+  export const TextColumn: { make(path: string): ColumnBuilder }
 }

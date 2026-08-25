@@ -1,30 +1,12 @@
 export {
-  PanelsAvatar,
-  PanelsBadge,
-  PanelsButton,
-  PanelsDropdown,
-  PanelsEmptyState,
   PanelsErrorBoundary,
-  PanelsIconButton,
-  PanelsInputWrapper,
-  PanelsLink,
-  PanelsLoadingIndicator,
-  PanelsModal,
-  PanelsPagination,
   PanelsPortalProvider,
-  PanelsSection,
-  PanelsSlideOver,
-  PanelsTab,
-  PanelsTabPanel,
-  PanelsTabs,
-  PanelsToastViewport,
   createDefaultComponentRegistry,
-  registerVueShellComponents,
-  vueShellComponents,
-  type PanelsDropdownItem,
-  type PanelsTabItem,
-  type PanelsToast,
-} from './primitives'
+} from './components'
+export { PanelsPageActions } from './page-actions'
+export { providePanelsRenderHooks, renderPanelsHook, usePanelsRenderHook, type VuePanelsRenderHookContextOptions, type VuePanelsRenderHookOptions } from './render-hooks'
+export { ActionsRenderHook, PanelsRenderHook, TablesRenderHook, WidgetsRenderHook } from '@holo-js/panels-core'
+export * from './internal-ui'
 export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
 export {
   ComponentRegistry,
@@ -76,10 +58,13 @@ export {
   createRequestEnvelope,
   executePanelAuthRequest,
   executePanelLogin,
+  loadPanelAuthPresentation,
   createPanelNotificationTransport,
   createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
+  publishPanelError,
+  registerPanelNotificationStore,
   toJsonValue,
 } from '@holo-js/panels-client'
 export type {
@@ -101,6 +86,7 @@ export type {
   PanelDatabaseNotificationOperationResult,
   PanelNotificationStore,
   PanelOperation,
+  PanelAuthPresentation,
   PanelAvatarComponentProps,
   PanelChromeComponentProps,
   PanelShellBootstrap,

@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
-import type { RelationDefinition } from '@holo-js/db'
-import { ActionEngine, type ActionDefinition, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
+import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/db'
+import { ActionEngine, builtInActionPresentation, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
 import type { Effect } from '../protocol/effects'
 import type { CompiledPageDefinition, PageContext, PageManifest, PageType } from '../pages/contracts'
 import { defaultSlugTransform } from '../fields/basic'
@@ -109,14 +109,83 @@ function arrayMember(value: object | undefined, key: string): readonly object[] 
   return Array.isArray(member) ? member.filter(item => item && typeof item === 'object') : Object.freeze([])
 }
 
+function resourceFilterOptions(value: unknown): JsonObject[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((option) => {
+      if (!option || typeof option !== 'object' || Array.isArray(option)) return []
+      const label = Reflect.get(option, 'label')
+      const optionValue = Reflect.get(option, 'value')
+      if (typeof label !== 'string' || ![null, 'boolean', 'number', 'string'].includes(optionValue === null ? null : typeof optionValue)) return []
+      return [{ disabled: Reflect.get(option, 'disabled') === true, label, value: optionValue as boolean | number | string | null }]
+    })
+  }
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value).flatMap(([optionValue, label]) => typeof label === 'string'
+    ? [{ disabled: false, label, value: optionValue }]
+    : [])
+}
+
+function resourceFilters(table: object | undefined): readonly JsonObject[] {
+  return Object.freeze(arrayMember(table, 'filters').flatMap((filter) => {
+    const id = Reflect.get(filter, 'id')
+    const type = Reflect.get(filter, 'type')
+    if (typeof id !== 'string' || typeof type !== 'string') return []
+    const existingProperties = objectMember(filter, 'properties')
+    const relationship = Reflect.get(filter, 'relationship')
+    const schema = Reflect.get(filter, 'schema')
+    const properties = existingProperties
+      ? toJsonValue(existingProperties)
+      : {
+          multiple: Reflect.get(filter, 'multiple') === true,
+          options: resourceFilterOptions(Reflect.get(filter, 'options')),
+          preload: Reflect.get(filter, 'preload') === true,
+          relationship: relationship === undefined ? null : toJsonValue(relationship),
+          schema: schema === undefined ? null : toJsonValue(schema),
+          searchable: Reflect.get(filter, 'searchable') === true,
+        }
+    if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return []
+    const rawLayout = Reflect.get(filter, 'layout')
+    const layout = rawLayout === undefined ? null : toJsonValue(rawLayout)
+    return [{
+      defaultValue: Reflect.get(filter, 'defaultValue') === undefined ? null : toJsonValue(Reflect.get(filter, 'defaultValue')),
+      id,
+      label: typeof Reflect.get(filter, 'label') === 'string' ? Reflect.get(filter, 'label') as string : null,
+      layout: layout && typeof layout === 'object' && !Array.isArray(layout) ? layout : {},
+      mode: Reflect.get(filter, 'mode') === 'deferred' ? 'deferred' as const : 'live' as const,
+      properties,
+      type,
+    }]
+  }))
+}
+
+function compositionArrayMember(value: object | undefined, key: string): readonly object[] {
+  if (!value || !(key in value)) return Object.freeze([])
+  const member = Reflect.get(value, key)
+  return Array.isArray(member)
+    ? member.filter((item): item is object => item !== null && (typeof item === 'object' || typeof item === 'function'))
+    : Object.freeze([])
+}
+
 function compositionMembers(value: object | undefined, key: string): readonly object[] {
-  const members = Array.isArray(value) ? value : arrayMember(value, key)
+  const members = Array.isArray(value)
+    ? value.filter((item): item is object => item !== null && (typeof item === 'object' || typeof item === 'function'))
+    : compositionArrayMember(value, key)
   return members.flatMap((member) => {
     const compiled = 'compile' in member && typeof member.compile === 'function' ? member.compile() : member
     if (!compiled || typeof compiled !== 'object') return []
     const manifest = objectMember(compiled, 'manifest')
     return [manifest ?? compiled]
   })
+}
+
+function compiledObject(value: object | undefined): object | undefined {
+  if (!value) return undefined
+  const compiled = 'compile' in value && typeof value.compile === 'function' ? value.compile() : value
+  return compiled && typeof compiled === 'object' ? compiled : undefined
+}
+
+function compiledObjectMember(value: object | undefined, key: string): object | undefined {
+  return compiledObject(objectMember(value, key))
 }
 
 function label(value: string): string {
@@ -158,6 +227,11 @@ function staticActionValue(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
+function staticActionPresentationValue(value: unknown, fallback: string | null): string | null {
+  if (typeof value === 'undefined') return fallback
+  return staticActionValue(value)
+}
+
 function actionLabel(action: object): string {
   const configured = Reflect.get(action, 'label')
   return typeof configured === 'string' && configured.trim() ? configured.trim() : label(String(Reflect.get(action, 'id') ?? 'action'))
@@ -168,14 +242,17 @@ function actionManifestSeed(action: object): ActionManifest {
   const nestedActions = modal && Array.isArray(Reflect.get(modal, 'nestedActions'))
     ? Reflect.get(modal, 'nestedActions').filter((item: unknown): item is string => typeof item === 'string')
     : []
+  const kindValue = Reflect.get(action, 'kind')
+  const kind = (['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'].includes(String(kindValue)) ? kindValue : 'custom') as ActionKind
+  const defaults = builtInActionPresentation(kind === 'custom' ? String(Reflect.get(action, 'id')) : kind)
   return {
     badge: staticActionValue(Reflect.get(action, 'badge')),
-    color: staticActionValue(Reflect.get(action, 'color')),
-    confirmation: staticActionValue(Reflect.get(action, 'confirmation')),
+    color: staticActionPresentationValue(Reflect.get(action, 'color'), defaults?.color ?? null),
+    confirmation: staticActionPresentationValue(Reflect.get(action, 'confirmation'), defaults?.confirmation ?? null),
     disabled: Reflect.get(action, 'disabled') === true,
-    icon: staticActionValue(Reflect.get(action, 'icon')),
+    icon: staticActionPresentationValue(Reflect.get(action, 'icon'), defaults?.icon ?? null),
     id: String(Reflect.get(action, 'id')),
-    kind: 'custom',
+    kind,
     label: actionLabel(action),
     modal: modal
       ? {
@@ -194,7 +271,7 @@ function actionManifestSeed(action: object): ActionManifest {
     mount: (['bulk', 'modal', 'notification', 'page', 'record'].includes(String(Reflect.get(action, 'mount'))) ? Reflect.get(action, 'mount') : 'record') as ActionMount,
     size: (['extra-small', 'small', 'medium', 'large', 'extra-large'].includes(String(Reflect.get(action, 'size'))) ? Reflect.get(action, 'size') : 'medium') as ActionSize,
     tooltip: staticActionValue(Reflect.get(action, 'tooltip')),
-    type: staticActionValue(Reflect.get(action, 'type')) ?? 'custom',
+    type: staticActionValue(Reflect.get(action, 'type')) ?? kind,
     visible: Reflect.get(action, 'visible') !== false,
   }
 }
@@ -245,7 +322,7 @@ function resourceDefinition(value: object): RuntimeDefinition {
 }
 
 function resourceWidgetIds(definition: RuntimeDefinition): readonly string[] {
-  const ids = arrayMember(definition, 'widgets').flatMap((widget) => {
+  const ids = compositionArrayMember(definition, 'widgets').flatMap((widget) => {
     const compiled = 'compile' in widget && typeof widget.compile === 'function' ? widget.compile() : widget
     if (!compiled || typeof compiled !== 'object') return []
     const manifest = objectMember(compiled, 'manifest')
@@ -321,9 +398,16 @@ function relationFields(relation: object, fields: readonly string[]): readonly J
   return Object.freeze(fields.map(field => Object.freeze({ id: field, label: label(field), required: true, type: relationFieldType(relation, field) })))
 }
 
+function pivotTableColumns(relation: object): object {
+  const pivotTableValue = Reflect.get(relation, 'pivotTable')
+  const pivotTable = pivotTableValue && typeof pivotTableValue === 'object'
+    ? pivotTableValue
+    : typeof pivotTableValue === 'string' ? getGeneratedTableDefinition(pivotTableValue) ?? null : null
+  return pivotTable ? objectMember(pivotTable, 'columns') ?? {} : {}
+}
+
 function relationPivotFields(relation: object, fields: readonly string[]): readonly JsonObject[] {
-  const pivotTable = 'pivotTable' in relation && relation.pivotTable && typeof relation.pivotTable === 'object' ? relation.pivotTable : null
-  const columns = pivotTable ? objectMember(pivotTable, 'columns') : undefined
+  const columns = pivotTableColumns(relation)
   return Object.freeze(fields.map(field => Object.freeze({ id: field, label: label(field), required: false, type: columnFieldType(columns, field) })))
 }
 
@@ -331,8 +415,7 @@ function automaticPivotFields(relation: RelationDefinition, context: GeneratedRe
   readonly bindings: Readonly<Record<string, number | string>>
   readonly writable: readonly string[]
 }> {
-  const pivotTable = 'pivotTable' in relation && relation.pivotTable && typeof relation.pivotTable === 'object' ? relation.pivotTable : null
-  const columns = pivotTable ? objectMember(pivotTable, 'columns') ?? {} : {}
+  const columns = pivotTableColumns(relation)
   const bindings: Record<string, number | string> = {}
   if ('id' in columns) bindings.id = globalThis.crypto.randomUUID()
   const timestamp = new Date().toISOString()
@@ -354,8 +437,8 @@ function automaticPivotFields(relation: RelationDefinition, context: GeneratedRe
 function relationManager(
   definition: RuntimeDefinition,
   managerId: string,
-): { readonly compiled: object, readonly relation: RelationDefinition, readonly relationName: string, readonly runtime: RuntimeRelationManager | null } {
-  const candidate = arrayMember(definition, 'relations').find((manager) => {
+): { readonly compiled: object, readonly operations: readonly RelationOperation[], readonly relation: RelationDefinition, readonly relationName: string, readonly runtime: RuntimeRelationManager | null } {
+  const candidate = compositionArrayMember(definition, 'relations').find((manager) => {
     const compiled = 'compile' in manager && typeof manager.compile === 'function' ? manager.compile() : manager
     return compiled && typeof compiled === 'object' && String(Reflect.get(compiled, 'id') ?? Reflect.get(compiled, 'relationName') ?? '') === managerId
   })
@@ -366,7 +449,13 @@ function relationManager(
   const relation = Reflect.get(compiled, 'relation') ?? (modelRelations && typeof modelRelations === 'object' ? Reflect.get(modelRelations, relationName) : undefined)
   if (!relationName || !relation || typeof relation !== 'object') throw new Error('[Holo Panels] The relation manager references an unknown model relation.')
   const configured = Reflect.get(compiled, 'persistence') && Reflect.get(compiled, 'authorization')
-  return Object.freeze({ compiled, relation: relation as RelationDefinition, relationName, runtime: configured ? compiled as RuntimeRelationManager : null })
+  return Object.freeze({
+    compiled,
+    operations: relationManagerOperations(compiled, relation as RelationDefinition),
+    relation: relation as RelationDefinition,
+    relationName,
+    runtime: configured ? compiled as RuntimeRelationManager : null,
+  })
 }
 
 function relationOperation(value: JsonValue | undefined): RelationOperation {
@@ -455,7 +544,18 @@ async function invokeRecord<TResult>(record: object, method: string, parameters:
   return await Reflect.apply(operation, record, parameters) as TResult
 }
 
-function relationColumns(relation: object, records: readonly Readonly<Record<string, JsonValue>>[]): readonly JsonObject[] {
+function relationColumns(
+  manager: object,
+  relation: object,
+  records: readonly Readonly<Record<string, JsonValue>>[],
+): readonly JsonObject[] {
+  const configured = arrayMember(compiledObjectMember(manager, 'table'), 'columns').flatMap((column) => {
+    const path = Reflect.get(column, 'path')
+    if (typeof path !== 'string' || !path) return []
+    const configuredLabel = Reflect.get(column, 'label')
+    return [{ key: path, label: typeof configuredLabel === 'string' && configuredLabel ? configuredLabel : label(path) }]
+  })
+  if (configured.length > 0) return Object.freeze(configured)
   const definition = relatedDefinition(relation)
   const table = definition ? objectMember(definition, 'table') : undefined
   const columns = table ? objectMember(table, 'columns') : undefined
@@ -466,6 +566,19 @@ function relationColumns(relation: object, records: readonly Readonly<Record<str
     ? Object.keys(columns).filter(key => !hidden.has(key))
     : Object.keys(records[0] ?? {})
   return Object.freeze(keys.map(key => Object.freeze({ key, label: label(key) })))
+}
+
+function relationManagerOperations(manager: object, relation: RelationDefinition): readonly RelationOperation[] {
+  const allowed = new Set(allowedRelationOperations(relation))
+  const configured = Reflect.get(manager, 'operations')
+  if (Array.isArray(configured)) {
+    return Object.freeze(configured.filter((operation): operation is RelationOperation => typeof operation === 'string' && allowed.has(operation as RelationOperation)))
+  }
+  return Object.freeze(compositionArrayMember(manager, 'actions').flatMap((action) => {
+    if (Reflect.get(action, 'visible') === false || Reflect.get(action, 'disabled') === true) return []
+    const kind = Reflect.get(action, 'kind')
+    return typeof kind === 'string' && allowed.has(kind as RelationOperation) ? [kind as RelationOperation] : []
+  }))
 }
 
 function camelCase(value: string): string {
@@ -511,7 +624,7 @@ async function resourceRelations(
   context: GeneratedResourceOperationInput['context'],
   editable: boolean,
 ): Promise<readonly object[]> {
-  const managers = await Promise.all(arrayMember(definition, 'relations').map(async (manager) => {
+  const managers = await Promise.all(compositionArrayMember(definition, 'relations').map(async (manager) => {
     const compiled = 'compile' in manager && typeof manager.compile === 'function' ? manager.compile() : manager
     const relationName = String(Reflect.get(compiled, 'relationName') ?? Reflect.get(compiled, 'id') ?? '')
     const modelRelations = Reflect.get(definition.model.definition, 'relations')
@@ -533,12 +646,12 @@ async function resourceRelations(
       if (typeof id !== 'number' && typeof id !== 'string') throw new Error(`[Holo Panels] Related records require a string or numeric "${primaryKey}".`)
       return Object.freeze({ id, values: record })
     })
-    const operations = runtime?.operations ?? allowedRelationOperations(relation as RelationDefinition)
+    const operations = relationManagerOperations(compiled, relation as RelationDefinition)
     const writableFields = runtime?.writableInputFields ?? relationWritableFields(relation)
     const writablePivotFields = runtime?.writablePivotFields ?? automaticPivotFields(relation as RelationDefinition, context).writable
     return Object.freeze({
       badge,
-      columns: relationColumns(relation, records),
+      columns: relationColumns(compiled, relation, records),
       fields: relationFields(relation, writableFields),
       group: runtime?.group ?? null,
       id: String(Reflect.get(compiled, 'id') ?? relationName),
@@ -634,9 +747,10 @@ async function finalizedUploadValues(
     for (const descriptor of descriptors) {
       if (!descriptor || typeof descriptor !== 'object' || Array.isArray(descriptor)) throw new Error('[Holo Panels] Upload form values contain an invalid descriptor.')
       const id = Reflect.get(descriptor, 'id')
+      const sessionId = Reflect.get(descriptor, 'sessionId')
       const token = Reflect.get(descriptor, 'token')
-      if (typeof id !== 'string' || typeof token !== 'string') throw new Error('[Holo Panels] Upload form values contain an invalid descriptor.')
-      paths.push((await service.finalizeToStorage({ ...context, id, token })).path)
+      if (typeof id !== 'string' || typeof sessionId !== 'string' || typeof token !== 'string') throw new Error('[Holo Panels] Upload form values contain an invalid descriptor.')
+      paths.push((await service.finalizeToStorage({ ...context, id, sessionId, token })).path)
     }
     setValueAtPath(result, fieldId, Array.isArray(value) ? paths : paths[0] ?? null)
   }
@@ -679,19 +793,31 @@ function resourceRoutes(definition: RuntimeDefinition, basePath: string): JsonOb
   return Object.fromEntries(entries) as JsonObject
 }
 
+function resourceFieldProperties(field: object, fields: readonly object[]): Readonly<Record<string, unknown>> {
+  const properties = objectMember(field, 'properties') ?? {}
+  const path = Reflect.get(field, 'path')
+  const conventionalSlug = path === 'slug'
+    && typeof Reflect.get(properties, 'specialization') !== 'string'
+    && fields.some(candidate => Reflect.get(candidate, 'path') === 'title')
+  return conventionalSlug
+    ? { ...properties, source: 'title', specialization: 'slug' }
+    : properties as Readonly<Record<string, unknown>>
+}
+
 function resourceProperties(definition: RuntimeDefinition, pageType: PageType, basePath: string): JsonObject {
   const form = definition.form
   const table = definition.table
   const slug = resourceSlug(definition)
   const capabilities = definition.capabilities ?? { delete: true, forceDelete: false, restore: false }
-  const fields = arrayMember(form, 'fields').map((field) => {
+  const compiledFields = arrayMember(form, 'fields')
+  const fields = compiledFields.map((field) => {
     const path = String(Reflect.get(field, 'path'))
     const source = objectMember(objectMember(field, 'server'), 'options')
     const manifestOptions = source && 'manifestOptions' in source && typeof source.manifestOptions === 'function'
       ? Reflect.apply(source.manifestOptions, source, [])
       : undefined
     const properties = {
-      ...(objectMember(field, 'properties') ?? {}),
+      ...resourceFieldProperties(field, compiledFields),
       ...(Array.isArray(manifestOptions) ? { options: manifestOptions } : {}),
     }
     const specialization = Reflect.get(properties, 'specialization')
@@ -766,12 +892,26 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
   })
   const explicitPages = explicitResourcePages(definition)
   const configuredTableActions = arrayMember(table, 'actions')
+  const defaultTableAction = (id: string, kind: 'delete' | 'edit' | 'view', actionLabelValue: string, removesRecord: boolean): JsonObject => {
+    const presentation = builtInActionPresentation(kind)
+    return {
+      color: presentation?.color ?? null,
+      confirmation: presentation?.confirmation ?? null,
+      icon: presentation?.icon ?? null,
+      id,
+      kind,
+      label: actionLabelValue,
+      removesRecord,
+      scope: 'row',
+    }
+  }
+  const deletePresentation = builtInActionPresentation('delete')
   const properties = {
     resource: {
       actions: [
         ...recordActions,
         ...(explicitPages.length === 0 && canDelete
-          ? [{ badge: null, color: null, confirmation: `Delete this ${singular.toLowerCase()}?`, disabled: false, icon: null, id: 'delete-record', kind: 'delete', label: `Delete ${singular.toLowerCase()}`, modal: null, mount: 'record', size: 'medium', tooltip: null, type: 'delete', visible: true }]
+          ? [{ badge: null, color: deletePresentation?.color ?? null, confirmation: `Delete this ${singular.toLowerCase()}?`, disabled: false, icon: deletePresentation?.icon ?? null, id: 'delete-record', kind: 'delete', label: `Delete ${singular.toLowerCase()}`, modal: null, mount: 'record', size: 'medium', tooltip: null, type: 'delete', visible: true }]
           : []),
       ],
       capabilities,
@@ -796,14 +936,14 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
       slug,
       table: {
         actions: configuredTableActions.length > 0 || explicitPages.length > 0 ? configuredTableActions : [
-          { id: 'view-record', kind: 'view', label: 'View', removesRecord: false, scope: 'row' },
-          { id: 'edit-record', kind: 'edit', label: 'Edit', removesRecord: false, scope: 'row' },
-          ...(canDelete ? [{ id: 'delete-record', kind: 'delete', label: 'Delete', removesRecord: true, scope: 'row' }] : []),
+          defaultTableAction('view-record', 'view', 'View', false),
+          defaultTableAction('edit-record', 'edit', 'Edit', false),
+          ...(canDelete ? [defaultTableAction('delete-record', 'delete', 'Delete', true)] : []),
           ...tableActions,
         ],
         columns,
         filterMode: table && Reflect.get(table, 'filterMode') === 'deferred' ? 'deferred' : 'live',
-        filters: arrayMember(table, 'filters'),
+        filters: resourceFilters(table),
         groups: arrayMember(table, 'groups'),
         recordLink: definition.recordTitle ?? 'id',
         summaries: arrayMember(table, 'summaries'),
@@ -850,8 +990,7 @@ function pageManifest(
     path: `${listPath}${suffix}`,
     renderer: null,
     schemaId: null,
-    slots: {},
-    widgets: { footer: [], header: widgetIds },
+    widgets: { footer: [], header: pageType === 'list' ? widgetIds : [] },
   })
 }
 
@@ -1101,7 +1240,7 @@ async function executeRelationOptions(
   const owner = await executor.resolveActionRecord(ownerId, input.context)
   if (!owner) throw new Error('[Holo Panels] The relation owner was not found.')
   const request = relationOptionRequest(definition, managerId, input)
-  const context = { actor: input.context.actor, owner, signal: input.context.signal, tenant: input.context.tenant }
+  const context = { actor: input.context.actor, owner, signal: input.context.signal, strictAuthorization: input.strictAuthorization, tenant: input.context.tenant }
   if (manager.runtime) {
     const service = new RelationManagerExecutor(manager.runtime).optionService()
     return jsonObject(await service.list(request, context, input.context.signal))
@@ -1139,12 +1278,15 @@ async function executeRelationOptions(
 
 function normalizeValues(definition: RuntimeDefinition, values: Readonly<Record<string, JsonValue>>): Readonly<Record<string, JsonValue>> {
   const normalized = structuredClone(values) as Record<string, JsonValue>
-  for (const field of arrayMember(definition.form, 'fields')) {
+  const fields = arrayMember(definition.form, 'fields')
+  for (const field of fields) {
     const path = Reflect.get(field, 'path')
-    const properties = objectMember(field, 'properties')
+    const properties = resourceFieldProperties(field, fields)
     const value = typeof path === 'string' ? valueAtPath(normalized, path) : undefined
-    if (typeof path === 'string' && properties && Reflect.get(properties, 'specialization') === 'slug' && typeof value === 'string') {
-      setValueAtPath(normalized, path, defaultSlugTransform(value))
+    if (typeof path === 'string' && Reflect.get(properties, 'specialization') === 'slug' && typeof value === 'string') {
+      const source = Reflect.get(properties, 'source')
+      const sourceValue = typeof source === 'string' ? valueAtPath(normalized, source) : undefined
+      setValueAtPath(normalized, path, defaultSlugTransform(value || (typeof sourceValue === 'string' ? sourceValue : '')))
     }
   }
   return Object.freeze(normalized)
@@ -1201,6 +1343,39 @@ function configuredAction(
   return action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>
 }
 
+function executableResourceAction(
+  action: ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>,
+  definition: RuntimeDefinition,
+  executor: ResourceExecutor<RuntimeDefinition['model'], RuntimeRecord, RuntimeQuery, Readonly<Record<string, unknown>>, object, unknown, boolean>,
+  input: GeneratedResourceOperationInput,
+): ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined> {
+  if (!['create', 'delete', 'edit', 'force-delete', 'replicate', 'restore'].includes(action.kind)) return action
+  return Object.freeze({
+    ...action,
+    handle: async (values: JsonObject, context: Parameters<typeof action.handle>[1]) => {
+      if (action.kind === 'create') {
+        await executor.create(values, input.context)
+        return
+      }
+      if (!context.record) throw new Error('[Holo Panels] Built-in resource actions require a resolved record.')
+      const identifier = valueAtPath(context.record.toJSON(), definition.routeKey)
+      if (typeof identifier !== 'number' && typeof identifier !== 'string') throw new Error('[Holo Panels] Built-in resource actions require a stable record identifier.')
+      if (action.kind === 'delete') await executor.delete(identifier, input.context)
+      else if (action.kind === 'edit') await executor.update(identifier, values, input.context)
+      else if (action.kind === 'force-delete') await executor.forceDelete(identifier, input.context)
+      else if (action.kind === 'restore') await executor.restore(identifier, input.context)
+      else if (action.kind === 'replicate') {
+        const serialized = context.record.toJSON()
+        const replicated = Object.fromEntries(definition.writableAttributes.flatMap(attribute => {
+          const value = valueAtPath(serialized, attribute)
+          return typeof value === 'undefined' ? [] : [[attribute, value]]
+        }))
+        await executor.create(replicated, input.context)
+      }
+    },
+  })
+}
+
 function actionRecordIds(payload: JsonObject): readonly (number | string)[] {
   if (Array.isArray(payload.recordIds)) {
     return Object.freeze(payload.recordIds.filter((value): value is number | string => typeof value === 'number' || typeof value === 'string'))
@@ -1230,7 +1405,7 @@ async function executeCustomAction(
   input: GeneratedResourceOperationInput,
   actionId: string,
 ): Promise<GeneratedResourceOperationResult> {
-  const action = configuredAction(definition, actionId)
+  const action = executableResourceAction(configuredAction(definition, actionId), definition, executor, input)
   const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
     records: {
       resolve: (id, scope) => executor.resolveActionRecord(id, { ...input.context, ...scope }),
@@ -1269,7 +1444,7 @@ async function executeRelationOperation(
   const operation = relationOperation(input.payload.relationOperation)
   const ownerId = relationIdentifier(input.payload, 'ownerId')
   const manager = relationManager(definition, managerId)
-  if (!allowedRelationOperations(manager.relation).includes(operation)) throw new Error('[Holo Panels] The relation operation is not allowed for this relation kind.')
+  if (!manager.operations.includes(operation)) throw new Error('[Holo Panels] The relation operation is not registered for this relation manager.')
   await executor.authorizeUpdate(ownerId, input.context)
   const owner = await executor.resolveActionRecord(ownerId, input.context)
   if (!owner) throw new Error('[Holo Panels] The relation owner was not found.')
@@ -1344,8 +1519,11 @@ async function executeRelationOperation(
   } else {
     throw new Error('[Holo Panels] This relation operation is read-only.')
   }
+  const refreshedOwner = await executor.resolveActionRecord(ownerId, input.context)
+  if (!refreshedOwner) throw new Error('[Holo Panels] The relation owner was not found after the operation completed.')
+  const relations = await resourceRelations(definition, refreshedOwner, context, true)
   return Object.freeze({
-    data: jsonObject({ managerId, operation, ownerId, ...(record ? { record: relationRecord(record) } : {}), relatedId }),
+    data: jsonObject({ managerId, operation, ownerId, ...(record ? { record: relationRecord(record) } : {}), relatedId, relations }),
     effects: Object.freeze([{ kind: 'toast' as const, level: 'success' as const, message: `${label(operation)} completed.` }]),
   })
 }
@@ -1511,23 +1689,25 @@ export async function executeGeneratedUploadOperation(
   if (!fieldId) throw new Error('[Holo Panels] Upload operations require a field ID.')
   const { service } = uploadService(definition, fieldId, input)
   const context = uploadActorContext(definition, fieldId, input)
+  const sessionId = typeof input.payload.sessionId === 'string' ? input.payload.sessionId : ''
+  if (!sessionId) throw new Error('[Holo Panels] Upload operations require a session ID.')
   if (action === 'create') {
     const declaredMimeType = typeof input.payload.declaredMimeType === 'string' ? input.payload.declaredMimeType : ''
     const name = typeof input.payload.name === 'string' ? input.payload.name : ''
     const size = input.payload.size
     if (typeof size !== 'number') throw new Error('[Holo Panels] Upload creation requires a numeric size.')
-    return jsonObject(await service.create({ ...context, declaredMimeType, name, size }))
+    return jsonObject(await service.create({ ...context, declaredMimeType, name, sessionId, size }))
   }
   const id = typeof input.payload.id === 'string' ? input.payload.id : ''
   const token = typeof input.payload.token === 'string' ? input.payload.token : ''
   if (!id || !token) throw new Error('[Holo Panels] Upload operations require an upload ID and token.')
   if (action === 'write') {
     if (!input.contents) throw new Error('[Holo Panels] Upload writes require binary contents.')
-    return jsonObject(await service.write({ ...context, contents: input.contents, id, token }))
+    return jsonObject(await service.write({ ...context, contents: input.contents, id, sessionId, token }))
   }
-  if (action === 'resolve') return jsonObject(await service.resolve({ ...context, id, token }))
+  if (action === 'resolve') return jsonObject(await service.resolve({ ...context, id, sessionId, token }))
   if (action === 'delete') {
-    await service.delete({ ...context, id, token })
+    await service.delete({ ...context, id, sessionId, token })
     return { deleted: true }
   }
   throw new Error('[Holo Panels] Upload action is not supported.')

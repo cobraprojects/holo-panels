@@ -1,5 +1,6 @@
-import { ShadcnButton, ShadcnInput, ShadcnTextarea } from '../internal-ui'
-import { defineComponent, h, ref, type PropType, type VNode, type VNodeChild } from 'vue'
+import { Button, Checkbox, Input, InputGroup, InputGroupAddon, InputGroupInput, InputGroupText, RadioGroup, RadioGroupItem, Switch, Textarea } from '../internal-ui'
+import { FieldLegend, FieldSet } from '../ui/field'
+import { defineComponent, h, ref, type PropType, type VNode } from 'vue'
 import { fieldFrame, property, touchField, updateField } from './shared'
 import type { VueFieldControlProps } from './types'
 
@@ -47,17 +48,17 @@ export const VueBasicField = defineComponent({
         onBlur: () => touchField(props),
       }
       if (context.definition.type === 'hidden') {
-        return h(ShadcnInput, { name: context.definition.path, type: 'hidden', value: textValue(context.value), 'data-slot': 'input' })
+        return h(Input, { name: context.definition.path, type: 'hidden', modelValue: textValue(context.value), 'data-slot': 'input' })
       }
       if (context.definition.type === 'textarea') {
         const autosize = property(context, 'autosize', false)
-        return fieldFrame(context, h(ShadcnTextarea, {
+        return fieldFrame(context, h(Textarea, {
           ...common,
           'data-autosize': autosize || undefined,
           'data-slot': 'textarea',
           maxlength: property(context, 'maximumLength', undefined as number | undefined),
           rows: property(context, 'rows', 4),
-          value: textValue(context.value),
+          modelValue: textValue(context.value),
           onInput: (event: Event) => {
             const element = eventTarget<HTMLTextAreaElement>(event)
             if (autosize) resizeTextarea(element)
@@ -69,16 +70,20 @@ export const VueBasicField = defineComponent({
         const stateLabel = context.value === true
           ? stringProperty(props, 'onLabel')
           : stringProperty(props, 'offLabel')
-        return fieldFrame(context, h(ShadcnInput, {
-          checked: context.value === true,
-          'data-slot': context.definition.type === 'toggle' ? 'switch' : 'checkbox',
-          disabled: context.disabled || context.readOnly,
-          readonly: context.readOnly,
-          role: context.definition.type === 'toggle' ? 'switch' : undefined,
-          type: 'checkbox',
-          onBlur: common.onBlur,
-          onChange: (event: Event) => updateField(props, eventTarget<HTMLInputElement>(event).checked),
-        }), {
+        const control = context.definition.type === 'toggle'
+          ? h(Switch, {
+              disabled: context.disabled || context.readOnly,
+              modelValue: context.value === true,
+              onBlur: common.onBlur,
+              'onUpdate:modelValue': (checked: boolean) => updateField(props, checked),
+            })
+          : h(Checkbox, {
+              disabled: context.disabled || context.readOnly,
+              modelValue: context.value === true,
+              onBlur: common.onBlur,
+              'onUpdate:modelValue': (checked: boolean | 'indeterminate') => updateField(props, checked === true),
+            })
+        return fieldFrame(context, control, {
           after: stateLabel ? h('span', { class: 'hp-field-toggle-label' }, stateLabel) : undefined,
         })
       }
@@ -87,7 +92,7 @@ export const VueBasicField = defineComponent({
         const description = context.definition.helperText ?? context.definition.hint
         const descriptionId = description ? `${context.inputId}-description` : undefined
         const errorId = context.errors.length > 0 ? `${context.inputId}-errors` : undefined
-        return h('fieldset', {
+        return h(FieldSet, {
           class: 'hp-field',
           disabled: context.disabled || context.readOnly,
           'data-field-path': context.definition.path,
@@ -96,27 +101,29 @@ export const VueBasicField = defineComponent({
           'aria-invalid': context.errors.length > 0 ? 'true' : undefined,
           'aria-required': context.definition.required ? 'true' : undefined,
         }, [
-          context.definition.label ? h('legend', [context.definition.label, context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null]) : null,
+          context.definition.label ? h(FieldLegend, { variant: 'label' }, () => [context.definition.label, context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null]) : null,
           description ? h('div', { id: descriptionId }, description) : null,
-          ...options.map((option, index) => {
+          h(RadioGroup, {
+            disabled: context.disabled || context.readOnly,
+            modelValue: typeof context.value === 'boolean' || typeof context.value === 'number' || typeof context.value === 'string' ? String(context.value) : undefined,
+            'onUpdate:modelValue': (raw: unknown) => {
+              const match = options.find(option => typeof option === 'object' && option !== null && !Array.isArray(option) && String(Reflect.get(option, 'value')) === raw)
+              if (match) updateField(props, Reflect.get(match, 'value'))
+            },
+          }, () => options.map((option, index) => {
             if (typeof option !== 'object' || option === null || Array.isArray(option)) return null
             const value: unknown = Reflect.get(option, 'value')
             if (!['boolean', 'number', 'string'].includes(typeof value)) return null
             const id = `${context.inputId}-${index}`
             return h('label', { for: id, key: String(value) }, [
-              h(ShadcnInput, {
-                checked: context.value === value,
-                'data-slot': 'radio-group-item',
+              h(RadioGroupItem, {
                 disabled: context.disabled || context.readOnly || Reflect.get(option, 'disabled') === true,
                 id,
-                name: context.definition.path,
-                readonly: context.readOnly,
-                type: 'radio',
-                onChange: () => updateField(props, value),
+                value: String(value),
               }),
               typeof Reflect.get(option, 'label') === 'string' ? String(Reflect.get(option, 'label')) : String(value),
             ])
-          }),
+          })),
           context.errors.length > 0 ? h('ul', { id: errorId, role: 'alert' }, context.errors.map(error => h('li', { key: error }, error))) : null,
         ])
       }
@@ -135,17 +142,7 @@ export const VueBasicField = defineComponent({
       const datalistValue = context.definition.properties.datalist
       const datalist = Array.isArray(datalistValue) ? datalistValue.filter((value): value is string => typeof value === 'string') : []
       const datalistId = datalist.length > 0 ? `${context.inputId}-list` : undefined
-      const after: VNodeChild[] = [
-        suffix ? h('span', { class: 'hp-field-suffix' }, suffix) : null,
-        revealable ? h(ShadcnButton, {
-          'aria-controls': context.inputId,
-          'aria-label': passwordVisible.value ? 'Hide password' : 'Show password',
-          type: 'button',
-          onClick: () => { passwordVisible.value = !passwordVisible.value },
-        }, passwordVisible.value ? 'Hide' : 'Show') : null,
-        datalistId ? h('datalist', { id: datalistId }, datalist.map(option => h('option', { key: option, value: option }))) : null,
-      ]
-      return fieldFrame(context, h(ShadcnInput, {
+      const inputProps = {
         ...common,
         autocomplete: property(context, 'autocomplete', undefined as string | undefined),
         'data-mask': stringProperty(props, 'mask') ?? undefined,
@@ -157,14 +154,31 @@ export const VueBasicField = defineComponent({
         minlength: property(context, 'minimumLength', undefined as number | undefined),
         step: property(context, 'step', undefined as number | undefined),
         type: inputType,
-        value: context.definition.type === 'date' ? dateValue(context.value, dateMode) : textValue(context.value),
+        modelValue: context.definition.type === 'date' ? dateValue(context.value, dateMode) : textValue(context.value),
         onInput: (event: Event) => {
           const raw = eventTarget<HTMLInputElement>(event).value
           updateField(props, context.definition.type === 'slider' || typeof context.value === 'number' ? Number(raw) : raw)
         },
-      }), {
-        after,
-        before: prefix ? h('span', { class: 'hp-field-prefix' }, prefix) : undefined,
+      }
+      const input = prefix || suffix || revealable
+        ? h(InputGroup, {}, () => [
+            prefix ? h(InputGroupAddon, { align: 'inline-start' }, () => h(InputGroupText, { class: 'hp-field-prefix' }, () => prefix)) : null,
+            h(InputGroupInput, inputProps),
+            suffix || revealable ? h(InputGroupAddon, { align: 'inline-end' }, () => [
+              suffix ? h(InputGroupText, { class: 'hp-field-suffix' }, () => suffix) : null,
+              revealable ? h(Button, {
+                'aria-controls': context.inputId,
+                'aria-label': passwordVisible.value ? 'Hide password' : 'Show password',
+                size: 'sm',
+                type: 'button',
+                variant: 'ghost',
+                onClick: () => { passwordVisible.value = !passwordVisible.value },
+              }, () => passwordVisible.value ? 'Hide' : 'Show') : null,
+            ]) : null,
+          ])
+        : h(Input, inputProps)
+      return fieldFrame(context, input, {
+        after: datalistId ? h('datalist', { id: datalistId }, datalist.map(option => h('option', { key: option, value: option }))) : undefined,
       })
     }
   },

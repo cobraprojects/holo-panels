@@ -19,5 +19,11 @@ export default defineNuxtConfig({
         },
       },
     },
+    resolve: {
+      dedupe: ['vue'],
+    },
+    ssr: {
+      noExternal: ['@holo-js/panels-nuxt', '@holo-js/panels-vue', 'reka-ui'],
+    },
   },
 })

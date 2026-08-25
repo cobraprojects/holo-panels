@@ -1,7 +1,8 @@
-<!-- @holo-panels-managed sha256:5bffd5fd6849af1bcef90ce5b4179fe4f35f042ac05e324e6d5b719712f1e943 -->
+<!-- @holo-panels-managed sha256:bc653d246e3d1857b88ee0b3fa27e562e434427f218d6dcde531770459c9ab43 -->
 <script setup lang="ts">
-import '@holo-js/panels-vue/style.css'
+import '../../../.holo-js/generated/panels/theme.css'
 import { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } from '@holo-js/panels-nuxt'
+import { registerPanelApplicationRenderers } from '../../../.holo-js/generated/panels/application-renderers'
 import { registerPanelPluginRenderers } from '../../../.holo-js/generated/panels/plugin-renderers'
 
 definePageMeta({
@@ -15,7 +16,7 @@ definePageMeta({
 })
 
 const panelPage = await usePanelPage({ panelId: 'admin' })
-const registry = registerPanelPluginRenderers(createNuxtPanelComponentRegistry())
+const registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createNuxtPanelComponentRegistry()))
 </script>
 
 <template>

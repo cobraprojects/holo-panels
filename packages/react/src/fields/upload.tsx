@@ -1,5 +1,6 @@
 import type { ChangeEvent, ReactNode } from 'react'
-import { ShadcnButton, ShadcnInput } from '../internal-ui'
+import { Button, Input } from '../internal-ui'
+import { Progress } from '../ui'
 import { requireStore, useStoreState } from './shared'
 import type { ReactFieldControlProps } from './types'
 
@@ -15,7 +16,7 @@ export function ReactUploadField<TValues extends object>(props: ReactFieldContro
   return <div className="hp-field hp-upload" data-field-path={props.context.definition.path} data-field-type={props.context.definition.type}>
     <label htmlFor={props.context.inputId}>{props.context.definition.label ?? 'Upload files'}</label>
     {props.context.definition.helperText ? <div id={`${props.context.inputId}-description`}>{props.context.definition.helperText}</div> : null}
-    <ShadcnInput
+    <Input
       aria-describedby={props.context.definition.helperText ? `${props.context.inputId}-description` : undefined}
       disabled={disabled}
       id={props.context.inputId}
@@ -27,12 +28,12 @@ export function ReactUploadField<TValues extends object>(props: ReactFieldContro
       {state.items.map((item, index) => <li key={item.id}>
         {item.previewUrl ? <img alt={`Preview of ${item.name}`} src={item.previewUrl} /> : null}
         <span>{item.name}</span>
-        <progress aria-label={`Upload progress for ${item.name}`} max={1} value={item.progress} />
+        <Progress aria-label={`Upload progress for ${item.name}`} max={1} value={item.progress} />
         <span aria-live="polite">{item.status}</span>
         {item.error ? <span role="alert">{item.error}</span> : null}
-        <ShadcnButton aria-label={`Move ${item.name} up`} disabled={disabled || index === 0} onClick={() => store.reorder(index, index - 1)} type="button">↑</ShadcnButton>
-        <ShadcnButton aria-label={`Move ${item.name} down`} disabled={disabled || index === state.items.length - 1} onClick={() => store.reorder(index, index + 1)} type="button">↓</ShadcnButton>
-        <ShadcnButton aria-label={`Remove ${item.name}`} disabled={disabled} onClick={() => void store.remove(item.id)} type="button">Remove</ShadcnButton>
+        <Button aria-label={`Move ${item.name} up`} disabled={disabled || index === 0} onClick={() => store.reorder(index, index - 1)} type="button">↑</Button>
+        <Button aria-label={`Move ${item.name} down`} disabled={disabled || index === state.items.length - 1} onClick={() => store.reorder(index, index + 1)} type="button">↓</Button>
+        <Button aria-label={`Remove ${item.name}`} disabled={disabled} onClick={() => void store.remove(item.id)} type="button">Remove</Button>
       </li>)}
     </ul>
     {props.context.errors.length > 0 ? <ul role="alert">{props.context.errors.map(error => <li key={error}>{error}</li>)}</ul> : null}

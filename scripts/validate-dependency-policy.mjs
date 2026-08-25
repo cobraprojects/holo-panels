@@ -40,7 +40,7 @@ const expectedRuntime = new Map([
     peers: [],
   }],
   ['@holo-js/panels-cli', {
-    dependencies: ['@holo-js/panels-core', 'esbuild'],
+    dependencies: ['@holo-js/panels-core', '@holo-js/panels-ui', '@tailwindcss/cli', 'esbuild'],
     peers: ['@holo-js/kernel'],
   }],
   ['@holo-js/panels-client', {
@@ -103,7 +103,7 @@ const expectedRuntime = new Map([
     optional: ['@holo-js/panels-react', '@holo-js/panels-svelte', '@holo-js/panels-vue', 'react', 'svelte', 'vue'],
   }],
   ['@holo-js/panels-react', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'lucide-react', 'radix-ui'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', '@radix-ui/react-slot', 'class-variance-authority', 'clsx', 'cmdk', 'lucide-react', 'radix-ui', 'sonner', 'tailwind-merge'],
     peers: ['react', 'react-dom'],
   }],
   ['@holo-js/panels-resources', {
@@ -119,7 +119,7 @@ const expectedRuntime = new Map([
     peers: ['@holo-js/auth', '@holo-js/authorization', '@holo-js/db', '@holo-js/kernel'],
   }],
   ['@holo-js/panels-svelte', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'bits-ui', 'lucide-svelte'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', '@lucide/svelte', 'bits-ui', 'clsx', 'lucide-svelte', 'mode-watcher', 'svelte-sonner', 'tailwind-merge', 'tailwind-variants'],
     peers: ['svelte'],
   }],
   ['@holo-js/panels-sveltekit', {
@@ -127,7 +127,7 @@ const expectedRuntime = new Map([
     peers: ['@holo-js/adapter-sveltekit', '@holo-js/security', '@sveltejs/kit', 'svelte'],
   }],
   ['@holo-js/panels-testing', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core'],
     peers: [
       '@holo-js/panels-react',
       '@holo-js/panels-svelte',
@@ -152,11 +152,11 @@ const expectedRuntime = new Map([
     peers: [],
   }],
   ['@holo-js/panels-ui', {
-    dependencies: [],
+    dependencies: ['tailwindcss', 'tw-animate-css'],
     peers: [],
   }],
   ['@holo-js/panels-vue', {
-    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', 'lucide-vue-next', 'reka-ui'],
+    dependencies: ['@holo-js/panels-client', '@holo-js/panels-core', '@holo-js/panels-ui', '@radix-icons/vue', '@vueuse/core', 'class-variance-authority', 'clsx', 'lucide-vue-next', 'reka-ui', 'tailwind-merge', 'vue-sonner'],
     peers: ['vue'],
   }],
 ])

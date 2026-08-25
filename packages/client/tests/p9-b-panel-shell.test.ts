@@ -17,6 +17,7 @@ const bootstrap: PanelShellBootstrap = {
     navigationMode: 'sidebar',
     path: '/admin',
     sidebarCollapsible: true,
+    slots: {},
     tenancy: null,
     theme: { colors: { primary: '#2563eb' }, darkMode: 'system', density: 'comfortable', fontFamily: 'Inter', width: 'constrained' },
     userMenu: [{ icon: 'user', id: 'profile', label: 'Profile', path: '/admin/profile' }],

@@ -163,6 +163,26 @@ describe('P4-A form state engine', () => {
     expect(store.get('account.name')).toBe('Ada')
   })
 
+  it('preserves a dependency target after the user edits it directly', () => {
+    const store = new FormStore({ slug: '', title: '' }, {
+      dependencies: [{
+        id: 'title-to-slug',
+        paths: ['title'],
+        recompute: context => context.touchedPaths.has('slug')
+          ? []
+          : [{ kind: 'set', path: 'slug', value: String(context.get('title')).toLowerCase().replaceAll(' ', '-') }],
+      }],
+    })
+
+    store.set('title', 'First Title', { touch: true })
+    expect(store.get('slug')).toBe('first-title')
+
+    store.set('slug', 'editorial-slug', { touch: true })
+    store.set('title', 'Second Title', { touch: true })
+
+    expect(store.get('slug')).toBe('editorial-slug')
+  })
+
   it('applies server validation errors atomically and exposes first-error focus metadata', async () => {
     const components = schemaComponentsFor(FormValueSource)
     const schema = defineSchema('form', FormValueSource).components([

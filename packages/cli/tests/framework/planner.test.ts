@@ -16,6 +16,8 @@ function adapterPlugin(): Plugin {
   return {
     name: 'panel-adapter-fixtures',
     setup(context) {
+      context.onResolve({ filter: /theme\.css$/ }, args => ({ namespace: 'panel-theme', path: args.path }))
+      context.onLoad({ filter: /.*/, namespace: 'panel-theme' }, () => ({ contents: '' }))
       context.onResolve({ filter: /^@holo-js\/panels-/ }, args => ({ namespace: 'panels-adapter', path: args.path }))
       context.onLoad({ filter: /.*/, namespace: 'panels-adapter' }, (args) => {
         if (args.path === '@holo-js/panels-next/client') {
@@ -106,6 +108,8 @@ describe('managed framework artifact planner', () => {
       await writeFixture(root, 'src/lib/server/panels/registry.ts', `export const panelsRegistry = { source: 'registry' } as const\n`)
       await writeFixture(root, '.holo-js/generated/panels/server-registry.ts', `export default { source: 'generated-registry' } as const\n`)
       await writeFixture(root, '.holo-js/generated/panels/plugin-renderers.ts', `export function registerPanelPluginRenderers<TRegistry>(registry: TRegistry): TRegistry { return registry }\n`)
+      await writeFixture(root, '.holo-js/generated/panels/application-renderers.ts', `export function registerPanelApplicationRenderers<TRegistry>(registry: TRegistry): TRegistry { return registry }\n`)
+      await writeFixture(root, '.holo-js/generated/panels/theme.css', `@layer hp-panels {}\n`)
       const declarations = await writeFixture(root, 'adapters.d.ts', `
 declare module '@holo-js/panels-next' {
   type Runtime = { readonly registry: { readonly source: 'generated-registry' }, readonly source: 'generated-runtime' }
@@ -255,14 +259,15 @@ declare module '@holo-js/panels-sveltekit' {
     const login = plan.writes.find(write => write.kind === 'auth-page' && write.contents.includes('PanelLoginPage'))
     expect(login?.contents).toContain('PanelLoginPage')
     expect(login?.contents).not.toContain('fetch(')
-    expect(login?.contents).toContain('Control Center')
-    expect(login?.contents).toContain('/admin/forgot-password')
-    expect(login?.contents).toContain('/admin/register')
-    expect(login?.contents).toContain('#7c3aed')
-    expect(login?.contents).toContain('screen-sm')
+    expect(login?.contents).toContain('panelId="admin"')
+    expect(login?.contents).not.toContain('Control Center')
+    expect(login?.contents).not.toContain('/admin/forgot-password')
+    expect(login?.contents).not.toContain('/admin/register')
+    expect(login?.contents).not.toContain('#7c3aed')
+    expect(login?.contents).not.toContain('screen-sm')
   })
 
-  it('imports the Vue stylesheet in every generated Nuxt panel and authentication page', () => {
+  it('imports the generated isolated theme in every Nuxt panel and authentication page', () => {
     const plan = planFrameworkArtifacts({
       framework: 'nuxt',
       panels: [{ id: 'admin', loginPath: '/admin/login', mfaChallengePath: '/admin/mfa', path: '/admin', profilePath: '/admin/profile' }],
@@ -270,10 +275,11 @@ declare module '@holo-js/panels-sveltekit' {
     const pages = plan.writes.filter(write => write.path.endsWith('.vue'))
 
     expect(pages).toHaveLength(4)
-    expect(pages.every(page => page.contents.includes("import '@holo-js/panels-vue/style.css'"))).toBe(true)
+    expect(pages.every(page => page.contents.includes('.holo-js/generated/panels/theme.css'))).toBe(true)
+    expect(pages.every(page => !page.contents.includes('@holo-js/panels-vue/style.css'))).toBe(true)
   })
 
-  it.each(['next', 'nuxt', 'sveltekit'] as const)('emits complete appearance props for generated %s authentication routes', (framework) => {
+  it.each(['next', 'nuxt', 'sveltekit'] as const)('keeps generated %s authentication routes free of duplicated panel presentation', (framework) => {
     const plan = planFrameworkArtifacts({
       framework,
       panels: [{
@@ -295,14 +301,14 @@ declare module '@holo-js/panels-sveltekit' {
 
     expect(authPages).toHaveLength(2)
     for (const page of authPages) {
-      expect(page.contents).toContain('appearance')
-      expect(page.contents).toContain('#123456')
-      expect(page.contents).toContain('compact')
-      expect(page.contents).toContain('Panel Sans')
-      expect(page.contents).toContain('Panel Mono')
-      expect(page.contents).toContain('Panel Serif')
-      expect(page.contents).toContain('radius-lg')
-      if (framework === 'nuxt') expect(page.contents).toContain(' as const')
+      expect(page.contents).toContain(framework === 'nuxt' ? 'panel-id' : 'panelId')
+      expect(page.contents).not.toContain('appearance')
+      expect(page.contents).not.toContain('#123456')
+      expect(page.contents).not.toContain('compact')
+      expect(page.contents).not.toContain('Panel Sans')
+      expect(page.contents).not.toContain('Panel Mono')
+      expect(page.contents).not.toContain('Panel Serif')
+      expect(page.contents).not.toContain('radius-lg')
     }
   })
 

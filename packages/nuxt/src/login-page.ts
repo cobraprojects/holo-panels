@@ -1,7 +1,8 @@
 import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-vue'
-import { defineComponent, h, ref, type PropType } from 'vue'
-import { nuxtPanelAuthAppearanceVariables, type NuxtPanelAuthAppearance } from './auth-appearance'
-import { ShadcnButton, ShadcnIcon, ShadcnInput } from './internal-ui'
+import { defineComponent, h, onMounted, ref } from 'vue'
+import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
+import { useNuxtPanelAuthPresentation } from './auth-presentation'
+import { Alert, AlertDescription, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Field, FieldGroup, FieldLabel, Input } from './internal-ui'
 
 function cookie(name: string): string {
   const entry = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(`${name}=`))
@@ -11,20 +12,18 @@ function cookie(name: string): string {
 export const PanelLoginPage = defineComponent({
   name: 'PanelLoginPage',
   props: {
-    appearance: { default: undefined, type: Object as PropType<NuxtPanelAuthAppearance> },
-    brandName: { required: true, type: String },
-    forgotPasswordPath: { default: undefined, type: String },
     panelId: { required: true, type: String },
-    registrationPath: { default: undefined, type: String },
-    simplePageMaxContentWidth: { default: undefined, type: String },
-    theme: { default: 'system', type: String },
-    themeColors: { default: undefined, type: Object },
   },
   setup(props) {
     const email = ref('')
     const password = ref('')
     const error = ref('')
     const pending = ref(false)
+    const ready = ref(false)
+    const presentation = useNuxtPanelAuthPresentation(props.panelId)
+    onMounted(() => {
+      ready.value = true
+    })
     const login = async (): Promise<void> => {
       error.value = ''
       pending.value = true
@@ -43,19 +42,25 @@ export const PanelLoginPage = defineComponent({
         pending.value = false
       }
     }
-    return () => h('main', { class: 'hp-auth-page', 'data-density': props.appearance?.density, 'data-holo-panel': '', 'data-theme': props.theme, style: { ...nuxtPanelAuthAppearanceVariables(props.appearance, props.themeColors as Readonly<Record<string, string>> | undefined), ...(props.simplePageMaxContentWidth ? { '--hp-auth-max-width': panelContentWidthValue(props.simplePageMaxContentWidth) } : {}) } }, [
-      h('section', { class: 'hp-auth-card', 'data-slot': 'card' }, [
-        h('div', { 'data-slot': 'card-header' }, [h('span', { class: 'hp-auth-brand-mark' }, [ShadcnIcon('key')]), h('div', [h('p', 'Administration'), h('h1', props.brandName), h('span', 'Sign in to your account')])]),
-        h('div', { 'data-slot': 'card-content' }, [
+    return () => {
+      if (!presentation.value) return h('main', { class: 'hp-auth-page', 'data-holo-panel': '' }, [h(Card, { class: 'hp-auth-card hp:h-80 hp:animate-pulse' })])
+      const { appearance, brandName, forgotPasswordPath, registrationPath, simplePageMaxContentWidth, theme } = presentation.value
+      return h('main', { class: 'hp-auth-page', 'data-density': appearance.density, 'data-holo-panel': '', 'data-theme': theme, style: { ...nuxtPanelAuthAppearanceVariables(appearance), '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } }, [
+      h(Card, { class: 'hp-auth-card' }, () => [
+        h(CardHeader, {}, () => [h(CardDescription, {}, () => 'Administration'), h(CardTitle, {}, () => brandName), h(CardDescription, {}, () => 'Sign in to your account')]),
+        h(CardContent, {}, () => [
           h('form', { onSubmit: (event: Event) => { event.preventDefault(); void login() } }, [
-            h('div', { class: 'hp-auth-field' }, [h('label', { 'data-slot': 'label', for: `${props.panelId}-email` }, 'Email'), h(ShadcnInput, { autocomplete: 'email', id: `${props.panelId}-email`, name: 'email', onInput: (event: Event) => { email.value = (event.currentTarget as HTMLInputElement).value }, required: true, type: 'email', value: email.value })]),
-            h('div', { class: 'hp-auth-field' }, [h('div', { class: 'hp-auth-field-heading' }, [h('label', { 'data-slot': 'label', for: `${props.panelId}-password` }, 'Password'), props.forgotPasswordPath ? h('a', { href: props.forgotPasswordPath }, 'Forgot password?') : null]), h(ShadcnInput, { autocomplete: 'current-password', id: `${props.panelId}-password`, name: 'password', onInput: (event: Event) => { password.value = (event.currentTarget as HTMLInputElement).value }, required: true, type: 'password', value: password.value })]),
-            error.value ? h('p', { class: 'hp-auth-error', role: 'alert' }, error.value) : null,
-            h(ShadcnButton, { class: 'hp-button hp-button-primary', disabled: pending.value, type: 'submit' }, () => pending.value ? 'Signing in…' : 'Sign in'),
+            h(FieldGroup, {}, () => [
+              h(Field, {}, () => [h(FieldLabel, { for: `${props.panelId}-email` }, () => 'Email'), h(Input, { autocomplete: 'email', disabled: !ready.value, id: `${props.panelId}-email`, modelValue: email.value, name: 'email', 'onUpdate:modelValue': (value: string | number) => { email.value = String(value) }, required: true, type: 'email' })]),
+              h(Field, {}, () => [h('div', { class: 'hp:flex hp:items-center hp:justify-between' }, [h(FieldLabel, { for: `${props.panelId}-password` }, () => 'Password'), forgotPasswordPath ? h(Button, { as: 'a', href: forgotPasswordPath, variant: 'link' }, () => 'Forgot password?') : null]), h(Input, { autocomplete: 'current-password', disabled: !ready.value, id: `${props.panelId}-password`, modelValue: password.value, name: 'password', 'onUpdate:modelValue': (value: string | number) => { password.value = String(value) }, required: true, type: 'password' })]),
+              error.value ? h(Alert, { variant: 'destructive' }, () => h(AlertDescription, {}, () => error.value)) : null,
+              h(Button, { disabled: pending.value || !ready.value, type: 'submit' }, () => pending.value ? 'Signing in…' : 'Sign in'),
+            ]),
           ]),
-          props.registrationPath ? h('p', { class: 'hp-auth-footer' }, ['Need an account? ', h('a', { href: props.registrationPath }, 'Register')]) : null,
         ]),
+        registrationPath ? h(CardFooter, {}, () => [h(CardDescription, {}, () => 'Need an account?'), h(Button, { as: 'a', href: registrationPath, variant: 'link' }, () => 'Register')]) : null,
       ]),
     ])
+    }
   },
 })

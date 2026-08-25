@@ -1672,12 +1672,12 @@ Tasks:
 - [x] Audit shadcn family licenses and record attribution obligations.
 - [x] Define semantic design tokens and default light/dark themes.
 - [x] Implement framework-neutral icon names and icon registration contracts.
-- [x] Implement semantic CSS for panel shell, typography, focus, forms, tables, modals, popovers, navigation, notifications, and loading states.
+- [x] Compile the shared shadcn token theme and framework component utilities for the panel shell, forms, tables, overlays, navigation, notifications, and loading states.
 - [x] Define accessibility behavior for focus traps, keyboard navigation, labels/descriptions, error association, live regions, dialogs, comboboxes, tabs, menus, and data tables.
 - [x] Ensure consuming applications do not need Tailwind configuration.
-- [x] Define component conformance fixtures and screenshot/reference states.
+- [x] Define canonical shadcn component states and screenshot/reference states.
 
-Evidence: the UI package passed strict typecheck, ESLint fix, 8 focused tests, declarations/CSS build, runtime import, and packed-artifact checks. It ships complete light/dark semantic themes and isolated Tailwind-independent CSS. The source-owned React, Vue, and Svelte component boundaries compose Radix UI, Reka UI, and Bits UI primitives with Lucide icons, and package notices record the applicable MIT attribution. The cross-framework browser gate rejects any panel button, input, select, textarea, or table that is not classified by a shadcn-family component slot.
+Evidence: the UI package passed strict typecheck, ESLint fix, focused tests, declarations/CSS build, runtime import, and packed-artifact checks. Holo Panels owns an isolated Tailwind v4 build with an `hp` prefix, no preflight, and no application source scanning; consuming applications need no Tailwind or shadcn setup. `holo panels:theme:build` and the development watcher compile optional application panel styles into the generated Panels theme artifact. The source-owned React, Vue, and Svelte component boundaries compose Radix UI, Reka UI, and Bits UI primitives with Lucide icons. Stable `hp-*` classes remain available for user overrides.
 
 ### P5-B: React renderer foundation
 
@@ -1685,13 +1685,13 @@ Owned paths: `packages/react`.
 
 - [x] Implement the React component registry.
 - [x] Bind shared client stores to idiomatic React reactivity without changing semantics.
-- [x] Implement the React shell primitives: button, link, badge, avatar, icon button, input wrapper, loading indicator, dropdown, modal, slide-over, tabs, section, empty state, pagination, toast viewport, and error boundary.
+- [x] Check in and compose the canonical shadcn/ui React components used by the panel, including buttons, badges, avatars, inputs, dropdowns, dialogs, sheets, tabs, cards, tables, pagination, Sonner toasts, and error containment.
 - [x] Implement named React component registration and panel-scoped overrides.
 - [x] Import shared Holo Panels CSS through the documented React adapter entry.
 - [x] Run the shared renderer contract tests against React.
 - [x] Add React accessibility and hydration tests.
 
-Evidence: strict React typecheck, ESLint fix, declarations/CSS build, and 8 tests covering registry scope/diagnostics, `useSyncExternalStore` bindings, all shell primitives, accessibility, keyboard behavior, error containment, SSR, and genuine `hydrateRoot` hydration passed on 2026-07-27.
+Evidence: strict React typecheck, ESLint fix, declarations/CSS build, and renderer tests cover registry scope/diagnostics, `useSyncExternalStore` bindings, canonical shadcn component slots, accessibility, keyboard behavior, error containment, SSR, and genuine `hydrateRoot` hydration.
 
 ### P5-C: Vue renderer foundation
 
@@ -1699,13 +1699,13 @@ Owned paths: `packages/vue`.
 
 - [x] Implement the Vue component registry.
 - [x] Bind shared client stores to idiomatic Vue reactivity without changing semantics.
-- [x] Implement the Vue shell primitives: button, link, badge, avatar, icon button, input wrapper, loading indicator, dropdown, modal, slide-over, tabs, section, empty state, pagination, toast viewport, and error boundary.
+- [x] Check in and compose the canonical shadcn-vue components used by the panel, including buttons, badges, avatars, inputs, dropdowns, dialogs, sheets, tabs, cards, tables, pagination, Vue Sonner toasts, and error containment.
 - [x] Implement named Vue component registration and panel-scoped overrides.
 - [x] Import shared Holo Panels CSS through the documented Vue adapter entry.
 - [x] Run the shared renderer contract tests against Vue.
 - [x] Add Vue accessibility and hydration tests.
 
-Evidence: strict Vue typecheck, ESLint fix, declarations/CSS build, and 6 tests covering registry scope/diagnostics, effect-scoped shared-store reactivity, all shell primitives, accessibility, keyboard behavior, error containment, SSR, and genuine hydration passed on 2026-07-27.
+Evidence: strict Vue typecheck, ESLint fix, declarations/CSS build, and renderer tests cover registry scope/diagnostics, effect-scoped shared-store reactivity, canonical shadcn-vue component slots, accessibility, keyboard behavior, error containment, SSR, and genuine hydration.
 
 ### P5-D: Svelte renderer foundation
 
@@ -1713,13 +1713,13 @@ Owned paths: `packages/svelte`.
 
 - [x] Implement the Svelte component registry.
 - [x] Bind shared client stores to idiomatic Svelte reactivity without changing semantics.
-- [x] Implement the Svelte shell primitives: button, link, badge, avatar, icon button, input wrapper, loading indicator, dropdown, modal, slide-over, tabs, section, empty state, pagination, toast viewport, and error boundary.
+- [x] Check in and compose the canonical shadcn-svelte components used by the panel, including buttons, badges, avatars, inputs, dropdowns, dialogs, sheets, tabs, cards, tables, pagination, Svelte Sonner toasts, and error containment.
 - [x] Implement named Svelte component registration and panel-scoped overrides.
 - [x] Import shared Holo Panels CSS through the documented Svelte adapter entry.
 - [x] Run the shared renderer contract tests against Svelte.
 - [x] Add Svelte accessibility and hydration tests.
 
-Evidence: Svelte check reported 0 errors and 0 warnings; ESLint fix, declarations/CSS build, and 8 tests covering registry scope/source diagnostics, readable store semantics, all 16 real Svelte components, accessibility, keyboard behavior, distinct slide-over rendering, independently compiled SSR, and genuine client hydration passed on 2026-07-27.
+Evidence: Svelte check reports 0 errors and 0 warnings; ESLint, declarations/CSS builds, and renderer tests cover registry scope/source diagnostics, readable store semantics, canonical shadcn-svelte component slots, accessibility, keyboard behavior, Sheet rendering, independently compiled SSR, and genuine client hydration.
 
 Acceptance criteria:
 
@@ -1730,7 +1730,7 @@ Acceptance criteria:
 
 - [x] **P5 phase gate:** compare shell fixtures across all frameworks, run accessibility checks, and verify no renderer imports server packages.
 
-Evidence: the shared renderer foundation suite verified equal primitive coverage and accessibility-pattern obligations across React, Vue, and Svelte. Framework tests observed keyboard-only navigation, source-located missing-registration failures, mismatch-free SSR hydration, isolated shadcn-family component slots, generated login composition, and full admin behavior. Full workspace validation, architecture and dependency checks, every package build, packed lifecycle/package smoke tests, and 42 serialized admin journeys across the three production example builds passed on 2026-08-11.
+Evidence: framework tests verify canonical shadcn `data-slot` output, keyboard interaction, focus restoration, source-located missing-registration failures, mismatch-free SSR hydration, isolated `hp:` Tailwind styling, generated authentication composition, and full admin behavior across React, Vue, and Svelte. The shared acceptance journeys cover tables, actions, notifications, relation managers, navigation, and widgets in all three production examples.
 
 ## 38. Phase P6: forms
 
@@ -2246,7 +2246,7 @@ Tasks:
 - [x] Complete every form field, infolist entry, table column, filter, layout, summary, and action listed in sections 9 through 12. Revalidated on 2026-08-09: behavior-oriented Core and React/Vue/Svelte renderer suites cover the complete built-in families, generated apps exercise real CRUD, table, relation, action, search, widget, tenant, and MFA workflows, and the exact 161-topic Filament 5 parity validator reports no deferred rows.
 - [x] Implement singular and nested resource edge cases. Evidence: singular resources resolve only after base/tenant/authorization scopes and reject list/create pages; nested resources infer the parent record from a supplied parent resource builder, resolve and authorize the trusted parent before applying the mandatory child scope, scope child lookup/mutation, verify parents before create, return 404 for missing/unauthorized combinations, and remain mutually exclusive with singular resources. Strict Core typecheck, ESLint, declaration build, and 3/3 focused nested executor tests passed on 2026-07-29.
 - [x] Implement configured resource/page variants registered multiple times. Evidence: immutable configured resources and pages preserve the original definition while deriving independent IDs, slugs/routes, component identities, and discovery contributions; one plugin can register base and configured variants into multiple panels without shared installation mutation. Focused plugin-authoring JSON Vitest passed 7/7 and Core declaration build passed on 2026-07-29.
-- [x] Implement render slots scoped to panel/resource/page/component. Evidence: panel, resource, page, and schema-component builders accept named JSON-safe ordered references, append repeated registrations, reject exact duplicates, sort deterministically by order/source/component, and serialize source-scoped manifests without callbacks or paths. React, Vue, and Svelte resolve the same ordered schema slot lists with trusted renderer properties; Core schema/plugin tests passed 15/15 and renderer suites passed 3/3, 4/4, and 4/4 with strict renderer typechecks on 2026-07-29.
+- [x] Implement Filament 5 render hooks registered on panels, with optional resource/page scopes, plus component render slots. Evidence: the public constants match the nondeprecated Filament 5 panel, table, action, and widget hook identifiers. Panel hooks accept named JSON-safe renderer references, order them deterministically, and serialize no callbacks or local paths. Prepare/build/dev discover framework renderer registries and generate the application registry in `.holo-js`; React, Vue, and Svelte mount the hooks at the matching shell, page, table, action-modal, widget, and relation-manager boundaries. The former page/resource `.slot()` APIs and their contracts were removed.
 - [x] Implement plugin asset and icon registration with safe package-relative resolution. Evidence: preparation resolves only public package exports, rejects traversal, symlink escape, special/unbounded/unsupported assets, fingerprints bounded package-owned assets, namespaces icons, and emits client-safe managed artifacts without callbacks or local paths. Focused preparation/plugin suites passed 8/8 and the packed money plugin generated its fingerprinted stylesheet and icon in clean Next, Nuxt, and SvelteKit fixtures on 2026-07-29.
 - [x] Implement global per-type defaults with panel/app/plugin precedence and local override. Evidence: discovery loads `panels.config.{ts,mts,js,mjs}`, captures application, ordered plugin-registration, and panel defaults while evaluating definitions, and applies matching defaults exactly once before local fluent mutations or compilation across actions, fields, columns, entries, filters, summaries, schema components, and widgets. Concrete subtypes and contextual callback types remain inferred without user generics, overlapping scopes fail closed, and focused Core/CLI suites passed 24/24 with strict typechecks, ESLint, builds, and architecture validation on 2026-07-29.
 - [x] Implement UI publishing and safe diff-based synchronization. Evidence: `holo panels:publish-ui [--confirm]` publishes fixed framework snapshots, validates exact package/application manifests and checksums, previews deterministic unified diffs, applies clean-only atomic add/change/delete synchronization with rollback, refuses traversal/symlink/special-file/UTF-8/NUL/size/conflict violations, and preserves published UI on uninstall. Strict CLI typecheck, ESLint, 68 focused tests including 13/13 publish tests, source/prepack validation, CLI build/declarations, built-command smoke, tarball asset verification, and the regenerated shared API reference passed on 2026-07-29.

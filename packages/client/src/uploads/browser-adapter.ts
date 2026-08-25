@@ -32,6 +32,7 @@ function descriptor(value: unknown, tokenRequired: boolean): TemporaryUploadDesc
 
 export function createBrowserUploadAdapter(options: BrowserUploadAdapterOptions): UploadClientAdapter {
   const csrf = options.csrfProvider ?? new HoloSecurityCsrfProvider()
+  const sessionId = globalThis.crypto.randomUUID()
   const send = async (payload: JsonObject, signal: AbortSignal, contents?: Uint8Array): Promise<unknown> => {
     const id = globalThis.crypto.randomUUID()
     const security = csrf.getField()
@@ -42,6 +43,7 @@ export function createBrowserUploadAdapter(options: BrowserUploadAdapterOptions)
       intent: options.intent,
       recordId: options.recordId ?? null,
       resourceId: options.resourceId,
+      sessionId,
     } })
     const body = new FormData()
     body.set(TRANSPORT_REQUEST_FIELD, JSON.stringify(envelope))

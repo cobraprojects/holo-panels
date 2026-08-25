@@ -1,7 +1,8 @@
 import { Fragment, useState, type AriaAttributes, type CSSProperties, type Key, type ReactNode } from 'react'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import { ChevronDown } from 'lucide-react'
-import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnTable } from '../internal-ui'
+import { Button, PanelsIcon } from '../internal-ui'
+import { Badge, Checkbox, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../ui'
 import type { ComponentRegistry } from '../registry'
 import type { ReactCustomColumnProps, ReactTableColumn, ReactTableColumnPath, ReactTableColumnValue } from './types'
 
@@ -57,7 +58,6 @@ function classNames(...values: readonly (string | undefined)[]): string {
   return values.filter(Boolean).join(' ')
 }
 
-/** Pure semantic table markup shared by resource and relation renderers. */
 export function TablePresentation<TRecord extends object>({
   caption,
   columns,
@@ -71,49 +71,47 @@ export function TablePresentation<TRecord extends object>({
   trailing,
 }: TablePresentationProps<TRecord>): ReactNode {
   const columnCount = columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0)
-  const row = (record: TRecord): ReactNode => <tr key={getRowKey(record)}>
-    {leading ? <td className={leading.cellClassName} data-label={leading.label}>{leading.render(record)}</td> : null}
-    {columns.map(column => <td
-      data-label={column.label}
-      key={column.key}
-      style={{
-        textAlign: column.alignment,
-        whiteSpace: column.wrap === false ? 'nowrap' : undefined,
-        width: column.width ?? undefined,
-      }}
-    >{column.render(record)}</td>)}
-    {trailing ? <td className={classNames('hp-table-row-actions', trailing.cellClassName)} data-label={trailing.label}>{trailing.render(record)}</td> : null}
-  </tr>
+  const row = (record: TRecord): ReactNode => {
+    return <TableRow key={getRowKey(record)}>
+      {leading ? <TableCell className={leading.cellClassName} data-label={leading.label}>{leading.render(record)}</TableCell> : null}
+      {columns.map(column => <TableCell
+        data-label={column.label}
+        key={column.key}
+        style={{ textAlign: column.alignment, whiteSpace: column.wrap === false ? 'nowrap' : undefined, width: column.width ?? undefined }}
+      >{column.render(record)}</TableCell>)}
+      {trailing ? <TableCell className={classNames('hp-table-row-actions hp:whitespace-nowrap', trailing.cellClassName)} data-label={trailing.label}>{trailing.render(record)}</TableCell> : null}
+    </TableRow>
+  }
   const body = groups && groups.length > 0
     ? groups.map(group => <Fragment key={group.key}>
-        <tr className="hp-table-group"><th colSpan={columnCount} scope="rowgroup">
+        <TableRow className="hp-table-group"><TableHead colSpan={columnCount}>
           {group.collapsible
-            ? <ShadcnButton aria-expanded={!group.collapsed} onClick={group.onToggle} type="button"><ChevronDown aria-hidden="true" /><span>{group.title}</span><span className="hp-table-group-count">{group.records.length}</span></ShadcnButton>
+            ? <Button aria-expanded={!group.collapsed} onClick={group.onToggle} type="button"><ChevronDown aria-hidden="true" /><span>{group.title}</span><span className="hp-table-group-count">{group.records.length}</span></Button>
             : group.title}
           {group.description ? <small>{group.description}</small> : null}
-        </th></tr>
+        </TableHead></TableRow>
         {!group.collapsed ? group.records.map(row) : null}
-        {group.summaries?.map(summary => <tr className="hp-table-group-summary" key={`${group.key}-${summary.id}`}><th colSpan={columnCount} scope="row">{group.title} subtotal · {summary.label}: {summary.value}</th></tr>)}
+        {group.summaries?.map(summary => <TableRow className="hp-table-group-summary" key={`${group.key}-${summary.id}`}><TableHead colSpan={columnCount}>{group.title} subtotal · {summary.label}: {summary.value}</TableHead></TableRow>)}
       </Fragment>)
     : records.map(row)
   return <div
     aria-label={regionLabel}
-    className={classNames('hp-table-responsive', containerClassName)}
+    className={classNames('hp-table-responsive hp:w-full hp:overflow-x-auto hp:rounded-md hp:border', containerClassName)}
     data-panels-component="data-table"
     data-slot="table-container"
     role="region"
     tabIndex={0}
   >
-    <ShadcnTable>
-      <caption className="hp-visually-hidden">{caption}</caption>
-      <thead><tr>
-        {leading ? <th scope="col">{leading.header}</th> : null}
-        {columns.map(column => <th aria-sort={column.ariaSort} key={column.key} scope="col" style={{ textAlign: column.alignment }}>{column.header}</th>)}
-        {trailing ? <th scope="col">{trailing.header}</th> : null}
-      </tr></thead>
-      <tbody>{body}</tbody>
-      {summaries.length > 0 ? <tfoot>{summaries.map(summary => <tr className="hp-table-total-summary" key={summary.id}><th colSpan={Math.max(1, columnCount)} scope="row">Total · {summary.label}: {summary.value}</th></tr>)}</tfoot> : null}
-    </ShadcnTable>
+    <Table>
+      <TableCaption className="hp:sr-only">{caption}</TableCaption>
+      <TableHeader><TableRow>
+        {leading ? <TableHead scope="col">{leading.header}</TableHead> : null}
+        {columns.map(column => <TableHead aria-sort={column.ariaSort} key={column.key} scope="col" style={{ textAlign: column.alignment }}>{column.header}</TableHead>)}
+        {trailing ? <TableHead scope="col">{trailing.header}</TableHead> : null}
+      </TableRow></TableHeader>
+      <TableBody>{body}</TableBody>
+      {summaries.length > 0 ? <TableFooter>{summaries.map(summary => <TableRow className="hp-table-total-summary" key={summary.id}><TableHead colSpan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableHead></TableRow>)}</TableFooter> : null}
+    </Table>
   </div>
 }
 
@@ -279,7 +277,7 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     const color = safeColor(value)
     content = color ? <span><span aria-hidden="true" className="hp-table-color" style={{ backgroundColor: color }} />{color}</span> : formatted
   } else if ((type === 'checkbox' || type === 'toggle') && !column.manifest.inlineEditor) {
-    content = <ShadcnInput aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled readOnly type="checkbox" />
+    content = <Checkbox aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled />
   } else {
     const configuredIcon = formatters.find(formatter => formatter.kind === 'icon')?.name
     const textColor = safeColor(formatters.find(formatter => formatter.kind === 'color')?.value)
@@ -287,17 +285,17 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
       {typeof configuredIcon === 'string' && /^[a-z][a-z0-9-]*$/u.test(configuredIcon) ? <span aria-hidden="true" data-icon={configuredIcon} /> : null}
       {formatted}
     </span>
-    content = badge ? <span className="hp-table-badge">{text}</span> : text
+    content = badge ? <Badge className="hp-table-badge" variant="secondary">{text}</Badge> : text
   }
 
   const linked = url ? <a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{content}</a> : content
-  const actionable = actionId && onAction ? <ShadcnButton disabled={actionPending} onClick={() => {
+  const actionable = actionId && onAction ? <Button disabled={actionPending} onClick={() => {
     setActionPending(true)
     setActionError(null)
     void onAction(actionId).catch(cause => {
       setActionError(cause instanceof Error ? cause.message : 'Column action failed')
     }).finally(() => setActionPending(false))
-  }} type="button">{linked}</ShadcnButton> : linked
+  }} type="button">{linked}</Button> : linked
   const copy = async (): Promise<void> => {
     if (!globalThis.navigator?.clipboard) {
       setCopyStatus('Copy unavailable')
@@ -311,6 +309,6 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     }
   }
   return <span className="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{actionable}{column.manifest.copyable && !column.manifest.inlineEditor
-    ? <ShadcnButton aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} className="hp-table-copy" onClick={() => void copy()} type="button"><ShadcnIcon name="copy" /></ShadcnButton>
+    ? <Button aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} className="hp-table-copy" onClick={() => void copy()} type="button"><PanelsIcon name="copy" /></Button>
     : null}<span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>{actionError ? <span role="alert">{actionError}</span> : null}</span>
 }

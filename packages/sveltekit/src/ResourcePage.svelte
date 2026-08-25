@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { goto } from '$app/navigation'
   import { onMount } from 'svelte'
-  import Button from './Button.svelte'
+  import { Button } from '@holo-js/panels-svelte/ui/button'
+  import { Card, CardContent, CardFooter } from '@holo-js/panels-svelte/ui/card'
+  import Icon from './Icon.svelte'
   import {
     ClientActionStore,
     ClientEffectSession,
@@ -12,6 +15,9 @@
     FormStore,
     OptionStore,
     PanelsTransport,
+    PanelsPageActions,
+    PanelsRenderHook,
+    PanelsRenderHookRenderer,
     SvelteActionRenderer,
     SvelteRelationManagerRenderer,
     SvelteTableRenderer,
@@ -21,8 +27,11 @@
     type JsonObject,
     type JsonValue,
     type SvelteEntryStore,
+    type SvelteComponentRegistry,
     type SvelteRelationManagerRendererProps,
     type SvelteTableGroup,
+    type SvelteTableAction,
+    type SvelteTableActionItem,
     type SvelteTableSummary,
     type UploadPolicy,
   } from '@holo-js/panels-svelte'
@@ -38,13 +47,14 @@
     type ResourceOptions,
   } from './resource-page'
 
-  let { data, effects }: { readonly data: PanelPageData, readonly effects: ClientEffectSession } = $props()
+  let { data, effects, pageActionsTarget, registry }: { readonly data: PanelPageData, readonly effects: ClientEffectSession, readonly pageActionsTarget?: HTMLElement, readonly registry?: SvelteComponentRegistry } = $props()
   const endpoint = $derived(`/holo/panels/${data.panel.manifest.id}`)
   const pageType = $derived(data.page.manifest.pageType)
   const resource = $derived(resourcePageMetadata(data.page.data.resource ?? data.page.manifest.body?.properties.resource, data.page.manifest.path, pageType))
+  const resourceScopes = $derived([data.page.manifest.id, ...(resource ? [resource.id] : [])])
   const record = $derived(jsonRecord(data.page.data.record))
   const records = $derived(jsonRecords(data.page.data.records))
-  const relations = $derived(relationManagers(data.page.data.relations))
+  let relations = $state(relationManagers(undefined))
   const readOnlyRelations = $derived(data.panel.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true)
   let persistedRouteIdentifier = $state<number | string>('')
   const currentRouteIdentifier = $derived(persistedRouteIdentifier === '' ? recordRouteIdentifier(record) : persistedRouteIdentifier)
@@ -52,18 +62,16 @@
   let renderedSummaries = $state<readonly SvelteTableSummary[]>([])
   const rowActions = $derived.by(() => {
     if (!resource) return []
-    const configured = resource.actions.flatMap(action => {
-      const scope = action.mount === 'bulk' ? 'bulk' as const : action.mount === 'page' ? 'header' as const : action.mount === 'record' ? 'row' as const : null
-      return scope ? [{ color: action.color, confirmation: action.confirmation ?? undefined, icon: action.icon, id: action.id, label: action.label, scope }] : []
-    })
+    const configured = resource.tableActions
     const defaults = [
-      ...(resource.routes.view && !resource.actions.some(action => action.kind === 'view') ? [{ id: `${resource.id}.view`, label: 'View', scope: 'row' as const }] : []),
-      ...(resource.routes.edit && !resource.actions.some(action => action.kind === 'edit') ? [{ id: `${resource.id}.edit`, label: 'Edit', scope: 'row' as const }] : []),
+      ...(resource.routes.view && !resource.actions.some(action => action.kind === 'view') ? [{ color: null, confirmation: undefined, icon: 'view', id: `${resource.id}.view`, label: 'View', scope: 'row' as const }] : []),
+      ...(resource.routes.edit && !resource.actions.some(action => action.kind === 'edit') ? [{ color: null, confirmation: undefined, icon: 'edit', id: `${resource.id}.edit`, label: 'Edit', scope: 'row' as const }] : []),
     ]
     return [...defaults, ...configured]
   })
   const createRoute = $derived(resource?.routes.create ?? null)
   const editRoute = $derived(resourceRoute(resource?.routes.edit ?? null, encodedRouteIdentifier(currentRouteIdentifier)))
+  const viewRoute = $derived(resourceRoute(resource?.routes.view ?? null, encodedRouteIdentifier(currentRouteIdentifier)))
   const initialValues = $derived.by(() => {
     const values: Record<string, unknown> = {}
     for (const field of resource?.fields ?? []) setRecordValue(values, field.path, recordValue(record ?? {}, field.path) ?? field.properties?.defaultValue ?? '')
@@ -74,7 +82,7 @@
       id: dependency.id,
       paths: [dependency.source],
       recompute: context => {
-        if (!context.changedPaths.has(dependency.source)) return []
+        if (!context.changedPaths.has(dependency.source) || context.touchedPaths.has(dependency.target)) return []
         return [{
           kind: 'set' as const,
           path: dependency.target,
@@ -166,6 +174,10 @@
   let submitError = $state<string | null>(null)
 
   $effect(() => {
+    relations = relationManagers(data.page.data.relations)
+  })
+
+  $effect(() => {
     renderedGroups = tableGroups(data.page.data.groups)
     renderedSummaries = tableSummaries(data.page.data.summaries)
   })
@@ -180,7 +192,7 @@
 
   $effect(() => {
     const unsubscribers = [...uploadStores.entries()].map(([path, upload]) => upload.subscribe(snapshot => {
-      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.token ? [{ id: item.id, token: item.token }] : [])
+      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.sessionId && item.token ? [{ id: item.id, sessionId: item.sessionId, token: item.token }] : [])
       const policy = resource?.fields.find(field => field.path === path)?.properties?.uploadPolicy
       form.set(path, uploadPolicy(policy)?.maximumFiles === 1 ? stored[0] ?? '' : stored)
     }))
@@ -256,6 +268,18 @@
       current = Reflect.get(current, segment)
     }
     return current
+  }
+
+  function executableTableAction(actions: readonly SvelteTableActionItem[], id: string): (SvelteTableAction & { readonly kind?: string }) | null {
+    for (const action of actions) {
+      if ('kind' in action && action.kind === 'action-group') {
+        const nested = executableTableAction(action.actions, id)
+        if (nested) return nested
+      } else if (action.id === id) {
+        return action as SvelteTableAction & { readonly kind?: string }
+      }
+    }
+    return null
   }
 
   function setRecordValue(value: Record<string, unknown>, path: string, next: unknown): void {
@@ -425,7 +449,7 @@
           if (redirect) {
             const encodedIdentifier = encodedRouteIdentifier(nextRouteIdentifier)
             const target = redirect === 'index' ? resource.basePath : redirect === 'view' ? `${resource.basePath}/${encodedIdentifier}` : `${resource.basePath}/${encodedIdentifier}/edit`
-            globalThis.location.assign(target)
+            await goto(target)
           } else if (pageType === 'edit') {
             const nextRoute = resourceRoute(resource.routes.edit, encodedRouteIdentifier(nextRouteIdentifier))
             if (nextRoute) globalThis.history.replaceState(null, '', nextRoute)
@@ -458,7 +482,7 @@
     })
     await effects.apply(response)
     if (!response.ok) throw new Error(response.error.message)
-    globalThis.location.reload()
+    relations = relationManagers(response.data.relations)
   }
 
   async function loadRelationOptions(managerId: string, search: string): Promise<readonly { readonly label: string, readonly value: number | string }[]> {
@@ -501,13 +525,15 @@
 {:else if pageType === 'list'}
   <div class="hp-resource-page">
     {#if createRoute && resource.recordActions.some(action => action.kind === 'create' && data.page.manifest.actions.header.includes(action.id))}
-      <div class="hp-resource-toolbar"><a class="hp-button hp-button-primary" href={createRoute}>{resource.recordActions.find(action => action.kind === 'create')?.label ?? resource.createLabel}</a></div>
+      {@const createAction = resource.recordActions.find(action => action.kind === 'create')}
+      <PanelsPageActions to={pageActionsTarget}><Button class="hp-button hp-action-trigger" data-action-id={createAction?.id} data-color={createAction?.color ?? undefined} href={createRoute}>{#if createAction?.icon}<Icon name={createAction.icon} />{/if}<span>{createAction?.label ?? resource.createLabel}</span></Button></PanelsPageActions>
     {/if}
+  <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />
   <SvelteTableRenderer table={{
     actions: rowActions,
     actionTransport: {
       async execute(request, signal) {
-        const action = resource.actions.find(candidate => candidate.id === request.actionId)
+        const action = executableTableAction(resource.tableActions, request.actionId)
         if (!action) throw new Error('Resource action is unavailable')
         const response = await transport.execute<JsonObject, JsonObject>({ kind: 'mutation', name: 'action', supportsIdempotency: true }, {
           endpoint: `${endpoint}/action`,
@@ -516,8 +542,10 @@
           payload: {
             actionId: request.actionId,
             idempotencyKey: globalThis.crypto.randomUUID(),
-            intent: action.kind,
-            recordIds: toJsonValue(resourceOperationIdentifiers(records, resource.recordId, resource.routeKey, request.recordId)),
+            intent: action.kind ?? request.actionId,
+            recordIds: toJsonValue(request.selection?.mode === 'explicit'
+              ? request.selection.recordIds
+              : resourceOperationIdentifiers(records, resource.recordId, resource.routeKey, request.recordId)),
             resourceId: resource.id,
           },
           signal,
@@ -528,6 +556,7 @@
       },
     },
     caption: resource.label,
+    panelId: data.panel.manifest.id,
     columns: resource.columns,
     filterPresentation: {
       columns: { default: 2 },
@@ -550,27 +579,28 @@
     store: table,
     summaries: renderedSummaries,
   }} />
+  <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />
   </div>
 {:else if pageType === 'create' || pageType === 'edit'}
   {#if pageType === 'edit' && currentRouteIdentifier !== ''}
-    <div class="hp-resource-toolbar">
+    <PanelsPageActions to={pageActionsTarget}>
       {#each resource.recordActions.filter(action => action.visible && data.page.manifest.actions.header.includes(action.id)) as action (action.id)}
-        {#if action.kind === 'view' && resource.routes.view}
-          <a class="hp-button" href={resourceRoute(resource.routes.view, encodedRouteIdentifier(currentRouteIdentifier))}>{action.label}</a>
+        {#if action.kind === 'view' && viewRoute}
+          <Button class="hp-button hp-action-trigger" data-action-id={action.id} data-color={action.color ?? undefined} href={viewRoute} variant="outline">{#if action.icon}<Icon name={action.icon} />{/if}<span>{action.label}</span></Button>
         {:else if action.kind !== 'edit' && action.kind !== 'create'}
           <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[currentRouteIdentifier]} store={actionStore} />
         {/if}
       {/each}
-    </div>
+    </PanelsPageActions>
   {/if}
-  <form class="hp-resource-form" data-slot="card" onsubmit={(event) => { event.preventDefault(); void submit() }}>
-    {#each resource.fields as definition (definition.path)}
-      <FieldRenderer {definition} {form} collectionStore={collectionStores.get(definition.path)} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} uploadStore={uploadStores.get(definition.path)} />
-    {/each}
-    <div class="hp-form-actions"><Button class="hp-button hp-button-primary" disabled={form.state.submitting} type="submit">{form.state.submitting ? 'Saving…' : resource.saveLabel}</Button></div>
+  <form class="hp-resource-form hp:grid hp:gap-6" onsubmit={(event) => { event.preventDefault(); void submit() }}>
+    <Card>
+      <CardContent class="hp:grid hp:gap-6 hp:pt-6">{#each resource.fields as definition (definition.path)}<FieldRenderer {definition} {form} collectionStore={collectionStores.get(definition.path)} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} uploadStore={uploadStores.get(definition.path)} />{/each}</CardContent>
+      <CardFooter class="hp:justify-end"><Button class="hp-form-actions hp-button hp-button-primary" disabled={form.state.submitting} type="submit">{form.state.submitting ? 'Saving…' : resource.saveLabel}</Button></CardFooter>
+    </Card>
   </form>
   {#if submitError}<div role="alert">{submitError}</div>{/if}
-  {#if relations.length > 0}<SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation }} />{/if}
+  {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId: data.panel.manifest.id }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
 {:else if pageType === 'view' && record}
   <article class="hp-resource-view"><div class="hp-infolist">
     {#each resource.entries as definition (String(definition.id ?? definition.path))}
@@ -578,11 +608,14 @@
     {/each}
   </div>
   {#if editRoute && resource.recordActions.some(action => action.kind === 'edit' && data.page.manifest.actions.header.includes(action.id))}
-    <div class="hp-form-actions"><a class="hp-button" href={editRoute}>{resource.recordActions.find(action => action.kind === 'edit')?.label ?? `Edit ${resource.label}`}</a></div>
+    {@const editAction = resource.recordActions.find(action => action.kind === 'edit')}
+    <PanelsPageActions to={pageActionsTarget}><Button class="hp-button hp-action-trigger" data-action-id={editAction?.id} data-color={editAction?.color ?? undefined} href={editRoute} variant="outline">{#if editAction?.icon}<Icon name={editAction.icon} />{/if}<span>{editAction?.label ?? `Edit ${resource.label}`}</span></Button></PanelsPageActions>
   {/if}
-  {#each resource.recordActions.filter(action => action.mount === 'record' && action.visible && action.kind !== 'edit' && action.kind !== 'view' && action.kind !== 'create') as action (action.id)}
-    <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} store={actionStore} />
-  {/each}
-  {#if relations.length > 0}<SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation }} />{/if}
+  <PanelsPageActions to={pageActionsTarget}>
+    {#each resource.recordActions.filter(action => action.mount === 'record' && action.visible && action.kind !== 'edit' && action.kind !== 'view' && action.kind !== 'create') as action (action.id)}
+      <SvelteActionRenderer {action} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} store={actionStore} />
+    {/each}
+  </PanelsPageActions>
+  {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations, panelId: data.panel.manifest.id } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId: data.panel.manifest.id }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
   </article>
 {/if}

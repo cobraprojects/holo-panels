@@ -5,14 +5,21 @@ import {
   IconColumn as CoreIconColumn,
   ImageColumn as CoreImageColumn,
   SelectColumn as CoreSelectColumn,
+  TablesRenderHook,
   TextColumn as CoreTextColumn,
   TextInputColumn as CoreTextInputColumn,
   ToggleColumn as CoreToggleColumn,
   type JsonObject,
   type RecordPath,
   type RecordPathFor,
+  type RegisteredPanelRecordForPath,
+  type RegisteredPanelRecordForPathValue,
+  type RegisteredPanelRecordPath,
+  type RegisteredPanelRecordPathFor,
   toJsonValue,
 } from '@holo-js/panels-core'
+
+export { TablesRenderHook }
 import type { Schema } from '@holo-js/panels-schemas'
 
 export type TableRecordPath<TRecord extends object> = RecordPath<TRecord>
@@ -27,11 +34,10 @@ interface Compilable {
 }
 
 export interface TableColumnContract<TRecord extends object> extends Compilable {
-  readonly resourceRecordType: TRecord
+  readonly path: RecordPath<TRecord>
 }
 
 export interface TableFilterContract<TRecord extends object> extends Compilable {
-  readonly resourceRecordType: TRecord
 }
 
 function compiledManifest(value: Compilable): object {
@@ -43,36 +49,71 @@ function compiledManifest(value: Compilable): object {
   return compiled
 }
 
+type BoundRecordPath<TPath extends RegisteredPanelRecordPath> = Extract<TPath, RecordPath<RegisteredPanelRecordForPath<TPath>>>
+type BoundValueRecordPath<TPath extends RegisteredPanelRecordPathFor<TValue>, TValue> = Extract<TPath, RecordPathFor<RegisteredPanelRecordForPathValue<TPath, TValue>, TValue>>
+
 export class TextColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>> extends CoreTextColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>>(path: TPath): TextColumn<TRecord, TPath> { return new TextColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): TextColumn<RegisteredPanelRecordForPath<TPath>, BoundRecordPath<TPath>>
+  static make<TRecord extends object, const TPath extends RecordPath<TRecord>>(path: TPath): TextColumn<TRecord, TPath>
+  static make(path: string): unknown { return new TextColumn(path) }
 }
 
 export class IconColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>> extends CoreIconColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>>(path: TPath): IconColumn<TRecord, TPath> { return new IconColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): IconColumn<RegisteredPanelRecordForPath<TPath>, BoundRecordPath<TPath>>
+  static make<TRecord extends object, const TPath extends RecordPath<TRecord>>(path: TPath): IconColumn<TRecord, TPath>
+  static make(path: string): unknown { return new IconColumn(path) }
 }
 
 export class ImageColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>> extends CoreImageColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>>(path: TPath): ImageColumn<TRecord, TPath> { return new ImageColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<string>>(path: TPath): ImageColumn<RegisteredPanelRecordForPathValue<TPath, string>, BoundValueRecordPath<TPath, string>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, string>>(path: TPath): ImageColumn<TRecord, TPath>
+  static make(path: string): unknown { return new ImageColumn<Record<string, string>, string>(path) }
 }
 
 export class ColorColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>> extends CoreColorColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>>(path: TPath): ColorColumn<TRecord, TPath> { return new ColorColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<string>>(path: TPath): ColorColumn<RegisteredPanelRecordForPathValue<TPath, string>, BoundValueRecordPath<TPath, string>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, string>>(path: TPath): ColorColumn<TRecord, TPath>
+  static make(path: string): unknown { return new ColorColumn<Record<string, string>, string>(path) }
 }
 
 export class SelectColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>> extends CoreSelectColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>>(path: TPath): SelectColumn<TRecord, TPath> { return new SelectColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): SelectColumn<RegisteredPanelRecordForPath<TPath>, BoundRecordPath<TPath>>
+  static make<TRecord extends object, const TPath extends RecordPath<TRecord>>(path: TPath): SelectColumn<TRecord, TPath>
+  static make(path: string): unknown { return new SelectColumn(path) }
 }
 
 export class ToggleColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, boolean> = RecordPathFor<TRecord, boolean>> extends CoreToggleColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, boolean> = RecordPathFor<TRecord, boolean>>(path: TPath): ToggleColumn<TRecord, TPath> { return new ToggleColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<boolean>>(path: TPath): ToggleColumn<RegisteredPanelRecordForPathValue<TPath, boolean>, BoundValueRecordPath<TPath, boolean>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, boolean>>(path: TPath): ToggleColumn<TRecord, TPath>
+  static make(path: string): unknown { return new ToggleColumn<Record<string, boolean>, string>(path) }
 }
 
 export class TextInputColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>> extends CoreTextInputColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, string> = RecordPathFor<TRecord, string>>(path: TPath): TextInputColumn<TRecord, TPath> { return new TextInputColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<string>>(path: TPath): TextInputColumn<RegisteredPanelRecordForPathValue<TPath, string>, BoundValueRecordPath<TPath, string>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, string>>(path: TPath): TextInputColumn<TRecord, TPath>
+  static make(path: string): unknown { return new TextInputColumn<Record<string, string>, string>(path) }
 }
 
 export class CheckboxColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, boolean> = RecordPathFor<TRecord, boolean>> extends CoreCheckboxColumn<TRecord, TPath> {
-  static make<TRecord extends object = Record<string, unknown>, TPath extends RecordPathFor<TRecord, boolean> = RecordPathFor<TRecord, boolean>>(path: TPath): CheckboxColumn<TRecord, TPath> { return new CheckboxColumn(path) }
+  readonly path: TPath
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<const TPath extends RegisteredPanelRecordPathFor<boolean>>(path: TPath): CheckboxColumn<RegisteredPanelRecordForPathValue<TPath, boolean>, BoundValueRecordPath<TPath, boolean>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, boolean>>(path: TPath): CheckboxColumn<TRecord, TPath>
+  static make(path: string): unknown { return new CheckboxColumn<Record<string, boolean>, string>(path) }
 }
 
 class BaseFilter<TRecord extends object = Record<string, unknown>, TValue = boolean> {
@@ -226,28 +267,46 @@ export class Table<
     this.#actionFactory = createActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>(actionSchemaFactory)
   }
 
-  columns<const TColumns extends readonly TableColumnContract<TRecord>[]>(configure: (column: ColumnFactory<TRecord>) => TColumns): this { this.#columns = Object.freeze([...configure(createColumnFactory<TRecord>())]); return this }
+  columns(columns: readonly TableColumnContract<TRecord>[]): this
+  columns<const TColumns extends readonly TableColumnContract<TRecord>[]>(configure: (column: ColumnFactory<TRecord>) => TColumns): this
+  columns<const TColumns extends readonly TableColumnContract<TRecord>[]>(columns: TColumns | ((column: ColumnFactory<TRecord>) => TColumns)): this {
+    const resolved = typeof columns === 'function' ? columns(createColumnFactory<TRecord>()) : columns
+    this.#columns = Object.freeze([...resolved])
+    return this
+  }
   defaultSort(column: RecordPath<TRecord>, direction: TableSortDirection = 'asc'): this { this.#defaultSort = Object.freeze({ column, direction }); return this }
   deferFilters(value = true): this { this.#deferFilters = value; return this }
   emptyStateActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[]): this { this.#emptyStateActions = Object.freeze([...actions(this.#actionFactory)]); return this }
   emptyStateDescription(value: string | null): this { this.#emptyStateDescription = value; return this }
   emptyStateHeading(value: string | null): this { this.#emptyStateHeading = value; return this }
   emptyStateIcon(value: string | null): this { this.#emptyStateIcon = value; return this }
-  filters<const TFilters extends readonly TableFilterContract<TRecord>[]>(configure: (filter: FilterFactory<TRecord>) => TFilters): this { this.#filters = Object.freeze([...configure(createFilterFactory<TRecord>())]); return this }
+  filters(filters: readonly TableFilterContract<TRecord>[]): this
+  filters<const TFilters extends readonly TableFilterContract<TRecord>[]>(configure: (filter: FilterFactory<TRecord>) => TFilters): this
+  filters<const TFilters extends readonly TableFilterContract<TRecord>[]>(filters: readonly TableFilterContract<TRecord>[] | ((filter: FilterFactory<TRecord>) => TFilters)): this {
+    const resolved = typeof filters === 'function' ? filters(createFilterFactory<TRecord>()) : filters
+    this.#filters = Object.freeze([...resolved])
+    return this
+  }
   filtersFormColumns(value: number): this { this.#filtersFormColumns = value; return this }
   groups(groups: readonly Compilable[]): this { this.#groups = Object.freeze([...groups]); return this }
-  headerActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[]): this { this.#headerActions = Object.freeze([...actions(this.#actionFactory)]); return this }
+  headerActions(actions: readonly TableAction<TRecord>[]): this
+  headerActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[]): this
+  headerActions(actions: readonly TableAction<TRecord>[] | ((action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[])): this { this.#headerActions = Object.freeze([...(typeof actions === 'function' ? actions(this.#actionFactory) : actions)]); return this }
   paginated(value: boolean | readonly TablePaginationPageOption[] = true): this { if (typeof value !== 'boolean') this.#paginationPageOptions = Object.freeze([...value]); else this.#paginated = value; return this }
   paginationPageOptions(options: readonly TablePaginationPageOption[]): this { this.#paginationPageOptions = Object.freeze([...options]); return this }
   persistFiltersInSession(value = true): this { this.#persistFiltersInSession = value; return this }
   persistSearchInSession(value = true): this { this.#persistSearchInSession = value; return this }
   persistSortInSession(value = true): this { this.#persistSortInSession = value; return this }
-  recordActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[], position: TableActionPosition = 'after-columns'): this { this.#recordActions = Object.freeze([...actions(this.#actionFactory)]); this.#actionsPosition = position; return this }
+  recordActions(actions: readonly TableAction<TRecord>[], position?: TableActionPosition): this
+  recordActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[], position?: TableActionPosition): this
+  recordActions(actions: readonly TableAction<TRecord>[] | ((action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[]), position: TableActionPosition = 'after-columns'): this { this.#recordActions = Object.freeze([...(typeof actions === 'function' ? actions(this.#actionFactory) : actions)]); this.#actionsPosition = position; return this }
   recordClasses(value: string | ((record: TRecord) => string | null) | null): this { this.#recordClasses = value; return this }
   recordUrl(value: string | ((record: TRecord) => string | null) | null): this { this.#recordUrl = value; return this }
   searchable(value = true): this { this.#searchable = value; return this }
   striped(value = true): this { this.#striped = value; return this }
-  toolbarActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[]): this { this.#toolbarActions = Object.freeze([...actions(this.#actionFactory)]); return this }
+  toolbarActions(actions: readonly TableAction<TRecord>[]): this
+  toolbarActions(actions: (action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[]): this
+  toolbarActions(actions: readonly TableAction<TRecord>[] | ((action: ActionFactory<TRecord, TData, object, unknown, object, TActionSchemaFactory>) => readonly TableAction<TRecord>[])): this { this.#toolbarActions = Object.freeze([...(typeof actions === 'function' ? actions(this.#actionFactory) : actions)]); return this }
 
   getActions(): readonly TableAction<TRecord>[] {
     return Object.freeze([...this.#recordActions, ...this.#headerActions, ...this.#toolbarActions])

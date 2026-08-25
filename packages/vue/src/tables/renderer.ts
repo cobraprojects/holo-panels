@@ -1,9 +1,11 @@
-import { ShadcnButton, ShadcnIcon, ShadcnInput, ShadcnSelect } from '../internal-ui'
-import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
-import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, Search } from 'lucide-vue-next'
+import { Alert, AlertDescription, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertTitle, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress, Skeleton } from '../internal-ui'
+import { ClientTransferStore, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import { TablesRenderHook } from '@holo-js/panels-core'
+import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, MoreHorizontal, Search } from 'lucide-vue-next'
 import {
   computed,
   defineComponent,
+  Fragment,
   h,
   nextTick,
   onScopeDispose,
@@ -18,10 +20,12 @@ import {
   type VNodeChild,
 } from 'vue'
 import { displayValue, pages, paginationRange, perPageOptions, recordValue, visibleColumns } from './helpers'
-import { PanelsModal } from '../primitives'
+import { usePanelsRenderHook } from '../render-hooks'
 import { VueTableColumnPresentation, VueTablePresentation, type VueTablePresentationProps } from './presentation'
 import type {
   VueTableAction,
+  VueTableActionGroup,
+  VueTableActionItem,
   VueTableColumn,
   VueCustomFilterProps,
   VueTableFilter,
@@ -99,18 +103,19 @@ const VueTransferAction = defineComponent({
       else await store.startExport(formatId.value, [...columns.value], props.table.store.selectionPayload())
     }
     return () => h('span', { class: 'hp-transfer-action' }, [
-      h(ShadcnButton, { disabled: !store, type: 'button', onClick: () => { open.value = true } }, props.manifest.label),
-      h(PanelsModal, { open: open.value, title: props.manifest.label, onClose: () => { store?.cancel(); open.value = false } }, { default: () => [
-        h('label', ['Format', h(ShadcnSelect, { value: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
+      h(Button, { class: 'hp-action-trigger', 'data-action': props.manifest.id, disabled: !store, type: 'button', variant: 'outline', onClick: () => { open.value = true } }, () => [PanelsIcon(props.manifest.kind === 'import' ? 'upload' : 'download'), h('span', props.manifest.label)]),
+      h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { if (!active) { store?.cancel(); open.value = false } } }, () => h(DialogContent, { 'data-holo-panel': '' }, () => [
+        h(DialogHeader, {}, () => [h(DialogTitle, {}, () => props.manifest.label), h(DialogDescription, {}, () => `Configure this ${props.manifest.kind}.`)]),
+        h('label', ['Format', h(NativeSelect, { modelValue: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
         props.manifest.kind === 'import' ? h('div', [
-          h('label', ['CSV file', h(ShadcnInput, { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
-          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h(ShadcnSelect, { required: column.required, value: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, 'Do not import'), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
-          state.value?.uploadProgress ? h('progress', { 'aria-label': 'Upload progress', max: 100, value: state.value.uploadProgress }) : null,
-        ]) : h('div', props.manifest.columns.map(column => h('label', [h(ShadcnInput, { checked: columns.value.has(column.id), type: 'checkbox', onChange: (event: Event) => { const next = new Set(columns.value); if (eventTarget<HTMLInputElement>(event).checked) next.add(column.id); else next.delete(column.id); columns.value = next } }), column.label]))),
-        h(ShadcnButton, { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, `Start ${props.manifest.kind}`),
-        state.value?.progress ? h('progress', { 'aria-label': 'Transfer progress', max: Math.max(1, state.value.progress.total), value: state.value.progress.completed }) : null,
+          h('label', ['CSV file', h(Input, { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
+          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h(NativeSelect, { required: column.required, modelValue: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, 'Do not import'), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
+          state.value?.uploadProgress ? h(Progress, { 'aria-label': 'Upload progress', max: 100, modelValue: state.value.uploadProgress }) : null,
+        ]) : h('div', props.manifest.columns.map(column => h('label', [h(Checkbox, { modelValue: columns.value.has(column.id), 'onUpdate:modelValue': (checked: boolean | 'indeterminate') => { const next = new Set(columns.value); if (checked === true) next.add(column.id); else next.delete(column.id); columns.value = next } }), column.label]))),
+        h(DialogFooter, {}, () => h(Button, { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, () => `Start ${props.manifest.kind}`)),
+        state.value?.progress ? h(Progress, { 'aria-label': 'Transfer progress', max: 100, modelValue: (state.value.progress.completed / Math.max(1, state.value.progress.total)) * 100 }) : null,
         state.value?.error ? h('div', { role: 'alert' }, state.value.error) : null,
-      ] }),
+      ])),
     ])
   },
 })
@@ -136,13 +141,13 @@ function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value
       const scalarType = typeof column?.scalarType === 'string' ? column.scalarType : 'string'
       const inputValue = Array.isArray(condition.value) ? condition.value.join(', ') : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
       return h('div', { 'data-advanced-condition': '', key: index }, [
-        h(ShadcnSelect, { 'aria-label': 'Column', value: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
-        h(ShadcnSelect, { 'aria-label': 'Operator', value: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, item))),
-        ['null', 'not-null'].includes(operator) ? null : h(ShadcnInput, { 'aria-label': 'Value', type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', value: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
-        h(ShadcnButton, { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, 'Remove condition'),
+        h(NativeSelect, { 'aria-label': 'Column', modelValue: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
+        h(NativeSelect, { 'aria-label': 'Operator', modelValue: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, item))),
+        ['null', 'not-null'].includes(operator) ? null : h(Input, { 'aria-label': 'Value', type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', modelValue: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
+        h(Button, { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, 'Remove condition'),
       ])
     }),
-    h(ShadcnButton, {
+    h(Button, {
       disabled: columns.length === 0,
       type: 'button',
       onClick: () => {
@@ -175,48 +180,150 @@ function notifyQueryChange(callback: (() => void) | undefined): void {
   callback?.()
 }
 
+function reportTableError(table: RuntimeTable, title: string): void {
+  if (table.notificationStore) {
+    publishPanelErrorTo(table.notificationStore, title)
+    return
+  }
+  publishPanelError(table.panelId ?? 'default', title)
+}
+
+async function executeTableAction(action: VueTableAction, table: RuntimeTable, record?: RuntimeRecord): Promise<void> {
+  if (!table.actionTransport) {
+    reportTableError(table, 'Action failed')
+    return
+  }
+  try {
+    await table.actionTransport.execute({
+      actionId: action.id,
+      ...(record ? { recordId: table.getRecordId(record) } : {}),
+      ...(action.scope === 'bulk' ? { selection: table.store.selectionPayload() } : {}),
+    }, new AbortController().signal)
+  } catch {
+    reportTableError(table, `${action.label} failed`)
+  }
+}
+
 const TableActionButton = defineComponent({
   name: 'VueTableActionButton',
   props: {
     action: { type: Object as PropType<VueTableAction>, required: true },
+    menuItem: { type: Boolean, default: false },
     record: { type: Object as PropType<RuntimeRecord>, default: undefined },
     table: { type: Object as PropType<object>, required: true },
   },
   setup(componentProps) {
     const pending = ref(false)
-    const error = ref<string | null>(null)
+    const confirming = ref(false)
     const run = async (): Promise<void> => {
       const table = runtimeTable(componentProps.table)
-      if (!table.actionTransport) {
-        error.value = '[Holo Panels] Vue table actions require an action transport.'
-        return
-      }
-      if (componentProps.action.confirmation && typeof globalThis.confirm === 'function' && !globalThis.confirm(componentProps.action.confirmation)) return
       pending.value = true
-      error.value = null
       try {
-        await table.actionTransport.execute({
-          actionId: componentProps.action.id,
-          ...(componentProps.record ? { recordId: table.getRecordId(componentProps.record) } : {}),
-          ...(componentProps.action.scope === 'bulk' ? { selection: table.store.selectionPayload() } : {}),
-        }, new AbortController().signal)
-      } catch (cause) {
-        error.value = cause instanceof Error ? cause.message : 'Action failed'
+        await executeTableAction(componentProps.action, table, componentProps.record)
       } finally {
         pending.value = false
       }
     }
     return (): VNode => {
       const action = componentProps.action
-      const inferredIcon = action.id.includes('delete') ? 'delete' : action.id.includes('edit') ? 'edit' : action.id.includes('view') ? 'view' : null
-      const icon = action.icon ?? inferredIcon
-      return h('span', [
-      h(ShadcnButton, { class: 'hp-table-action', 'data-action': action.id, 'data-color': action.color ?? undefined, disabled: pending.value, type: 'button', onClick: () => void run() }, () => [icon ? ShadcnIcon(icon) : null, h('span', pending.value ? 'Working…' : action.label)]),
-      error.value ? h('span', { role: 'alert' }, error.value) : null,
+      const activate = (): void => {
+        if (action.confirmation) confirming.value = true
+        else void run()
+      }
+      const content = () => [action.icon ? PanelsIcon(action.icon) : null, h('span', pending.value ? 'Working…' : action.label)]
+      const trigger = componentProps.menuItem
+        ? h(DropdownMenuItem, { 'data-action': action.id, 'data-color': action.color ?? undefined, disabled: pending.value, variant: action.color === 'danger' ? 'destructive' : 'default', onSelect: activate }, content)
+        : h(Button, { class: 'hp-action-trigger hp-table-action', 'data-action': action.id, 'data-color': action.color ?? undefined, disabled: pending.value, type: 'button', variant: action.color === 'danger' ? 'destructive' : 'outline', onClick: activate }, content)
+      return h(Fragment, [
+      trigger,
+      confirming.value ? h(AlertDialog, { open: true, 'onUpdate:open': (active: boolean) => { if (!active) confirming.value = false } }, () => h(AlertDialogContent, { 'data-holo-panel': '' }, () => [
+          h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => action.label), h(AlertDialogDescription, {}, () => action.confirmation)]),
+          h(AlertDialogFooter, {}, () => [
+            h(AlertDialogCancel, { onClick: () => { confirming.value = false } }, () => 'Cancel'),
+            h(AlertDialogAction, {
+              class: 'hp-action-trigger',
+              'data-action': action.id,
+              'data-color': action.color ?? undefined,
+              type: 'button',
+              variant: action.color === 'danger' ? 'destructive' : 'default',
+              onClick: () => { confirming.value = false; void run() },
+            }, () => [action.icon ? PanelsIcon(action.icon) : null, h('span', 'Confirm')]),
+          ]),
+        ])) : null,
       ])
     }
   },
 })
+
+function isActionGroup(action: VueTableActionItem): action is VueTableActionGroup {
+  return 'kind' in action && action.kind === 'action-group'
+}
+
+const TableActionGroupButton = defineComponent({
+  name: 'VueTableActionGroupButton',
+  props: {
+    group: { type: Object as PropType<VueTableActionGroup>, required: true },
+    record: { type: Object as PropType<RuntimeRecord>, default: undefined },
+    table: { type: Object as PropType<object>, required: true },
+  },
+  setup(props) {
+    const confirming = ref<VueTableAction | null>(null)
+    const pending = ref<ReadonlySet<string>>(new Set())
+    const run = async (action: VueTableAction): Promise<void> => {
+      pending.value = new Set([...pending.value, action.id])
+      try {
+        await executeTableAction(action, runtimeTable(props.table), props.record)
+      } finally {
+        const next = new Set(pending.value)
+        next.delete(action.id)
+        pending.value = next
+      }
+    }
+    return (): VNode => {
+      const label = props.group.label ?? (props.group.scope === 'bulk' ? 'Bulk actions' : 'Actions')
+      const confirmation = confirming.value
+      return h(Fragment, [
+        h(DropdownMenu, {}, () => [
+          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': label, class: 'hp-action-group-trigger hp-action-trigger', 'data-action-group': props.group.id, type: 'button', variant: 'outline' }, () => [props.group.icon ? PanelsIcon(props.group.icon) : props.group.scope === 'row' ? h(MoreHorizontal, { 'aria-hidden': 'true' }) : null, h('span', label), props.group.scope === 'row' ? null : h(ChevronDown, { 'aria-hidden': 'true' })])),
+          h(DropdownMenuContent, { align: 'end' }, () => props.group.actions.map(action => h(DropdownMenuItem, {
+            'data-action': action.id,
+            'data-color': action.color ?? undefined,
+            disabled: pending.value.has(action.id),
+            key: action.id,
+            variant: action.color === 'danger' ? 'destructive' : 'default',
+            onSelect: () => {
+              if (action.confirmation) confirming.value = action
+              else void run(action)
+            },
+          }, () => [action.icon ? PanelsIcon(action.icon) : null, h('span', action.label)]))),
+        ]),
+        confirmation ? h(AlertDialog, { open: true, 'onUpdate:open': (active: boolean) => { if (!active) confirming.value = null } }, () => h(AlertDialogContent, { 'data-holo-panel': '' }, () => [
+          h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => confirmation.label), h(AlertDialogDescription, {}, () => confirmation.confirmation)]),
+          h(AlertDialogFooter, {}, () => [
+            h(AlertDialogCancel, { onClick: () => { confirming.value = null } }, () => 'Cancel'),
+            h(AlertDialogAction, {
+              class: 'hp-action-trigger',
+              'data-action': confirmation.id,
+              'data-color': confirmation.color ?? undefined,
+              type: 'button',
+              variant: confirmation.color === 'danger' ? 'destructive' : 'default',
+              onClick: () => {
+                confirming.value = null
+                void run(confirmation)
+              },
+            }, () => [confirmation.icon ? PanelsIcon(confirmation.icon) : null, h('span', 'Confirm')]),
+          ]),
+        ])) : null,
+      ])
+    }
+  },
+})
+
+function tableActionNode(action: VueTableActionItem, table: RuntimeTable, record?: RuntimeRecord): VNode {
+  return isActionGroup(action)
+    ? h(TableActionGroupButton, { group: action, key: action.id, record, table })
+    : h(TableActionButton, { action, key: action.id, record, table })
+}
 
 function optionValue(option: unknown): boolean | number | string | null | undefined {
   if (typeof option !== 'object' || option === null || Array.isArray(option)) return undefined
@@ -237,7 +344,7 @@ const InlineTableCell = defineComponent({
     const value = ref<boolean | number | string | null>(null)
     const pending = ref(false)
     const error = ref<string | null>(null)
-    const input = ref<HTMLInputElement>()
+    const input = ref<HTMLInputElement | { $el?: HTMLInputElement }>()
     const begin = (): void => {
       const current = original.value
       value.value = typeof current === 'boolean' || typeof current === 'number' || typeof current === 'string' || current === null
@@ -249,7 +356,8 @@ const InlineTableCell = defineComponent({
     watch(editing, async active => {
       if (!active) return
       await nextTick()
-      input.value?.focus()
+      const element = input.value instanceof HTMLInputElement ? input.value : input.value?.$el
+      element?.focus()
     })
     const save = async (next = value.value): Promise<void> => {
       const table = runtimeTable(componentProps.table)
@@ -290,17 +398,16 @@ const InlineTableCell = defineComponent({
         value: original.value,
       } })
       if (!valid) return rendered
-      if (!editing.value) return h(ShadcnButton, { 'aria-label': `Edit ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: begin }, () => [rendered])
+      if (!editing.value) return h(Button, { 'aria-label': `Edit ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: begin }, () => [rendered])
       const label = column.manifest.label ?? column.manifest.path
       if (kind === 'checkbox' || kind === 'toggle') {
         return h('span', [
-          h(ShadcnInput, {
+          h(Checkbox, {
             'aria-label': label,
-            checked: value.value === true,
             disabled: pending.value,
-            type: 'checkbox',
-            onChange: (event: Event) => {
-              const next = eventTarget<HTMLInputElement>(event).checked
+            modelValue: value.value === true,
+            'onUpdate:modelValue': (checked: boolean | 'indeterminate') => {
+              const next = checked === true
               value.value = next
               void save(next)
             },
@@ -311,10 +418,10 @@ const InlineTableCell = defineComponent({
       if (kind === 'select') {
         const options: readonly unknown[] = Array.isArray(editor.options) ? editor.options : []
         return h('span', [
-          h(ShadcnSelect, {
+          h(NativeSelect, {
             'aria-label': label,
             disabled: pending.value,
-            value: String(value.value ?? ''),
+            modelValue: String(value.value ?? ''),
             onChange: (event: Event) => {
               const raw = eventTarget<HTMLSelectElement>(event).value
               const next = options.map(optionValue).find(option => typeof option !== 'undefined' && String(option) === raw)
@@ -336,11 +443,11 @@ const InlineTableCell = defineComponent({
         ])
       }
       return h('span', [
-        h(ShadcnInput, {
+        h(Input, {
           'aria-label': label,
           disabled: pending.value,
           ref: input,
-          value: String(value.value ?? ''),
+          modelValue: String(value.value ?? ''),
           onInput: (event: Event) => {
             value.value = eventTarget<HTMLInputElement>(event).value
           },
@@ -392,31 +499,31 @@ function tableFilters(
       const to = typeof Reflect.get(range, 'to') === 'string' ? String(Reflect.get(range, 'to')) : ''
       return wrap(h('fieldset', [
         h('legend', filter.manifest.label ?? filter.manifest.id),
-        h('label', { for: `${id}-from` }, ['From', h(ShadcnInput, {
+        h('label', { for: `${id}-from` }, ['From', h(Input, {
           id: `${id}-from`,
           type: 'date',
-          value: from,
+          modelValue: from,
           onInput: (event: Event) => update({ from: eventTarget<HTMLInputElement>(event).value || null, to: to || null }),
         })]),
-        h('label', { for: `${id}-to` }, ['To', h(ShadcnInput, {
+        h('label', { for: `${id}-to` }, ['To', h(Input, {
           id: `${id}-to`,
           type: 'date',
-          value: to,
+          modelValue: to,
           onInput: (event: Event) => update({ from: from || null, to: eventTarget<HTMLInputElement>(event).value || null }),
         })]),
       ]))
     }
     if (filter.manifest.type === 'ternary') {
-      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(ShadcnSelect, {
+      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(NativeSelect, {
         id,
-        value: typeof current === 'string' ? current : 'all',
+        modelValue: typeof current === 'string' ? current : 'all',
         onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
       }, [h('option', { value: 'all' }, 'All'), h('option', { value: 'true' }, 'Yes'), h('option', { value: 'false' }, 'No')])]))
     }
     if (filter.manifest.type === 'trashed') {
-      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(ShadcnSelect, {
+      return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(NativeSelect, {
         id,
-        value: typeof current === 'string' ? current : 'without',
+        modelValue: typeof current === 'string' ? current : 'without',
         onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
       }, [h('option', { value: 'without' }, 'Without trashed'), h('option', { value: 'with' }, 'With trashed'), h('option', { value: 'only' }, 'Only trashed')])]))
     }
@@ -431,10 +538,10 @@ function tableFilters(
     const multiple = filter.manifest.properties.multiple === true
     const selectedValues = Array.isArray(current) ? current.map(String) : [String(current ?? '')]
     const control = filter.options
-      ? h(ShadcnSelect, {
+      ? h(NativeSelect, {
           id,
           multiple,
-          value: multiple ? selectedValues : selectedValues[0],
+          modelValue: multiple ? selectedValues : selectedValues[0],
           onChange: (event: Event) => {
             const select = eventTarget<HTMLSelectElement>(event)
             if (multiple) {
@@ -448,11 +555,11 @@ function tableFilters(
           ...filter.options.map(option => h('option', { disabled: option.disabled, key: String(option.value), value: String(option.value ?? '') }, option.label)),
         ])
       : filter.manifest.type.includes('boolean') || typeof current === 'boolean'
-        ? h(ShadcnInput, { checked: current === true, id, type: 'checkbox', onChange: (event: Event) => update(eventTarget<HTMLInputElement>(event).checked) })
-        : h(ShadcnInput, {
+        ? h(Checkbox, { id, modelValue: current === true, 'onUpdate:modelValue': (checked: boolean | 'indeterminate') => update(checked === true) })
+        : h(Input, {
             id,
             type: 'search',
-            value: typeof current === 'number' || typeof current === 'string' ? String(current) : '',
+            modelValue: typeof current === 'number' || typeof current === 'string' ? String(current) : '',
             onInput: (event: Event) => update(eventTarget<HTMLInputElement>(event).value),
           })
     return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, control]))
@@ -470,8 +577,8 @@ function tableFilters(
   }, [
     filterCollectionSlot(table, 'before'),
     ...orderedFilters(filters, presentation).map(field),
-    state.filters.mode === 'deferred' ? h(ShadcnButton, { type: 'submit' }, 'Apply filters') : null,
-    h(ShadcnButton, {
+    state.filters.mode === 'deferred' ? h(Button, { type: 'submit' }, 'Apply filters') : null,
+    h(Button, {
       type: 'button',
       onClick: () => {
         table.store.resetFilters()
@@ -481,14 +588,13 @@ function tableFilters(
     filterCollectionSlot(table, 'after'),
   ])
   if (placement === 'inline') return content
-  const trigger = h(ShadcnButton, {
+  const trigger = h(Button, {
     'aria-expanded': String(open.value),
     'aria-haspopup': 'dialog',
     type: 'button',
-    onClick: () => { open.value = !open.value },
   }, [h(ListFilter, { 'aria-hidden': 'true' }), 'Filters'])
-  if (placement === 'dropdown') return h('div', { class: 'hp-table-filters-dropdown' }, [trigger, open.value ? h('div', { role: 'dialog' }, [content]) : null])
-  return [trigger, h(PanelsModal, { open: open.value, title: 'Filters', onClose: () => { open.value = false } }, { default: () => [content] })]
+  if (placement === 'dropdown') return h(Popover, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => [h(PopoverTrigger, { asChild: true }, () => trigger), h(PopoverContent, { 'data-holo-panel': '' }, () => content)])
+  return [trigger, h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => h(DialogContent, { 'data-holo-panel': '' }, () => [h(DialogHeader, {}, () => [h(DialogTitle, {}, () => 'Filters'), h(DialogDescription, {}, () => 'Narrow the records shown in this table.')]), content]))]
 }
 
 export const VueTableRenderer = defineComponent({
@@ -497,6 +603,7 @@ export const VueTableRenderer = defineComponent({
     table: { type: Object as PropType<object>, required: true },
   },
   setup(componentProps) {
+    const renderHook = usePanelsRenderHook()
     const table = runtimeTable(componentProps.table)
     const state = shallowRef(table.store.snapshot)
     onScopeDispose(table.store.subscribe(next => {
@@ -546,10 +653,12 @@ export const VueTableRenderer = defineComponent({
             alignment: column.manifest.alignment,
             ariaSort: active?.direction === 'asc' ? 'ascending' : active?.direction === 'desc' ? 'descending' : 'none',
             header: column.manifest.sortable
-              ? h(ShadcnButton, {
-                  class: 'hp-table-sort',
+              ? h(Button, {
+                  class: 'hp-table-sort hp:-ml-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground',
                   'data-sorted': active?.direction,
+                  size: 'sm',
                   type: 'button',
+                  variant: 'ghost',
                   onClick: () => sort(column),
                 }, () => [label, h(active?.direction === 'asc' ? ChevronUp : active?.direction === 'desc' ? ChevronDown : ArrowUpDown, {
                   'aria-hidden': 'true',
@@ -577,20 +686,18 @@ export const VueTableRenderer = defineComponent({
           title: group.title,
         })) } : {}),
         ...(selectable ? { leading: {
-          header: h(ShadcnInput, {
+          header: h(Checkbox, {
             'aria-label': 'Select page',
-            checked: selectedOnPage,
-            type: 'checkbox',
-            onChange: (event: Event) => table.store.selectPage(recordIds, eventTarget<HTMLInputElement>(event).checked),
+            modelValue: selectedOnPage,
+            'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectPage(recordIds, checked === true),
           }),
           label: 'Select',
           render(record: RuntimeRecord): VNodeChild {
             const recordId = table.getRecordId(record)
-            return h(ShadcnInput, {
+            return h(Checkbox, {
               'aria-label': `Select record ${String(recordId)}`,
-              checked: table.store.isSelected(recordId),
-              type: 'checkbox',
-              onChange: (event: Event) => table.store.selectRecord(recordId, eventTarget<HTMLInputElement>(event).checked),
+              modelValue: table.store.isSelected(recordId),
+              'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectRecord(recordId, checked === true),
             })
           },
         } } : {}),
@@ -601,62 +708,67 @@ export const VueTableRenderer = defineComponent({
           header: 'Actions',
           label: 'Actions',
           render(record: RuntimeRecord): VNodeChild {
-            return rowActions.map(action => h(TableActionButton, { action, key: action.id, record, table }))
+            return rowActions.map(action => tableActionNode(action, table, record))
           },
         } } : {}),
       }
       const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen)
       const children: VNodeChild[] = [
+        renderHook(TablesRenderHook.HEADER_BEFORE),
         h('h2', { id: captionId }, table.caption),
+        renderHook(TablesRenderHook.HEADER_AFTER),
+        renderHook(TablesRenderHook.TOOLBAR_BEFORE),
         h('div', { class: 'hp-table-toolbar' }, [
-          h('label', [h(Search, { 'aria-hidden': 'true' }), h('span', { class: 'hp-visually-hidden' }, 'Search'), h(ShadcnInput, {
+          renderHook(TablesRenderHook.TOOLBAR_START),
+          renderHook(TablesRenderHook.TOOLBAR_SEARCH_BEFORE),
+          h('label', { class: 'hp:min-w-48 hp:flex-1' }, [h('span', { class: 'hp-visually-hidden' }, 'Search'), h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => h(Search, { 'aria-hidden': 'true' })), h(InputGroupInput, {
             placeholder: 'Search records…',
             type: 'search',
-            value: snapshot.search,
+            modelValue: snapshot.search,
             onInput: (event: Event) => {
               table.store.setSearch(eventTarget<HTMLInputElement>(event).value)
               notifyQueryChange(table.onQueryChange)
             },
-          })]),
-          h('div', { class: 'hp-column-manager' }, [
-            h(ShadcnButton, { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', type: 'button', onClick: () => { columnsOpen.value = !columnsOpen.value } }, () => [h(Columns3, { 'aria-hidden': 'true' }), 'Columns']),
-            columnsOpen.value ? h('div', { 'aria-label': 'Visible columns', role: 'menu' }, table.columns.filter(column => column.manifest.toggleable).map(column => h('label', {
-              'aria-checked': currentColumns.has(column.manifest.path),
+          })])]),
+          renderHook(TablesRenderHook.TOOLBAR_SEARCH_AFTER),
+          renderHook(TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE),
+          h(DropdownMenu, { open: columnsOpen.value, 'onUpdate:open': (open: boolean) => { columnsOpen.value = open } }, () => [
+            h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', class: 'hp-column-manager', type: 'button', variant: 'outline' }, () => [h(Columns3, { 'aria-hidden': 'true' }), 'Columns'])),
+            h(DropdownMenuContent, { align: 'end', 'aria-label': 'Visible columns' }, () => table.columns.filter(column => column.manifest.toggleable).map(column => h(DropdownMenuCheckboxItem, {
+              modelValue: currentColumns.has(column.manifest.path),
               key: column.manifest.path,
-              role: 'menuitemcheckbox',
-            }, [
-              h(ShadcnInput, {
-                checked: currentColumns.has(column.manifest.path),
-                type: 'checkbox',
-                onChange: (event: Event) => {
-                  const next = new Set(currentColumns)
-                  if (eventTarget<HTMLInputElement>(event).checked) next.add(column.manifest.path)
-                  else next.delete(column.manifest.path)
-                  table.store.setVisibleColumns([...next])
-                  notifyQueryChange(table.onQueryChange)
-                },
-              }),
-              column.manifest.label ?? column.manifest.path,
-            ]))) : null,
+              'onUpdate:modelValue': (checked: boolean) => {
+                const next = new Set(currentColumns)
+                if (checked) next.add(column.manifest.path)
+                else next.delete(column.manifest.path)
+                table.store.setVisibleColumns([...next])
+                notifyQueryChange(table.onQueryChange)
+              },
+            }, () => column.manifest.label ?? column.manifest.path))),
           ]),
+          renderHook(TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_AFTER),
           filtersNode,
-          ...headerActions.map(action => h(TableActionButton, { action, key: action.id, table })),
+          ...headerActions.map(action => tableActionNode(action, table)),
           ...table.transfers?.map(manifest => h(VueTransferAction, { key: manifest.id, manifest, table })) ?? [],
+          renderHook(TablesRenderHook.TOOLBAR_END),
         ]),
+        renderHook(TablesRenderHook.TOOLBAR_AFTER),
         hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions' }, [
           h('span', snapshot.selection.mode === 'all-matching'
             ? `All ${snapshot.total} matching records selected`
             : `${snapshot.selection.selectedRecordIds.length} records selected`),
-          ...bulkActions.map(action => h(TableActionButton, { action, key: action.id, table })),
-          h(ShadcnButton, { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
+          renderHook(TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE),
+          ...bulkActions.map(action => tableActionNode(action, table)),
+          renderHook(TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER),
+          h(Button, { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
         ]) : null,
         snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
-          ? h(ShadcnButton, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
+          ? h(Button, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
           : null,
-        snapshot.error ? h('div', { class: 'hp-table-error', 'data-slot': 'table-error', role: 'alert' }, [h('strong', 'Unable to load table'), h('span', snapshot.error.message)]) : null,
-        snapshot.loading ? h('div', { 'aria-live': 'polite', class: 'hp-table-loading', 'data-slot': 'table-loading', role: 'status' }, 'Loading records…') : null,
+        snapshot.error ? h(Alert, { class: 'hp-table-error', 'data-slot': 'table-error', variant: 'destructive' }, () => [h(AlertTitle, {}, () => 'Unable to load table'), h(AlertDescription, {}, () => snapshot.error?.message)]) : null,
+        snapshot.loading ? h('div', { 'aria-label': 'Loading records', 'aria-live': 'polite', class: 'hp-table-loading hp:space-y-2', 'data-slot': 'table-loading', role: 'status' }, [h(Skeleton, { class: 'hp:h-10 hp:w-full' }), h(Skeleton, { class: 'hp:h-10 hp:w-full' }), h(Skeleton, { class: 'hp:h-10 hp:w-full' })]) : null,
         !snapshot.loading && !snapshot.error && snapshot.records.length === 0
-          ? h('div', { class: 'hp-table-empty', 'data-slot': 'table-empty' }, table.emptyMessage ?? 'No records found.')
+          ? h(Empty, { class: 'hp-table-empty', 'data-slot': 'table-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No records'), h(EmptyDescription, {}, () => table.emptyMessage ?? 'No records found.')]))
           : null,
         snapshot.records.length > 0 ? h(VueTablePresentation, { presentation: tablePresentation }) : null,
         h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination', 'data-slot': 'table-pagination' }, [
@@ -664,10 +776,10 @@ export const VueTableRenderer = defineComponent({
             'Showing ', h('strong', String(paginationFrom)), ' to ', h('strong', String(paginationTo)), ' of ', h('strong', String(snapshot.total)), ' results',
           ]),
           typeof table.store.setPerPage === 'function' ? h('label', { class: 'hp-table-pagination-per-page' }, [
-            h(ShadcnSelect, {
+            h(NativeSelect, {
               'aria-label': 'Results per page',
               disabled: snapshot.loading,
-              value: String(snapshot.perPage),
+              modelValue: String(snapshot.perPage),
               onChange: (event: Event) => {
                 table.store.setPerPage?.(Number(eventTarget<HTMLSelectElement>(event).value))
                 notifyQueryChange(table.onQueryChange)
@@ -676,7 +788,7 @@ export const VueTableRenderer = defineComponent({
             h('span', 'per page'),
           ]) : null,
           h('span', { class: 'hp-table-pagination-pages' }, [
-            h(ShadcnButton, {
+            h(Button, {
               'aria-label': 'Previous page',
               disabled: snapshot.page <= 1 || snapshot.loading,
               type: 'button',
@@ -687,7 +799,7 @@ export const VueTableRenderer = defineComponent({
             }, () => [h(ChevronLeft, { 'aria-hidden': 'true' })]),
             ...paginationItems.map((item, index) => item === 'ellipsis'
               ? h('span', { 'aria-hidden': 'true', class: 'hp-table-pagination-ellipsis', key: `ellipsis-${index}` }, '…')
-              : h(ShadcnButton, {
+              : h(Button, {
                   'aria-current': item === snapshot.page ? 'page' : undefined,
                   'aria-label': `Page ${item}`,
                   'data-active': item === snapshot.page ? 'true' : undefined,
@@ -699,7 +811,7 @@ export const VueTableRenderer = defineComponent({
                     notifyQueryChange(table.onQueryChange)
                   },
                 }, () => [String(item)])),
-            h(ShadcnButton, {
+            h(Button, {
               'aria-label': 'Next page',
               disabled: snapshot.page >= pageCount || snapshot.loading,
               type: 'button',

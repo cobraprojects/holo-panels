@@ -87,10 +87,11 @@ describe('Holo Panels plugin', () => {
       'panel-routes.json',
       'registry.json',
       'resource-type-bindings.d.ts',
+      'theme.css',
     ])
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'registry.json')?.contents)
       .toBe('{\n  "version": 1,\n  "definitions": []\n}\n')
-    expect(result.watch).toEqual({ roots: ['server'] })
+    expect(result.watch).toEqual({ roots: ['server', 'resources'] })
     expect(Object.hasOwn(result, 'managedArtifacts')).toBe(false)
   })
 
@@ -98,6 +99,7 @@ describe('Holo Panels plugin', () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-prepare-'))
     temporaryDirectories.push(projectRoot)
     await mkdir(join(projectRoot, 'server/admin'), { recursive: true })
+    await mkdir(join(projectRoot, 'resources/panels/renderers'), { recursive: true })
     await writeFile(join(projectRoot, 'server/admin/AdminPanel.ts'), `
       export default {
         discoveryMarker: '@holo-js/panels/discovery/v1',
@@ -106,6 +108,9 @@ describe('Holo Panels plugin', () => {
         route: '/admin',
         client: { path: '/admin' },
       } as const
+    `)
+    await writeFile(join(projectRoot, 'resources/panels/renderers/react.ts'), `
+      export default function register(registry) { return registry }
     `)
 
     const result = await preparer.prepare(createPrepareContext(
@@ -124,7 +129,9 @@ describe('Holo Panels plugin', () => {
       'app/holo/panels/[panelId]/auth/[operation]/route.ts',
       'app/holo/panels/[panelId]/tenant/[operation]/route.ts',
     ])
-    expect(result.generatedArtifacts?.map(artifact => artifact.path)).toEqual(expect.arrayContaining(['plugin-renderers.ts', 'plugins.json']))
+    expect(result.generatedArtifacts?.map(artifact => artifact.path)).toEqual(expect.arrayContaining(['application-renderers.ts', 'plugin-renderers.ts', 'plugins.json']))
+    expect(result.generatedArtifacts?.find(artifact => artifact.path === 'application-renderers.ts')?.contents)
+      .toContain("../../../resources/panels/renderers/react")
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'framework-artifacts.json')?.contents)
       .toContain('"checksum"')
   })

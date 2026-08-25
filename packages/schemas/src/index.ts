@@ -1,4 +1,4 @@
-import { type JsonObject, toJsonValue } from '@holo-js/panels-core'
+import { type JsonObject, type RecordPath, toJsonValue } from '@holo-js/panels-core'
 
 export type SchemaOperation = 'create' | 'edit' | 'view' | string
 export type SchemaColumns = number | Readonly<Record<string, number>>
@@ -12,11 +12,14 @@ export interface SchemaComponentManifest {
 }
 
 export interface SchemaComponentContract<TRecord extends object = object> {
-  readonly resourceRecordType?: TRecord
   compile(): object
 }
 
 export type SchemaComponent<TRecord extends object = object> = SchemaComponentContract<TRecord>
+export type SchemaComponentFor<TRecord extends object> = SchemaComponentContract & (
+  | { readonly recordPath: RecordPath<TRecord> }
+  | { readonly recordPath?: undefined }
+)
 
 function compileComponent(component: SchemaComponentContract): SchemaComponentManifest {
   const compiled = component.compile()
@@ -46,8 +49,10 @@ export class Schema<TRecord extends object = Record<string, unknown>, TState ext
     this.#factory = factory
   }
 
-  components<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: TComponents | ((factory: TFactory) => TComponents)): this {
-    let resolved: TComponents
+  components(components: readonly SchemaComponentFor<TRecord>[]): this
+  components<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: (factory: TFactory) => TComponents): this
+  components<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: readonly SchemaComponentFor<TRecord>[] | ((factory: TFactory) => TComponents)): this {
+    let resolved: readonly SchemaComponentContract[]
     if (typeof components === 'function') {
       const factory = this.#factory
       if (factory === undefined) throw new Error('Schema component callbacks require a component factory')

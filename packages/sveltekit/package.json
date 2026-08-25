@@ -24,7 +24,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/package-svelte-source.mjs",
+    "build": "tsup && svelte-package -i src -o dist/svelte",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest --run --passWithNoTests --reporter=json"
   },

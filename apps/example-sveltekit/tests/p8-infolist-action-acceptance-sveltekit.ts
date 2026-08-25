@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { EntryRenderer, SvelteActionRenderer } from '@holo-js/panels-svelte'
+import { EntryRenderer, registerPanelNotificationStore, SvelteActionRenderer } from '@holo-js/panels-svelte'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import type { Component, flushSync, mount, unmount } from 'svelte'
 import type { render as RenderComponent } from 'svelte/server'
@@ -86,7 +86,7 @@ async function render(model: InfolistActionAcceptanceModel): Promise<string> {
   }
   if (!serverEntryRenderer || !serverActionRenderer || !renderComponent) throw new Error('Svelte P8 acceptance SSR renderer is unavailable')
   const entries = model.entries.map(store => renderComponent?.(serverEntryRenderer as Component, { props: { action: model.entryAction, store } }).body)
-  const action = renderComponent(serverActionRenderer, { props: { action: model.actions.publish, recordIds: [42], store: model.actionStore } }).body
+  const action = renderComponent(serverActionRenderer, { props: { action: model.actions.publish, panelId: 'admin', recordIds: [42], store: model.actionStore } }).body
   return `${entries.join('')}${action}`
 }
 
@@ -96,8 +96,9 @@ export const svelteKitInfolistActionAcceptanceFixture: InfolistActionAcceptanceF
     const client = await clientRuntime()
     const container = document.createElement('div')
     document.body.append(container)
+    const unregisterNotifications = registerPanelNotificationStore('admin', model.notificationStore)
     const entryComponents = model.entries.map(store => client.mountComponent(EntryRenderer, { props: { action: model.entryAction, store }, target: container }))
-    const actionComponent = client.mountComponent(SvelteActionRenderer, { props: { action: model.actions.publish, recordIds: [42], store: model.actionStore }, target: container })
+    const actionComponent = client.mountComponent(SvelteActionRenderer, { props: { action: model.actions.publish, panelId: 'admin', recordIds: [42], store: model.actionStore }, target: container })
     client.flush()
     return driver(
       container,
@@ -110,6 +111,7 @@ export const svelteKitInfolistActionAcceptanceFixture: InfolistActionAcceptanceF
       async () => {
         await client.unmountComponent(actionComponent)
         for (const component of entryComponents) await client.unmountComponent(component)
+        unregisterNotifications()
         await ssrServer?.close()
         ssrServer = undefined
         serverEntryRenderer = undefined

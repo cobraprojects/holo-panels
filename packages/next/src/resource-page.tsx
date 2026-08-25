@@ -39,7 +39,6 @@ import {
   type ReactTableSummary,
   type UploadPolicy,
 } from '@holo-js/panels-react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Button, Card, CardContent, CardFooter, PanelsIcon } from './internal-ui'
@@ -457,7 +456,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
       setGroups(tableGroups(result.data.groups))
       setSummaries(tableSummaries(result.data.summaries))
       store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total })
-    })
+    }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
   const createAction = objects(resource.actions).find(action => action.kind === 'create' && action.visible !== false)
   const createRoute = configuredRoute(resource, 'create')
@@ -853,7 +852,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
     {actions.map((action) => {
       if (action.kind === 'edit' || action.kind === 'view') {
         const route = configuredRoute(resource, action.kind, recordId)
-        return route ? <Button asChild className="hp-action-trigger" key={action.id} variant="outline"><Link data-action-id={action.id} data-color={action.color ?? undefined} href={route}>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>{action.label}</span></Link></Button> : null
+        return route ? <Button asChild className="hp-action-trigger" key={action.id} variant="outline"><a data-action-id={action.id} data-color={action.color ?? undefined} href={route}>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>{action.label}</span></a></Button> : null
       }
       if (action.kind === 'create') return null
       return <ReactActionRenderer key={action.id} manifest={action} panelId={panelId} recordIds={[recordId]} registry={registry} store={store} />

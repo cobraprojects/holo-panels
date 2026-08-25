@@ -42,6 +42,7 @@ const catalogDependencies = new Set([
   '@holo-js/notifications',
   '@holo-js/security',
   '@holo-js/session',
+  '@holo-js/storage',
   '@holo-js/validation',
   '@sveltejs/adapter-node',
   '@sveltejs/kit',
@@ -194,6 +195,12 @@ async function adaptFrameworkFiles(destination, example) {
   await activatePanelsPlugin(destination)
   if (example.framework === 'nuxt') {
     await writeFile(join(destination, 'app/app.vue'), '<template>\n  <NuxtPage />\n</template>\n')
+    const path = join(destination, 'nuxt.config.ts')
+    const contents = await readFile(path, 'utf8')
+    const closing = '\n  },\n})\n'
+    const closingIndex = contents.lastIndexOf(closing)
+    if (closingIndex < 0) throw new Error(`Unable to configure panel bundling in ${path}`)
+    await writeFile(path, `${contents.slice(0, closingIndex)}\n    resolve: {\n      dedupe: ['vue'],\n    },\n    ssr: {\n      noExternal: ['@holo-js/panels-nuxt', '@holo-js/panels-vue', 'reka-ui'],\n    },${contents.slice(closingIndex)}`)
   }
   if (example.framework === 'next') {
     const path = join(destination, 'tsconfig.json')
@@ -338,7 +345,7 @@ async function scaffoldExample(scaffoldRoot, example) {
       HOLO_PANELS_SCAFFOLD_OPTIONS: JSON.stringify({
         databaseDriver: 'sqlite',
         framework: example.framework,
-        optionalPackages: ['security'],
+        optionalPackages: ['security', 'storage'],
         packageManager: 'bun',
         projectName: example.directory,
         storageDefaultDisk: 'local',

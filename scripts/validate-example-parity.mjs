@@ -73,6 +73,15 @@ try {
     if (expectedManifest.dependencies?.['@holo-js/security'] !== 'catalog:') {
       differences.push(`${example.directory}/package.json: missing the scaffold-owned security dependency`)
     }
+    if (expectedManifest.dependencies?.['@holo-js/storage'] !== 'catalog:') {
+      differences.push(`${example.directory}/package.json: missing the scaffold-owned storage dependency`)
+    }
+    if (example.framework === 'nuxt') {
+      const nuxtConfig = await readFile(join(expectedRoot, 'nuxt.config.ts'), 'utf8')
+      if (!nuxtConfig.includes("dedupe: ['vue']") || !nuxtConfig.includes("noExternal: ['@holo-js/panels-nuxt', '@holo-js/panels-vue', 'reka-ui']")) {
+        differences.push(`${example.directory}/nuxt.config.ts: missing panel workspace bundling rules`)
+      }
+    }
     for (const path of ['config/security.ts', 'config/cors.ts']) {
       const expected = await readFile(join(expectedRoot, path)).catch(() => undefined)
       if (!expected) {

@@ -212,7 +212,8 @@ describe('SvelteKit panel SPA navigation', () => {
         manifest: { ...current.page.manifest, pageType: 'create', path: '/admin/posts/create' },
       },
     }
-    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined)
+    const goto = vi.fn(async () => undefined)
+    configureSvelteKitNavigation(goto)
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const fields = new URLSearchParams(String(init?.body ?? ''))
       const request = JSON.parse(fields.get('request') ?? '{}') as { readonly id?: string }
@@ -225,7 +226,7 @@ describe('SvelteKit panel SPA navigation', () => {
 
     container.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/admin/posts/new-post'))
+    await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/admin/posts/new-post'))
     await unmount(component)
     vi.unstubAllGlobals()
   })

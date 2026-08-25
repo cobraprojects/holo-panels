@@ -19,6 +19,7 @@ import { createHoloUploadStorage } from '../src/fields/upload/storage'
 const storageRuntime = vi.hoisted(() => {
   const disk = {
     delete: vi.fn(async () => undefined),
+    driver: 's3' as const,
     listFiles: vi.fn(async () => ({ nextCursor: null, paths: ['temporary/upload.bin'] })),
     getBytes: vi.fn(async () => new Uint8Array([1, 2, 3])),
     json: vi.fn(async () => ({ state: 'pending' })),

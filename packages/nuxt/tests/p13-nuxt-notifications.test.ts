@@ -3,6 +3,7 @@ import { ClientToastStore } from '@holo-js/panels-vue'
 import { createApp, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PanelPage, type NuxtPanelPage } from '../src'
+import { configureNuxtNavigation } from './nuxt-imports'
 
 interface RecordedRequest {
   readonly operation: string
@@ -113,6 +114,7 @@ function installFetch(effects: readonly Record<string, unknown>[] = [], mutation
 }
 
 afterEach(() => {
+  configureNuxtNavigation(async () => undefined)
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -256,7 +258,8 @@ describe('Nuxt P13 notification integration', () => {
         },
       },
     }
-    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined)
+    const routerPush = vi.fn(async () => undefined)
+    configureNuxtNavigation(routerPush)
     installFetch([], true, { id: 'article-1' })
     const container = document.createElement('div')
     document.body.append(container)
@@ -265,7 +268,7 @@ describe('Nuxt P13 notification integration', () => {
     app.mount(container)
     container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/admin/articles/article-1'))
+    await vi.waitFor(() => expect(routerPush).toHaveBeenCalledWith('/admin/articles/article-1'))
     app.unmount()
   })
 })

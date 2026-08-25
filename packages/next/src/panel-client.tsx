@@ -79,7 +79,7 @@ import {
   type ReactWidgetManifest,
 } from '@holo-js/panels-react'
 import { useRouter } from 'next/navigation'
-import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { NextPanelClientProps } from './contracts'
 import { Button, InputGroup, InputGroupAddon, InputGroupInput, PanelsIcon } from './internal-ui'
 
@@ -369,15 +369,6 @@ function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mo
 
 export function NextPanelClient({ notificationRealtime, payload, registry: registryInput, tenantTransport }: NextPanelClientProps): ReactNode {
   const router = useRouter()
-  const navigatePanelLink = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (event.defaultPrevented || event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-    const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null
-    if (!target || target.hasAttribute('download') || (target.target && target.target !== '_self')) return
-    const url = new URL(target.href, globalThis.location.href)
-    if (url.origin !== globalThis.location.origin) return
-    event.preventDefault()
-    router.push(`${url.pathname}${url.search}${url.hash}`)
-  }
   const registry = useMemo<ComponentRegistry>(
     () => registryInput ?? createNextPanelComponentRegistry(),
     [registryInput],
@@ -526,7 +517,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     </SidebarInset>
     {renderHook(PanelsRenderHook.CONTENT_AFTER)}
   </>
-  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} onClick={navigatePanelLink} style={panelConfigurationVariables(manifest) as CSSProperties}>
+  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
     {renderHook(PanelsRenderHook.BODY_START)}{renderHook(PanelsRenderHook.LAYOUT_START)}
     {manifest.assets?.map(asset => asset.type === 'css' ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" /> : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
     {renderHook(PanelsRenderHook.TOPBAR_BEFORE)}

@@ -153,7 +153,7 @@ describe('shared React renderer contract', () => {
     expect(container.querySelector('.hp-relation-manager-count[data-slot="badge"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
     expect(container.querySelector('[data-operation="attach"] [data-icon="link"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="relation-loading-empty"]')).not.toBeNull()
+    expect(container.textContent).toContain('No tags found.')
     await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click() })
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')

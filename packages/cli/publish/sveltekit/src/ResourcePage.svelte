@@ -54,12 +54,15 @@
   const resourceScopes = $derived([data.page.manifest.id, ...(resource ? [resource.id] : [])])
   const record = $derived(jsonRecord(data.page.data.record))
   const records = $derived(jsonRecords(data.page.data.records))
-  let relations = $state(relationManagers(undefined))
+  let loadedRelations = $state<SvelteRelationManagerRendererProps['managers'] | null>(null)
+  const relations = $derived(loadedRelations ?? relationManagers(data.page.data.relations))
   const readOnlyRelations = $derived(data.panel.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true)
   let persistedRouteIdentifier = $state<number | string>('')
   const currentRouteIdentifier = $derived(persistedRouteIdentifier === '' ? recordRouteIdentifier(record) : persistedRouteIdentifier)
-  let renderedGroups = $state<readonly SvelteTableGroup<Record<string, unknown>>[]>([])
-  let renderedSummaries = $state<readonly SvelteTableSummary[]>([])
+  let loadedGroups = $state<readonly SvelteTableGroup<Record<string, unknown>>[] | null>(null)
+  let loadedSummaries = $state<readonly SvelteTableSummary[] | null>(null)
+  const renderedGroups = $derived(loadedGroups ?? tableGroups(data.page.data.groups))
+  const renderedSummaries = $derived(loadedSummaries ?? tableSummaries(data.page.data.summaries))
   const rowActions = $derived.by(() => {
     if (!resource) return []
     const configured = resource.tableActions
@@ -174,12 +177,12 @@
   let submitError = $state<string | null>(null)
 
   $effect(() => {
-    relations = relationManagers(data.page.data.relations)
+    loadedRelations = relationManagers(data.page.data.relations)
   })
 
   $effect(() => {
-    renderedGroups = tableGroups(data.page.data.groups)
-    renderedSummaries = tableSummaries(data.page.data.summaries)
+    loadedGroups = tableGroups(data.page.data.groups)
+    loadedSummaries = tableSummaries(data.page.data.summaries)
   })
 
   $effect(() => {
@@ -482,7 +485,7 @@
     })
     await effects.apply(response)
     if (!response.ok) throw new Error(response.error.message)
-    relations = relationManagers(response.data.relations)
+    loadedRelations = relationManagers(response.data.relations)
   }
 
   async function loadRelationOptions(managerId: string, search: string): Promise<readonly { readonly label: string, readonly value: number | string }[]> {
@@ -514,8 +517,8 @@
     }
     const nextRecords = jsonRecords(response.data.records)
     const total = typeof response.data.total === 'number' ? response.data.total : nextRecords.length
-    renderedGroups = tableGroups(response.data.groups)
-    renderedSummaries = tableSummaries(response.data.summaries)
+    loadedGroups = tableGroups(response.data.groups)
+    loadedSummaries = tableSummaries(response.data.summaries)
     table.applyData({ queryVersion: query.queryVersion, records: nextRecords, total })
   }
 </script>

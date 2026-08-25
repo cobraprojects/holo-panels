@@ -244,7 +244,7 @@ describe('P9-D Nuxt adapter', () => {
       path: '/admin/posts?status=draft',
       fetch: async (path, options) => {
         requests.push(`${path}:${JSON.stringify(options)}`)
-        return page
+        return structuredClone(page)
       },
     })
     const admin = await usePanelPage({ panelId: 'admin' })
@@ -572,7 +572,9 @@ describe('P9-D Nuxt adapter', () => {
     }))
     const response = await fetch(new Request('http://localhost/holo/panels/admin/page-data?path=%2Fadmin%2Fposts'))
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ path: '/admin/posts', page: { title: 'Posts' } })
+    const payload = await response.json() as NuxtPanelPage
+    expect(payload.path).toBe('/admin/posts')
+    expect(payload.page.title).toBe('Posts')
     const missing = await fetch(new Request('http://localhost/holo/panels/admin/page-data?path=%2Fadmin%2Fmissing'))
     expect(missing.status).toBe(404)
     expect(await missing.text()).not.toContain('missing')
@@ -686,9 +688,8 @@ describe('P9-D Nuxt adapter', () => {
     const confirmAction = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Confirm')
     expect(confirmAction).toBeDefined()
     confirmAction?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await vi.waitFor(() => expect(actionRequests.length + (container.querySelector('[role="alert"]') ? 1 : 0)).toBeGreaterThan(0))
+    await vi.waitFor(() => expect(actionRequests).toHaveLength(2))
     expect(container.querySelector('[role="alert"]')?.textContent).toBeUndefined()
-    expect(actionRequests).toHaveLength(1)
     expect(actionRequests[0]?.url).toBe('http://localhost/holo/panels/backoffice/action')
     const actionParameters = new URLSearchParams(await actionRequests[0]?.clone().text())
     expect(JSON.parse(actionParameters.get('request') ?? '{}')).toMatchObject({
@@ -696,6 +697,8 @@ describe('P9-D Nuxt adapter', () => {
       panelId: 'backoffice',
       payload: { actionId: 'remove-article', recordIds: ['guide'], resourceId: 'articles' },
     })
+    const refreshParameters = new URLSearchParams(await actionRequests[1]?.clone().text())
+    expect(JSON.parse(refreshParameters.get('request') ?? '{}')).toMatchObject({ operation: 'table-data', panelId: 'backoffice' })
     listApp.unmount()
     fetchAction.mockRestore()
     vi.unstubAllGlobals()
@@ -757,7 +760,7 @@ describe('P9-D Nuxt adapter', () => {
     ])
     expect(actions.map(action => action.kind)).toEqual(['view', 'edit', 'delete', 'action-group'])
     expect(actions.at(-1)).toMatchObject({ actions: [expect.objectContaining({ kind: 'custom' }), expect.objectContaining({ kind: 'delete' })] })
-    expect(fields.find(field => field.path === 'slug')).toMatchObject({ type: 'text' })
+    expect(fields.find(field => field.path === 'slug')).toMatchObject({ type: 'slug' })
     expect(fields.find(field => field.path === 'category')).toMatchObject({ properties: { options: [{ label: 'News', value: 'News' }, { label: 'Guides', value: 'Guides' }] } })
     const panel = AdminPanel.compile()
     const context = { guard: 'web', operation: 'page-data' as const, panelId: 'admin', provider: 'session', signal: new AbortController().signal }

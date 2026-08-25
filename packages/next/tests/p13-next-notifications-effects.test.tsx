@@ -308,7 +308,7 @@ describe('Next notification and effect integration', () => {
     await click(container, 'Run action')
     expect(order).toEqual(['toast', 'redirect'])
     expect(toastStore.state.items).toHaveLength(1)
-    if (!ok) expect(document.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')
+    if (!ok) expect(toastStore.state.items[0]?.title).toBe('Failed safely')
     await act(async () => root.unmount())
     effects.dispose()
   })

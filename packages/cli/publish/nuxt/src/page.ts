@@ -770,7 +770,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       summaries.splice(0, summaries.length, ...tableSummaries(response.data.summaries))
       store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total: typeof response.data.total === 'number' ? response.data.total : nextRecords.length })
       if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}?${store.toQueryString()}`)
-    })
+    }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
   const createAction = schema.recordActions.find(action => action.kind === 'create' && action.visible)
   const createRoute = schema.routes.create

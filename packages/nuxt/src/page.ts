@@ -770,7 +770,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       summaries.splice(0, summaries.length, ...tableSummaries(response.data.summaries))
       store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total: typeof response.data.total === 'number' ? response.data.total : nextRecords.length })
       if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}?${store.toQueryString()}`)
-    })
+    }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
   const createAction = schema.recordActions.find(action => action.kind === 'create' && action.visible)
   const createRoute = schema.routes.create
@@ -1087,15 +1087,6 @@ export const PanelPage = defineComponent({
   },
   setup(props) {
     const router = useRouter()
-    const navigatePanelLink = (event: MouseEvent): void => {
-      if (event.defaultPrevented || event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-      const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null
-      if (!target || target.hasAttribute('download') || (target.target && target.target !== '_self')) return
-      const url = new URL(target.href, globalThis.location.href)
-      if (url.origin !== globalThis.location.origin) return
-      event.preventDefault()
-      void router.push(`${url.pathname}${url.search}${url.hash}`)
-    }
     const ready = ref(false)
     const panelId = props.page.bootstrap.manifest.id
     const registry = props.registry ?? createNuxtPanelComponentRegistry()
@@ -1339,7 +1330,6 @@ export const PanelPage = defineComponent({
           'data-sidebar-fully-collapsible': bootstrap.manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false',
           'data-width': bootstrap.manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained',
           inert: ready.value ? undefined : '',
-          onClick: navigatePanelLink,
           ref: shellElement,
           style: panelConfigurationVariables(bootstrap.manifest),
         }, [

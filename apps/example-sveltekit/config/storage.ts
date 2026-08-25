@@ -1,12 +1,18 @@
 import { defineStorageConfig } from '@holo-js/storage'
+import { env } from '@holo-js/config'
 
 export default defineStorageConfig({
-  defaultDisk: 'private',
+  defaultDisk: env('STORAGE_DEFAULT_DISK', 'local'),
+  routePrefix: env('STORAGE_ROUTE_PREFIX', '/storage'),
   disks: {
-    private: {
+    local: {
       driver: 'local',
       root: './storage/app',
-      visibility: 'private',
+    },
+    public: {
+      driver: 'public',
+      root: './storage/app/public',
+      visibility: 'public',
     },
   },
 })

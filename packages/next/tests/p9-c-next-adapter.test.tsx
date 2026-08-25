@@ -1,10 +1,10 @@
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRequestEnvelope, definePage, definePanel, defineStatsWidget, TRANSPORT_REQUEST_FIELD, type HoloAuth, type JsonObject } from '@holo-js/panels-core'
-import type { PanelAvatarComponentProps, PanelChromeComponentProps, ReactNotificationInboxTriggerProps } from '@holo-js/panels-react'
+import { ClientToastStore, ReactFeedbackProvider, type PanelAvatarComponentProps, type PanelChromeComponentProps, type ReactNotificationInboxTriggerProps } from '@holo-js/panels-react'
 import { createNextPanelComponentRegistry, NextPanelClient } from '../src/panel-client'
 import { NextPanelResourcePage } from '../src/resource-page'
 import { createPanelOperationRoute } from '../src/operation'
@@ -760,6 +760,8 @@ describe('Next panel adapter', () => {
       return body.properties
     }
     const root = createRoot(container as unknown as Element)
+    const toastStore = new ClientToastStore()
+    const renderResource = async (page: ReactNode): Promise<void> => act(async () => root.render(<ReactFeedbackProvider panelId="admin" store={toastStore}>{page}</ReactFeedbackProvider>))
     const input = (selector: string): HTMLInputElement => container.querySelector(selector) as unknown as HTMLInputElement
     const select = (selector: string): HTMLSelectElement => container.querySelector(selector) as unknown as HTMLSelectElement
     const click = async (label: string): Promise<void> => act(async () => {
@@ -792,13 +794,13 @@ describe('Next panel adapter', () => {
     const firstPost = { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' }
     const cityGuide = { category: 'Guides', city: 'Giza', id: 2, slug: 'city-guide', title: 'City guide' }
     const listRecords = [firstPost, cityGuide]
-    await act(async () => root.render(<NextPanelResourcePage data={{
+    await renderResource(<NextPanelResourcePage data={{
       groups: [
         { key: 'News', records: [firstPost], title: 'News' },
         { key: 'Guides', records: [cityGuide], title: 'Guides' },
       ],
       records: listRecords,
-    }} panelId="admin" panelPath="/admin" properties={listProperties} />))
+    }} panelId="admin" panelPath="/admin" properties={listProperties} />)
     expect(container.textContent).toContain('Post: First post')
     const tableSearch = input('input[type="search"]')
     expect(tableSearch.closest('[data-slot="input-group"]')).not.toBeNull()
@@ -822,7 +824,7 @@ describe('Next panel adapter', () => {
     const createForm = createResource.form
     if (!createForm || typeof createForm !== 'object' || Array.isArray(createForm) || !Array.isArray(createForm.fields)) throw new Error('Create page is missing its form definition.')
     createForm.fields = createForm.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, label: null } : field)
-    await act(async () => root.render(<NextPanelResourcePage data={{}} panelId="admin" panelPath="/admin" properties={createProperties} unsavedChangesAlerts />))
+    await renderResource(<NextPanelResourcePage data={{}} panelId="admin" panelPath="/admin" properties={createProperties} unsavedChangesAlerts />)
     const renderedLabels = [...container.querySelectorAll('label')].map(label => label.textContent ?? '')
     expect(renderedLabels.some(label => label.startsWith('Title'))).toBe(true)
     expect(renderedLabels.some(label => label.startsWith('Slug'))).toBe(true)
@@ -844,17 +846,17 @@ describe('Next panel adapter', () => {
     const savedBeforeUnload = new Event('beforeunload', { cancelable: true })
     globalThis.dispatchEvent(savedBeforeUnload)
     expect(savedBeforeUnload.defaultPrevented).toBe(false)
-    await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Alexandria', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))
+    await renderResource(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Alexandria', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />)
     expect(input('[data-field-path="title"] input').value).toBe('First post')
     await change(input('[data-field-path="title"] input'), 'Edited post')
     expect(input('[data-field-path="slug"] input').value).toBe('edited-post')
     await click('Save post')
     fail = true
-    await act(async () => root.render(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />))
+    await renderResource(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />)
     await click('Delete')
     await click('Confirm')
     await click('Run action')
-    expect(document.querySelector('[role="alert"]')?.textContent).toBe('The operation could not be completed.')
+    await vi.waitFor(() => expect(toastStore.state.items.at(-1)?.body).toBe('The operation could not be completed.'))
     expect(mutations.map(mutation => mutation.intent)).toEqual(['delete', 'create', 'edit'])
     await act(async () => root.unmount())
   })
@@ -868,7 +870,6 @@ describe('Next panel adapter', () => {
     const form = resource.form
     if (!form || typeof form !== 'object' || Array.isArray(form) || !Array.isArray(form.fields)) throw new Error('Create page is missing its fields.')
     form.fields = form.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, required: false } : field)
-    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined)
     const operation = { execute: vi.fn(async () => ({ data: { record: { id: 'new-post' } }, ok: true as const })) }
     const container = document.createElement('div')
     document.body.append(container)
@@ -881,7 +882,7 @@ describe('Next panel adapter', () => {
     })
 
     await vi.waitFor(() => expect(operation.execute).toHaveBeenCalled())
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/admin/posts/new-post'))
+    await vi.waitFor(() => expect(routerPush).toHaveBeenCalledWith('/admin/posts/new-post'))
     await act(async () => root.unmount())
   })
 

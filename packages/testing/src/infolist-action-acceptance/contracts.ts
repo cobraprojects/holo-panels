@@ -1,4 +1,4 @@
-import type { ClientActionManifest, ClientActionStore, EntryStateStore } from '@holo-js/panels-client'
+import type { ClientActionManifest, ClientActionStore, ClientToastStore, EntryStateStore } from '@holo-js/panels-client'
 
 export interface InfolistActionAcceptanceModel {
   readonly actions: {
@@ -9,6 +9,7 @@ export interface InfolistActionAcceptanceModel {
   readonly actionStore: ClientActionStore<string>
   readonly entries: readonly EntryStateStore[]
   readonly entryAction: (id: string) => void
+  readonly notificationStore: ClientToastStore
 }
 
 export interface InfolistActionAcceptanceRenderReport {
@@ -34,6 +35,7 @@ export interface InfolistActionAcceptanceFixture {
 
 export interface InfolistActionAcceptanceJourneyReport {
   readonly deniedMarkup: string
+  readonly deniedNotification: { readonly body: string | null, readonly title: string } | null
   readonly entryActions: readonly string[]
   readonly framework: InfolistActionAcceptanceRenderReport['framework']
   readonly activeDialogCount: number

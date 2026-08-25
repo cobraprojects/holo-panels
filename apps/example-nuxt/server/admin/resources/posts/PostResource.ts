@@ -89,6 +89,7 @@ export default class PostResource extends Resource {
     ])
     .deferFilters()
     .recordActions([
+      component.ViewAction.make(),
       component.EditAction.make(),
       component.DeleteAction.make(),
     ])

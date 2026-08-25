@@ -39,8 +39,8 @@ describe('P8 infolist and action phase-gate acceptance', () => {
       expect(report.successMarkup, name).toContain('Action completed')
       expect(report.activeDialogCount, name).toBe(1)
       expect(report.remainingDialogCount, name).toBe(1)
-      expect(report.deniedMarkup, name).toContain('role="alert"')
-      expect(report.deniedMarkup, name).toContain('Action denied by policy')
+      expect(report.deniedMarkup, name).not.toContain('Action denied by policy')
+      expect(report.deniedNotification, name).toEqual({ body: 'The operation could not be completed.', title: 'Action failed' })
       expect(report.requests[1], name).toEqual({ actionId: 'posts.denied', input: {}, recordIds: [42] })
       expect(document.body.childElementCount, name).toBe(0)
     }

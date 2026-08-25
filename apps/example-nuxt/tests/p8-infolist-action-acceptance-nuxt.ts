@@ -1,4 +1,4 @@
-import { VueActionRenderer, VueEntryRenderer } from '@holo-js/panels-vue'
+import { registerPanelNotificationStore, VueActionRenderer, VueEntryRenderer } from '@holo-js/panels-vue'
 import { createApp, createSSRApp, defineComponent, h, nextTick } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import type {
@@ -11,7 +11,7 @@ import type {
 function component(model: InfolistActionAcceptanceModel) {
   return defineComponent(() => () => h('div', [
     ...model.entries.map(store => h(VueEntryRenderer, { entry: { action: model.entryAction, store }, key: store.snapshot.id })),
-    h(VueActionRenderer, { action: model.actions.publish, recordIds: [42], store: model.actionStore }),
+    h(VueActionRenderer, { action: model.actions.publish, panelId: 'admin', recordIds: [42], store: model.actionStore }),
   ]))
 }
 
@@ -56,10 +56,14 @@ export const nuxtInfolistActionAcceptanceFixture: InfolistActionAcceptanceFixtur
   async mount(model) {
     const container = document.createElement('div')
     document.body.append(container)
+    const unregisterNotifications = registerPanelNotificationStore('admin', model.notificationStore)
     const app = createApp(component(model))
     app.mount(container)
     await nextTick()
-    return driver(container, () => app.unmount())
+    return driver(container, () => {
+      app.unmount()
+      unregisterNotifications()
+    })
   },
   async render(model): Promise<InfolistActionAcceptanceRenderReport> {
     const markup = await render(model)

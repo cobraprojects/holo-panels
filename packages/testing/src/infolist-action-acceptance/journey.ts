@@ -1,4 +1,4 @@
-import { ClientActionStore, EntryStateStore, type ClientActionManifest, type JsonValue } from '@holo-js/panels-client'
+import { ClientActionStore, ClientToastStore, EntryStateStore, type ClientActionManifest, type JsonValue } from '@holo-js/panels-client'
 import type {
   InfolistActionAcceptanceFixture,
   InfolistActionAcceptanceJourneyReport,
@@ -96,6 +96,7 @@ export async function runInfolistActionAcceptanceJourney(
       entryStore('topics', 'repeatable', 'Topics', ['travel', 'history']),
     ],
     entryAction: id => { entryActions.push(id) },
+    notificationStore: new ClientToastStore(),
   }
   const render = await fixture.render(model)
   const driver = await fixture.mount(model)
@@ -125,8 +126,10 @@ export async function runInfolistActionAcceptanceJourney(
       }
     })
     const deniedMarkup = driver.markup()
+    const deniedToast = model.notificationStore.state.items.at(-1)
     return {
       deniedMarkup,
+      deniedNotification: deniedToast ? { body: deniedToast.body, title: deniedToast.title } : null,
       entryActions,
       framework: fixture.framework,
       activeDialogCount,

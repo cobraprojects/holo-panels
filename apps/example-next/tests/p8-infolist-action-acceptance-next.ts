@@ -2,7 +2,7 @@ import { createElement, Fragment } from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
-import { ReactActionRenderer, ReactEntryRenderer } from '@holo-js/panels-react'
+import { ReactActionRenderer, ReactEntryRenderer, ReactFeedbackProvider } from '@holo-js/panels-react'
 import type {
   InfolistActionAcceptanceDriver,
   InfolistActionAcceptanceFixture,
@@ -11,9 +11,11 @@ import type {
 } from '../../../packages/testing/src/infolist-action-acceptance/index'
 
 function view(model: InfolistActionAcceptanceModel) {
-  return createElement(Fragment, null,
-    ...model.entries.map(store => createElement(ReactEntryRenderer, { action: model.entryAction, key: store.snapshot.id, store })),
-    createElement(ReactActionRenderer<string>, { manifest: model.actions.publish, recordIds: [42], store: model.actionStore }),
+  return createElement(ReactFeedbackProvider, { panelId: 'admin', store: model.notificationStore },
+    createElement(Fragment, null,
+      ...model.entries.map(store => createElement(ReactEntryRenderer, { action: model.entryAction, key: store.snapshot.id, store })),
+      createElement(ReactActionRenderer<string>, { manifest: model.actions.publish, panelId: 'admin', recordIds: [42], store: model.actionStore }),
+    ),
   )
 }
 

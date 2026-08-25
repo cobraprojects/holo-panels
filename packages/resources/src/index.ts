@@ -20,6 +20,7 @@ import {
   type ResourceCompositionTypes,
   type ResourceQuery,
   type ResourceRecord,
+  type PanelRelationValue,
   type RecordPath,
   type TableRecordIdentifier,
 } from '@holo-js/panels-core'
@@ -51,11 +52,13 @@ type ModelRelationsFor<TModel> = TModel extends { readonly definition: { readonl
 type RelatedRecord<TRelation, TDepth extends number> = TRelation extends { readonly related: () => infer TModel }
   ? ResourceRecordFromModel<TModel, TDepth>
   : never
-type RelatedValue<TRelation, TDepth extends number> = TRelation extends { readonly kind: 'belongsToMany' | 'hasMany' | 'hasManyThrough' | 'morphMany' | 'morphedByMany' | 'morphToMany' }
-  ? readonly RelatedRecord<TRelation, TDepth>[]
-  : TRelation extends { readonly kind: 'morphTo' }
-    ? object | null
-    : RelatedRecord<TRelation, TDepth> | null
+type RelatedValue<TRelation, TDepth extends number> = PanelRelationValue<
+  TRelation extends { readonly kind: 'belongsToMany' | 'hasMany' | 'hasManyThrough' | 'morphMany' | 'morphedByMany' | 'morphToMany' }
+    ? readonly RelatedRecord<TRelation, TDepth>[]
+    : TRelation extends { readonly kind: 'morphTo' }
+      ? object | null
+      : RelatedRecord<TRelation, TDepth> | null
+>
 type RelationValues<TRelations, TDepth extends number> = TDepth extends 0
   ? object
   : TRelations extends object

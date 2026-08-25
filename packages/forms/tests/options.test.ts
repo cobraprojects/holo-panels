@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { createFieldFactory } from '../src/index'
+import { createFieldFactory, type FieldContext } from '../src/index'
 
 interface RecordFixture {
   readonly city: string
 }
 
-const context = Object.freeze({
-  get: (_path: 'city'): string | undefined => undefined,
+const context: FieldContext<RecordFixture> = Object.freeze({
+  get: () => undefined,
   operation: 'create',
   record: null,
-  set: (_path: 'city', _value: string): void => {},
+  set: () => {},
 })
 
 describe('choice field options', () => {

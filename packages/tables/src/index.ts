@@ -10,8 +10,11 @@ import {
   TextInputColumn as CoreTextInputColumn,
   ToggleColumn as CoreToggleColumn,
   type JsonObject,
+  type RelatedRecord,
+  type RelationPath,
   type RecordPath,
   type RecordPathFor,
+  type RecordPathValue,
   type RegisteredPanelRecordForPath,
   type RegisteredPanelRecordForPathValue,
   type RegisteredPanelRecordPath,
@@ -38,6 +41,7 @@ export interface TableColumnContract<TRecord extends object> extends Compilable 
 }
 
 export interface TableFilterContract<TRecord extends object> extends Compilable {
+  readonly resourceRecordType: TRecord
 }
 
 function compiledManifest(value: Compilable): object {
@@ -51,6 +55,9 @@ function compiledManifest(value: Compilable): object {
 
 type BoundRecordPath<TPath extends RegisteredPanelRecordPath> = Extract<TPath, RecordPath<RegisteredPanelRecordForPath<TPath>>>
 type BoundValueRecordPath<TPath extends RegisteredPanelRecordPathFor<TValue>, TValue> = Extract<TPath, RecordPathFor<RegisteredPanelRecordForPathValue<TPath, TValue>, TValue>>
+type SelectFilterValue<TRecord, TPath extends string> = Extract<NonNullable<RecordPathValue<TRecord, TPath>>, boolean | number | string> extends infer TValue
+  ? [TValue] extends [never] ? string : TValue & (boolean | number | string)
+  : string
 
 export class TextColumn<TRecord extends object = Record<string, unknown>, TPath extends RecordPath<TRecord> = RecordPath<TRecord>> extends CoreTextColumn<TRecord, TPath> {
   readonly path: TPath
@@ -156,18 +163,31 @@ export class Filter<TRecord extends object = Record<string, unknown>, TValue = b
   static make<TRecord extends object = Record<string, unknown>, TValue = boolean>(name: string): Filter<TRecord, TValue> { return new Filter(name) }
 }
 
-export class SelectFilter<TRecord extends object = Record<string, unknown>, TValue extends boolean | number | string = string> extends BaseFilter<TRecord, TValue | null> {
+export class SelectFilter<
+  TRecord extends object = Record<string, unknown>,
+  TPath extends RecordPath<TRecord> = RecordPath<TRecord>,
+  TValue extends boolean | number | string = SelectFilterValue<TRecord, TPath>,
+> extends BaseFilter<TRecord, TValue | null> {
+  readonly path: TPath
   #multiple = false
   #options: Readonly<Record<string, string>> = {}
   #preload = false
   #relationship: Readonly<{ name: string, titleAttribute: string }> | null = null
   #searchable = false
-  private constructor(id: string) { super(id) }
-  static make<TRecord extends object = Record<string, unknown>, TValue extends boolean | number | string = string>(name: string): SelectFilter<TRecord, TValue> { return new SelectFilter(name) }
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<TRecord extends object, const TPath extends RecordPath<TRecord>>(path: TPath): SelectFilter<TRecord, TPath>
+  static make<const TPath extends RegisteredPanelRecordPath>(path: TPath): SelectFilter<
+    RegisteredPanelRecordForPath<TPath>,
+    BoundRecordPath<TPath>,
+    SelectFilterValue<RegisteredPanelRecordForPath<TPath>, BoundRecordPath<TPath>>
+  >
+  static make<TRecord extends object, const TPath extends RecordPath<TRecord>>(path: TPath): SelectFilter<TRecord, TPath> { return new SelectFilter(path) }
   multiple(value = true): this { this.#multiple = value; return this }
   options(value: Readonly<Record<string, string>>): this { this.#options = Object.freeze({ ...value }); return this }
   preload(value = true): this { this.#preload = value; return this }
-  relationship(name: string, titleAttribute: string): this { this.#relationship = Object.freeze({ name, titleAttribute }); return this }
+  relationship<
+    const TRelation extends RelationPath<TRecord>,
+  >(name: TRelation, titleAttribute: RecordPath<RelatedRecord<RecordPathValue<TRecord, TRelation>>>): this { this.#relationship = Object.freeze({ name, titleAttribute }); return this }
   searchable(value = true): this { this.#searchable = value; return this }
   override compile(): ReturnType<BaseFilter<TRecord, TValue | null>['compile']> {
     const compiled = super.compile()
@@ -175,13 +195,19 @@ export class SelectFilter<TRecord extends object = Record<string, unknown>, TVal
   }
 }
 
-export class TernaryFilter<TRecord extends object = Record<string, unknown>> extends BaseFilter<TRecord, boolean | null> {
+export class TernaryFilter<
+  TRecord extends object = Record<string, unknown>,
+  TPath extends RecordPathFor<TRecord, boolean> = RecordPathFor<TRecord, boolean>,
+> extends BaseFilter<TRecord, boolean | null> {
+  readonly path: TPath
   #falseLabel = 'No'
   #nullable = false
   #placeholder = 'All'
   #trueLabel = 'Yes'
-  private constructor(id: string) { super(id) }
-  static make<TRecord extends object = Record<string, unknown>>(name: string): TernaryFilter<TRecord> { return new TernaryFilter(name) }
+  private constructor(path: TPath) { super(path); this.path = path }
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, boolean>>(path: TPath): TernaryFilter<TRecord, TPath>
+  static make<const TPath extends RegisteredPanelRecordPathFor<boolean>>(path: TPath): TernaryFilter<RegisteredPanelRecordForPathValue<TPath, boolean>, BoundValueRecordPath<TPath, boolean>>
+  static make<TRecord extends object, const TPath extends RecordPathFor<TRecord, boolean>>(path: TPath): TernaryFilter<TRecord, TPath> { return new TernaryFilter(path) }
   falseLabel(value: string): this { this.#falseLabel = value; return this }
   nullable(value = true): this { this.#nullable = value; return this }
   placeholder(value: string): this { this.#placeholder = value; return this }
@@ -206,8 +232,8 @@ export interface ColumnFactory<TRecord extends object> {
 
 export interface FilterFactory<TRecord extends object> {
   make<TValue = boolean>(name: string): Filter<TRecord, TValue>
-  select<TValue extends boolean | number | string = string>(name: string): SelectFilter<TRecord, TValue>
-  ternary(name: string): TernaryFilter<TRecord>
+  select<const TPath extends RecordPath<TRecord>>(path: TPath): SelectFilter<TRecord, TPath>
+  ternary<const TPath extends RecordPathFor<TRecord, boolean>>(path: TPath): TernaryFilter<TRecord, TPath>
 }
 
 function createColumnFactory<TRecord extends object>(): ColumnFactory<TRecord> {
@@ -226,8 +252,8 @@ function createColumnFactory<TRecord extends object>(): ColumnFactory<TRecord> {
 function createFilterFactory<TRecord extends object>(): FilterFactory<TRecord> {
   return Object.freeze({
     make: <TValue = boolean>(name: string) => Filter.make<TRecord, TValue>(name),
-    select: <TValue extends boolean | number | string = string>(name: string) => SelectFilter.make<TRecord, TValue>(name),
-    ternary: (name: string) => TernaryFilter.make<TRecord>(name),
+    select: <const TPath extends RecordPath<TRecord>>(path: TPath) => SelectFilter.make<TRecord, TPath>(path),
+    ternary: <const TPath extends RecordPathFor<TRecord, boolean>>(path: TPath) => TernaryFilter.make<TRecord, TPath>(path),
   })
 }
 

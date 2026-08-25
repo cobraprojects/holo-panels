@@ -3,7 +3,7 @@ import { Action, ActionGroup, CreateAction, DeleteAction, DeleteBulkAction, Edit
 import { Checkbox, TextInput } from '@holo-js/panels-forms'
 import { TextEntry } from '@holo-js/panels-infolists'
 import { CreateRecord, EditRecord, ListRecords, RelationManager, Resource, ViewRecord } from '@holo-js/panels-resources'
-import { TextColumn } from '@holo-js/panels-tables'
+import { SelectFilter, TextColumn } from '@holo-js/panels-tables'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   configureNotificationSender,
@@ -98,6 +98,10 @@ class PostResource extends Resource {
     .columns([
       TextColumn.make('title').searchable().sortable(),
       TextColumn.make('author.name'),
+    ])
+    .filters([
+      SelectFilter.make('title'),
+      SelectFilter.make('author').relationship('author', 'name'),
     ])
     .recordActions([
       ViewAction.make(),

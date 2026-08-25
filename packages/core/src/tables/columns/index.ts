@@ -26,6 +26,8 @@ export type {
   CompiledColumnDefinition,
   InlineEditorKind,
   InlineEditorManifest,
+  PanelRelationValue,
+  PanelRelationValueMarker,
   RecordPath,
   RecordPathFor,
   RecordPathValue,

@@ -3,6 +3,15 @@ import type { JsonObject, JsonValue } from '../../protocol/json'
 type AtomicValue = bigint | boolean | Date | number | string | symbol | null | undefined
 
 declare const panelRecordTypeRegistryMarker: unique symbol
+declare const panelRelationValueMarker: unique symbol
+
+export interface PanelRelationValueMarker {
+  readonly [panelRelationValueMarker]: true
+}
+
+export type PanelRelationValue<TValue> = TValue extends null | undefined
+  ? TValue
+  : TValue & PanelRelationValueMarker
 
 export interface PanelRecordTypeRegistry {
   readonly [panelRecordTypeRegistryMarker]?: never
@@ -66,11 +75,21 @@ export type RegisteredPanelRecordForPathValue<TPath extends string, TValue> = Pa
     : never
   : never
 
-export type RelationPath<TRecord> = {
+type StructuralRelationPath<TRecord> = {
   [TPath in RecordPath<TRecord>]: NonNullable<RecordPathValue<TRecord, TPath>> extends readonly object[] | object
     ? TPath
     : never
 }[RecordPath<TRecord>]
+
+type MarkedRelationPath<TRecord> = {
+  [TPath in RecordPath<TRecord>]: NonNullable<RecordPathValue<TRecord, TPath>> extends PanelRelationValueMarker
+    ? TPath
+    : never
+}[RecordPath<TRecord>]
+
+export type RelationPath<TRecord> = [MarkedRelationPath<TRecord>] extends [never]
+  ? StructuralRelationPath<TRecord>
+  : MarkedRelationPath<TRecord>
 
 export type RelatedRecord<TValue> = NonNullable<TValue> extends readonly (infer TItem)[]
   ? TItem

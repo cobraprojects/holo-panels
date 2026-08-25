@@ -1,6 +1,6 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ts from 'typescript'
 import { generatorCommands } from '../src/commands'
@@ -45,22 +45,77 @@ async function run(
 }
 
 async function expectGeneratedResourcesToTypecheck(projectRoot: string, files: readonly string[]): Promise<void> {
-  const fixtureRoot = join(import.meta.dirname, 'generator-fixtures')
-  await mkdir(join(projectRoot, 'models'), { recursive: true })
-  await mkdir(join(projectRoot, 'server/models'), { recursive: true })
-  const model = await readFile(join(fixtureRoot, 'Post.ts'), 'utf8')
-  await writeFile(join(projectRoot, 'models/Post.ts'), model)
-  await writeFile(join(projectRoot, 'server/models/Post.ts'), model)
-  const declarations = join(fixtureRoot, 'panels.d.ts')
+  const workspaceRoot = resolve(import.meta.dirname, '../../..')
+  const generatedRoot = join(projectRoot, '.holo-js/generated')
+  const modelPaths = ['models/Post.ts', 'server/models/Post.ts']
+  await Promise.all([
+    mkdir(join(generatedRoot, 'panels'), { recursive: true }),
+    mkdir(join(projectRoot, 'models'), { recursive: true }),
+    mkdir(join(projectRoot, 'server/models'), { recursive: true }),
+  ])
+  await writeFile(join(generatedRoot, 'schema.generated.ts'), `import { column, defineGeneratedTable } from '@holo-js/db'
+
+export const posts = defineGeneratedTable('posts', {
+  title: column.string(),
+  published: column.boolean(),
+  publishedAt: column.timestamp().nullable(),
+})
+
+declare module '@holo-js/db' {
+  interface GeneratedSchemaTables {
+    readonly posts: typeof posts
+  }
+}
+
+export {}
+`)
+  await Promise.all(modelPaths.map(path => writeFile(join(projectRoot, path), `import { defineModel } from '@holo-js/db'
+
+export default defineModel('posts')
+`)))
+  const resourcePath = files.find(path => path.endsWith('/PostResource.ts'))!
+  await writeFile(join(generatedRoot, 'panels/resource-type-bindings.d.ts'), `declare module '@holo-js/panels-resources' {
+  interface ResourceTypeRegistry {
+    readonly post: {
+      readonly model: typeof import('../../../server/models/Post')['default']
+      readonly resource: typeof import('../../../${resourcePath}')['default']
+    }
+  }
+}
+
+declare module '@holo-js/panels-core' {
+  interface PanelRecordTypeRegistry {
+    readonly post: import('@holo-js/panels-resources').ResourceRecordFor<typeof import('../../../server/models/Post')['default']>
+  }
+}
+
+export {}
+`)
+  const packageSource = (name: string): string => resolve(workspaceRoot, 'packages', name, 'src/index.ts')
   const program = ts.createProgram({
-    rootNames: [...files.map(file => join(projectRoot, file)), declarations],
+    rootNames: [
+      ...files.map(file => join(projectRoot, file)),
+      join(generatedRoot, 'schema.generated.ts'),
+      join(generatedRoot, 'panels/resource-type-bindings.d.ts'),
+    ],
     options: {
       baseUrl: projectRoot,
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       noEmit: true,
       noUncheckedIndexedAccess: true,
-      paths: { '~/*': ['./*'] },
+      paths: {
+        '@holo-js/db': [resolve(workspaceRoot, 'node_modules/@holo-js/db/dist/index.d.ts')],
+        '@holo-js/panels-actions': [packageSource('actions')],
+        '@holo-js/panels-core': [packageSource('core')],
+        '@holo-js/panels-forms': [packageSource('forms')],
+        '@holo-js/panels-infolists': [packageSource('infolists')],
+        '@holo-js/panels-notifications': [packageSource('notifications')],
+        '@holo-js/panels-resources': [packageSource('resources')],
+        '@holo-js/panels-schemas': [packageSource('schemas')],
+        '@holo-js/panels-tables': [packageSource('tables')],
+        '~/*': ['./*'],
+      },
       skipLibCheck: true,
       strict: true,
       target: ts.ScriptTarget.ES2022,

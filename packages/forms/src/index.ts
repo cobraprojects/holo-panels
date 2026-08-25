@@ -1,6 +1,11 @@
 import {
   type JsonObject,
   type JsonValue,
+  type RecordPath,
+  type RecordPathFor,
+  type RecordPathValue,
+  type RelatedRecord,
+  type RelationPath,
   type RegisteredPanelRecordForPath,
   type RegisteredPanelRecordForPathValue,
   type RegisteredPanelRecordPath,
@@ -9,18 +14,9 @@ import {
 } from '@holo-js/panels-core'
 import { Component, compileSchemaComponentManifest, type SchemaComponentManifest } from '@holo-js/panels-schemas'
 
-export type FieldPath<TRecord extends object> = TRecord extends object ? Extract<keyof TRecord, string> : never
-export type FieldValue<TRecord extends object, TPath extends FieldPath<TRecord>> = TRecord extends object
-  ? TPath extends keyof TRecord ? TRecord[TPath] : never
-  : never
-export type FieldPathFor<TRecord extends object, TValue> = TRecord extends object
-  ? Extract<
-      string extends keyof TRecord
-        ? string
-        : { readonly [TPath in Extract<keyof TRecord, string>]: NonNullable<TRecord[TPath]> extends TValue ? TPath : never }[Extract<keyof TRecord, string>],
-      Extract<keyof TRecord, string>
-    >
-  : never
+export type FieldPath<TRecord extends object> = RecordPath<TRecord>
+export type FieldValue<TRecord extends object, TPath extends FieldPath<TRecord>> = RecordPathValue<TRecord, TPath>
+export type FieldPathFor<TRecord extends object, TValue> = RecordPathFor<TRecord, TValue>
 export type FieldState<TValue> = TValue | null | undefined
 export type FieldOptions<TValue extends boolean | number | string> = Readonly<Record<string, string>> | readonly Readonly<{ readonly disabled?: boolean, readonly label: string, readonly value: TValue }>[]
 export type FieldResolver<TRecord extends object, TValue> = TValue | ((context: FieldContext<TRecord>) => TValue | Promise<TValue>)
@@ -28,8 +24,8 @@ export type FieldResolver<TRecord extends object, TValue> = TValue | ((context: 
 export interface FieldContext<TRecord extends object> {
   readonly operation: string
   readonly record: TRecord | null
-  readonly get: <TPath extends FieldPath<TRecord>>(path: TPath) => TRecord[TPath] | undefined
-  readonly set: <TPath extends FieldPath<TRecord>>(path: TPath, value: TRecord[TPath]) => void
+  readonly get: <TPath extends FieldPath<TRecord>>(path: TPath) => FieldValue<TRecord, TPath> | undefined
+  readonly set: <TPath extends FieldPath<TRecord>>(path: TPath, value: FieldValue<TRecord, TPath>) => void
 }
 
 function json(value: unknown): JsonValue {
@@ -40,9 +36,8 @@ function staticValue(value: unknown): JsonValue {
   return typeof value === 'function' || typeof value === 'undefined' ? null : json(value)
 }
 
-type TopLevelPath<TPath extends string> = TPath extends `${string}.${string}` ? never : TPath
-type RegisteredFieldPath = TopLevelPath<Extract<RegisteredPanelRecordPath, string>>
-type RegisteredFieldPathFor<TValue> = TopLevelPath<Extract<RegisteredPanelRecordPathFor<TValue>, string>>
+type RegisteredFieldPath = Extract<RegisteredPanelRecordPath, string>
+type RegisteredFieldPathFor<TValue> = Extract<RegisteredPanelRecordPathFor<TValue>, string>
 type BoundFieldPath<TPath extends RegisteredFieldPath> = Extract<TPath, FieldPath<RegisteredPanelRecordForPath<TPath>>>
 type BoundValueFieldPath<TPath extends RegisteredFieldPathFor<TValue>, TValue> = Extract<TPath, FieldPathFor<RegisteredPanelRecordForPathValue<TPath, TValue>, TValue>>
 
@@ -449,7 +444,10 @@ abstract class ChoiceField<TRecord extends object, TPath extends FieldPath<TReco
   multiple(value = true): this { this.#multiple = value; return this }
   options(value: FieldResolver<TRecord, FieldOptions<ChoiceValue>>): this { this.#options = value; return this }
   preload(value = true): this { this.#preload = value; return this }
-  relationship(name: string, titleAttribute: string): this { this.#relationship = Object.freeze({ name, titleAttribute }); return this }
+  relationship<const TRelation extends RelationPath<TRecord>>(
+    name: TRelation,
+    titleAttribute: RecordPath<RelatedRecord<RecordPathValue<TRecord, TRelation>>>,
+  ): this { this.#relationship = Object.freeze({ name, titleAttribute }); return this }
   searchable(value = true): this { this.#searchable = value; return this }
 
   override compile(): SchemaComponentManifest & Readonly<{ server: Readonly<{ options: FieldOptionSource<TRecord> }> }> {

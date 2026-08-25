@@ -1,7 +1,4 @@
 import { Resource } from '@holo-js/panels'
-import { ActionGroup, DeleteAction, DeleteBulkAction, EditAction, ViewAction } from '@holo-js/panels-actions'
-import { Select, Textarea, TextInput } from '@holo-js/panels-forms'
-import { TextColumn } from '@holo-js/panels-tables'
 import Comment from '../../../models/Comment'
 import CreateComment from './pages/CreateComment'
 import EditComment from './pages/EditComment'
@@ -18,21 +15,21 @@ export default class CommentResource extends Resource {
   static override routeKeyName = this.attribute('id')
   static override slug = 'comments'
 
-  static form = this.configureForm(schema => schema.components([
-    TextInput.make('postId').required(),
-    TextInput.make('authorName').required(),
-    Textarea.make('body').required(),
-    Select.make('status').options({ approved: 'Approved', pending: 'Pending', spam: 'Spam' }).required(),
+  static form = this.configureForm((schema, field) => schema.components([
+    field.TextInput.make('postId').required(),
+    field.TextInput.make('authorName').required(),
+    field.Textarea.make('body').required(),
+    field.Select.make('status').options({ approved: 'Approved', pending: 'Pending', spam: 'Spam' }).required(),
   ]))
 
-  static table = this.configureTable(table => table
+  static table = this.configureTable((table, component) => table
     .columns([
-      TextColumn.make('authorName').searchable(),
-      TextColumn.make('body').limit(80).wrap(),
-      TextColumn.make('status').badge(),
+      component.TextColumn.make('authorName').searchable(),
+      component.TextColumn.make('body').limit(80).wrap(),
+      component.TextColumn.make('status').badge(),
     ])
-    .recordActions([ViewAction.make(), EditAction.make(), DeleteAction.make()])
-    .toolbarActions([ActionGroup.make([DeleteBulkAction.make()])]))
+    .recordActions([component.ViewAction.make(), component.EditAction.make(), component.DeleteAction.make()])
+    .toolbarActions([component.ActionGroup.make([component.DeleteBulkAction.make()])]))
 
   static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))
   static scopeQueryToTenant = this.configureQuery((query, context) => query.where('tenantId', context.tenant))

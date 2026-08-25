@@ -6,10 +6,6 @@ import {
   type RecordPathValue,
   type RelatedRecord,
   type RelationPath,
-  type RegisteredPanelRecordForPath,
-  type RegisteredPanelRecordForPathValue,
-  type RegisteredPanelRecordPath,
-  type RegisteredPanelRecordPathFor,
   toJsonValue,
 } from '@holo-js/panels-core'
 import { Component, compileSchemaComponentManifest, type SchemaComponentManifest } from '@holo-js/panels-schemas'
@@ -35,11 +31,6 @@ function json(value: unknown): JsonValue {
 function staticValue(value: unknown): JsonValue {
   return typeof value === 'function' || typeof value === 'undefined' ? null : json(value)
 }
-
-type RegisteredFieldPath = Extract<RegisteredPanelRecordPath, string>
-type RegisteredFieldPathFor<TValue> = Extract<RegisteredPanelRecordPathFor<TValue>, string>
-type BoundFieldPath<TPath extends RegisteredFieldPath> = Extract<TPath, FieldPath<RegisteredPanelRecordForPath<TPath>>>
-type BoundValueFieldPath<TPath extends RegisteredFieldPathFor<TValue>, TValue> = Extract<TPath, FieldPathFor<RegisteredPanelRecordForPathValue<TPath, TValue>, TValue>>
 
 export abstract class Field<
   TRecord extends object = Record<string, unknown>,
@@ -250,7 +241,7 @@ export class TextInput<TRecord extends object = Record<string, unknown>, TPath e
     super('text', path)
   }
 
-  static make<const TPath extends RegisteredFieldPathFor<number | string>>(path: TPath): TextInput<RegisteredPanelRecordForPathValue<TPath, number | string>, BoundValueFieldPath<TPath, number | string>>
+  static make(path: string): TextInput<Record<string, number | string>, string>
   static make<TRecord extends object, const TPath extends FieldPathFor<TRecord, number | string>>(path: TPath): TextInput<TRecord, TPath>
   static make(path: string): unknown { return new TextInput<Record<string, number | string>, string>(path) }
 
@@ -317,7 +308,7 @@ export class Textarea<TRecord extends object = Record<string, unknown>, TPath ex
     super('textarea', path)
   }
 
-  static make<const TPath extends RegisteredFieldPathFor<string>>(path: TPath): Textarea<RegisteredPanelRecordForPathValue<TPath, string>, BoundValueFieldPath<TPath, string>>
+  static make(path: string): Textarea<Record<string, string>, string>
   static make<TRecord extends object, const TPath extends FieldPathFor<TRecord, string>>(path: TPath): Textarea<TRecord, TPath>
   static make(path: string): unknown { return new Textarea<Record<string, string>, string>(path) }
 
@@ -354,14 +345,14 @@ abstract class BooleanField<TRecord extends object, TPath extends FieldPathFor<T
 
 export class Checkbox<TRecord extends object = Record<string, unknown>, TPath extends FieldPathFor<TRecord, boolean> = FieldPathFor<TRecord, boolean>> extends BooleanField<TRecord, TPath> {
   private constructor(path: TPath) { super('checkbox', path) }
-  static make<const TPath extends RegisteredFieldPathFor<boolean>>(path: TPath): Checkbox<RegisteredPanelRecordForPathValue<TPath, boolean>, BoundValueFieldPath<TPath, boolean>>
+  static make(path: string): Checkbox<Record<string, boolean>, string>
   static make<TRecord extends object, const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath): Checkbox<TRecord, TPath>
   static make(path: string): unknown { return new Checkbox<Record<string, boolean>, string>(path) }
 }
 
 export class Toggle<TRecord extends object = Record<string, unknown>, TPath extends FieldPathFor<TRecord, boolean> = FieldPathFor<TRecord, boolean>> extends BooleanField<TRecord, TPath> {
   private constructor(path: TPath) { super('toggle', path) }
-  static make<const TPath extends RegisteredFieldPathFor<boolean>>(path: TPath): Toggle<RegisteredPanelRecordForPathValue<TPath, boolean>, BoundValueFieldPath<TPath, boolean>>
+  static make(path: string): Toggle<Record<string, boolean>, string>
   static make<TRecord extends object, const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath): Toggle<TRecord, TPath>
   static make(path: string): unknown { return new Toggle<Record<string, boolean>, string>(path) }
 }
@@ -464,7 +455,7 @@ abstract class ChoiceField<TRecord extends object, TPath extends FieldPath<TReco
 
 export class Select<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends ChoiceField<TRecord, TPath> {
   private constructor(path: TPath) { super('select', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): Select<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): Select<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): Select<TRecord, TPath>
   static make(path: string): unknown { return new Select<Record<string, unknown>, string>(path) }
 }
@@ -474,7 +465,7 @@ export class CheckboxList<TRecord extends object = Record<string, unknown>, TPat
   #columns = 1
   #gridDirection: 'column' | 'row' = 'column'
   private constructor(path: TPath) { super('checkbox-list', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): CheckboxList<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): CheckboxList<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): CheckboxList<TRecord, TPath>
   static make(path: string): unknown { return new CheckboxList<Record<string, unknown>, string>(path) }
   bulkToggleable(value = true): this { this.#bulkToggleable = value; return this }
@@ -486,7 +477,7 @@ export class CheckboxList<TRecord extends object = Record<string, unknown>, TPat
 export class Radio<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends ChoiceField<TRecord, TPath> {
   #inline = false
   private constructor(path: TPath) { super('radio', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): Radio<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): Radio<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): Radio<TRecord, TPath>
   static make(path: string): unknown { return new Radio<Record<string, unknown>, string>(path) }
   inline(value = true): this { this.#inline = value; return this }
@@ -498,7 +489,7 @@ export class ToggleButtons<TRecord extends object = Record<string, unknown>, TPa
   #icons: Readonly<Record<string, string>> = {}
   #inline = false
   private constructor(path: TPath) { super('toggle-buttons', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): ToggleButtons<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): ToggleButtons<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): ToggleButtons<TRecord, TPath>
   static make(path: string): unknown { return new ToggleButtons<Record<string, unknown>, string>(path) }
   grouped(value = true): this { this.#grouped = value; return this }
@@ -531,21 +522,21 @@ abstract class DateField<TRecord extends object, TPath extends FieldPath<TRecord
 
 export class DatePicker<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends DateField<TRecord, TPath> {
   private constructor(path: TPath) { super('date', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): DatePicker<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): DatePicker<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): DatePicker<TRecord, TPath>
   static make(path: string): unknown { return new DatePicker<Record<string, unknown>, string>(path) }
 }
 
 export class TimePicker<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends DateField<TRecord, TPath> {
   private constructor(path: TPath) { super('time', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): TimePicker<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): TimePicker<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): TimePicker<TRecord, TPath>
   static make(path: string): unknown { return new TimePicker<Record<string, unknown>, string>(path) }
 }
 
 export class DateTimePicker<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends DateField<TRecord, TPath> {
   private constructor(path: TPath) { super('date-time', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): DateTimePicker<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): DateTimePicker<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): DateTimePicker<TRecord, TPath>
   static make(path: string): unknown { return new DateTimePicker<Record<string, unknown>, string>(path) }
 }
@@ -565,7 +556,7 @@ export class FileUpload<TRecord extends object = Record<string, unknown>, TPath 
   #previewable = true
   #visibility: 'private' | 'public' | null = null
   private constructor(path: TPath) { super('panels:field:upload', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): FileUpload<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): FileUpload<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): FileUpload<TRecord, TPath>
   static make(path: string): unknown { return new FileUpload<Record<string, unknown>, string>(path) }
   acceptedFileTypes(value: readonly string[]): this { this.#acceptedFileTypes = Object.freeze([...value]); return this }
@@ -653,7 +644,7 @@ abstract class CollectionField<TRecord extends object, TPath extends FieldPath<T
 export class Repeater<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends CollectionField<TRecord, TPath> {
   #schema: readonly Component[] = []
   private constructor(path: TPath) { super('repeater', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): Repeater<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): Repeater<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): Repeater<TRecord, TPath>
   static make(path: string): unknown { return new Repeater<Record<string, unknown>, string>(path) }
   schema(value: readonly Component[]): this { this.#schema = Object.freeze([...value]); return this }
@@ -664,7 +655,7 @@ export class Repeater<TRecord extends object = Record<string, unknown>, TPath ex
 export class Builder<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends CollectionField<TRecord, TPath> {
   #blocks: readonly BuilderBlock[] = []
   private constructor(path: TPath) { super('builder', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): Builder<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): Builder<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): Builder<TRecord, TPath>
   static make(path: string): unknown { return new Builder<Record<string, unknown>, string>(path) }
   blocks(value: readonly BuilderBlock[]): this { this.#blocks = Object.freeze([...value]); return this }
@@ -689,103 +680,103 @@ abstract class SimpleField<TRecord extends object, TPath extends FieldPath<TReco
 
 export class RichEditor<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('rich-editor', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): RichEditor<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): RichEditor<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): RichEditor<TRecord, TPath>
   static make(path: string): unknown { return new RichEditor<Record<string, unknown>, string>(path) }
 }
 export class MarkdownEditor<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('markdown-editor', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): MarkdownEditor<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): MarkdownEditor<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): MarkdownEditor<TRecord, TPath>
   static make(path: string): unknown { return new MarkdownEditor<Record<string, unknown>, string>(path) }
 }
 export class TagsInput<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('tags-input', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): TagsInput<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): TagsInput<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): TagsInput<TRecord, TPath>
   static make(path: string): unknown { return new TagsInput<Record<string, unknown>, string>(path) }
 }
 export class KeyValue<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('key-value', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): KeyValue<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): KeyValue<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): KeyValue<TRecord, TPath>
   static make(path: string): unknown { return new KeyValue<Record<string, unknown>, string>(path) }
 }
 export class ColorPicker<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('color-picker', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): ColorPicker<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): ColorPicker<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): ColorPicker<TRecord, TPath>
   static make(path: string): unknown { return new ColorPicker<Record<string, unknown>, string>(path) }
 }
 export class Slider<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('slider', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): Slider<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): Slider<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): Slider<TRecord, TPath>
   static make(path: string): unknown { return new Slider<Record<string, unknown>, string>(path) }
 }
 export class CodeEditor<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('code-editor', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): CodeEditor<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): CodeEditor<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): CodeEditor<TRecord, TPath>
   static make(path: string): unknown { return new CodeEditor<Record<string, unknown>, string>(path) }
 }
 export class Hidden<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends SimpleField<TRecord, TPath> {
   private constructor(path: TPath) { super('hidden', path) }
-  static make<const TPath extends RegisteredFieldPath>(path: TPath): Hidden<RegisteredPanelRecordForPath<TPath>, BoundFieldPath<TPath>>
+  static make(path: string): Hidden<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): Hidden<TRecord, TPath>
   static make(path: string): unknown { return new Hidden<Record<string, unknown>, string>(path) }
 }
 
 export interface FieldFactory<TRecord extends object> {
-  builder<const TPath extends FieldPath<TRecord>>(path: TPath): Builder<TRecord, TPath>
-  builderBlock(name: string): BuilderBlock
-  checkbox<const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath): Checkbox<TRecord, TPath>
-  checkboxList<const TPath extends FieldPath<TRecord>>(path: TPath): CheckboxList<TRecord, TPath>
-  codeEditor<const TPath extends FieldPath<TRecord>>(path: TPath): CodeEditor<TRecord, TPath>
-  colorPicker<const TPath extends FieldPath<TRecord>>(path: TPath): ColorPicker<TRecord, TPath>
-  datePicker<const TPath extends FieldPath<TRecord>>(path: TPath): DatePicker<TRecord, TPath>
-  dateTimePicker<const TPath extends FieldPath<TRecord>>(path: TPath): DateTimePicker<TRecord, TPath>
-  fileUpload<const TPath extends FieldPath<TRecord>>(path: TPath): FileUpload<TRecord, TPath>
-  hidden<const TPath extends FieldPath<TRecord>>(path: TPath): Hidden<TRecord, TPath>
-  keyValue<const TPath extends FieldPath<TRecord>>(path: TPath): KeyValue<TRecord, TPath>
-  markdownEditor<const TPath extends FieldPath<TRecord>>(path: TPath): MarkdownEditor<TRecord, TPath>
-  radio<const TPath extends FieldPath<TRecord>>(path: TPath): Radio<TRecord, TPath>
-  repeater<const TPath extends FieldPath<TRecord>>(path: TPath): Repeater<TRecord, TPath>
-  richEditor<const TPath extends FieldPath<TRecord>>(path: TPath): RichEditor<TRecord, TPath>
-  select<const TPath extends FieldPath<TRecord>>(path: TPath): Select<TRecord, TPath>
-  slider<const TPath extends FieldPath<TRecord>>(path: TPath): Slider<TRecord, TPath>
-  tagsInput<const TPath extends FieldPath<TRecord>>(path: TPath): TagsInput<TRecord, TPath>
-  textarea<const TPath extends FieldPathFor<TRecord, string>>(path: TPath): Textarea<TRecord, TPath>
-  textInput<const TPath extends FieldPathFor<TRecord, number | string>>(path: TPath): TextInput<TRecord, TPath>
-  timePicker<const TPath extends FieldPath<TRecord>>(path: TPath): TimePicker<TRecord, TPath>
-  toggle<const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath): Toggle<TRecord, TPath>
-  toggleButtons<const TPath extends FieldPath<TRecord>>(path: TPath): ToggleButtons<TRecord, TPath>
+  readonly Builder: { make<const TPath extends FieldPath<TRecord>>(path: TPath): Builder<TRecord, TPath> }
+  readonly BuilderBlock: { make(name: string): BuilderBlock }
+  readonly Checkbox: { make<const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath): Checkbox<TRecord, TPath> }
+  readonly CheckboxList: { make<const TPath extends FieldPath<TRecord>>(path: TPath): CheckboxList<TRecord, TPath> }
+  readonly CodeEditor: { make<const TPath extends FieldPath<TRecord>>(path: TPath): CodeEditor<TRecord, TPath> }
+  readonly ColorPicker: { make<const TPath extends FieldPath<TRecord>>(path: TPath): ColorPicker<TRecord, TPath> }
+  readonly DatePicker: { make<const TPath extends FieldPath<TRecord>>(path: TPath): DatePicker<TRecord, TPath> }
+  readonly DateTimePicker: { make<const TPath extends FieldPath<TRecord>>(path: TPath): DateTimePicker<TRecord, TPath> }
+  readonly FileUpload: { make<const TPath extends FieldPath<TRecord>>(path: TPath): FileUpload<TRecord, TPath> }
+  readonly Hidden: { make<const TPath extends FieldPath<TRecord>>(path: TPath): Hidden<TRecord, TPath> }
+  readonly KeyValue: { make<const TPath extends FieldPath<TRecord>>(path: TPath): KeyValue<TRecord, TPath> }
+  readonly MarkdownEditor: { make<const TPath extends FieldPath<TRecord>>(path: TPath): MarkdownEditor<TRecord, TPath> }
+  readonly Radio: { make<const TPath extends FieldPath<TRecord>>(path: TPath): Radio<TRecord, TPath> }
+  readonly Repeater: { make<const TPath extends FieldPath<TRecord>>(path: TPath): Repeater<TRecord, TPath> }
+  readonly RichEditor: { make<const TPath extends FieldPath<TRecord>>(path: TPath): RichEditor<TRecord, TPath> }
+  readonly Select: { make<const TPath extends FieldPath<TRecord>>(path: TPath): Select<TRecord, TPath> }
+  readonly Slider: { make<const TPath extends FieldPath<TRecord>>(path: TPath): Slider<TRecord, TPath> }
+  readonly TagsInput: { make<const TPath extends FieldPath<TRecord>>(path: TPath): TagsInput<TRecord, TPath> }
+  readonly Textarea: { make<const TPath extends FieldPathFor<TRecord, string>>(path: TPath): Textarea<TRecord, TPath> }
+  readonly TextInput: { make<const TPath extends FieldPathFor<TRecord, number | string>>(path: TPath): TextInput<TRecord, TPath> }
+  readonly TimePicker: { make<const TPath extends FieldPath<TRecord>>(path: TPath): TimePicker<TRecord, TPath> }
+  readonly Toggle: { make<const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath): Toggle<TRecord, TPath> }
+  readonly ToggleButtons: { make<const TPath extends FieldPath<TRecord>>(path: TPath): ToggleButtons<TRecord, TPath> }
 }
 
 export function createFieldFactory<TRecord extends object>(): FieldFactory<TRecord> {
   return Object.freeze({
-    builder: <const TPath extends FieldPath<TRecord>>(path: TPath) => Builder.make<TRecord, TPath>(path),
-    builderBlock: (name: string) => BuilderBlock.make(name),
-    checkbox: <const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath) => Checkbox.make<TRecord, TPath>(path),
-    checkboxList: <const TPath extends FieldPath<TRecord>>(path: TPath) => CheckboxList.make<TRecord, TPath>(path),
-    codeEditor: <const TPath extends FieldPath<TRecord>>(path: TPath) => CodeEditor.make<TRecord, TPath>(path),
-    colorPicker: <const TPath extends FieldPath<TRecord>>(path: TPath) => ColorPicker.make<TRecord, TPath>(path),
-    datePicker: <const TPath extends FieldPath<TRecord>>(path: TPath) => DatePicker.make<TRecord, TPath>(path),
-    dateTimePicker: <const TPath extends FieldPath<TRecord>>(path: TPath) => DateTimePicker.make<TRecord, TPath>(path),
-    fileUpload: <const TPath extends FieldPath<TRecord>>(path: TPath) => FileUpload.make<TRecord, TPath>(path),
-    hidden: <const TPath extends FieldPath<TRecord>>(path: TPath) => Hidden.make<TRecord, TPath>(path),
-    keyValue: <const TPath extends FieldPath<TRecord>>(path: TPath) => KeyValue.make<TRecord, TPath>(path),
-    markdownEditor: <const TPath extends FieldPath<TRecord>>(path: TPath) => MarkdownEditor.make<TRecord, TPath>(path),
-    radio: <const TPath extends FieldPath<TRecord>>(path: TPath) => Radio.make<TRecord, TPath>(path),
-    repeater: <const TPath extends FieldPath<TRecord>>(path: TPath) => Repeater.make<TRecord, TPath>(path),
-    richEditor: <const TPath extends FieldPath<TRecord>>(path: TPath) => RichEditor.make<TRecord, TPath>(path),
-    select: <const TPath extends FieldPath<TRecord>>(path: TPath) => Select.make<TRecord, TPath>(path),
-    slider: <const TPath extends FieldPath<TRecord>>(path: TPath) => Slider.make<TRecord, TPath>(path),
-    tagsInput: <const TPath extends FieldPath<TRecord>>(path: TPath) => TagsInput.make<TRecord, TPath>(path),
-    textarea: <const TPath extends FieldPathFor<TRecord, string>>(path: TPath) => Textarea.make<TRecord, TPath>(path),
-    textInput: <const TPath extends FieldPathFor<TRecord, number | string>>(path: TPath) => TextInput.make<TRecord, TPath>(path),
-    timePicker: <const TPath extends FieldPath<TRecord>>(path: TPath) => TimePicker.make<TRecord, TPath>(path),
-    toggle: <const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath) => Toggle.make<TRecord, TPath>(path),
-    toggleButtons: <const TPath extends FieldPath<TRecord>>(path: TPath) => ToggleButtons.make<TRecord, TPath>(path),
+    Builder: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => Builder.make<TRecord, TPath>(path) }),
+    BuilderBlock: Object.freeze({ make: (name: string) => BuilderBlock.make(name) }),
+    Checkbox: Object.freeze({ make: <const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath) => Checkbox.make<TRecord, TPath>(path) }),
+    CheckboxList: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => CheckboxList.make<TRecord, TPath>(path) }),
+    CodeEditor: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => CodeEditor.make<TRecord, TPath>(path) }),
+    ColorPicker: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => ColorPicker.make<TRecord, TPath>(path) }),
+    DatePicker: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => DatePicker.make<TRecord, TPath>(path) }),
+    DateTimePicker: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => DateTimePicker.make<TRecord, TPath>(path) }),
+    FileUpload: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => FileUpload.make<TRecord, TPath>(path) }),
+    Hidden: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => Hidden.make<TRecord, TPath>(path) }),
+    KeyValue: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => KeyValue.make<TRecord, TPath>(path) }),
+    MarkdownEditor: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => MarkdownEditor.make<TRecord, TPath>(path) }),
+    Radio: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => Radio.make<TRecord, TPath>(path) }),
+    Repeater: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => Repeater.make<TRecord, TPath>(path) }),
+    RichEditor: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => RichEditor.make<TRecord, TPath>(path) }),
+    Select: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => Select.make<TRecord, TPath>(path) }),
+    Slider: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => Slider.make<TRecord, TPath>(path) }),
+    TagsInput: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => TagsInput.make<TRecord, TPath>(path) }),
+    Textarea: Object.freeze({ make: <const TPath extends FieldPathFor<TRecord, string>>(path: TPath) => Textarea.make<TRecord, TPath>(path) }),
+    TextInput: Object.freeze({ make: <const TPath extends FieldPathFor<TRecord, number | string>>(path: TPath) => TextInput.make<TRecord, TPath>(path) }),
+    TimePicker: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => TimePicker.make<TRecord, TPath>(path) }),
+    Toggle: Object.freeze({ make: <const TPath extends FieldPathFor<TRecord, boolean>>(path: TPath) => Toggle.make<TRecord, TPath>(path) }),
+    ToggleButtons: Object.freeze({ make: <const TPath extends FieldPath<TRecord>>(path: TPath) => ToggleButtons.make<TRecord, TPath>(path) }),
   })
 }

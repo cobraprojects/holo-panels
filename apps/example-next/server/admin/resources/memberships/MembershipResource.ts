@@ -1,7 +1,4 @@
 import { Resource } from '@holo-js/panels'
-import { ActionGroup, DeleteAction, DeleteBulkAction, EditAction, ViewAction } from '@holo-js/panels-actions'
-import { TextInput } from '@holo-js/panels-forms'
-import { TextColumn } from '@holo-js/panels-tables'
 import Membership from '../../../models/Membership'
 import CreateMembership from './pages/CreateMembership'
 import EditMembership from './pages/EditMembership'
@@ -18,11 +15,11 @@ export default class MembershipResource extends Resource {
   static override routeKeyName = this.attribute('id')
   static override slug = 'memberships'
 
-  static form = this.configureForm(schema => schema.components([TextInput.make('userId').required(), TextInput.make('roleKey').required()]))
-  static table = this.configureTable(table => table
-    .columns([TextColumn.make('userId'), TextColumn.make('roleKey').badge()])
-    .recordActions([ViewAction.make(), EditAction.make(), DeleteAction.make()])
-    .toolbarActions([ActionGroup.make([DeleteBulkAction.make()])]))
+  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('userId').required(), field.TextInput.make('roleKey').required()]))
+  static table = this.configureTable((table, component) => table
+    .columns([component.TextColumn.make('userId'), component.TextColumn.make('roleKey').badge()])
+    .recordActions([component.ViewAction.make(), component.EditAction.make(), component.DeleteAction.make()])
+    .toolbarActions([component.ActionGroup.make([component.DeleteBulkAction.make()])]))
   static override getGloballySearchableAttributes() { return this.attributes(['userId', 'roleKey']) }
   static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))
   static scopeQueryToTenant = this.configureQuery((query, context) => query.where('tenantId', context.tenant))

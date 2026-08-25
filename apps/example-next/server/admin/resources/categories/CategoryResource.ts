@@ -1,7 +1,4 @@
 import { Resource } from '@holo-js/panels'
-import { ActionGroup, DeleteAction, DeleteBulkAction, EditAction, ViewAction } from '@holo-js/panels-actions'
-import { TextInput } from '@holo-js/panels-forms'
-import { TextColumn } from '@holo-js/panels-tables'
 import Category from '../../../models/Category'
 import CreateCategory from './pages/CreateCategory'
 import EditCategory from './pages/EditCategory'
@@ -18,11 +15,11 @@ export default class CategoryResource extends Resource {
   static override routeKeyName = this.attribute('id')
   static override slug = 'categories'
 
-  static form = this.configureForm(schema => schema.components([TextInput.make('name').required(), TextInput.make('slug').required()]))
-  static table = this.configureTable(table => table
-    .columns([TextColumn.make('name'), TextColumn.make('slug')])
-    .recordActions([ViewAction.make(), EditAction.make(), DeleteAction.make()])
-    .toolbarActions([ActionGroup.make([DeleteBulkAction.make()])]))
+  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('name').required(), field.TextInput.make('slug').required()]))
+  static table = this.configureTable((table, component) => table
+    .columns([component.TextColumn.make('name'), component.TextColumn.make('slug')])
+    .recordActions([component.ViewAction.make(), component.EditAction.make(), component.DeleteAction.make()])
+    .toolbarActions([component.ActionGroup.make([component.DeleteBulkAction.make()])]))
   static override getGloballySearchableAttributes() { return this.attributes(['name', 'slug']) }
   static override getGlobalSearchResultsLimit() { return 10 }
   static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))

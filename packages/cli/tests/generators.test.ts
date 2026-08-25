@@ -198,16 +198,16 @@ describe('Holo Panels generators', () => {
     const resource = await readFile(join(projectRoot, files[0]!), 'utf8')
     const listPage = await readFile(join(projectRoot, files[1]!), 'utf8')
     expect(resource).toContain('protected static override model = Post')
-    expect(resource).toContain("TextInput.make('title').required()")
-    expect(resource).toContain("Checkbox.make('published').required()")
-    expect(resource).toContain("DateTimePicker.make('publishedAt')")
-    expect(resource).toContain("TextColumn.make('title')")
-    expect(resource).toContain('recordActions([\n      ViewAction.make(),')
-    expect(resource).toContain('ActionGroup.make([\n        DeleteBulkAction.make(),')
+    expect(resource).toContain("field.TextInput.make('title').required()")
+    expect(resource).toContain("field.Checkbox.make('published').required()")
+    expect(resource).toContain("field.DateTimePicker.make('publishedAt')")
+    expect(resource).toContain("component.TextColumn.make('title')")
+    expect(resource).toContain('recordActions([\n      component.ViewAction.make(),')
+    expect(resource).toContain('component.ActionGroup.make([\n        component.DeleteBulkAction.make(),')
     expect(resource).not.toContain('components(field =>')
     expect(resource).not.toContain('columns(column =>')
-    expect(listPage).toContain("import { CreateAction } from '@holo-js/panels-actions'")
-    expect(listPage).toContain('return [CreateAction.make()]')
+    expect(listPage).not.toContain("from '@holo-js/panels-actions'")
+    expect(listPage).toContain('return PostResource.actions(({ CreateAction }) => [CreateAction.make()])')
   })
 
   it('generates an empty type-safe resource when metadata generation is not requested', async () => {
@@ -238,8 +238,8 @@ describe('Holo Panels generators', () => {
     const contents = await readFile(join(projectRoot, files[0]!), 'utf8')
 
     expect(contents).toContain("import Post from '~/server/models/Post'")
-    expect(contents).toContain("TextInput.make('id').numeric().required()")
-    expect(contents).toContain("DateTimePicker.make('published_at')")
+    expect(contents).toContain("field.TextInput.make('id').numeric().required()")
+    expect(contents).toContain("field.DateTimePicker.make('published_at')")
     expect(files).toEqual([
       'server/admin/resources/posts/PostResource.ts',
       'server/admin/resources/posts/pages/ListPosts.ts',
@@ -266,9 +266,9 @@ describe('Holo Panels generators', () => {
       'server/admin/resources/posts/pages/ViewPost.ts',
       'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
     ])
-    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('export const PostForm = [')
+    expect(await readFile(join(projectRoot, files[1]!), 'utf8')).toContain('export function PostForm(field: ResourceFormFactoryFor<typeof PostResource>)')
     expect(await readFile(join(projectRoot, files[1]!), 'utf8')).not.toContain('Post from')
-    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('export const PostsTable = {')
+    expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('export function PostsTable(component: ResourceTableFactoryFor<typeof PostResource>)')
     expect(await readFile(join(projectRoot, files[2]!), 'utf8')).toContain('recordActions: [')
   })
 

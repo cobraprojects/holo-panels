@@ -1,25 +1,23 @@
 import { RelationManager } from '@holo-js/panels'
-import { AssociateAction, CreateAction, DeleteAction, DissociateAction, EditAction, ViewAction } from '@holo-js/panels-actions'
-import { TextColumn } from '@holo-js/panels-tables'
 
 export default class CommentsRelationManager extends RelationManager {
   protected static override relationship = 'comments'
 
-  static table = this.configureTable(table => table
+  static table = this.configureTable((table, component) => table
     .columns([
-      TextColumn.make('authorName'),
-      TextColumn.make('body').limit(80).wrap(),
-      TextColumn.make('status').badge(),
+      component.TextColumn.make('authorName'),
+      component.TextColumn.make('body').limit(80).wrap(),
+      component.TextColumn.make('status').badge(),
     ])
     .headerActions([
-      CreateAction.make(),
-      AssociateAction.make(),
+      component.CreateAction.make(),
+      component.AssociateAction.make(),
     ])
     .recordActions([
-      ViewAction.make(),
-      EditAction.make(),
-      DissociateAction.make(),
-      DeleteAction.make(),
+      component.ViewAction.make(),
+      component.EditAction.make(),
+      component.DissociateAction.make(),
+      component.DeleteAction.make(),
     ])
   )
 }

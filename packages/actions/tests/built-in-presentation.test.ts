@@ -60,10 +60,10 @@ describe('built-in action presentation', () => {
   it('uses the same defaults through resource-scoped action factories', () => {
     const action = createActionFactory<{ readonly id: number }>()
 
-    expect(action.create().manifest()).toMatchObject({ color: 'primary', icon: 'plus' })
-    expect(action.deleteBulk().manifest()).toMatchObject({ color: 'danger', icon: 'delete', requiresConfirmation: true })
-    expect(action.attach().manifest('header')).toMatchObject({ icon: 'link', kind: 'attach', scope: 'header' })
-    expect(action.editPivot().manifest('row')).toMatchObject({ icon: 'edit', kind: 'editPivot', scope: 'row' })
-    expect(action.detach().manifest('row')).toMatchObject({ color: 'danger', icon: 'unlink', kind: 'detach', requiresConfirmation: true })
+    expect(action.CreateAction.make().manifest()).toMatchObject({ color: 'primary', icon: 'plus' })
+    expect(action.DeleteBulkAction.make().manifest()).toMatchObject({ color: 'danger', icon: 'delete', requiresConfirmation: true })
+    expect(action.AttachAction.make().manifest('header')).toMatchObject({ icon: 'link', kind: 'attach', scope: 'header' })
+    expect(action.EditPivotAction.make().manifest('row')).toMatchObject({ icon: 'edit', kind: 'editPivot', scope: 'row' })
+    expect(action.DetachAction.make().manifest('row')).toMatchObject({ color: 'danger', icon: 'unlink', kind: 'detach', requiresConfirmation: true })
   })
 })

@@ -85,7 +85,7 @@ export const users = defineGeneratedTable('users', {
   name: column.string(),
   email: column.string(),
   published: column.boolean(),
-  title: column.string(),
+  title: column.integer(),
 })
 
 export const audits = defineGeneratedTable('audits', {
@@ -174,12 +174,77 @@ async function writeResourceBindings(projectRoot: string): Promise<void> {
   await writeFile(join(generatedRoot, 'panels', bindings.path), bindings.contents)
 }
 
-async function generatedProject(source: string, resource: 'Audit' | 'Post' = 'Post'): Promise<GeneratedProject> {
+async function generatedRelationManagerProject(source: string): Promise<GeneratedProject> {
+  const workspaceRoot = resolve(import.meta.dirname, '../../..')
+  const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-relation-manager-api-'))
+  const fileName = join(projectRoot, 'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts')
+  temporaryDirectories.push(projectRoot)
+  await Promise.all([
+    mkdir(join(projectRoot, '.holo-js/generated/panels'), { recursive: true }),
+    mkdir(join(projectRoot, 'server/models'), { recursive: true }),
+    mkdir(join(projectRoot, 'server/admin/resources/posts/relation-managers'), { recursive: true }),
+  ])
+  await Promise.all([
+    writeGeneratedHoloTypes(projectRoot),
+    writeGeneratedRegistry(projectRoot),
+    writeModels(projectRoot),
+    writeFile(join(projectRoot, 'server/admin/resources/posts/PostResource.ts'), `import { Resource } from '@holo-js/panels-resources'
+import Post from '../../../models/Post'
+
+export default class PostResource extends Resource {
+  protected static override model = Post
+}
+`),
+    writeFile(fileName, source),
+  ])
+  const bindings = await renderResourceTypeBindings(projectRoot, [{
+    exportName: 'default',
+    modelName: 'Post',
+    projectPath: 'server/admin/resources/posts/PostResource.ts',
+    tableName: 'posts',
+  }], [{
+    exportName: 'default',
+    ownerResourceExportName: 'default',
+    ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.ts',
+    projectPath: 'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts',
+    relationship: 'author',
+  }])
+  await writeFile(join(projectRoot, '.holo-js/generated/panels', bindings.path), bindings.contents)
+  return { fileName, projectRoot, workspaceRoot }
+}
+
+async function generatedProject(source: string, resource: 'Audit' | 'Post' | 'User' = 'Post'): Promise<GeneratedProject> {
   const workspaceRoot = resolve(import.meta.dirname, '../../..')
   const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-resource-api-'))
-  const fileName = resource === 'Audit'
-    ? join(projectRoot, 'server/admin/resources/audits/AuditResource.ts')
-    : join(projectRoot, 'server/admin/resources/posts/PostResource.ts')
+  const resourcePaths = {
+    Audit: 'server/admin/resources/audits/AuditResource.ts',
+    Post: 'server/admin/resources/posts/PostResource.ts',
+    User: 'server/admin/resources/users/UserResource.ts',
+  } as const
+  const resourceStubs = {
+    Audit: `import { Resource } from '@holo-js/panels-resources'
+import Audit from '../../../models/Audit'
+
+export default class AuditResource extends Resource {
+  protected static override model = Audit
+}
+`,
+    Post: `import { Resource } from '@holo-js/panels-resources'
+import Post from '../../../models/Post'
+
+export default class PostResource extends Resource {
+  protected static override model = Post
+}
+`,
+    User: `import { Resource } from '@holo-js/panels-resources'
+import User from '../../../models/User'
+
+export default class UserResource extends Resource {
+  protected static override model = User
+}
+`,
+  } as const
+  const fileName = join(projectRoot, resourcePaths[resource])
   temporaryDirectories.push(projectRoot)
   await Promise.all([
     mkdir(join(projectRoot, '.holo-js/generated/panels'), { recursive: true }),
@@ -188,34 +253,8 @@ async function generatedProject(source: string, resource: 'Audit' | 'Post' = 'Po
     mkdir(join(projectRoot, 'server/admin/resources/users'), { recursive: true }),
     mkdir(join(projectRoot, 'server/admin/resources/audits'), { recursive: true }),
   ])
-  const resourceFiles = [
-    writeFile(fileName, source),
-    ...(resource === 'Post' ? [] : [
-      writeFile(join(projectRoot, 'server/admin/resources/posts/PostResource.ts'), `import { Resource } from '@holo-js/panels-resources'
-import Post from '../../../models/Post'
-
-export default class PostResource extends Resource {
-  protected static override model = Post
-}
-`),
-    ]),
-    writeFile(join(projectRoot, 'server/admin/resources/users/UserResource.ts'), `import { Resource } from '@holo-js/panels-resources'
-import User from '../../../models/User'
-
-export default class UserResource extends Resource {
-  protected static override model = User
-}
-`),
-    ...(resource === 'Audit' ? [] : [
-      writeFile(join(projectRoot, 'server/admin/resources/audits/AuditResource.ts'), `import { Resource } from '@holo-js/panels-resources'
-import Audit from '../../../models/Audit'
-
-export default class AuditResource extends Resource {
-  protected static override model = Audit
-}
-`),
-    ]),
-  ]
+  const resourceFiles = (Object.keys(resourcePaths) as readonly (keyof typeof resourcePaths)[])
+    .map(name => writeFile(join(projectRoot, resourcePaths[name]), name === resource ? source : resourceStubs[name]))
   await Promise.all([
     writeGeneratedHoloTypes(projectRoot),
     writeGeneratedRegistry(projectRoot),
@@ -230,16 +269,14 @@ describe('Resource API completions', () => {
   it('offers generated model paths throughout the Resource API', async () => {
     const source = [
       "import { Resource } from '@holo-js/panels-resources'",
-      "import { TextInput } from '@holo-js/panels-forms'",
-      "import { TextEntry } from '@holo-js/panels-infolists'",
-      "import { SelectFilter, TextColumn } from '@holo-js/panels-tables'",
       "import Post from '../../../models/Post'",
       '',
       'export default class PostResource extends Resource {',
       '  protected static override model = Post',
-      "  static form = this.configureForm(schema => schema.components([TextInput.make('')]))",
-      "  static infolist = this.configureInfolist(schema => schema.components([TextEntry.make('')]))",
-      "  static table = this.configureTable(table => table.columns([TextColumn.make('')]).filters([SelectFilter.make('')]))",
+      "  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('')]))",
+      "  static destructuredForm = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('')]))",
+      "  static infolist = this.configureInfolist((schema, entry) => schema.components([entry.TextEntry.make('')]))",
+      "  static table = this.configureTable((table, column) => table.columns([column.TextColumn.make('')]).filters([column.SelectFilter.make('')]))",
       '}',
       '',
     ].join('\n')
@@ -256,13 +293,17 @@ describe('Resource API completions', () => {
       return completions?.entries.map(entry => entry.name) ?? []
     }
 
-    const formPaths = completionsAt("TextInput.make('')")
-    const infolistPaths = completionsAt("TextEntry.make('')")
-    const columnPaths = completionsAt("TextColumn.make('')")
-    const filterPaths = completionsAt("SelectFilter.make('')")
+    const formPaths = completionsAt("field.TextInput.make('')")
+    const destructuredFormPaths = completionsAt("TextInput.make('')")
+    const infolistPaths = completionsAt("entry.TextEntry.make('')")
+    const columnPaths = completionsAt("column.TextColumn.make('')")
+    const filterPaths = completionsAt("column.SelectFilter.make('')")
 
     expect(formPaths).toContain('title')
     expect(formPaths).toContain('author.name')
+    expect(formPaths).not.toContain('email')
+    expect(destructuredFormPaths).toContain('title')
+    expect(destructuredFormPaths).not.toContain('email')
     expect(infolistPaths).toContain('author.name')
     expect(columnPaths).toContain('author.name')
     expect(filterPaths).toContain('category')
@@ -270,33 +311,30 @@ describe('Resource API completions', () => {
 
   it('rejects fields and action records outside the generated Resource model', async () => {
     const source = [
-      "import { Action } from '@holo-js/panels-actions'",
-      "import { Select, TextInput } from '@holo-js/panels-forms'",
       "import { Resource } from '@holo-js/panels-resources'",
-      "import { SelectFilter, TernaryFilter, TextColumn } from '@holo-js/panels-tables'",
       "import Post from '../../../models/Post'",
       '',
       'export default class PostResource extends Resource {',
       '  protected static override model = Post',
-      "  static table = this.configureTable(table => table.columns([TextColumn.make('title')]).filters([SelectFilter.make('title'), TernaryFilter.make('published')]))",
-      '  static form = this.configureForm((schema) => {',
+      "  static table = this.configureTable((table, { SelectFilter, TernaryFilter, TextColumn }) => table.columns([TextColumn.make('title')]).filters([SelectFilter.make('title'), TernaryFilter.make('published')]))",
+      '  static form = this.configureForm((schema, { Select, TextInput }) => {',
       "    Select.make('authorId').relationship('author', 'name')",
       "    TextInput.make('category').disabled(({ record }) => record?.published === true)",
       "    return schema.components([TextInput.make('email')])",
       '  })',
-      '  static invalidColumn = this.configureTable((table) => {',
+      '  static invalidColumn = this.configureTable((table, { TextColumn }) => {',
       "    return table.columns([TextColumn.make('email')])",
       '  })',
-      '  static invalidFilter = this.configureTable((table) => {',
+      '  static invalidFilter = this.configureTable((table, { SelectFilter }) => {',
       "    return table.filters([SelectFilter.make('email')])",
       '  })',
-      '  static invalidFormRelation = this.configureForm((schema) => {',
+      '  static invalidFormRelation = this.configureForm((schema, { Select }) => {',
       "    return schema.components([Select.make('authorId').relationship('metadata', 'label')])",
       '  })',
-      '  static invalidTableRelation = this.configureTable((table) => {',
+      '  static invalidTableRelation = this.configureTable((table, { SelectFilter }) => {',
       "    return table.filters([SelectFilter.make('metadata').relationship('metadata', 'label')])",
       '  })',
-      "  static publish = this.action(Action.make('publish')).action((_data, { record }) => {",
+      "  static publish = this.action(({ Action }) => Action.make('publish')).action((_data, { record }) => {",
       '    if (!record) return null',
       '    const title = record.title',
       '    return record.email ?? title',
@@ -310,21 +348,20 @@ describe('Resource API completions', () => {
     const diagnostics = service.getSemanticDiagnostics(fileName)
     const messages = diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
 
-    expect(messages).toHaveLength(7)
-    expect(messages.filter(message => message.includes('No overload matches this call'))).toHaveLength(4)
+    expect(messages).toHaveLength(6)
+    expect(messages.filter(message => message.includes('is not assignable to parameter of type'))).toHaveLength(5)
     expect(messages.filter(message => message.includes('Argument of type \'"metadata"\' is not assignable'))).toHaveLength(2)
     expect(messages.filter(message => message.includes("Property 'email' does not exist"))).toHaveLength(1)
   })
 
   it('rejects JSON object columns as relations on models without relations', async () => {
     const source = [
-      "import { Select } from '@holo-js/panels-forms'",
       "import { Resource } from '@holo-js/panels-resources'",
       "import Audit from '../../../models/Audit'",
       '',
       'export default class AuditResource extends Resource {',
       '  protected static override model = Audit',
-      "  static form = this.configureForm(schema => schema.components([Select.make('metadata').relationship('metadata', 'label')]))",
+      "  static form = this.configureForm((schema, { Select }) => schema.components([Select.make('metadata').relationship('metadata', 'label')]))",
       '}',
       '',
     ].join('\n')
@@ -334,5 +371,227 @@ describe('Resource API completions', () => {
       .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
 
     expect(messages).toEqual([expect.stringContaining('Argument of type \'"metadata"\' is not assignable')])
+  })
+
+  it('infers shared-path callbacks from the enclosing Resource', async () => {
+    const postSource = [
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import Post from '../../../models/Post'",
+      '',
+      'export default class PostResource extends Resource {',
+      '  protected static override model = Post',
+      "  static plainForm = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').required()]))",
+      "  static form = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').disabled(({ record }) => record?.category === 'news')]))",
+      "  static invalidForm = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').disabled(({ record }) => record?.email !== '')]))",
+      "  static plainInfolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').label('Title')]))",
+      "  static infolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').visible(({ record }) => record.category === 'news')]))",
+      "  static invalidInfolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').visible(({ record }) => record.email !== '')]))",
+      "  static plainTable = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').label('Title')]))",
+      "  static table = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').tooltip(({ record }) => record.category)]))",
+      "  static invalidTable = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').tooltip(({ record }) => record.email)]))",
+      '}',
+      '',
+    ].join('\n')
+    const userSource = [
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import User from '../../../models/User'",
+      '',
+      'export default class UserResource extends Resource {',
+      '  protected static override model = User',
+      "  static plainForm = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').required()]))",
+      "  static form = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').disabled(({ record }) => record?.email !== '')]))",
+      "  static invalidForm = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').disabled(({ record }) => record?.category === 'news')]))",
+      "  static plainInfolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').label('Title')]))",
+      "  static infolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').visible(({ record }) => record.email !== '')]))",
+      "  static invalidInfolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').visible(({ record }) => record.category === 'news')]))",
+      "  static plainTable = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').label('Title')]))",
+      "  static table = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').tooltip(({ record }) => record.email)]))",
+      "  static invalidTable = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').tooltip(({ record }) => record.category)]))",
+      '}',
+      '',
+    ].join('\n')
+    const [postProject, userProject] = await Promise.all([
+      generatedProject(postSource),
+      generatedProject(userSource, 'User'),
+    ])
+    const postMessages = languageService(postProject, postSource).getSemanticDiagnostics(postProject.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+    const userMessages = languageService(userProject, userSource).getSemanticDiagnostics(userProject.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(postMessages).toHaveLength(3)
+    expect(postMessages.every(message => message.includes("Property 'email' does not exist"))).toBe(true)
+    expect(userMessages).toHaveLength(3)
+    expect(userMessages.every(message => message.includes("Property 'category' does not exist"))).toBe(true)
+  })
+
+  it('rejects relations owned by another Resource on a shared path', async () => {
+    const source = [
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import User from '../../../models/User'",
+      '',
+      'export default class UserResource extends Resource {',
+      '  protected static override model = User',
+      "  static form = this.configureForm((schema, { Select }) => schema.components([Select.make('title').relationship('author', 'name')]))",
+      "  static infolist = this.configureInfolist((schema, { TextEntry }) => schema.components([TextEntry.make('title').relationship('author', 'name')]))",
+      "  static table = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('title').relationship('author', 'name')]))",
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedProject(source, 'User')
+    const messages = languageService(project, source).getSemanticDiagnostics(project.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(messages).toHaveLength(3)
+    expect(messages.every(message => message.includes('Argument of type \'"author"\' is not assignable'))).toBe(true)
+  })
+
+  it('infers a shared field value from the enclosing Resource', async () => {
+    const source = [
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import User from '../../../models/User'",
+      '',
+      'export default class UserResource extends Resource {',
+      '  protected static override model = User',
+      "  static form = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').afterStateUpdated(state => { state?.toFixed() })]))",
+      "  static invalidForm = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').default('wrong')]))",
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedProject(source, 'User')
+    const diagnostics = languageService(project, source).getSemanticDiagnostics(project.fileName)
+    const messages = diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toContain("Argument of type '\"wrong\"' is not assignable")
+  })
+
+  it('preserves the Resource record across every built-in field, column, and entry', async () => {
+    const formComponents = [
+      ['Builder', 'title'],
+      ['Checkbox', 'published'],
+      ['CheckboxList', 'title'],
+      ['CodeEditor', 'title'],
+      ['ColorPicker', 'title'],
+      ['DatePicker', 'title'],
+      ['DateTimePicker', 'title'],
+      ['FileUpload', 'title'],
+      ['Hidden', 'title'],
+      ['KeyValue', 'title'],
+      ['MarkdownEditor', 'title'],
+      ['Radio', 'title'],
+      ['Repeater', 'title'],
+      ['RichEditor', 'title'],
+      ['Select', 'title'],
+      ['Slider', 'title'],
+      ['TagsInput', 'title'],
+      ['TextInput', 'title'],
+      ['Textarea', 'title'],
+      ['TimePicker', 'title'],
+      ['Toggle', 'published'],
+      ['ToggleButtons', 'title'],
+    ] as const
+    const tableColumns = [
+      ['CheckboxColumn', 'published'],
+      ['ColorColumn', 'title'],
+      ['IconColumn', 'title'],
+      ['ImageColumn', 'title'],
+      ['SelectColumn', 'title'],
+      ['TextColumn', 'title'],
+      ['TextInputColumn', 'title'],
+      ['ToggleColumn', 'published'],
+    ] as const
+    const infolistEntries = [
+      ['CodeEntry', 'title'],
+      ['ColorEntry', 'title'],
+      ['IconEntry', 'title'],
+      ['ImageEntry', 'title'],
+      ['KeyValueEntry', 'title'],
+      ['RepeatableEntry', 'title'],
+      ['TextEntry', 'title'],
+    ] as const
+    const source = [
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import Post from '../../../models/Post'",
+      '',
+      'export default class PostResource extends Resource {',
+      '  protected static override model = Post',
+      `  static form = this.configureForm((schema, field) => schema.components([${formComponents.map(([name, path]) => `field.${name}.make('${path}').disabled(({ record }) => record?.category === 'news')`).join(', ')}]))`,
+      `  static infolist = this.configureInfolist((schema, entry) => schema.components([${infolistEntries.map(([name, path]) => `entry.${name}.make('${path}').visible(({ record }) => record.category === 'news')`).join(', ')}]))`,
+      `  static table = this.configureTable((table, column) => table.columns([${tableColumns.map(([name, path]) => `column.${name}.make('${path}').tooltip(({ record }) => record.category)`).join(', ')}]))`,
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedProject(source)
+    const messages = languageService(project, source).getSemanticDiagnostics(project.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(messages).toEqual([])
+  })
+
+  it('infers relation-manager paths from the parent Resource relationship', async () => {
+    const source = [
+      "import { RelationManager } from '@holo-js/panels-resources'",
+      '',
+      'export default class AuthorRelationManager extends RelationManager {',
+      "  protected static override relationship = 'author'",
+      "  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('name'), field.TextInput.make('')]))",
+      "  static table = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('email'), TextColumn.make('')]))",
+      "  static invalid = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('category')]))",
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedRelationManagerProject(source)
+    const service = languageService(project, source)
+    const completionsAt = (needle: string): readonly string[] => {
+      const position = source.indexOf(needle) + needle.length - 2
+      return service.getCompletionsAtPosition(project.fileName, position, {
+        includeCompletionsForModuleExports: false,
+        includeCompletionsWithInsertText: true,
+      })?.entries.map(entry => entry.name) ?? []
+    }
+    const messages = service.getSemanticDiagnostics(project.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(completionsAt("field.TextInput.make('')")).toContain('name')
+    expect(completionsAt("TextColumn.make('')")).toContain('email')
+    expect(completionsAt("field.TextInput.make('')")).not.toContain('category')
+    expect(messages).toHaveLength(3)
+    expect(messages.filter(message => message.includes('"category"'))).toHaveLength(1)
+  })
+
+  it('rejects manual record generics on resources and relation managers', async () => {
+    const resourceSource = [
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import Post from '../../../models/Post'",
+      '',
+      'export default class PostResource extends Resource {',
+      '  protected static override model = Post',
+      '}',
+      'class ManuallyTypedResource extends Resource<typeof Post> {}',
+      '',
+    ].join('\n')
+    const relationManagerSource = [
+      "import { RelationManager } from '@holo-js/panels-resources'",
+      '',
+      'export default class AuthorRelationManager extends RelationManager {',
+      "  protected static override relationship = 'author'",
+      '}',
+      'class ManuallyTypedRelationManager extends RelationManager<object, object> {}',
+      '',
+    ].join('\n')
+    const [resourceProject, relationManagerProject] = await Promise.all([
+      generatedProject(resourceSource),
+      generatedRelationManagerProject(relationManagerSource),
+    ])
+    const messages = [
+      ...languageService(resourceProject, resourceSource).getSemanticDiagnostics(resourceProject.fileName),
+      ...languageService(relationManagerProject, relationManagerSource).getSemanticDiagnostics(relationManagerProject.fileName),
+    ].map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(messages).toEqual([
+      "Type 'Resource' is not generic.",
+      "Type 'RelationManager' is not generic.",
+    ])
   })
 })

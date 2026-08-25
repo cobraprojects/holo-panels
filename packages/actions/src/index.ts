@@ -35,6 +35,7 @@ type ActionHandler<TContext, TData extends object, TResult> = (data: Readonly<TD
 
 export interface ActionContract<TRecord extends object = object> {
   readonly id: string
+  readonly resourceRecordType: TRecord
   compile(): object
   manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): JsonObject
 }
@@ -298,11 +299,11 @@ export class Action<
     }
     const factory = this.#schemaFactory
     if (typeof schema !== 'function') {
-      this.modal().schema = new Schema<TRecord, TData, TSchemaFactory>(factory).components(schema)
+      this.modal().schema = new Schema<TRecord, TData, TSchemaFactory>().components(schema)
       return this
     }
     if (factory === undefined) throw new Error('Action schema callbacks require a component factory')
-    this.modal().schema = new Schema<TRecord, TData, TSchemaFactory>(factory).components(schema)
+    this.modal().schema = new Schema<TRecord, TData, TSchemaFactory>().components(schema(factory))
     return this
   }
 
@@ -596,26 +597,27 @@ export interface ActionFactory<
   TServices = object,
   TSchemaFactory = undefined,
 > {
-  make<TResult = void>(name: string): Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>
-  bulk<TResult = void>(name: string): BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>
-  associate(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  attach(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  create(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  delete(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  deleteBulk(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  detach(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  dissociate(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  edit(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  editPivot(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  export(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  forceDelete(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  forceDeleteBulk(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  group<const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions): ActionGroup<TActions[number]>
-  import(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  replicate(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  restore(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  restoreBulk(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
-  view(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory>
+  readonly Action: { make<TResult = void>(name: string): Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ActionGroup: { make<const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions): ActionGroup<TActions[number]> }
+  readonly AssociateAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly AttachAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly BulkAction: { make<TResult = void>(name: string): BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly BulkActionGroup: { make<const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions): BulkActionGroup<TActions[number]> }
+  readonly CreateAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly DeleteAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly DeleteBulkAction: { make(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly DetachAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly DissociateAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly EditAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly EditPivotAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ExportAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ForceDeleteAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ForceDeleteBulkAction: { make(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ImportAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ReplicateAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly RestoreAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly RestoreBulkAction: { make(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly ViewAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
 }
 
 export function createActionFactory<
@@ -629,25 +631,26 @@ export function createActionFactory<
   const action = (id: string, kind: ActionKind, mount: ActionMount): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> => applyBuiltInPresentation(new Action(id, kind, mount, schemaFactory), id)
   const bulkAction = (id: string, kind: ActionKind): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> => applyBuiltInPresentation(new BulkAction(id, kind, schemaFactory), id)
   return Object.freeze({
-    associate: () => action('associate', 'associate', 'page'),
-    attach: () => action('attach', 'attach', 'page'),
-    bulk: <TResult = void>(name: string) => new BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>(name, 'custom', schemaFactory),
-    create: () => action('create', 'create', 'page'),
-    delete: () => action('delete', 'delete', 'record'),
-    deleteBulk: () => bulkAction('delete', 'delete'),
-    detach: () => action('detach', 'detach', 'record'),
-    dissociate: () => action('dissociate', 'dissociate', 'record'),
-    edit: () => action('edit', 'edit', 'record'),
-    editPivot: () => action('editPivot', 'editPivot', 'record'),
-    export: () => action('export', 'custom', 'page'),
-    forceDelete: () => action('force-delete', 'force-delete', 'record'),
-    forceDeleteBulk: () => bulkAction('force-delete', 'force-delete'),
-    group: <const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions) => ActionGroup.make(actions),
-    import: () => action('import', 'custom', 'page'),
-    make: <TResult = void>(name: string) => new Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>(name, 'custom', 'record', schemaFactory),
-    replicate: () => action('replicate', 'replicate', 'record'),
-    restore: () => action('restore', 'restore', 'record'),
-    restoreBulk: () => bulkAction('restore', 'restore'),
-    view: () => action('view', 'view', 'record'),
+    Action: Object.freeze({ make: <TResult = void>(name: string) => new Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>(name, 'custom', 'record', schemaFactory) }),
+    ActionGroup: Object.freeze({ make: <const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions) => ActionGroup.make(actions) }),
+    AssociateAction: Object.freeze({ make: () => action('associate', 'associate', 'page') }),
+    AttachAction: Object.freeze({ make: () => action('attach', 'attach', 'page') }),
+    BulkAction: Object.freeze({ make: <TResult = void>(name: string) => new BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>(name, 'custom', schemaFactory) }),
+    BulkActionGroup: Object.freeze({ make: <const TActions extends readonly ActionContract<TRecord>[]>(actions: TActions) => BulkActionGroup.make(actions) }),
+    CreateAction: Object.freeze({ make: () => action('create', 'create', 'page') }),
+    DeleteAction: Object.freeze({ make: () => action('delete', 'delete', 'record') }),
+    DeleteBulkAction: Object.freeze({ make: () => bulkAction('delete', 'delete') }),
+    DetachAction: Object.freeze({ make: () => action('detach', 'detach', 'record') }),
+    DissociateAction: Object.freeze({ make: () => action('dissociate', 'dissociate', 'record') }),
+    EditAction: Object.freeze({ make: () => action('edit', 'edit', 'record') }),
+    EditPivotAction: Object.freeze({ make: () => action('editPivot', 'editPivot', 'record') }),
+    ExportAction: Object.freeze({ make: () => action('export', 'custom', 'page') }),
+    ForceDeleteAction: Object.freeze({ make: () => action('force-delete', 'force-delete', 'record') }),
+    ForceDeleteBulkAction: Object.freeze({ make: () => bulkAction('force-delete', 'force-delete') }),
+    ImportAction: Object.freeze({ make: () => action('import', 'custom', 'page') }),
+    ReplicateAction: Object.freeze({ make: () => action('replicate', 'replicate', 'record') }),
+    RestoreAction: Object.freeze({ make: () => action('restore', 'restore', 'record') }),
+    RestoreBulkAction: Object.freeze({ make: () => bulkAction('restore', 'restore') }),
+    ViewAction: Object.freeze({ make: () => action('view', 'view', 'record') }),
   })
 }

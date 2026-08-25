@@ -152,27 +152,29 @@ This applies to navigation, buttons, icon buttons, dropdown menus, command searc
 - Provide autocomplete for every accepted field and relation name.
 - Reject invalid field and relation names at compile time.
 - Require no user-written generic arguments, casts, extracted base-class members, or generated-table declarations in application code.
-- Keep actions, forms, tables, infolists, notifications, widgets, pages, resources, and relation managers as normal package imports.
-- Match Filament's direct array shape for schemas and tables. Do not require a contextual factory callback solely to recover model inference.
+- Keep actions, forms, tables, infolists, notifications, widgets, pages, resources, and relation managers in their normal packages.
+- Match Filament's direct array shape inside model-bound resource callbacks. Allow either property access on the component object or destructuring from it.
 
 The final resource code must allow calls such as:
 
 ```ts
-TextColumn.make('author_name')
+static table = this.configureTable((table, component) => table.columns([
+  component.TextColumn.make('title'),
+]))
 ```
 
 The model binding must supply the type. The user must not write `TextColumn.make<CommentRecord>(...)` or extract constructors from a generated base class.
 
-The table API must allow normal imports and a direct array:
+The table API must allow a direct array with destructured constructors:
 
 ```ts
-table.columns([
+static table = this.configureTable((table, { TextColumn }) => table.columns([
   TextColumn.make('title'),
   TextColumn.make('author.name'),
-])
+]))
 ```
 
-The resource model binding and generated `.holo-js` declarations must contextually constrain each component. Invalid paths must fail at compile time and valid paths must autocomplete.
+The resource model binding and generated `.holo-js` declarations must constrain the component object. Invalid paths must fail at compile time and valid paths must autocomplete.
 
 ## 11. Add panel localization and RTL support
 

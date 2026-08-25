@@ -14,7 +14,7 @@ const context: FieldContext<RecordFixture> = Object.freeze({
 
 describe('choice field options', () => {
   it('preserves static options for client manifests and server operations', async () => {
-    const field = createFieldFactory<RecordFixture>().select('city').options({ Cairo: 'Cairo', London: 'London' }).compile()
+    const field = createFieldFactory<RecordFixture>().Select.make('city').options({ Cairo: 'Cairo', London: 'London' }).compile()
 
     expect(field.properties?.options).toEqual({ Cairo: 'Cairo', London: 'London' })
     expect(field.server.options.manifestOptions()).toEqual([
@@ -31,7 +31,7 @@ describe('choice field options', () => {
   })
 
   it('resolves callback options on the server without serializing the callback', async () => {
-    const field = createFieldFactory<RecordFixture>().select('city').options(() => [
+    const field = createFieldFactory<RecordFixture>().Select.make('city').options(() => [
       { label: 'Cairo', value: 'Cairo' },
     ]).compile()
 

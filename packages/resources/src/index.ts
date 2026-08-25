@@ -4,7 +4,6 @@ import {
   type ActionFactory,
   type ActionContract,
   type ActionGroup,
-  type BulkAction,
 } from '@holo-js/panels-actions'
 import {
   DISCOVERY_MARKER,
@@ -17,7 +16,6 @@ import {
   defineResource,
   type ResourceExecutionContext,
   type ResourceInput,
-  type ResourceCompositionTypes,
   type ResourceQuery,
   type ResourceRecord,
   type PanelRelationValue,
@@ -28,7 +26,14 @@ import { createFieldFactory, type FieldFactory } from '@holo-js/panels-forms'
 import { createEntryFactory, type EntryFactory } from '@holo-js/panels-infolists'
 import type { Notification } from '@holo-js/panels-notifications'
 import { createLayoutFactory, Schema, type LayoutFactory } from '@holo-js/panels-schemas'
-import { Table, type TableAction } from '@holo-js/panels-tables'
+import {
+  createColumnFactory,
+  createFilterFactory,
+  Table,
+  type ColumnFactory,
+  type FilterFactory,
+  type TableAction,
+} from '@holo-js/panels-tables'
 
 export interface ResourceModelSource<TRecord extends ResourceRecord = ResourceRecord> {
   create(...parameters: never[]): TRecord | Promise<TRecord>
@@ -80,10 +85,13 @@ export type ResourceRelationRecordFor<
   TRelation extends ResourceRelationName<TModel>,
 > = RelatedRecord<ModelRelationsFor<TModel>[TRelation], 3>
 
-export type SchemaConfiguration<TRecord extends object, TFactory = undefined> = (schema: Schema<TRecord, TRecord, TFactory>) => Schema<TRecord, TRecord, TFactory>
+export type SchemaConfiguration<TRecord extends object, TFactory = undefined> = (
+  schema: Schema<TRecord, TRecord, TFactory>,
+  components: TFactory,
+) => Schema<TRecord, TRecord, TFactory>
 export type ResourceFormFactory<TRecord extends object> = FieldFactory<TRecord> & LayoutFactory<TRecord>
 export type ResourceInfolistFactory<TRecord extends object> = EntryFactory<TRecord> & LayoutFactory<TRecord>
-export type ResourceActionFactory<TRecord extends object> = ActionFactory<
+export type ResourceActionFactory<TRecord extends object> = ResourceFormFactory<TRecord> & ActionFactory<
   TRecord,
   ResourceInput<TRecord>,
   DefaultPanelActor,
@@ -91,15 +99,22 @@ export type ResourceActionFactory<TRecord extends object> = ActionFactory<
   object,
   ResourceFormFactory<TRecord>
 >
-type BoundResourceAction<TAction, TRecord extends object> = TAction extends BulkAction<infer _TExistingRecord, infer TData, infer TResult, infer _TActor, infer _TTenant, infer _TServices, infer _TSchemaFactory>
-  ? BulkAction<TRecord, TData, TResult, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>
-  : TAction extends Action<infer _TExistingRecord, infer TData, infer TResult, infer _TActor, infer _TTenant, infer _TServices, infer _TSchemaFactory>
-    ? Action<TRecord, TData, TResult, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>
-    : never
-export type ResourceTable<TRecord extends object> = Table<TRecord, ResourceInput<TRecord>, ResourceFormFactory<TRecord>>
-export type TableConfiguration<TRecord extends object> = (table: ResourceTable<TRecord>) => ResourceTable<TRecord>
-export type ResourceSchemaConfiguration = (schema: Schema) => Schema
-export type ResourceTableConfiguration = (table: Table) => Table
+export type ResourceTable<TRecord extends object> = Table<TRecord>
+export type ResourceTableFactory<TRecord extends object> = ColumnFactory<TRecord> & FilterFactory<TRecord> & ResourceActionFactory<TRecord>
+export type ResourceFormFactoryFor<TResource extends ResourceClass> = ResourceFormFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>
+export type ResourceTableFactoryFor<TResource extends ResourceClass> = ResourceTableFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>
+export type TableConfiguration<TRecord extends object> = (
+  table: ResourceTable<TRecord>,
+  components: ResourceTableFactory<TRecord>,
+) => ResourceTable<TRecord>
+export type ResourceSchemaConfiguration<TRecord extends object, TFactory> = (
+  schema: Schema<TRecord, TRecord, TFactory>,
+  components: TFactory,
+) => Schema<TRecord, TRecord, TFactory>
+export type ResourceTableConfiguration<TRecord extends object> = (
+  table: ResourceTable<TRecord>,
+  components: ResourceTableFactory<TRecord>,
+) => ResourceTable<TRecord>
 export type ResourceCreateBindings = (
   context: ResourceExecutionContext<DefaultPanelActor, DefaultPanelTenant>,
 ) => Readonly<Record<string, unknown>> | Promise<Readonly<Record<string, unknown>>>
@@ -118,6 +133,30 @@ export type ResourceQueryConfiguration<
   query: ReturnType<TModel['query']>,
   context: ResourceExecutionContext<TActor, TTenant>,
 ) => ReturnType<TModel['query']>
+
+function resourceFormFactory<TRecord extends object>(): ResourceFormFactory<TRecord> {
+  return Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
+}
+
+function resourceInfolistFactory<TRecord extends object>(): ResourceInfolistFactory<TRecord> {
+  return Object.freeze({ ...createEntryFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
+}
+
+function resourceActionFactory<TRecord extends object>(): ResourceActionFactory<TRecord> {
+  const formFactory = resourceFormFactory<TRecord>()
+  return Object.freeze({
+    ...formFactory,
+    ...createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(formFactory),
+  })
+}
+
+function resourceTableFactory<TRecord extends object>(): ResourceTableFactory<TRecord> {
+  return Object.freeze({
+    ...resourceActionFactory<TRecord>(),
+    ...createColumnFactory<TRecord>(),
+    ...createFilterFactory<TRecord>(),
+  })
+}
 
 declare const resourceTypeRegistryMarker: unique symbol
 declare const relationManagerTypeRegistryMarker: unique symbol
@@ -299,9 +338,9 @@ interface ResourceBuilderContract {
   writableAttributes(values: readonly string[]): ResourceBuilderContract
 }
 
-function invoke<TValue>(target: object, method: string, value: TValue): TValue {
+function invoke<TValue>(target: object, method: string, value: TValue, ...parameters: readonly unknown[]): TValue {
   const callback = Reflect.get(target, method)
-  return typeof callback === 'function' ? Reflect.apply(callback, target, [value]) as TValue : value
+  return typeof callback === 'function' ? Reflect.apply(callback, target, [value, ...parameters]) as TValue : value
 }
 
 function invokeArray(target: object, method: string): readonly object[] {
@@ -310,6 +349,17 @@ function invokeArray(target: object, method: string): readonly object[] {
   return Array.isArray(value)
     ? value.filter((item): item is object => (typeof item === 'object' && item !== null) || typeof item === 'function')
     : []
+}
+
+function configuredCompositions(target: object): Readonly<{ form: Schema, infolist: Schema, table: Table }> {
+  const formFactory = resourceFormFactory()
+  const infolistFactory = resourceInfolistFactory()
+  const tableFactory = resourceTableFactory()
+  return Object.freeze({
+    form: invoke(target, 'form', new Schema(), formFactory),
+    infolist: invoke(target, 'infolist', new Schema(), infolistFactory),
+    table: invoke(target, 'table', new Table(), tableFactory),
+  })
 }
 
 function pageRegistrations(target: object): readonly ResourcePageRegistration[] {
@@ -321,20 +371,6 @@ function pageRegistrations(target: object): readonly ResourcePageRegistration[] 
 
 function flattenedActions<TRecord extends object>(actions: readonly TableAction<TRecord>[]): readonly ActionContract<TRecord>[] {
   return actions.flatMap(action => 'actions' in action ? (action as ActionGroup<ActionContract<TRecord>>).actions : [action])
-}
-
-export function configureResourceForm<TModel extends ResourceModelSource>(
-  _model: TModel,
-  configuration: SchemaConfiguration<ResourceRecordFor<TModel>, ResourceFormFactory<ResourceRecordFor<TModel>>>,
-): ResourceSchemaConfiguration {
-  return schema => Reflect.apply(configuration, undefined, [schema]) as Schema
-}
-
-export function configureResourceTable<TModel extends ResourceModelSource>(
-  _model: TModel,
-  configuration: TableConfiguration<ResourceRecordFor<TModel>>,
-): ResourceTableConfiguration {
-  return table => Reflect.apply(configuration, undefined, [table]) as Table
 }
 
 export function defineImporter<TResource extends ResourceClass>(
@@ -351,12 +387,7 @@ export function defineExporter<TResource extends ResourceClass>(
   return Reflect.apply(defineCoreExporter, undefined, [id, resource]) as ExporterBuilder<RegisteredResourceQuery<TResource>, RegisteredModelRecord<TResource>, RegisteredResourceIdentifier<TResource>, DefaultPanelActor, DefaultPanelTenant>
 }
 
-export abstract class Resource<
-  TModel extends ResourceModelSource = ResourceModelSource,
-  TActor extends object = DefaultPanelActor,
-  TTenant = DefaultPanelTenant,
-> {
-  declare readonly resourceCompositionTypes: ResourceCompositionTypes<ResourceRecordFor<TModel>, TActor, TTenant>
+export abstract class Resource {
   static readonly discoveryMarker = DISCOVERY_MARKER
   static readonly kind = 'resource' as const
   protected static model: ResourceModelSource
@@ -389,45 +420,38 @@ export abstract class Resource<
     return context => configuration(context)
   }
 
-  static action<TResource extends ResourceClass, TAction extends ActionContract>(
-    this: TResource,
-    action: TAction,
-  ): BoundResourceAction<TAction, ResourceRecordFor<RegisteredResourceModel<TResource>>>
   static action<TResource extends ResourceClass, TResult>(
     this: TResource,
     configure: (action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TResult,
-  ): TResult extends ActionContract ? ActionContract<never> : TResult
+  ): TResult
   static action<TResource extends ResourceClass, TResult>(
     this: TResource,
-    action: ActionContract | ((action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TResult),
-  ): unknown {
-    if (typeof action !== 'function') return action
+    action: (action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TResult,
+  ): TResult {
     type TRecord = ResourceRecordFor<RegisteredResourceModel<TResource>>
-    const factory = Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
-    return action(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory))
+    return action(resourceActionFactory<TRecord>())
   }
 
   static actions<TResource extends ResourceClass, const TActions extends readonly ActionContract<ResourceRecordFor<RegisteredResourceModel<TResource>>>[]>(
     this: TResource,
     configure: (action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TActions,
-  ): readonly ActionContract[] {
+  ): TActions {
     type TRecord = ResourceRecordFor<RegisteredResourceModel<TResource>>
-    const factory = Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
-    return configure(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory))
+    return configure(resourceActionFactory<TRecord>())
   }
 
   protected static configureForm<TResource extends ResourceClass>(
     this: TResource,
     configuration: SchemaConfiguration<ResourceRecordFor<RegisteredResourceModel<TResource>>, ResourceFormFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>>,
-  ): ResourceSchemaConfiguration {
-    return schema => Reflect.apply(configuration, this, [schema]) as Schema
+  ): ResourceSchemaConfiguration<ResourceRecordFor<RegisteredResourceModel<TResource>>, ResourceFormFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>> {
+    return (schema, components) => Reflect.apply(configuration, this, [schema, components])
   }
 
   protected static configureInfolist<TResource extends ResourceClass>(
     this: TResource,
     configuration: SchemaConfiguration<ResourceRecordFor<RegisteredResourceModel<TResource>>, ResourceInfolistFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>>,
-  ): ResourceSchemaConfiguration {
-    return schema => Reflect.apply(configuration, this, [schema]) as Schema
+  ): ResourceSchemaConfiguration<ResourceRecordFor<RegisteredResourceModel<TResource>>, ResourceInfolistFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>> {
+    return (schema, components) => Reflect.apply(configuration, this, [schema, components])
   }
 
   protected static configureQuery<TResource extends ResourceClass>(
@@ -440,18 +464,15 @@ export abstract class Resource<
   protected static configureTable<TResource extends ResourceClass>(
     this: TResource,
     configuration: TableConfiguration<ResourceRecordFor<RegisteredResourceModel<TResource>>>,
-  ): ResourceTableConfiguration {
-    return table => Reflect.apply(configuration, this, [table]) as Table
+  ): ResourceTableConfiguration<ResourceRecordFor<RegisteredResourceModel<TResource>>> {
+    return (table, components) => Reflect.apply(configuration, this, [table, components])
   }
 
   static compile(): CompiledResourceDefinition {
     const model = this.model
     const create = defineResource as unknown as (source: ResourceModelSource) => ResourceBuilderContract
     let builder = create(model)
-    const formFactory = Object.freeze({ ...createFieldFactory(), ...createLayoutFactory() })
-    const form = invoke(this, 'form', new Schema(formFactory))
-    const infolist = invoke(this, 'infolist', new Schema(Object.freeze({ ...createEntryFactory(), ...createLayoutFactory() })))
-    const table = invoke(this, 'table', new Table(formFactory))
+    const { form, infolist, table } = configuredCompositions(this)
     const pages = pageRegistrations(this)
     const relations = invokeArray(this, 'getRelations')
     const widgets = invokeArray(this, 'getWidgets')
@@ -529,71 +550,61 @@ export abstract class Resource<
   static shouldRegisterNavigation(): boolean { return true }
 }
 
-export abstract class RelationManager<TOwnerRecord extends object = object, TRecord extends object = object> {
-  declare readonly ownerRecordType: TOwnerRecord
-  declare readonly resourceRecordType: TRecord
+export abstract class RelationManager {
   static readonly discoveryMarker = DISCOVERY_MARKER
   static readonly kind = 'relation-manager' as const
   protected static relationship: string
   static title: string | null = null
 
-  static action<TManager extends RelationManagerClass, TAction extends ActionContract>(
-    this: TManager,
-    action: TAction,
-  ): BoundResourceAction<TAction, RegisteredRelationRecord<TManager>>
   static action<TManager extends RelationManagerClass, TResult>(
     this: TManager,
     configure: (action: ResourceActionFactory<RegisteredRelationRecord<TManager>>) => TResult,
-  ): TResult extends ActionContract ? ActionContract<never> : TResult
+  ): TResult
   static action<TManager extends RelationManagerClass, TResult>(
     this: TManager,
-    action: ActionContract | ((action: ResourceActionFactory<RegisteredRelationRecord<TManager>>) => TResult),
-  ): unknown {
-    if (typeof action !== 'function') return action
+    action: (action: ResourceActionFactory<RegisteredRelationRecord<TManager>>) => TResult,
+  ): TResult {
     type TRecord = RegisteredRelationRecord<TManager>
-    const factory = Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
-    return action(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory))
+    return action(resourceActionFactory<TRecord>())
   }
 
   static actions<TManager extends RelationManagerClass, const TActions extends readonly ActionContract<RegisteredRelationRecord<TManager>>[]>(
     this: TManager,
     configure: (action: ResourceActionFactory<RegisteredRelationRecord<TManager>>) => TActions,
-  ): readonly ActionContract[] {
+  ): TActions {
     type TRecord = RegisteredRelationRecord<TManager>
-    const factory = Object.freeze({ ...createFieldFactory<TRecord>(), ...createLayoutFactory<TRecord>() })
-    return configure(createActionFactory<TRecord, ResourceInput<TRecord>, DefaultPanelActor, DefaultPanelTenant, object, ResourceFormFactory<TRecord>>(factory))
+    return configure(resourceActionFactory<TRecord>())
   }
 
   protected static configureForm<TManager extends RelationManagerClass>(
     this: TManager,
     configuration: SchemaConfiguration<RegisteredRelationRecord<TManager>, ResourceFormFactory<RegisteredRelationRecord<TManager>>>,
-  ): ResourceSchemaConfiguration {
-    return schema => Reflect.apply(configuration, this, [schema]) as Schema
+  ): ResourceSchemaConfiguration<RegisteredRelationRecord<TManager>, ResourceFormFactory<RegisteredRelationRecord<TManager>>> {
+    return (schema, components) => Reflect.apply(configuration, this, [schema, components])
   }
 
   protected static configureInfolist<TManager extends RelationManagerClass>(
     this: TManager,
     configuration: SchemaConfiguration<RegisteredRelationRecord<TManager>, ResourceInfolistFactory<RegisteredRelationRecord<TManager>>>,
-  ): ResourceSchemaConfiguration {
-    return schema => Reflect.apply(configuration, this, [schema]) as Schema
+  ): ResourceSchemaConfiguration<RegisteredRelationRecord<TManager>, ResourceInfolistFactory<RegisteredRelationRecord<TManager>>> {
+    return (schema, components) => Reflect.apply(configuration, this, [schema, components])
   }
 
   protected static configureTable<TManager extends RelationManagerClass>(
     this: TManager,
     configuration: TableConfiguration<RegisteredRelationRecord<TManager>>,
-  ): ResourceTableConfiguration {
-    return table => Reflect.apply(configuration, this, [table]) as Table
+  ): ResourceTableConfiguration<RegisteredRelationRecord<TManager>> {
+    return (table, components) => Reflect.apply(configuration, this, [table, components])
   }
 
   static compile(): object {
-    const formFactory = Object.freeze({ ...createFieldFactory(), ...createLayoutFactory() })
-    const form = invoke(this, 'form', new Schema(formFactory))
-    const table = invoke(this, 'table', new Table(formFactory))
+    const { form, infolist, table } = configuredCompositions(this)
     return Object.freeze({
       actions: Object.freeze(flattenedActions(table.getActions()).map(action => action.compile())),
       discoveryMarker: DISCOVERY_MARKER,
       form,
       id: this.relationship,
+      infolist,
       kind: 'relation-manager',
       relationName: this.relationship,
       resourceRecordType: Object.freeze({}),
@@ -603,7 +614,11 @@ export abstract class RelationManager<TOwnerRecord extends object = object, TRec
   }
 
   static compileDiscoveryDefinition(): object { return this.compile() }
-  static canViewForRecord(_ownerRecord: object, _pageClass: ResourcePageConstructor): boolean | Promise<boolean> { return true }
-  protected getHeaderActions(): readonly ActionContract<TRecord>[] { return [] }
-  protected getTableHeaderActions(): readonly ActionContract<TRecord>[] { return [] }
+  static canViewForRecord<TManager extends RelationManagerClass>(
+    this: TManager,
+    _ownerRecord: ResourceRecordFor<RegisteredRelationOwnerModel<TManager>>,
+    _pageClass: ResourcePageConstructor,
+  ): boolean | Promise<boolean> { return true }
+  protected getHeaderActions(): readonly ActionContract<object>[] { return [] }
+  protected getTableHeaderActions(): readonly ActionContract<object>[] { return [] }
 }

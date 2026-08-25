@@ -750,22 +750,22 @@ export default class PostResource extends Resource {
   static override navigationLabel = 'Posts'
   static override navigationIcon = 'document-text'
 
-  static form = this.configureForm(schema => schema.components(field => [
-    field.textInput('title').required(),
+  static form = this.configureForm((schema, field) => schema.components([
+    field.TextInput.make('title').required(),
   ]))
 
-  static infolist = this.configureInfolist(schema => schema.components(entry => [
-    entry.text('title'),
+  static infolist = this.configureInfolist((schema, { TextEntry }) => schema.components([
+    TextEntry.make('title'),
   ]))
 
-  static table = this.configureTable(table => table
-    .columns(column => [
-      column.text('title').searchable().sortable(),
+  static table = this.configureTable((table, component) => table
+    .columns([
+      component.TextColumn.make('title').searchable().sortable(),
     ])
-    .recordActions(action => [
-      action.view(),
-      action.edit(),
-      action.delete(),
+    .recordActions([
+      component.ViewAction.make(),
+      component.EditAction.make(),
+      component.DeleteAction.make(),
     ])
   )
 
@@ -782,7 +782,7 @@ export default class PostResource extends Resource {
 
 The user-facing resource API follows Filament 5's class and package composition. `Schema`, `Action`, `Table`, `Notification`, form fields, infolist entries, resource pages, and relation managers are independent public package types. The same `Action` instance type can be mounted in pages, tables, notifications, schemas, and other action hosts. Relation managers configure the same `Table` and `Schema` classes as resources.
 
-The protected static `model` property is the only model declaration on a resource. A relation manager declares only its protected static `relationship` property; its owner model and related record type come from the parent resource. Holo Panels generates resource and relation-manager registry augmentations under `.holo-js/generated/panels` during `holo prepare`, `holo build`, and the live `holo dev` watcher. Those bindings infer concrete fields, loaded relation paths, callback records, form values, action payloads, actor, tenant, and transfer fields. User-facing resource code must not declare record aliases, pass generic arguments, annotate callbacks, or repeat migration columns to recover types. Bound fields, columns, entries, filters, actions, pages, and relation managers must provide autocomplete and reject invalid paths directly at their call sites.
+The protected static `model` property is the only model declaration on a resource. A relation manager declares only its protected static `relationship` property; its owner model and related record type come from the parent resource. Holo Panels generates resource and relation-manager registry augmentations under `.holo-js/generated/panels` during `holo prepare`, `holo build`, and the live `holo dev` watcher. Those bindings infer concrete fields, loaded relation paths, callback records, form values, action payloads, actor, tenant, and transfer fields. Each configuration callback receives one model-bound component object. Applications can keep the object intact, as in `field.TextInput.make('title')`, or destructure it, as in `({ TextInput }) => TextInput.make('title')`. User-facing resource code must not declare record aliases, pass generic arguments, annotate callbacks, or repeat migration columns to recover types. Bound fields, columns, entries, filters, actions, pages, and relation managers must provide autocomplete and reject invalid paths directly at their call sites.
 
 Resources support:
 

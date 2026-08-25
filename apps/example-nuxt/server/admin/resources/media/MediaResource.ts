@@ -1,7 +1,4 @@
 import { Resource } from '@holo-js/panels'
-import { ActionGroup, DeleteAction, DeleteBulkAction, EditAction, ViewAction } from '@holo-js/panels-actions'
-import { TextInput } from '@holo-js/panels-forms'
-import { TextColumn } from '@holo-js/panels-tables'
 import Media from '../../../models/Media'
 import CreateMedia from './pages/CreateMedia'
 import EditMedia from './pages/EditMedia'
@@ -19,11 +16,11 @@ export default class MediaResource extends Resource {
   static override slug = 'media'
   static override writableAttributes = this.attributes(['alt'])
 
-  static form = this.configureForm(schema => schema.components([TextInput.make('alt').required()]))
-  static table = this.configureTable(table => table
-    .columns([TextColumn.make('alt').searchable(), TextColumn.make('mime').badge(), TextColumn.make('size').number()])
-    .recordActions([ViewAction.make(), EditAction.make(), DeleteAction.make()])
-    .toolbarActions([ActionGroup.make([DeleteBulkAction.make()])]))
+  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('alt').required()]))
+  static table = this.configureTable((table, component) => table
+    .columns([component.TextColumn.make('alt').searchable(), component.TextColumn.make('mime').badge(), component.TextColumn.make('size').number()])
+    .recordActions([component.ViewAction.make(), component.EditAction.make(), component.DeleteAction.make()])
+    .toolbarActions([component.ActionGroup.make([component.DeleteBulkAction.make()])]))
   static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))
   static scopeQueryToTenant = this.configureQuery((query, context) => query.where('tenantId', context.tenant))
 

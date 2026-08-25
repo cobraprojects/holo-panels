@@ -1,9 +1,5 @@
 import { belongsTo, column as databaseColumn, defineGeneratedTable, defineModel } from '@holo-js/db'
-import { Action, ActionGroup, CreateAction, DeleteAction, DeleteBulkAction, EditAction, ViewAction } from '@holo-js/panels-actions'
-import { Checkbox, TextInput } from '@holo-js/panels-forms'
-import { TextEntry } from '@holo-js/panels-infolists'
 import { CreateRecord, EditRecord, ListRecords, RelationManager, Resource, ViewRecord } from '@holo-js/panels-resources'
-import { SelectFilter, TextColumn } from '@holo-js/panels-tables'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   configureNotificationSender,
@@ -48,7 +44,12 @@ class ListPosts extends ListRecords {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return [CreateAction.make().label('New post')]
+    return PostResource.actions(({ CreateAction }) => [CreateAction.make()
+      .label('New post')
+      .visible(({ record }) => {
+        expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
+        return true
+      })])
   }
 }
 
@@ -60,7 +61,10 @@ class EditPost extends EditRecord {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return [ViewAction.make(), DeleteAction.make().requiresConfirmation()]
+    return PostResource.actions(({ DeleteAction, ViewAction }) => [
+      ViewAction.make(),
+      DeleteAction.make().requiresConfirmation(),
+    ])
   }
 }
 
@@ -68,7 +72,7 @@ class ViewPost extends ViewRecord {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return [EditAction.make()]
+    return PostResource.actions(({ EditAction }) => [EditAction.make()])
   }
 }
 
@@ -76,7 +80,7 @@ class PostResource extends Resource {
   protected static override model = Post
   static override recordTitleAttribute = this.attribute('title')
 
-  static form = this.configureForm(schema => schema.components([
+  static form = this.configureForm((schema, { Checkbox, TextInput }) => schema.components([
     TextInput.make('title')
       .required()
       .maxLength(120)
@@ -89,12 +93,12 @@ class PostResource extends Resource {
     Checkbox.make('published'),
   ]))
 
-  static infolist = this.configureInfolist(schema => schema.components([
+  static infolist = this.configureInfolist((schema, { TextEntry }) => schema.components([
     TextEntry.make('title'),
     TextEntry.make('author.name'),
   ]))
 
-  static table = this.configureTable(table => table
+  static table = this.configureTable((table, { ActionGroup, DeleteAction, DeleteBulkAction, EditAction, SelectFilter, TextColumn, ViewAction }) => table
     .columns([
       TextColumn.make('title').searchable().sortable(),
       TextColumn.make('author.name'),
@@ -115,7 +119,7 @@ class PostResource extends Resource {
     ])
   )
 
-  static publishAction = this.action(Action.make('publish'))
+  static publishAction = this.action(({ Action, TextInput }) => Action.make('publish')
     .authorize(({ record }) => {
       expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
       return record !== null
@@ -127,31 +131,29 @@ class PostResource extends Resource {
       expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
       expectTypeOf(selectedRecords).toEqualTypeOf<readonly PostRecord[]>()
       return record?.title
-    })
+    }))
 
   static invalidForm = typecheckOnly()
-    ? this.configureForm(schema => {
+    ? this.configureForm((schema, { TextInput }) => {
         // @ts-expect-error name is not a Post field
         return schema.components([TextInput.make('name')])
       })
     : undefined
 
   static invalidTable = typecheckOnly()
-    ? this.configureTable((table) => {
+    ? this.configureTable((table, { TextColumn }) => {
         // @ts-expect-error name is not a Post table path
         return table.columns([TextColumn.make('name')])
       })
     : undefined
 
   static invalidComponents = typecheckOnly()
-    ? [
+    ? this.configureForm((schema, { Checkbox, TextInput }) => schema.components([
         // @ts-expect-error missing is not a generated model field
         TextInput.make('missing'),
         // @ts-expect-error title is not a generated boolean field
         Checkbox.make('title'),
-        // @ts-expect-error author.missing is not a generated relation path
-        TextColumn.make('author.missing'),
-      ]
+      ]))
     : undefined
 
   static getPages() {
@@ -178,11 +180,15 @@ declare module '@holo-js/panels-resources' {
 class AuthorRelationManager extends RelationManager {
   protected static override relationship = 'author'
 
-  static form = this.configureForm(schema => schema.components([
+  static form = this.configureForm((schema, { TextInput }) => schema.components([
     TextInput.make('name'),
   ]))
 
-  static table = this.configureTable(table => table
+  static infolist = this.configureInfolist((schema, { TextEntry }) => schema.components([
+    TextEntry.make('name'),
+  ]))
+
+  static table = this.configureTable((table, { DeleteAction, EditAction, TextColumn }) => table
     .columns([TextColumn.make('name')])
     .recordActions([EditAction.make(), DeleteAction.make()])
   )
@@ -250,10 +256,17 @@ describe('Filament 5-shaped public API', () => {
   })
 
   it('uses the normal schema, table, and action implementations in relation managers', () => {
-    expect(AuthorRelationManager.compile()).toMatchObject({
+    const relationManager = AuthorRelationManager.compile()
+    const infolist = Reflect.get(relationManager, 'infolist')
+
+    expect(relationManager).toMatchObject({
       actions: [expect.objectContaining({ id: 'edit' }), expect.objectContaining({ id: 'delete' })],
+      infolist: expect.any(Object),
       relationName: 'author',
       table: expect.any(Object),
+    })
+    expect(Reflect.apply(Reflect.get(infolist, 'compile'), infolist, [])).toMatchObject({
+      fields: [expect.objectContaining({ path: 'name', type: 'text' })],
     })
   })
 

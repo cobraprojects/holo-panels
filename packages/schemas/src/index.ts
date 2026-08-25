@@ -12,11 +12,12 @@ export interface SchemaComponentManifest {
 }
 
 export interface SchemaComponentContract<TRecord extends object = object> {
+  readonly resourceRecordType: TRecord
   compile(): object
 }
 
 export type SchemaComponent<TRecord extends object = object> = SchemaComponentContract<TRecord>
-export type SchemaComponentFor<TRecord extends object> = SchemaComponentContract & (
+export type SchemaComponentFor<TRecord extends object> = SchemaComponentContract<TRecord> & (
   | { readonly recordPath: RecordPath<TRecord> }
   | { readonly recordPath?: undefined }
 )
@@ -36,6 +37,7 @@ export function compileSchemaComponentManifest(component: SchemaComponentContrac
 }
 
 export class Schema<TRecord extends object = Record<string, unknown>, TState extends object = TRecord, TFactory = undefined> {
+  declare readonly componentFactoryType: TFactory
   declare readonly resourceRecordType: TRecord
   declare readonly stateType: TState
   readonly definitionKind = 'schema' as const
@@ -43,28 +45,14 @@ export class Schema<TRecord extends object = Record<string, unknown>, TState ext
   #columns: SchemaColumns = 1
   #extraAttributes: JsonObject = {}
   #operation: SchemaOperation | null = null
-  readonly #factory: TFactory | undefined
-
-  constructor(factory?: TFactory) {
-    this.#factory = factory
-  }
 
   components(components: readonly SchemaComponentFor<TRecord>[]): this
-  components<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: (factory: TFactory) => TComponents): this
-  components<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: readonly SchemaComponentFor<TRecord>[] | ((factory: TFactory) => TComponents)): this {
-    let resolved: readonly SchemaComponentContract[]
-    if (typeof components === 'function') {
-      const factory = this.#factory
-      if (factory === undefined) throw new Error('Schema component callbacks require a component factory')
-      resolved = components(factory)
-    } else {
-      resolved = components
-    }
-    this.#components = Object.freeze([...resolved])
+  components(components: readonly SchemaComponentFor<TRecord>[]): this {
+    this.#components = Object.freeze([...components])
     return this
   }
 
-  schema<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: TComponents): this {
+  schema(components: readonly SchemaComponentFor<TRecord>[]): this {
     return this.components(components)
   }
 
@@ -361,23 +349,23 @@ export class WizardStep<TRecord extends object = object> extends ChildComponent<
 }
 
 export interface LayoutFactory<TRecord extends object> {
-  fieldset(label: string): Fieldset<TRecord>
-  grid(columns?: SchemaColumns): Grid<TRecord>
-  section(heading?: string | null): Section<TRecord>
-  tab(label: string): Tab<TRecord>
-  tabs(key?: string): Tabs<TRecord>
-  wizard(key?: string): Wizard<TRecord>
-  wizardStep(label: string): WizardStep<TRecord>
+  readonly Fieldset: { make(label: string): Fieldset<TRecord> }
+  readonly Grid: { make(columns?: SchemaColumns): Grid<TRecord> }
+  readonly Section: { make(heading?: string | null): Section<TRecord> }
+  readonly Tab: { make(label: string): Tab<TRecord> }
+  readonly Tabs: { make(key?: string): Tabs<TRecord> }
+  readonly Wizard: { make(key?: string): Wizard<TRecord> }
+  readonly WizardStep: { make(label: string): WizardStep<TRecord> }
 }
 
 export function createLayoutFactory<TRecord extends object>(): LayoutFactory<TRecord> {
   return Object.freeze({
-    fieldset: (label: string) => Fieldset.make<TRecord>(label),
-    grid: (columns?: SchemaColumns) => Grid.make<TRecord>(columns),
-    section: (heading?: string | null) => Section.make<TRecord>(heading),
-    tab: (label: string) => Tab.make<TRecord>(label),
-    tabs: (key?: string) => Tabs.make<TRecord>(key),
-    wizard: (key?: string) => Wizard.make<TRecord>(key),
-    wizardStep: (label: string) => WizardStep.make<TRecord>(label),
+    Fieldset: Object.freeze({ make: (label: string) => Fieldset.make<TRecord>(label) }),
+    Grid: Object.freeze({ make: (columns?: SchemaColumns) => Grid.make<TRecord>(columns) }),
+    Section: Object.freeze({ make: (heading?: string | null) => Section.make<TRecord>(heading) }),
+    Tab: Object.freeze({ make: (label: string) => Tab.make<TRecord>(label) }),
+    Tabs: Object.freeze({ make: (key?: string) => Tabs.make<TRecord>(key) }),
+    Wizard: Object.freeze({ make: (key?: string) => Wizard.make<TRecord>(key) }),
+    WizardStep: Object.freeze({ make: (label: string) => WizardStep.make<TRecord>(label) }),
   })
 }

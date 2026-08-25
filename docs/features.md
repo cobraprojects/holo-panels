@@ -56,7 +56,7 @@ Authentication and tenancy are compiled server-only capabilities. Login/logout, 
 
 Resources extend [`Resource`](../packages/resources/src/index.ts) and identify their Holo model with `protected static override model = Post`. Relation managers extend `RelationManager` and identify only the parent model relation with `protected static override relationship = 'comments'`. Holo Panels generates the resource-to-model and relation-manager bindings under `.holo-js/generated/panels`, so fields, loaded relation paths, callback records, form values, actions, and table state are inferred without record aliases, generic arguments, callback annotations, or duplicate model columns.
 
-Forms, infolists, tables, and actions use host-scoped callbacks such as `this.configureForm(schema => ...)`, `this.configureTable(table => ...)`, and `PostResource.actions(action => ...)`. The callback factories provide autocomplete for the current model and reject invalid paths at the call site. Static `form`, `infolist`, `table`, `getPages()`, `getRelations()`, and `getWidgets()` hooks compose the independent public packages. The lower-level [`ResourceExecutor`](../packages/core/src/resources/executor.ts) provides Holo policy calls, authoritative validation, scoped lookup, transactions, lifecycle hooks, and hidden-field removal.
+Forms, infolists, tables, and actions use model-bound component callbacks. For example, `this.configureForm((schema, field) => ...)` exposes `field.TextInput.make('title')`, while `this.configureTable((table, { TextColumn, EditAction }) => ...)` supports destructuring the same bound object. Both styles autocomplete only the current model and reject invalid paths at the call site. Static `form`, `infolist`, `table`, `getPages()`, `getRelations()`, and `getWidgets()` hooks compose the independent public packages. The lower-level [`ResourceExecutor`](../packages/core/src/resources/executor.ts) provides Holo policy calls, authoritative validation, scoped lookup, transactions, lifecycle hooks, and hidden-field removal.
 
 Resource page classes exported from `@holo-js/panels` are:
 
@@ -99,7 +99,7 @@ Public form classes in [`@holo-js/panels-forms`](../packages/forms/src/index.ts)
 - key-value, tags, repeater, rich editor, Markdown editor, and builder blocks;
 - temporary upload and media field definitions.
 
-Inside a resource, fields are created through the inferred callback factory: `schema.components(field => [field.textInput('title')])`. Invalid paths and incompatible value types fail during typechecking, fluent methods preserve the concrete field subtype, and callbacks retain the concrete record and field value types. No model type argument is written by the application.
+Inside a resource, fields come from the model-bound component object: `this.configureForm((schema, field) => schema.components([field.TextInput.make('title')]))`. The callback can also destructure constructors such as `{ TextInput, Select }`. Invalid paths and incompatible value types fail during typechecking, fluent methods preserve the concrete field subtype, and callbacks retain the concrete record and field value types. The application writes no model type argument.
 
 ### Client state
 
@@ -142,7 +142,7 @@ Entry resolution supports direct record paths, relation paths, formatted scalar/
 
 ## Actions
 
-`this.action(action => action.make('publish'))` creates a resource action with its record, input, actor, tenant, services, and modal field types inferred from the resource model. `PostResource.actions(action => [action.create()])` creates page actions, while table callbacks expose the same factory through `recordActions`, `headerActions`, `toolbarActions`, and `emptyStateActions`. The same action instance can be injected into pages, tables, notifications, and action modals. Create, view, edit, delete, restore, force-delete, replicate, import, export, bulk actions, and action groups use that contract. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
+`this.action(({ Action }) => Action.make('publish'))` creates a resource action with its record, input, actor, tenant, services, and modal field types inferred from the resource model. `PostResource.actions(({ CreateAction }) => [CreateAction.make()])` creates page actions. The component object passed to `configureTable` exposes the same constructors for `recordActions`, `headerActions`, `toolbarActions`, and `emptyStateActions`. The same action instance can be injected into pages, tables, notifications, and action modals. Create, view, edit, delete, restore, force-delete, replicate, import, export, bulk actions, and action groups use that contract. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
 
 Server execution validates the mounted action, bounds bulk record IDs, reauthorizes, validates modal data, checks record versions, uses configured transactions, and returns a bounded effect set. A hidden or disabled action is not an authorization decision.
 

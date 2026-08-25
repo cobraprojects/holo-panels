@@ -88,10 +88,16 @@ export const users = defineGeneratedTable('users', {
   title: column.string(),
 })
 
+export const audits = defineGeneratedTable('audits', {
+  id: column.id(),
+  metadata: column.json<{ label: string }>(),
+})
+
 declare module '@holo-js/db' {
   interface GeneratedSchemaTables {
     readonly posts: typeof posts
     readonly users: typeof users
+    readonly audits: typeof audits
   }
 }
 
@@ -104,6 +110,7 @@ declare module '@holo-js/db' {
   interface RegisteredModels {
     readonly Post: ModelReference<GeneratedSchemaTable<'posts'>, EmptyScopeMap>
     readonly User: ModelReference<GeneratedSchemaTable<'users'>, EmptyScopeMap>
+    readonly Audit: ModelReference<GeneratedSchemaTable<'audits'>, EmptyScopeMap>
   }
 }
 
@@ -113,6 +120,10 @@ export {}
 
 async function writeModels(projectRoot: string): Promise<void> {
   const modelRoot = join(projectRoot, 'server/models')
+  await writeFile(join(modelRoot, 'Audit.ts'), `import { defineModel } from '@holo-js/db'
+
+export default defineModel('audits')
+`)
   await writeFile(join(modelRoot, 'User.ts'), `import { defineModel } from '@holo-js/db'
 
 export default defineModel('users')
@@ -132,6 +143,7 @@ async function writeGeneratedRegistry(projectRoot: string): Promise<void> {
     models: [
       { exportName: 'default', name: 'Post', sourcePath: 'server/models/Post.ts', tableName: 'posts' },
       { exportName: 'default', name: 'User', sourcePath: 'server/models/User.ts', tableName: 'users' },
+      { exportName: 'default', name: 'Audit', sourcePath: 'server/models/Audit.ts', tableName: 'audits' },
     ],
     version: 1,
   })}\n`)
@@ -152,26 +164,41 @@ async function writeResourceBindings(projectRoot: string): Promise<void> {
       projectPath: 'server/admin/resources/users/UserResource.ts',
       tableName: 'users',
     },
+    {
+      exportName: 'default',
+      modelName: 'Audit',
+      projectPath: 'server/admin/resources/audits/AuditResource.ts',
+      tableName: 'audits',
+    },
   ], [])
   await writeFile(join(generatedRoot, 'panels', bindings.path), bindings.contents)
 }
 
-async function generatedProject(source: string): Promise<GeneratedProject> {
+async function generatedProject(source: string, resource: 'Audit' | 'Post' = 'Post'): Promise<GeneratedProject> {
   const workspaceRoot = resolve(import.meta.dirname, '../../..')
   const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-resource-api-'))
-  const fileName = join(projectRoot, 'server/admin/resources/posts/PostResource.ts')
+  const fileName = resource === 'Audit'
+    ? join(projectRoot, 'server/admin/resources/audits/AuditResource.ts')
+    : join(projectRoot, 'server/admin/resources/posts/PostResource.ts')
   temporaryDirectories.push(projectRoot)
   await Promise.all([
     mkdir(join(projectRoot, '.holo-js/generated/panels'), { recursive: true }),
     mkdir(join(projectRoot, 'server/models'), { recursive: true }),
     mkdir(join(projectRoot, 'server/admin/resources/posts'), { recursive: true }),
     mkdir(join(projectRoot, 'server/admin/resources/users'), { recursive: true }),
+    mkdir(join(projectRoot, 'server/admin/resources/audits'), { recursive: true }),
   ])
-  await Promise.all([
-    writeGeneratedHoloTypes(projectRoot),
-    writeGeneratedRegistry(projectRoot),
-    writeModels(projectRoot),
+  const resourceFiles = [
     writeFile(fileName, source),
+    ...(resource === 'Post' ? [] : [
+      writeFile(join(projectRoot, 'server/admin/resources/posts/PostResource.ts'), `import { Resource } from '@holo-js/panels-resources'
+import Post from '../../../models/Post'
+
+export default class PostResource extends Resource {
+  protected static override model = Post
+}
+`),
+    ]),
     writeFile(join(projectRoot, 'server/admin/resources/users/UserResource.ts'), `import { Resource } from '@holo-js/panels-resources'
 import User from '../../../models/User'
 
@@ -179,6 +206,21 @@ export default class UserResource extends Resource {
   protected static override model = User
 }
 `),
+    ...(resource === 'Audit' ? [] : [
+      writeFile(join(projectRoot, 'server/admin/resources/audits/AuditResource.ts'), `import { Resource } from '@holo-js/panels-resources'
+import Audit from '../../../models/Audit'
+
+export default class AuditResource extends Resource {
+  protected static override model = Audit
+}
+`),
+    ]),
+  ]
+  await Promise.all([
+    writeGeneratedHoloTypes(projectRoot),
+    writeGeneratedRegistry(projectRoot),
+    writeModels(projectRoot),
+    ...resourceFiles,
   ])
   await writeResourceBindings(projectRoot)
   return { fileName, projectRoot, workspaceRoot }
@@ -268,12 +310,29 @@ describe('Resource API completions', () => {
     const diagnostics = service.getSemanticDiagnostics(fileName)
     const messages = diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
 
-    expect(messages).toHaveLength(6)
-    expect(messages.slice(0, 3).every(message => message.includes('"email"') && message.includes('not assignable'))).toBe(true)
-    expect(messages.slice(3, 5)).toEqual([
-      expect.stringContaining('Argument of type \'"metadata"\' is not assignable'),
-      expect.stringContaining('Argument of type \'"metadata"\' is not assignable'),
-    ])
-    expect(messages[5]).toContain("Property 'email' does not exist")
+    expect(messages).toHaveLength(7)
+    expect(messages.filter(message => message.includes('No overload matches this call'))).toHaveLength(4)
+    expect(messages.filter(message => message.includes('Argument of type \'"metadata"\' is not assignable'))).toHaveLength(2)
+    expect(messages.filter(message => message.includes("Property 'email' does not exist"))).toHaveLength(1)
+  })
+
+  it('rejects JSON object columns as relations on models without relations', async () => {
+    const source = [
+      "import { Select } from '@holo-js/panels-forms'",
+      "import { Resource } from '@holo-js/panels-resources'",
+      "import Audit from '../../../models/Audit'",
+      '',
+      'export default class AuditResource extends Resource {',
+      '  protected static override model = Audit',
+      "  static form = this.configureForm(schema => schema.components([Select.make('metadata').relationship('metadata', 'label')]))",
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedProject(source, 'Audit')
+    const service = languageService(project, source)
+    const messages = service.getSemanticDiagnostics(project.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(messages).toEqual([expect.stringContaining('Argument of type \'"metadata"\' is not assignable')])
   })
 })

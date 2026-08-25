@@ -9,6 +9,7 @@ import {
   type CustomColumn,
   type IconColumn,
   type ImageColumn,
+  type PanelRelationValue,
   type SelectColumn,
   type TextColumn,
   type TextInputColumn,
@@ -23,14 +24,14 @@ import {
 
 class PostRecord {
   declare active: boolean
-  declare author: {
+  declare author: PanelRelationValue<{
     email: string
     name: string
-  }
-  declare comments: readonly {
+  }>
+  declare comments: PanelRelationValue<readonly {
     body: string
     score: number
-  }[]
+  }[]>
   declare cover: string
   declare id: number
   declare metadata: {

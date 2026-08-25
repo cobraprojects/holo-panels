@@ -75,21 +75,13 @@ export type RegisteredPanelRecordForPathValue<TPath extends string, TValue> = Pa
     : never
   : never
 
-type StructuralRelationPath<TRecord> = {
-  [TPath in RecordPath<TRecord>]: NonNullable<RecordPathValue<TRecord, TPath>> extends readonly object[] | object
-    ? TPath
-    : never
-}[RecordPath<TRecord>]
-
 type MarkedRelationPath<TRecord> = {
   [TPath in RecordPath<TRecord>]: NonNullable<RecordPathValue<TRecord, TPath>> extends PanelRelationValueMarker
     ? TPath
     : never
 }[RecordPath<TRecord>]
 
-export type RelationPath<TRecord> = [MarkedRelationPath<TRecord>] extends [never]
-  ? StructuralRelationPath<TRecord>
-  : MarkedRelationPath<TRecord>
+export type RelationPath<TRecord> = MarkedRelationPath<TRecord>
 
 export type RelatedRecord<TValue> = NonNullable<TValue> extends readonly (infer TItem)[]
   ? TItem

@@ -81,7 +81,7 @@ function response(data: unknown, status: number, cookies: readonly string[] = []
 }
 
 function failure(error: unknown): Response {
-  if (error instanceof AuthControllerError) return response({ error: 'Panel authentication request failed.' }, panelAuthOperationStatus(error))
+  if (error instanceof AuthControllerError) return response({ code: error.code, error: 'Panel authentication request failed.' }, panelAuthOperationStatus(error))
   if (error instanceof PanelTenantOperationError) return response({ error: 'Tenant was not found.' }, panelTenantOperationStatus(error))
   if (error instanceof NextPanelHttpError) return response({ error: error.status >= 500 ? 'Panel request failed.' : error.message }, error.status)
   return response({ error: 'Panel request failed.' }, 500)

@@ -102,8 +102,8 @@ const page: PanelResolvedPageData = {
   title: 'Posts',
 }
 
-function event(method = 'GET', parameters: Readonly<Record<string, string>> = {}): SvelteKitPanelEvent {
-  const url = new URL('https://panels.test/admin/posts?search=hello')
+function event(method = 'GET', parameters: Readonly<Record<string, string>> = {}, requestUrl = 'https://panels.test/admin/posts?search=hello'): SvelteKitPanelEvent {
+  const url = new URL(requestUrl)
   const envelope = {
     id: 'request-12345678',
     operation: parameters.operation ?? 'page-data',
@@ -282,9 +282,10 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     }
     const value: SvelteKitPanelRegistry = { ...configured.value, panels: { admin: configuredPanel } }
     const { createPanelPageLoad } = await import('../src/server')
+    const requestEvent = event('GET', { path: 'posts' }, 'https://panels.test/control/posts?search=hello')
 
-    await expect(createPanelPageLoad({ panelId: 'admin', registry: value })(event('GET', { path: 'posts' }))).rejects.toMatchObject({
-      location: '/control/sign-in',
+    await expect(createPanelPageLoad({ panelId: 'admin', registry: value })(requestEvent)).rejects.toMatchObject({
+      location: '/control/sign-in?next=%2Fcontrol%2Fposts%3Fsearch%3Dhello',
       status: 303,
     })
   })

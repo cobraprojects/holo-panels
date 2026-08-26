@@ -42,6 +42,7 @@ export {
   createRequestEnvelope,
   executePanelAuthRequest,
   executePanelLogin,
+  panelLoginErrorMessage,
   loadPanelAuthPresentation,
   createPanelNotificationTransport,
   createPanelTenantSwitcherTransport,

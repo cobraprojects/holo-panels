@@ -463,7 +463,7 @@ function nativeResponse(data: unknown, status: number, cookies: readonly string[
 }
 
 function nativeFailure(cause: unknown): Response {
-  if (cause instanceof AuthControllerError) return nativeResponse({ error: 'Panel authentication request failed.' }, panelAuthOperationStatus(cause))
+  if (cause instanceof AuthControllerError) return nativeResponse({ code: cause.code, error: 'Panel authentication request failed.' }, panelAuthOperationStatus(cause))
   if (cause instanceof PanelTenantOperationError) return nativeResponse({ error: 'Tenant was not found.' }, panelTenantOperationStatus(cause))
   const details = errorDetails(cause)
   return nativeResponse({ error: details.status >= 500 ? 'Panel request failed.' : details.message }, details.status)

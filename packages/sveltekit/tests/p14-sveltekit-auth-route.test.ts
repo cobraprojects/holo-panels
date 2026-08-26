@@ -1,4 +1,5 @@
 import { definePanel } from '@holo-js/panels-core'
+import { AuthError } from '@holo-js/auth'
 import { describe, expect, it, vi } from 'vitest'
 import type { SvelteKitPanelEvent, SvelteKitPanelRegistry } from '../src/contracts'
 
@@ -85,6 +86,20 @@ describe('SvelteKit panel auth handler', () => {
     expect(response.headers.get('set-cookie')).toContain('Secure; HttpOnly; SameSite=Lax')
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(authentication.guard.login).toHaveBeenCalledWith({ email: 'ava@example.com', password: 'secret' })
+  })
+
+  it('returns a safe machine-readable invalid-credentials failure', async () => {
+    authentication.guard.login.mockRejectedValueOnce(new AuthError('invalid_credentials', 'Secret provider detail'))
+    const handler = createPanelAuthHandler({ panelIds: ['admin'], registry })
+
+    const response = await handler.POST(event(new Request('http://localhost/admin/auth/login', {
+      body: JSON.stringify({ credentials: { email: 'ava@example.com', password: 'wrong' } }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })))
+
+    expect(response.status).toBe(422)
+    await expect(response.json()).resolves.toEqual({ code: 'invalid-credentials', error: 'Panel authentication request failed.' })
   })
 
   it('dispatches inferred tenant registration through the native POST boundary', async () => {

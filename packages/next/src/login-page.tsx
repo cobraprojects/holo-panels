@@ -1,7 +1,7 @@
 'use client'
 
-import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-react'
-import { useState, type CSSProperties, type FormEvent } from 'react'
+import { executePanelLogin, panelContentWidthValue, panelLoginErrorMessage } from '@holo-js/panels-react'
+import { useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { nextPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNextPanelAuthPresentation } from './auth-presentation'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PanelsIcon, Input, Label } from './internal-ui'
@@ -18,10 +18,13 @@ function cookie(name: string): string {
 export function NextPanelLoginPage({ panelId }: NextPanelLoginPageProps) {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
+  const submitting = useRef(false)
   const presentation = useNextPanelAuthPresentation(panelId)
 
   async function login(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
     setError('')
     setPending(true)
     try {
@@ -32,11 +35,12 @@ export function NextPanelLoginPage({ panelId }: NextPanelLoginPageProps) {
         panelId,
       })
       if (!result.ok || !result.url) {
-        setError('These credentials do not match our records.')
+        setError(panelLoginErrorMessage(result))
         return
       }
       globalThis.location.assign(result.url)
     } finally {
+      submitting.current = false
       setPending(false)
     }
   }

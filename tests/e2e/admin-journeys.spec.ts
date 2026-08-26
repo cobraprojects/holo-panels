@@ -4,7 +4,7 @@ import { expect, test, type ConsoleMessage, type Page, type Request } from '@pla
 const guardResponses = Object.freeze({
   next: { location: '/admin/login?next=%2Fadmin', status: 307 },
   nuxt: { location: '/admin/login?next=/admin', status: 302 },
-  sveltekit: { location: '/admin/login', status: 303 },
+  sveltekit: { location: '/admin/login?next=%2Fadmin', status: 303 },
 })
 
 const generatedResources = Object.freeze([
@@ -224,6 +224,72 @@ test.describe('authenticated admin journeys', () => {
       loginButton.click(),
     ])
     await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === 'holo_panels_session')).toBe(true)
+  })
+
+  test('stops after one CSRF retry when the replacement token is also rejected', async ({ page }) => {
+    let submissions = 0
+    await page.route('**/holo/panels/admin/auth/login', async (route) => {
+      submissions += 1
+      await route.fulfill({
+        body: JSON.stringify({ error: 'Panel request security validation failed.' }),
+        contentType: 'application/json',
+        status: 419,
+      })
+    })
+    await page.goto('/admin/login', { waitUntil: 'networkidle' })
+    await page.evaluate(() => {
+      document.cookie = 'XSRF-TOKEN=stale-token; Path=/; SameSite=Lax'
+    })
+    await page.getByLabel('Email').fill('super@example.test')
+    await page.getByLabel('Password').fill('panel-secret')
+
+    await page.getByRole('button', { name: 'Sign in' }).click()
+
+    await expect(page.getByText('Your session expired. Refresh the page and try again.', { exact: true })).toBeVisible()
+    expect(submissions).toBe(2)
+  })
+
+  test('renders invalid credentials as an authentication error', async ({ page }) => {
+    await page.goto('/admin/login', { waitUntil: 'networkidle' })
+    await page.getByLabel('Email').fill('super@example.test')
+    await page.getByLabel('Password').fill('wrong-password')
+
+    await page.getByRole('button', { name: 'Sign in' }).click()
+
+    await expect(page.getByText('These credentials do not match our records.', { exact: true })).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe('/admin/login')
+  })
+
+  test('returns to the allow-listed requested destination after login', async ({ page }) => {
+    await page.goto('/admin/posts?tableSearch=published', { waitUntil: 'networkidle' })
+    await expect(page).toHaveURL(url => url.pathname === '/admin/login' && url.searchParams.get('next') === '/admin/posts?tableSearch=published')
+    await page.getByLabel('Email').fill('super@example.test')
+    await page.getByLabel('Password').fill('panel-secret')
+
+    await Promise.all([
+      page.waitForURL(url => url.pathname === '/admin/posts' && url.searchParams.get('tableSearch') === 'published'),
+      page.getByRole('button', { name: 'Sign in' }).click(),
+    ])
+  })
+
+  test('submits a repeated login form operation only once', async ({ page }) => {
+    let submissions = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/holo/panels/admin/auth/login')) submissions += 1
+    })
+    await page.goto('/admin/login', { waitUntil: 'networkidle' })
+    await page.getByLabel('Email').fill('super@example.test')
+    await page.getByLabel('Password').fill('panel-secret')
+
+    await Promise.all([
+      page.waitForURL(url => url.pathname.startsWith('/admin') && url.pathname !== '/admin/login'),
+      page.locator('form').evaluate((form) => {
+        form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+        form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+      }),
+    ])
+
+    expect(submissions).toBe(1)
   })
 
   test('loads the authorized admin dashboard', async ({ page }) => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { executePanelLogin, loadPanelAuthPresentation, panelContentWidthValue, type PanelAuthPresentation } from '@holo-js/panels-svelte'
+  import { executePanelLogin, loadPanelAuthPresentation, panelContentWidthValue, panelLoginErrorMessage, type PanelAuthPresentation } from '@holo-js/panels-svelte'
   import { onMount } from 'svelte'
   import { svelteKitPanelAuthAppearanceStyleAttribute } from './auth-appearance'
   import { Button } from '@holo-js/panels-svelte/ui/button'
@@ -19,6 +19,7 @@
   let password = $state('')
   let error = $state('')
   let pending = $state(false)
+  let submitting = false
 
   onMount(() => {
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
@@ -31,21 +32,24 @@
 
   async function login(event: SubmitEvent): Promise<void> {
     event.preventDefault()
+    if (submitting) return
     if (!(event.currentTarget instanceof HTMLFormElement)) return
     const values = new FormData(event.currentTarget)
     const submittedEmail = values.get('email')
     const submittedPassword = values.get('password')
     if (typeof submittedEmail !== 'string' || typeof submittedPassword !== 'string') return
+    submitting = true
     error = ''
     pending = true
     try {
       const result = await executePanelLogin({ credentials: { email: submittedEmail, password: submittedPassword }, csrfToken: cookie('XSRF-TOKEN'), panelId })
       if (!result.ok || !result.url) {
-        error = 'These credentials do not match our records.'
+        error = panelLoginErrorMessage(result)
         return
       }
       window.location.assign(result.url)
     } finally {
+      submitting = false
       pending = false
     }
   }

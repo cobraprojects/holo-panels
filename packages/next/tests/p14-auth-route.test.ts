@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AuthError } from '@holo-js/auth'
 import { definePanel } from '@holo-js/panels-core'
 import { createPanelAuthRoute, createPanelTenantRoute } from '../src/auth-route'
 
@@ -77,6 +78,18 @@ describe('Next panel auth route', () => {
     expect((await route.POST(request('login', { credentials: { email: 'ava@example.com' } }, 'invalid'), context)).status).toBe(419)
     expect((await route.POST(request('login', { credentials: { email: 'ava@example.com' }, guard: 'web' }), context)).status).toBe(422)
     expect(guard.login).not.toHaveBeenCalled()
+  })
+
+  it('returns a safe machine-readable invalid-credentials failure', async () => {
+    const { guard, route } = fixture()
+    guard.login.mockRejectedValueOnce(new AuthError('invalid_credentials', 'Secret provider detail'))
+
+    const response = await route.POST(request('login', { credentials: { email: 'ava@example.com', password: 'wrong' } }), {
+      params: Promise.resolve({ operation: 'login', panelId: 'admin' }),
+    })
+
+    expect(response.status).toBe(422)
+    await expect(response.json()).resolves.toEqual({ code: 'invalid-credentials', error: 'Panel authentication request failed.' })
   })
 
   it('allows only read-only auth operations through GET', async () => {

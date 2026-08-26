@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { executePanelAuthRequest } from '../src/auth'
 
 describe('panel authentication client', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('posts logout through the fixed panel authentication boundary', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
 
@@ -32,5 +34,16 @@ describe('panel authentication client', () => {
     const fetcher = vi.fn<typeof fetch>()
     await expect(executePanelAuthRequest({ csrfToken: 'secret', fetch: fetcher, operation: 'registration', panelId: '../admin', payload: {} })).rejects.toThrow('stable panel ID')
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('preserves a requested panel destination through MFA completion', async () => {
+    vi.stubGlobal('location', { href: 'https://example.test/admin/mfa-challenge?next=%2Fadmin%2Fposts%3Fsearch%3Dready' })
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
+
+    await executePanelAuthRequest({ csrfToken: 'token', fetch: fetcher, operation: 'mfa-challenge', panelId: 'admin', payload: { code: '123456' } })
+
+    expect(fetcher).toHaveBeenCalledWith('/holo/panels/admin/auth/mfa-challenge', expect.objectContaining({
+      body: JSON.stringify({ code: '123456', destination: '/admin/posts?search=ready' }),
+    }))
   })
 })

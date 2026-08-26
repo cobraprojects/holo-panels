@@ -7,17 +7,21 @@ describe('panel login client boundary', () => {
 
   it('posts only fixed credentials with CSRF to the compiled panel endpoint', async () => {
     const fetcher = vi.fn(async () => new Response(null, { status: 200 }))
-    await executePanelLogin({
+    await expect(executePanelLogin({
       credentials: { email: ' admin@example.com ', password: 'secret' },
       csrfToken: 'csrf-token',
       fetch: fetcher,
       panelId: 'admin',
-    })
+    })).resolves.toEqual({ error: null, ok: true, status: 200, url: null })
 
     expect(fetcher).toHaveBeenCalledWith('/holo/panels/admin/auth/login', {
       body: JSON.stringify({ credentials: { email: 'admin@example.com', password: 'secret' } }),
       credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', 'x-csrf-token': 'csrf-token' },
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-csrf-token': 'csrf-token',
+      },
       method: 'POST',
     })
   })
@@ -25,7 +29,7 @@ describe('panel login client boundary', () => {
   it('rejects invalid panel IDs and empty credentials before the network', async () => {
     const fetcher = vi.fn()
     await expect(executePanelLogin({ credentials: { email: '', password: '' }, csrfToken: '', fetch: fetcher, panelId: 'admin' }))
-      .resolves.toEqual({ ok: false, url: null })
+      .resolves.toEqual({ error: 'authentication', ok: false, status: 422, url: null })
     await expect(executePanelLogin({ credentials: { email: 'a@b.test', password: 'x' }, csrfToken: '', fetch: fetcher, panelId: '../admin' }))
       .rejects.toThrow('stable panel ID')
     expect(fetcher).not.toHaveBeenCalled()
@@ -56,7 +60,7 @@ describe('panel login client boundary', () => {
       csrfToken: 'stale-token',
       fetch: fetcher,
       panelId: 'admin',
-    })).resolves.toEqual({ ok: true, url: 'https://example.test/admin' })
+    })).resolves.toEqual({ error: null, ok: true, status: 200, url: 'https://example.test/admin' })
 
     expect(fetcher).toHaveBeenCalledTimes(3)
     expect(fetcher.mock.calls[1]).toEqual([
@@ -69,12 +73,84 @@ describe('panel login client boundary', () => {
       },
     ])
     expect(fetcher.mock.calls[2]?.[1]).toMatchObject({
+      body: JSON.stringify({
+        credentials: { email: 'super@example.test', password: 'panel-secret' },
+        destination: '/admin',
+      }),
       headers: {
+        accept: 'application/json',
         'content-type': 'application/json',
         'x-csrf-token': 'fresh-token',
       },
       method: 'POST',
     })
+  })
+
+  it('stops after one CSRF refresh and reports the second failure as a security error', async () => {
+    let cookie = 'XSRF-TOKEN=stale-token'
+    vi.stubGlobal('document', {
+      get cookie() {
+        return cookie
+      },
+    })
+    vi.stubGlobal('location', { href: 'https://example.test/admin/login' })
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'GET') {
+        cookie = 'XSRF-TOKEN=fresh-token'
+        return new Response(null, { status: 200 })
+      }
+      return new Response('CSRF token mismatch.', { status: 419 })
+    })
+
+    await expect(executePanelLogin({
+      credentials: { email: 'super@example.test', password: 'panel-secret' },
+      csrfToken: 'stale-token',
+      fetch: fetcher,
+      panelId: 'admin',
+    })).resolves.toEqual({ error: 'security', ok: false, status: 419, url: null })
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
+  it('reports rejected credentials as an authentication error', async () => {
+    const fetcher = vi.fn(async () => Response.json({ code: 'invalid-credentials', error: 'Panel authentication request failed.' }, { status: 422 }))
+
+    await expect(executePanelLogin({
+      credentials: { email: 'super@example.test', password: 'wrong' },
+      csrfToken: 'fresh-token',
+      fetch: fetcher,
+      panelId: 'admin',
+    })).resolves.toEqual({ error: 'authentication', ok: false, status: 422, url: null })
+  })
+
+  it('reports a SvelteKit validation action envelope as an authentication error', async () => {
+    const failure = {
+      bag: 'default',
+      errors: { email: ['These credentials do not match our records.'] },
+      message: 'email: These credentials do not match our records.',
+      ok: false,
+      status: 422,
+      valid: false,
+      values: {},
+    }
+    const fetcher = vi.fn(async () => Response.json({ data: JSON.stringify(failure), status: 422, type: 'failure' }))
+
+    await expect(executePanelLogin({
+      credentials: { email: 'super@example.test', password: 'wrong' },
+      csrfToken: 'fresh-token',
+      fetch: fetcher,
+      panelId: 'admin',
+    })).resolves.toEqual({ error: 'authentication', ok: false, status: 422, url: null })
+  })
+
+  it('does not misreport other validation failures as invalid credentials', async () => {
+    const fetcher = vi.fn(async () => Response.json({ code: 'profile-input-invalid', error: 'Panel authentication request failed.' }, { status: 422 }))
+
+    await expect(executePanelLogin({
+      credentials: { email: 'super@example.test', password: 'panel-secret' },
+      csrfToken: 'fresh-token',
+      fetch: fetcher,
+      panelId: 'admin',
+    })).resolves.toEqual({ error: 'request', ok: false, status: 422, url: null })
   })
 
   it('loads the panel-owned authentication presentation without a mutation token', async () => {

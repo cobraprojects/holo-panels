@@ -52,8 +52,12 @@ const PANEL_ID = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
 
 export async function executePanelAuthRequest(options: ExecutePanelAuthRequestOptions): Promise<PanelAuthRequestResult> {
   if (!PANEL_ID.test(options.panelId)) throw new Error('Panel authentication requires a stable panel ID')
+  const destination = options.operation === 'mfa-challenge' || options.operation === 'mfa-recovery'
+    ? requestedPanelDestination()
+    : null
+  const payload = destination ? { ...options.payload, destination } : options.payload
   const response = await (options.fetch ?? globalThis.fetch)(`/holo/panels/${encodeURIComponent(options.panelId)}/auth/${options.operation}`, {
-    ...(options.operation === 'mfa-enrollment-begin' || options.operation === 'mfa-status' || options.operation === 'presentation' || options.operation === 'profile-read' ? {} : { body: JSON.stringify(options.payload) }),
+    ...(options.operation === 'mfa-enrollment-begin' || options.operation === 'mfa-status' || options.operation === 'presentation' || options.operation === 'profile-read' ? {} : { body: JSON.stringify(payload) }),
     credentials: 'same-origin',
     headers: {
       'content-type': 'application/json',
@@ -80,3 +84,4 @@ export async function loadPanelAuthPresentation(panelId: string, fetch?: typeof 
   if (!result.ok) throw new Error('Panel authentication presentation could not be loaded')
   return authPresentation(result.data)
 }
+import { requestedPanelDestination } from './destination'

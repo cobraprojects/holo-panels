@@ -152,9 +152,9 @@ function errorCode(cause: unknown): string | undefined {
     : undefined
 }
 
-function translatePageError(cause: unknown, loginPath: string): never {
+function translatePageError(cause: unknown, loginPath: string, destination: string): never {
   const code = errorCode(cause)
-  if (code === 'unauthenticated') redirect(303, loginPath)
+  if (code === 'unauthenticated') redirect(303, `${loginPath}?next=${encodeURIComponent(destination)}`)
   if (code === 'subscription-required' && typeof cause === 'object' && cause !== null && typeof Reflect.get(cause, 'billingPath') === 'string') {
     redirect(303, String(Reflect.get(cause, 'billingPath')))
   }
@@ -331,7 +331,7 @@ export function createPanelPageLoad<TActor = unknown, TTenant = unknown>(options
       const loginPath = errorCode(cause) === 'unauthenticated'
         ? await configuredLoginPath(registry, options.panelId)
         : '/login'
-      return translatePageError(cause, loginPath)
+      return translatePageError(cause, loginPath, `${event.url.pathname}${event.url.search}`)
     }
   })
 }
@@ -472,7 +472,7 @@ function nativeResponse(data: unknown, status: number, cookies: readonly string[
 }
 
 function nativeFailure(cause: unknown): Response {
-  if (cause instanceof AuthControllerError) return nativeResponse({ error: 'Panel authentication request failed.' }, panelAuthOperationStatus(cause))
+  if (cause instanceof AuthControllerError) return nativeResponse({ code: cause.code, error: 'Panel authentication request failed.' }, panelAuthOperationStatus(cause))
   if (cause instanceof PanelTenantOperationError) return nativeResponse({ error: 'Tenant was not found.' }, panelTenantOperationStatus(cause))
   const status = statusFor(cause)
   return nativeResponse({ error: status >= 500 ? 'Panel request failed.' : 'Panel request was rejected.' }, status)

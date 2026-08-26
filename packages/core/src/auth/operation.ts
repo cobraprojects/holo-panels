@@ -100,6 +100,50 @@ function credentials(value: unknown): Readonly<Record<string, unknown>> {
   return Object.freeze({ ...input })
 }
 
+function loginInput(value: unknown): Readonly<{ readonly credentials: Readonly<Record<string, unknown>>, readonly destination: string | null }> {
+  const input = inputObject(value)
+  const keys = Object.keys(input)
+  if (!keys.includes('credentials') || keys.some(key => key !== 'credentials' && key !== 'destination')) {
+    throw new AuthControllerError('profile-input-invalid', 'Panel authentication input contains unsupported fields')
+  }
+  const destination = input.destination
+  if (destination !== undefined && typeof destination !== 'string') {
+    throw new AuthControllerError('profile-input-invalid', 'Panel login destination is invalid')
+  }
+  return Object.freeze({ credentials: credentials(input.credentials), destination: destination ?? null })
+}
+
+function panelLoginDestination(value: string | null, panelPath: string): string | null {
+  if (value === null) return null
+  const candidate = value.trim()
+  const path = candidate.split('?', 1)[0] ?? ''
+  if (!candidate || candidate.length > MAX_SCALAR_LENGTH || !candidate.startsWith('/') || path.includes('//') || candidate.includes('\\') || candidate.includes('#')) {
+    throw new AuthControllerError('profile-input-invalid', 'Panel login destination is invalid')
+  }
+  if ([...candidate].some(character => character.charCodeAt(0) <= 31 || character.charCodeAt(0) === 127) || /%(?:2e|2f|5c)/iu.test(candidate)) {
+    throw new AuthControllerError('profile-input-invalid', 'Panel login destination is invalid')
+  }
+  const destination = new URL(candidate, 'https://holo.invalid')
+  if (destination.origin !== 'https://holo.invalid') throw new AuthControllerError('profile-input-invalid', 'Panel login destination is invalid')
+  if (panelPath !== '/' && destination.pathname !== panelPath && !destination.pathname.startsWith(`${panelPath}/`)) {
+    throw new AuthControllerError('profile-input-invalid', 'Panel login destination must remain inside the fixed panel path')
+  }
+  return `${destination.pathname}${destination.search}`
+}
+
+function sessionInput(value: unknown): Readonly<{ readonly code: string, readonly destination: string | null }> {
+  const input = inputObject(value)
+  const keys = Object.keys(input)
+  if (!keys.includes('code') || keys.some(key => key !== 'code' && key !== 'destination')) {
+    throw new AuthControllerError('profile-input-invalid', 'Panel authentication input contains unsupported fields')
+  }
+  const destination = input.destination
+  if (destination !== undefined && typeof destination !== 'string') {
+    throw new AuthControllerError('profile-input-invalid', 'Panel login destination is invalid')
+  }
+  return Object.freeze({ code: scalar(input, 'code'), destination: destination ?? null })
+}
+
 function method(input: Input): 'recovery' | 'totp' {
   const value = input.method
   if (value !== 'recovery' && value !== 'totp') throw new AuthControllerError('profile-input-invalid', 'Panel MFA method is invalid')
@@ -147,11 +191,17 @@ export async function executePanelAuthOperation<TActor, TTenant, TServices>(
 
   switch (options.operation) {
     case 'login': {
-      const exact = exactInput(input, ['credentials'])
-      const result = await controller.login(credentials(exact.credentials), options.signal)
+      const login = loginInput(input)
+      const destination = panelLoginDestination(login.destination, options.panel.manifest.path)
+      const result = await controller.login(login.credentials, options.signal)
+      const redirectTo = result.status === 'authenticated' && destination
+        ? destination
+        : result.status === 'multi-factor-challenge' && destination
+          ? `${result.redirectTo}?next=${encodeURIComponent(destination)}`
+          : result.redirectTo
       return redirectOutcome(result.cookies, result.status === 'multi-factor-challenge'
         ? { expiresAt: result.expiresAt.toISOString(), recoveryAllowed: result.recoveryAllowed, status: result.status }
-        : { status: result.status }, result.redirectTo)
+        : { status: result.status }, redirectTo)
     }
     case 'logout': {
       exactInput(input, [])
@@ -207,14 +257,16 @@ export async function executePanelAuthOperation<TActor, TTenant, TServices>(
       return outcome(await controller.confirmMultiFactorEnrollment(scalar(exact, 'code')))
     }
     case 'mfa-challenge': {
-      const exact = exactInput(input, ['code'])
-      const result = await controller.challengeMultiFactor(scalar(exact, 'code'), options.signal)
-      return redirectOutcome(result.cookies, { status: result.status }, result.redirectTo)
+      const session = sessionInput(input)
+      const destination = panelLoginDestination(session.destination, options.panel.manifest.path)
+      const result = await controller.challengeMultiFactor(session.code, options.signal)
+      return redirectOutcome(result.cookies, { status: result.status }, destination ?? result.redirectTo)
     }
     case 'mfa-recovery': {
-      const exact = exactInput(input, ['code'])
-      const result = await controller.recoverMultiFactor(scalar(exact, 'code'), options.signal)
-      return redirectOutcome(result.cookies, { status: result.status }, result.redirectTo)
+      const session = sessionInput(input)
+      const destination = panelLoginDestination(session.destination, options.panel.manifest.path)
+      const result = await controller.recoverMultiFactor(session.code, options.signal)
+      return redirectOutcome(result.cookies, { status: result.status }, destination ?? result.redirectTo)
     }
     case 'mfa-disable': {
       const exact = exactInput(input, ['code', 'method'])

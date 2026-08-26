@@ -1,4 +1,4 @@
-import { executePanelLogin, panelContentWidthValue } from '@holo-js/panels-vue'
+import { executePanelLogin, panelContentWidthValue, panelLoginErrorMessage } from '@holo-js/panels-vue'
 import { defineComponent, h, onMounted, ref } from 'vue'
 import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNuxtPanelAuthPresentation } from './auth-presentation'
@@ -20,11 +20,14 @@ export const PanelLoginPage = defineComponent({
     const error = ref('')
     const pending = ref(false)
     const ready = ref(false)
+    let submitting = false
     const presentation = useNuxtPanelAuthPresentation(props.panelId)
     onMounted(() => {
       ready.value = true
     })
     const login = async (): Promise<void> => {
+      if (submitting) return
+      submitting = true
       error.value = ''
       pending.value = true
       try {
@@ -34,11 +37,12 @@ export const PanelLoginPage = defineComponent({
           panelId: props.panelId,
         })
         if (!result.ok || !result.url) {
-          error.value = 'These credentials do not match our records.'
+          error.value = panelLoginErrorMessage(result)
           return
         }
         window.location.assign(result.url)
       } finally {
+        submitting = false
         pending.value = false
       }
     }

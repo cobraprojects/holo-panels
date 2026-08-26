@@ -1,4 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { AuthError } from '@holo-js/auth'
+import { ValidationException } from '@holo-js/validation'
 import { executePanelAuthOperation, panelAuthOperationStatus } from '../src/auth/operation'
 import { AuthControllerError } from '../src/auth/controller'
 import { definePanel } from '../src/panels/panel'
@@ -6,9 +8,18 @@ import type { JsonValue } from '../src/protocol/json'
 
 function fixture() {
   const actor = { id: 7, name: 'Ava' }
-  const session = { cookies: ['panel_session=rotated; Secure; HttpOnly; SameSite=Lax'], user: actor }
+  type TestSession = Readonly<{
+    cookies: readonly string[]
+    multiFactorChallenge?: Readonly<{
+      expiresAt: Date
+      recoveryAllowed: boolean
+      route: string
+    }>
+    user: typeof actor
+  }>
+  const session: TestSession = { cookies: ['panel_session=rotated; Secure; HttpOnly; SameSite=Lax'], user: actor }
   const guard = {
-    login: vi.fn(async () => session),
+    login: vi.fn(async (): Promise<TestSession> => session),
     logout: vi.fn(async () => ({ cookies: ['panel_session=; Max-Age=0; Secure; HttpOnly'], guard: 'admin' })),
     provider: vi.fn(async () => 'admins'),
     refreshUser: vi.fn(async () => actor),
@@ -76,6 +87,75 @@ describe('panel auth operation dispatcher', () => {
       status: 303,
     })
     expect(guard.login).toHaveBeenCalledWith({ email: 'ava@example.com', password: 'secret' })
+  })
+
+  it('returns to a requested destination only when it remains inside the panel path', async () => {
+    const { common, guard } = fixture()
+
+    await expect(executePanelAuthOperation({
+      ...common,
+      operation: 'login',
+      payload: {
+        credentials: { email: 'ava@example.com', password: 'secret' },
+        destination: '/admin/posts?tableSearch=published',
+      },
+    })).resolves.toMatchObject({ redirectTo: '/admin/posts?tableSearch=published' })
+
+    for (const destination of ['https://attacker.test/admin', '/admin//posts', '/admin/%2e%2e/outside']) {
+      await expect(executePanelAuthOperation({
+        ...common,
+        operation: 'login',
+        payload: {
+          credentials: { email: 'ava@example.com', password: 'secret' },
+          destination,
+        },
+      })).rejects.toMatchObject({ code: 'profile-input-invalid' })
+    }
+    expect(guard.login).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    new AuthError('invalid_credentials', 'Invalid credentials.'),
+    ValidationException.withMessages({ email: ['These credentials do not match our records.'] }),
+    {
+      body: { errors: { email: ['These credentials do not match our records.'] }, status: 422 },
+      status: 422,
+    },
+  ])('reports invalid Holo credentials as an authentication failure', async (failure) => {
+    const { common, guard } = fixture()
+    guard.login.mockRejectedValueOnce(failure)
+
+    await expect(executePanelAuthOperation({
+      ...common,
+      operation: 'login',
+      payload: { credentials: { email: 'ava@example.com', password: 'wrong' } },
+    })).rejects.toMatchObject({ code: 'invalid-credentials' })
+  })
+
+  it('preserves the requested destination through MFA', async () => {
+    const { common, guard } = fixture()
+    guard.login.mockResolvedValue({
+      cookies: ['panel_mfa=pending; Secure; HttpOnly; SameSite=Lax'],
+      multiFactorChallenge: { expiresAt: new Date('2026-08-27T00:00:00Z'), recoveryAllowed: true, route: '/admin/mfa-challenge' },
+      user: { id: 7, name: 'Ava' },
+    })
+    const result = await executePanelAuthOperation({
+      ...common,
+      operation: 'login',
+      payload: {
+        credentials: { email: 'ava@example.com', password: 'secret' },
+        destination: '/admin/posts?search=ready',
+      },
+    })
+
+    expect(result.redirectTo).toBe('/admin/mfa-challenge?next=%2Fadmin%2Fposts%3Fsearch%3Dready')
+    expect(guard.login).toHaveBeenCalledTimes(1)
+
+    await expect(executePanelAuthOperation({
+      ...common,
+      operation: 'mfa-challenge',
+      payload: { code: '123456', destination: '/admin/posts?search=ready' },
+    })).resolves.toMatchObject({ redirectTo: '/admin/posts?search=ready' })
   })
 
   it('returns only the public authentication presentation compiled from the panel', async () => {

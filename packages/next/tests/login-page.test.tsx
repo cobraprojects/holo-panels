@@ -37,4 +37,53 @@ describe('Next panel login page', () => {
     expect(fetcher).toHaveBeenCalledWith('/holo/panels/admin/auth/presentation', expect.any(Object))
     await act(async () => root.unmount())
   })
+
+  it('submits once and renders invalid credentials as an authentication error', async () => {
+    let resolveLogin: (response: Response) => void = () => {}
+    const login = new Promise<Response>(resolve => {
+      resolveLogin = resolve
+    })
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'POST') return login
+      return Response.json({
+        appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
+        brandName: 'Control Center',
+        forgotPasswordPath: null,
+        loginPath: '/admin/login',
+        registrationPath: null,
+        simplePageMaxContentWidth: 'screen-sm',
+        theme: 'system',
+      })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    document.cookie = 'XSRF-TOKEN=fresh-token'
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<NextPanelLoginPage panelId="admin" />)
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    })
+    const email = container.querySelector<HTMLInputElement>('input[name="email"]')!
+    const password = container.querySelector<HTMLInputElement>('input[name="password"]')!
+    const form = container.querySelector<HTMLFormElement>('form')!
+    email.value = 'admin@example.test'
+    password.value = 'wrong'
+
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+
+    await act(async () => {
+      resolveLogin(Response.json({ code: 'invalid-credentials', error: 'Panel authentication request failed.' }, { status: 422 }))
+      await login
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    })
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('These credentials do not match our records.')
+    await act(async () => root.unmount())
+  })
 })

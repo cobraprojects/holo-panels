@@ -1,3 +1,5 @@
+import { isAuthError } from '@holo-js/auth'
+import { isValidationException } from '@holo-js/validation'
 import type { CompiledPanelProfileServer, PanelAuthContext } from './contracts'
 import type { CompiledPanelDefinition } from '../panels/contracts'
 import { toSchemaManifest } from '../schemas/manifest'
@@ -13,6 +15,21 @@ interface AuthSession<TActor> {
     readonly route: string
   }
   readonly user: TActor
+}
+
+const INVALID_CREDENTIALS_MESSAGE = 'These credentials do not match our records.'
+
+function isInvalidCredentialsFailure(error: unknown): boolean {
+  if (isAuthError(error)) return error.code === 'invalid_credentials'
+  if (isValidationException(error)) {
+    return error.status === 422 && Object.values(error.errors.flatten()).some(messages => messages.includes(INVALID_CREDENTIALS_MESSAGE))
+  }
+  if (typeof error !== 'object' || error === null || Reflect.get(error, 'status') !== 422) return false
+  const body = Reflect.get(error, 'body')
+  if (typeof body !== 'object' || body === null || Reflect.get(body, 'status') !== 422) return false
+  const errors = Reflect.get(body, 'errors')
+  if (typeof errors !== 'object' || errors === null) return false
+  return Object.values(errors).some(messages => Array.isArray(messages) && messages.includes(INVALID_CREDENTIALS_MESSAGE))
 }
 
 interface MultiFactorFacade<TActor> {
@@ -68,7 +85,7 @@ interface AuthControllerOptions<TActor, TTenant, TServices> {
   readonly tenant: TTenant
 }
 
-type AuthControllerErrorCode = 'access-denied' | 'auth-unavailable' | 'multi-factor-unavailable' | 'password-reset-unavailable' | 'profile-input-invalid' | 'profile-unavailable' | 'registration-unavailable' | 'unauthenticated'
+type AuthControllerErrorCode = 'access-denied' | 'auth-unavailable' | 'invalid-credentials' | 'multi-factor-unavailable' | 'password-reset-unavailable' | 'profile-input-invalid' | 'profile-unavailable' | 'registration-unavailable' | 'unauthenticated'
 
 export type PanelAuthSessionOutcome<TActor> = Readonly<{
   actor: TActor
@@ -139,7 +156,15 @@ export class PanelAuthController<TActor, TTenant = unknown, TServices = unknown>
   }
 
   async login(credentials: Readonly<Record<string, unknown>>, signal: AbortSignal): Promise<PanelAuthSessionOutcome<TActor>> {
-    const session = await this.#guard.login(credentials)
+    let session: AuthSession<TActor>
+    try {
+      session = await this.#guard.login(credentials)
+    } catch (error) {
+      if (isInvalidCredentialsFailure(error)) {
+        throw new AuthControllerError('invalid-credentials', INVALID_CREDENTIALS_MESSAGE)
+      }
+      throw error
+    }
     if (session.multiFactorChallenge) {
       if (this.#routes.multiFactorChallenge === null) {
         throw new AuthControllerError('multi-factor-unavailable', 'Panel MFA challenge is not configured')

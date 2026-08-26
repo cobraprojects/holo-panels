@@ -38,7 +38,10 @@ describe('Next generated panel login route', () => {
   it('redirects unauthenticated requests to the panel-configured login path', async () => {
     const page = createPanelPage({ panelId: 'admin', runtime })
 
-    await expect(page({ params: Promise.resolve({ panelsPath: ['posts'] }) })).rejects.toThrow('redirect:/admin/sign-in?next=%2Fadmin%2Fposts')
-    expect(redirect).toHaveBeenCalledWith('/admin/sign-in?next=%2Fadmin%2Fposts')
+    await expect(page({
+      params: Promise.resolve({ panelsPath: ['posts'] }),
+      searchParams: Promise.resolve({ tableSearch: 'published' }),
+    })).rejects.toThrow('redirect:/admin/sign-in?next=%2Fadmin%2Fposts%3FtableSearch%3Dpublished')
+    expect(redirect).toHaveBeenCalledWith('/admin/sign-in?next=%2Fadmin%2Fposts%3FtableSearch%3Dpublished')
   })
 })

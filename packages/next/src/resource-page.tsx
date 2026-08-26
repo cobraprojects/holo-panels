@@ -39,7 +39,7 @@ import {
   type ReactTableSummary,
   type UploadPolicy,
 } from '@holo-js/panels-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation.js'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Button, Card, CardContent, CardFooter, PanelsIcon } from './internal-ui'
 

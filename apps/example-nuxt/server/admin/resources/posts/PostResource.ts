@@ -62,7 +62,7 @@ export default class PostResource extends Resource {
     ]).required(),
     field.FileUpload.make('featuredMediaId')
       .image()
-      .disk('private')
+      .disk('local')
       .directory('panels/uploads/posts')
       .acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
       .maxSize(5_242_880),

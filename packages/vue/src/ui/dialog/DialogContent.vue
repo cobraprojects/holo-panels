@@ -30,6 +30,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <DialogPortal>
     <DialogOverlay />
     <DialogContent
+      aria-modal="true"
       data-slot="dialog-content"
       data-panels-component="modal"
       v-bind="{ ...$attrs, ...forwarded }"

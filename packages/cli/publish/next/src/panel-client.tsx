@@ -78,7 +78,7 @@ import {
   type ReactNotificationInboxTriggerProps,
   type ReactWidgetManifest,
 } from '@holo-js/panels-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation.js'
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { NextPanelClientProps } from './contracts'
 import { Button, InputGroup, InputGroupAddon, InputGroupInput, PanelsIcon } from './internal-ui'
@@ -186,7 +186,7 @@ function PanelGlobalSearch({ configuration, end, panelId, start }: {
     return () => globalThis.removeEventListener('keydown', shortcut)
   }, [store])
   return <div className="hp-global-search hp:relative hp:w-full hp:max-w-md" role="search">
-    {start}<InputGroup><InputGroupAddon><PanelsIcon name="search" /></InputGroupAddon><InputGroupInput aria-controls="hp-global-search-results" aria-expanded={state.open} data-panel-global-search="" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
+    {start}<InputGroup><InputGroupAddon><PanelsIcon name="search" /></InputGroupAddon><InputGroupInput aria-controls="hp-global-search-results" aria-expanded={state.open} aria-label="Global search" data-panel-global-search="" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') store.move(event.key === 'ArrowDown' ? 1 : -1)
       if (event.key === 'Enter') {
         const url = store.selectedUrl()
@@ -488,7 +488,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
       {renderHook(PanelsRenderHook.CONTENT_START)}
       {manifest.layout?.topbar === false ? null : TopbarComponent ? <TopbarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <header className="hp-panel-header hp-panel-main-header hp:sticky hp:top-0 hp:z-20 hp:flex hp:h-16 hp:shrink-0 hp:items-center hp:gap-2 hp:border-b hp:bg-background hp:px-4">
         <div className="hp-panel-topbar-start hp:contents">{renderHook(PanelsRenderHook.TOPBAR_START)}</div>
-        {manifest.navigationEnabled === false ? null : manifest.navigationMode === 'sidebar' ? <SidebarTrigger className="hp-panel-navigation-toggle" /> : <Button aria-expanded={navigationOpen} aria-label="Toggle navigation" className="hp-panel-navigation-toggle" onClick={() => setNavigationOpen(open => !open)} size="icon" variant="ghost"><PanelsIcon name="menu" /></Button>}
+        {manifest.navigationEnabled === false ? null : manifest.navigationMode === 'sidebar' ? <SidebarTrigger aria-label="Toggle navigation" className="hp-panel-navigation-toggle" /> : <Button aria-expanded={navigationOpen} aria-label="Toggle navigation" className="hp-panel-navigation-toggle" onClick={() => setNavigationOpen(open => !open)} size="icon" variant="ghost"><PanelsIcon name="menu" /></Button>}
         {manifest.navigationMode === 'sidebar' ? <Separator className="hp:mr-2 hp:h-4" orientation="vertical" /> : null}
         {manifest.navigationMode === 'topbar' ? <>{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}<nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation--topbar hp:hidden hp:items-center hp:gap-1 hp:lg:flex"><NavigationItems activeId={state.activeNavigationId} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav></> : null}
         {renderHook(PanelsRenderHook.GLOBAL_SEARCH_BEFORE)}
@@ -517,7 +517,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     </SidebarInset>
     {renderHook(PanelsRenderHook.CONTENT_AFTER)}
   </>
-  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-panel={state.panelId} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
+  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
     {renderHook(PanelsRenderHook.BODY_START)}{renderHook(PanelsRenderHook.LAYOUT_START)}
     {manifest.assets?.map(asset => asset.type === 'css' ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" /> : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
     {renderHook(PanelsRenderHook.TOPBAR_BEFORE)}
@@ -525,7 +525,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
       {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'}>
         {renderHook(PanelsRenderHook.SIDEBAR_START)}
         <SidebarHeader className="hp-panel-navigation-header">{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}</SidebarHeader>
-        <SidebarContent className="hp-panel-navigation-body">{renderHook(PanelsRenderHook.SIDEBAR_NAV_START)}<NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => undefined} />{renderHook(PanelsRenderHook.SIDEBAR_NAV_END)}</SidebarContent>
+        <SidebarContent className="hp-panel-navigation-body"><nav aria-label="Panel navigation" className="hp-panel-navigation hp:h-full">{renderHook(PanelsRenderHook.SIDEBAR_NAV_START)}<NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => undefined} />{renderHook(PanelsRenderHook.SIDEBAR_NAV_END)}</nav></SidebarContent>
         <SidebarFooter>{notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}{renderHook(PanelsRenderHook.SIDEBAR_FOOTER)}</SidebarFooter><SidebarRail />
       </Sidebar> : null}
       {page}

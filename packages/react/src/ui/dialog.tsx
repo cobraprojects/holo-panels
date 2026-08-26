@@ -60,6 +60,7 @@ function DialogContent({
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
+        aria-modal="true"
         data-slot="dialog-content"
         data-panels-component="modal"
         className={cn(

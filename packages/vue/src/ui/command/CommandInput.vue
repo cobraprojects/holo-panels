@@ -5,7 +5,7 @@ import { MagnifyingGlassIcon } from '@radix-icons/vue'
 import { reactiveOmit } from "@vueuse/core"
 import { ListboxFilter, useForwardProps } from "reka-ui"
 import { cn } from "@/lib/utils"
-import { useCommand } from "."
+import { useCommand } from './context'
 
 defineOptions({
   inheritAttrs: false,

@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "declarationMap": false,
     "outDir": "./dist",
     "paths": {
       "@holo-js/storage/runtime": ["../holo-js/packages/storage/dist/runtime/composables/index.d.ts"]

@@ -11,12 +11,11 @@ import type {
 } from '../../../packages/testing/src/infolist-action-acceptance/index'
 
 function view(model: InfolistActionAcceptanceModel) {
-  return createElement(ReactFeedbackProvider, { panelId: 'admin', store: model.notificationStore },
-    createElement(Fragment, null,
+  const children = createElement(Fragment, null,
       ...model.entries.map(store => createElement(ReactEntryRenderer, { action: model.entryAction, key: store.snapshot.id, store })),
       createElement(ReactActionRenderer<string>, { manifest: model.actions.publish, panelId: 'admin', recordIds: [42], store: model.actionStore }),
-    ),
-  )
+    )
+  return createElement(ReactFeedbackProvider, { children, panelId: 'admin', store: model.notificationStore })
 }
 
 function driver(container: HTMLDivElement, destroy: () => Promise<void>): InfolistActionAcceptanceDriver {

@@ -240,6 +240,7 @@ async function collectRequiredPackageRoots() {
     { packageName: '@sveltejs/adapter-node', parentRoot: repositoryRoot, includeDependencies: true },
     { packageName: '@sveltejs/kit', parentRoot: repositoryRoot, includeDependencies: true },
     { packageName: '@sveltejs/vite-plugin-svelte', parentRoot: repositoryRoot, includeDependencies: true },
+    { packageName: '@tailwindcss/cli', parentRoot: repositoryRoot, includeDependencies: true },
     'bindings',
     { packageName: 'svelte', parentRoot: repositoryRoot, includeDependencies: true },
     { packageName: 'svelte-check', parentRoot: repositoryRoot, includeDependencies: true },

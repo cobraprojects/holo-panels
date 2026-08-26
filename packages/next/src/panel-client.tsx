@@ -78,7 +78,7 @@ import {
   type ReactNotificationInboxTriggerProps,
   type ReactWidgetManifest,
 } from '@holo-js/panels-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation.js'
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { NextPanelClientProps } from './contracts'
 import { Button, InputGroup, InputGroupAddon, InputGroupInput, PanelsIcon } from './internal-ui'

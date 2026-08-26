@@ -96,6 +96,16 @@ function nodeImportSpecifier(packageName) {
   return manifest?.exports?.['./server'] ? `${packageName}/server` : packageName
 }
 
+function containsExportTarget(entrySet, target) {
+  const expected = `package/${target.slice(2)}`
+  const wildcard = expected.indexOf('*')
+  if (wildcard === -1) return entrySet.has(expected)
+  if (expected.indexOf('*', wildcard + 1) !== -1) return false
+  const prefix = expected.slice(0, wildcard)
+  const suffix = expected.slice(wildcard + 1)
+  return [...entrySet].some(entry => entry.length > prefix.length + suffix.length && entry.startsWith(prefix) && entry.endsWith(suffix))
+}
+
 function validateTarball(packageName, sourceManifest, tarballPath) {
   const entries = execFileSync('tar', ['-tzf', tarballPath], { encoding: 'utf8' })
     .trim()
@@ -128,7 +138,7 @@ function validateTarball(packageName, sourceManifest, tarballPath) {
 
   for (const target of exportTargets(packedManifest.exports)) {
     if (!target.startsWith('./') || target.split('/').includes('..')) throw new Error(`${packageName} export target is unsafe: ${target}`)
-    if (!entrySet.has(`package/${target.slice(2)}`)) throw new Error(`${packageName} tarball is missing export target ${target}`)
+    if (!containsExportTarget(entrySet, target)) throw new Error(`${packageName} tarball is missing export target ${target}`)
   }
 
   validatePublishedDependencyRanges(packageName, packedManifest, new Set(manifests.keys()), catalog)
@@ -330,39 +340,39 @@ declare module '@holo-js/panels-resources' {
 export class PostResource extends Resource {
   protected static override model = Post
 
-  static form = this.configureForm(schema => schema.components(field => [
-    field.textInput('title').required(),
-    field.toggle('published'),
+  static form = this.configureForm((schema, field) => schema.components([
+    field.TextInput.make('title').required(),
+    field.Toggle.make('published'),
   ]))
 
-  static table = this.configureTable(table => table.columns(column => [
-    column.text('title').sortable(),
-    column.toggle('published'),
+  static table = this.configureTable((table, column) => table.columns([
+    column.TextColumn.make('title').sortable(),
+    column.ToggleColumn.make('published'),
   ]))
 }
 
 export class InvalidFormComponentTypeResource extends Resource {
   protected static override model = Post
   // @ts-expect-error title is not boolean
-  static form = this.configureForm(schema => schema.components(field => [field.toggle('title')]))
+  static form = this.configureForm((schema, field) => schema.components([field.Toggle.make('title')]))
 }
 
 export class InvalidFormComponentPathResource extends Resource {
   protected static override model = Post
   // @ts-expect-error missing is not a model attribute
-  static form = this.configureForm(schema => schema.components(field => [field.textInput('missing')]))
+  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('missing')]))
 }
 
 export class InvalidColumnTypeResource extends Resource {
   protected static override model = Post
   // @ts-expect-error title is not boolean
-  static table = this.configureTable(table => table.columns(column => [column.toggle('title')]))
+  static table = this.configureTable((table, column) => table.columns([column.ToggleColumn.make('title')]))
 }
 
 export class InvalidColumnPathResource extends Resource {
   protected static override model = Post
   // @ts-expect-error missing is not a model attribute
-  static table = this.configureTable(table => table.columns(column => [column.text('missing')]))
+  static table = this.configureTable((table, column) => table.columns([column.TextColumn.make('missing')]))
 }
 `)
     await writeFile(join(standaloneRoot, 'tsconfig.json'), JSON.stringify({

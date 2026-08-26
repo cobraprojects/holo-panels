@@ -14,6 +14,11 @@ const presentation = {
   theme: 'system',
 } as const
 
+async function settle(): Promise<void> {
+  await new Promise<void>(resolve => setTimeout(resolve, 0))
+  await nextTick()
+}
+
 describe('Nuxt panel authentication pages', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
@@ -39,12 +44,40 @@ describe('Nuxt panel authentication pages', () => {
     document.body.append(container)
     const app = createApp(component as Component, props)
     app.mount(container)
-    await new Promise<void>(resolve => setTimeout(resolve, 0))
-    await nextTick()
+    await settle()
 
     expect(container.textContent).toContain('Control')
     expect(container.querySelector('main')?.dataset.density).toBe('compact')
     expect(container.querySelector('main')?.getAttribute('style')).toContain('--holo-color-primary: #123456')
+    app.unmount()
+  })
+
+  it('exposes generated recovery codes as a labeled region', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith('/presentation')) return Response.json(presentation)
+      if (url.endsWith('/mfa-status')) return Response.json({ enabled: false })
+      if (url.endsWith('/mfa-enrollment-begin')) return Response.json({ manualKey: 'PANELSECRET' })
+      if (url.endsWith('/mfa-enrollment-confirm')) return Response.json({ recoveryCodes: ['first-code', 'second-code'] })
+      return new Response(null, { status: 204 })
+    }))
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(PanelMultiFactorPage, { panelId: 'cp' })
+    app.mount(container)
+    await settle()
+
+    const begin = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('Begin enrollment'))
+    begin?.click()
+    await settle()
+    const code = container.querySelector<HTMLInputElement>('#cp-code')
+    if (!code) throw new Error('The authentication code field was not rendered')
+    code.value = '123456'
+    code.dispatchEvent(new Event('input', { bubbles: true }))
+    code.closest('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await settle()
+
+    expect(container.querySelector('section[aria-labelledby="cp-recovery-codes-heading"]')?.textContent).toContain('first-code')
     app.unmount()
   })
 })

@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "declarationMap": false,
     "lib": ["ES2022", "DOM"],
     "outDir": "./dist",
     "paths": {

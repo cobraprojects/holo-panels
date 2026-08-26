@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "declarationMap": false,
     "outDir": "./dist",
     "paths": {
       "@/*": ["./src/*"]

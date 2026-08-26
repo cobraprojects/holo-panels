@@ -5,7 +5,7 @@ import { reactiveOmit, useCurrentElement } from "@vueuse/core"
 import { ListboxItem, useForwardPropsEmits, useId } from "reka-ui"
 import { computed, onMounted, onUnmounted, ref } from "vue"
 import { cn } from "@/lib/utils"
-import { useCommand, useCommandGroup } from "."
+import { useCommand, useCommandGroup } from './context'
 
 const props = defineProps<ListboxItemProps & { class?: HTMLAttributes["class"] }>()
 const emits = defineEmits<ListboxItemEmits>()
@@ -16,7 +16,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
 const id = useId()
 const { filterState, allItems, allGroups } = useCommand()
-const groupContext = useCommandGroup()
+const groupContext = useCommandGroup(null)
 
 const isRender = computed(() => {
   if (!filterState.search) {

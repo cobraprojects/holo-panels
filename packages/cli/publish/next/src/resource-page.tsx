@@ -84,17 +84,6 @@ function ownedUploadAdapter(adapter: ReturnType<typeof createBrowserUploadAdapte
   return Object.freeze(owned)
 }
 
-async function executeResourceOperation(
-  transport: NextResourceOperationTransport,
-  operation: ResourceOperation,
-  payload: JsonObject,
-  signal?: AbortSignal,
-): Promise<NextResourceOperationResult> {
-  const result = await transport.execute(operation, payload, signal)
-  if (signal?.aborted) throw new DOMException('The operation was aborted', 'AbortError')
-  return result
-}
-
 type ResourceValues = Record<string, JsonValue>
 
 interface ClientResolverContext {
@@ -482,7 +471,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
   }), [columns, data.total, panelId, records, resourceId, table.filterMode])
   const refresh = (): void => {
     const query = store.query
-    void executeResourceOperation(operation, 'table-data', {
+    void operation.execute('table-data', {
       filters: query.filters,
       page: query.page,
       perPage: query.perPage,
@@ -512,7 +501,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds
           : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-        const result = await executeResourceOperation(operation, 'action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, recordIds: [...recordIds], resourceId }, signal)
+        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, recordIds: [...recordIds], resourceId }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
@@ -645,7 +634,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
     transport: {
       async hydrateSelected(_request, selected, signal) {
         if (serverOptions) {
-          const result = await executeResourceOperation(operation, 'options', { action: 'hydrate', dependencies: { ..._request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } }, signal)
+          const result = await operation.execute('options', { action: 'hydrate', dependencies: { ..._request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to hydrate options.')
           return staticOptions({ options: result.data.options ?? [] })
         }
@@ -653,7 +642,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
       },
       async list(request, signal) {
         if (serverOptions) {
-          const result = await executeResourceOperation(operation, 'options', { action: 'list', dependencies: { ...request.dependencies }, fieldId: definition.path, page: request.page, perPage: request.perPage, resourceId, search: request.search, values: { ...values } }, signal)
+          const result = await operation.execute('options', { action: 'list', dependencies: { ...request.dependencies }, fieldId: definition.path, page: request.page, perPage: request.perPage, resourceId, search: request.search, values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to load options.')
           const available = staticOptions({ options: result.data.options ?? [] })
           return { hasMore: result.data.hasMore === true, options: available, page: request.page, perPage: request.perPage, total: typeof result.data.total === 'number' ? result.data.total : available.length }
@@ -665,7 +654,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
       },
       async validateSelection(request, selected, signal) {
         if (serverOptions) {
-          const result = await executeResourceOperation(operation, 'options', { action: 'validate', dependencies: { ...request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } }, signal)
+          const result = await operation.execute('options', { action: 'validate', dependencies: { ...request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } }, signal)
           return result.ok && result.data?.valid === true
         }
         const available = new Set(dynamic
@@ -675,7 +664,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
       },
       ...(serverOptions && Reflect.get(definition.properties, 'canCreateOption') === true ? {
         async create(request, label, signal) {
-          const result = await executeResourceOperation(operation, 'options', { action: 'create', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, values: { ...values } }, signal)
+          const result = await operation.execute('options', { action: 'create', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to create option.')
           const option = staticOptions({ options: [result.data.option ?? null] })[0]
           if (!option) throw new Error('The created option response is invalid.')
@@ -684,7 +673,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
       } : {}),
       ...(serverOptions && Reflect.get(definition.properties, 'canEditOption') === true ? {
         async edit(request, value, label, signal) {
-          const result = await executeResourceOperation(operation, 'options', { action: 'edit', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, value, values: { ...values } }, signal)
+          const result = await operation.execute('options', { action: 'edit', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, value, values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to edit option.')
           const option = staticOptions({ options: [result.data.option ?? null] })[0]
           if (!option) throw new Error('The edited option response is invalid.')
@@ -757,7 +746,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   const [relations, setRelations] = useState(() => relationManagers(data.relations))
   useEffect(() => setRelations(relationManagers(data.relations)), [data.relations])
   const loadRelationOptions: NonNullable<ReactRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
-    const result = await executeResourceOperation(operation, 'options', {
+    const result = await operation.execute('options', {
       ownerId: record[routeKey] ?? null,
       relationManagerId: managerId,
       resourceId,
@@ -771,7 +760,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     })
   }
   const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request) => {
-    const result = await executeResourceOperation(operation, 'action', {
+    const result = await operation.execute('action', {
       intent: 'relation',
       managerId: request.managerId,
       ownerId: record[routeKey] ?? null,
@@ -790,7 +779,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     await form.submit(async context => {
       const errors = Object.fromEntries(fields.filter(field => field.required && (context.values[field.path] === '' || context.values[field.path] === null || typeof context.values[field.path] === 'undefined')).map(field => [field.path, 'This field is required.']))
       if (Object.keys(errors).length > 0) return { errors, focusFirstError: true }
-      const result = await executeResourceOperation(operation, 'form-submit', { ...context.values, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, context.signal)
+      const result = await operation.execute('form-submit', { ...context.values, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, context.signal)
       if (!result.ok) return { errors: { [fields[0]?.path ?? routeKey]: result.error ?? 'The record could not be saved.' }, focusFirstError: true }
       setSaved(true)
       const savedRecord = object(result.data?.record)
@@ -884,7 +873,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
       async execute(request, signal) {
         const kind = actionKinds.get(request.actionId)
         if (!kind) throw new Error('The requested action is not available.')
-        const result = await executeResourceOperation(operation, 'action', {
+        const result = await operation.execute('action', {
           actionId: request.actionId,
           idempotencyKey: request.idempotencyKey,
           input: request.input,
@@ -934,7 +923,7 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
   const [relations, setRelations] = useState(() => relationManagers(data.relations))
   useEffect(() => setRelations(relationManagers(data.relations)), [data.relations])
   const loadRelationOptions: NonNullable<ReactRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
-    const result = await executeResourceOperation(operation, 'options', { ownerId: record[routeKey] ?? null, relationManagerId: managerId, resourceId, search })
+    const result = await operation.execute('options', { ownerId: record[routeKey] ?? null, relationManagerId: managerId, resourceId, search })
     if (!result.ok) throw new Error(result.error ?? 'Related records could not be loaded.')
     return objects(result.data?.options).flatMap(option => {
       const value = option.value
@@ -943,7 +932,7 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
     })
   }
   const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request) => {
-    const result = await executeResourceOperation(operation, 'action', {
+    const result = await operation.execute('action', {
       intent: 'relation',
       managerId: request.managerId,
       ownerId: record[routeKey] ?? null,

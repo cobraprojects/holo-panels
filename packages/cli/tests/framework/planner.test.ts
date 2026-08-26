@@ -114,7 +114,7 @@ describe('managed framework artifact planner', () => {
 declare module '@holo-js/panels-next' {
   type Runtime = { readonly registry: { readonly source: 'generated-registry' }, readonly source: 'generated-runtime' }
   export function createGeneratedNextPanelsRuntime(registry: { readonly source: 'generated-registry' }): Runtime
-  export function createPanelPage(options: { readonly client: unknown, readonly loginPath?: string, readonly panelId: string, readonly runtime: Runtime }): () => object
+  export function createPanelPage(options: { readonly client: unknown, readonly panelId: string, readonly runtime: Runtime }): () => object
   export function createPanelOperationRoute(options: { readonly panelIds: readonly string[], readonly runtime: Runtime }): { readonly DELETE: () => object, readonly GET: () => object, readonly PATCH: () => object, readonly POST: () => object, readonly PUT: () => object }
 }
 declare module '@holo-js/panels-next/server' {
@@ -144,7 +144,7 @@ declare module '@holo-js/panels-nuxt' {
 declare module '@holo-js/panels-sveltekit/server' {
   type Registry = { readonly registry: { readonly source: 'generated-registry' }, readonly source: 'generated-registry-runtime' }
   export function createGeneratedSvelteKitPanelsRegistry(registry: { readonly source: 'generated-registry' }): Registry
-  export function createPanelPageLoad(options: { readonly loginPath?: string, readonly panelId: string, readonly registry: Registry }): () => object
+  export function createPanelPageLoad(options: { readonly panelId: string, readonly registry: Registry }): () => object
   export function createPanelOperationHandler(options: { readonly panelIds: readonly string[], readonly registry: Registry }): { readonly GET: () => object, readonly POST: () => object }
   export function createPanelAuthHandler(options: { readonly panelIds: readonly string[], readonly registry: Registry }): { readonly GET: () => object, readonly POST: () => object }
   export function createPanelTenantHandler(options: { readonly panelIds: readonly string[], readonly registry: Registry }): { readonly GET: () => object, readonly POST: () => object }
@@ -279,7 +279,7 @@ declare module '@holo-js/panels-sveltekit' {
     expect(pages.every(page => !page.contents.includes('@holo-js/panels-vue/style.css'))).toBe(true)
   })
 
-  it.each(['next', 'nuxt', 'sveltekit'] as const)('keeps generated %s authentication routes free of duplicated panel presentation', (framework) => {
+  it.each(['next', 'nuxt', 'sveltekit'] as const)('keeps generated %s routes free of duplicated panel configuration', (framework) => {
     const plan = planFrameworkArtifacts({
       framework,
       panels: [{
@@ -291,17 +291,41 @@ declare module '@holo-js/panels-sveltekit' {
           serifFontFamily: 'Panel Serif',
           tokens: { 'radius-lg': '1.25rem' },
         },
+        emailChangeVerificationPath: '/account/email-change/verify',
+        emailVerificationPath: '/account/email/notice',
+        emailVerificationVerifyPath: '/account/email/verify',
+        forgotPasswordPath: '/account/password/forgot',
         id: 'admin',
-        loginPath: '/admin/login',
+        loginPath: '/account/sign-in',
+        mfaChallengePath: '/account/mfa/challenge',
+        mfaEnrollmentPath: '/account/mfa/manage',
+        mfaRecoveryCodesPath: '/account/mfa/recovery',
+        passwordResetPath: '/account/password/reset',
         path: '/admin',
-        profilePath: '/admin/profile',
+        profilePath: '/account/profile',
+        registrationPath: '/account/register',
       }],
     })
-    const authPages = plan.writes.filter(write => write.kind === 'auth-page')
+    const pages = plan.writes.filter(write => write.kind === 'auth-page' || write.kind === 'panel-page')
+    const authPages = pages.filter(page => page.kind === 'auth-page')
+    const configuredPaths = [
+      '/account/email-change/verify',
+      '/account/email/notice',
+      '/account/email/verify',
+      '/account/mfa/challenge',
+      '/account/mfa/manage',
+      '/account/mfa/recovery',
+      '/account/password/forgot',
+      '/account/password/reset',
+      '/account/profile',
+      '/account/register',
+      '/account/sign-in',
+    ]
 
-    expect(authPages).toHaveLength(2)
-    for (const page of authPages) {
-      expect(page.contents).toContain(framework === 'nuxt' ? 'panel-id' : 'panelId')
+    expect(authPages).toHaveLength(configuredPaths.length)
+    expect(authPages.every(page => page.contents.includes(framework === 'nuxt' ? 'panel-id' : 'panelId'))).toBe(true)
+    for (const page of pages) {
+      for (const configuredPath of configuredPaths) expect(page.contents).not.toContain(configuredPath)
       expect(page.contents).not.toContain('appearance')
       expect(page.contents).not.toContain('#123456')
       expect(page.contents).not.toContain('compact')
@@ -309,6 +333,9 @@ declare module '@holo-js/panels-sveltekit' {
       expect(page.contents).not.toContain('Panel Mono')
       expect(page.contents).not.toContain('Panel Serif')
       expect(page.contents).not.toContain('radius-lg')
+    }
+    if (framework === 'nuxt') {
+      expect(pages.find(page => page.kind === 'panel-page')?.contents).toContain('/auth/presentation')
     }
   })
 

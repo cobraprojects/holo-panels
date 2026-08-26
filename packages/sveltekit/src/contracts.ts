@@ -95,7 +95,6 @@ export function defineSvelteKitPanelRegistry<TActor, TTenant>(
 }
 
 export interface CreatePanelPageLoadOptions<TActor = unknown, TTenant = unknown> {
-  readonly loginPath?: string
   readonly panelId: string
   readonly registry?: SvelteKitPanelRegistry<TActor, TTenant>
 }

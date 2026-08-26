@@ -2,7 +2,7 @@ import { headers } from 'next/headers.js'
 import { PanelRuntimeError, PanelSubscriptionRequiredError, PageAccessError } from '@holo-js/panels-react/server'
 import { NextPanelClient } from '@holo-js/panels-next/client'
 import type { CreatePanelPageOptions, NextPanelPageProps } from './contracts'
-import { NextPanelPageNotFoundError, resolveNextPanelBillingResponse, resolveNextPanelPage, resolveNextPanelPath } from './runtime'
+import { NextPanelPageNotFoundError, resolveNextPanelBillingResponse, resolveNextPanelLoginPath, resolveNextPanelPage, resolveNextPanelPath } from './runtime'
 
 async function currentRequest(path: string, searchParams: Readonly<Record<string, string | readonly string[] | undefined>>): Promise<Request> {
   const source = await headers()
@@ -50,7 +50,7 @@ export function createPanelPage(options: CreatePanelPageOptions) {
       if (error instanceof PanelRuntimeError && error.code === 'unauthenticated') {
         const panelPath = await resolveNextPanelPath(options.panelId, options.runtime)
         const destination = `${panelPath === '/' ? '' : panelPath}${suffix ? `/${suffix}` : ''}` || '/'
-        redirect(loginDestination(options.loginPath ?? '/login', destination))
+        redirect(loginDestination(await resolveNextPanelLoginPath(options.panelId, options.runtime), destination))
       }
       throw error
     }

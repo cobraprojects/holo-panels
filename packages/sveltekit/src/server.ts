@@ -163,6 +163,14 @@ function translatePageError(cause: unknown, loginPath: string): never {
   throw cause
 }
 
+async function configuredLoginPath<TActor, TTenant>(registry: SvelteKitPanelRegistry<TActor, TTenant>, panelId: string): Promise<string> {
+  const internal = registry as InternalSvelteKitPanelRegistry<TActor, TTenant>
+  const panel = internal[panelResolver]
+    ? await internal[panelResolver](panelId)
+    : registry.panels?.[panelId]
+  return safeLocalPath(panel?.manifest.auth?.login?.path ?? '/login', 'Panel login paths')
+}
+
 function operationFrom(event: SvelteKitPanelEvent): PanelOperation {
   const value = event.params.operation
   if (!value || !OPERATIONS.has(value as PanelOperation)) error(404, 'Panel operation not found')
@@ -278,10 +286,9 @@ function requestWithBody(request: Request, body: Uint8Array): Request {
 
 export function createPanelPageLoad<TActor = unknown, TTenant = unknown>(options: CreatePanelPageLoadOptions<TActor, TTenant>): (event: SvelteKitPanelEvent) => Promise<PanelPageData> {
   assertPanelId(options.panelId)
-  const loginPath = safeLocalPath(options.loginPath ?? '/login', 'Panel login paths')
   return event => runWithSvelteKitRequestEvent(event, async () => {
+    const registry = registryFor(event, options.registry)
     try {
-      const registry = registryFor(event, options.registry)
       const signal = requestSignal(event.request)
       const bootstraps = await registry.runtime.bootstrap([options.panelId], signal)
       const panel = bootstraps[0]
@@ -321,6 +328,9 @@ export function createPanelPageLoad<TActor = unknown, TTenant = unknown>(options
       }))
       return Object.freeze({ effects: resolved.effects, panel, page: resolved.page, widgets: resolved.widgets })
     } catch (cause) {
+      const loginPath = errorCode(cause) === 'unauthenticated'
+        ? await configuredLoginPath(registry, options.panelId)
+        : '/login'
       return translatePageError(cause, loginPath)
     }
   })

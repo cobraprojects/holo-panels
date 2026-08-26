@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { defineSvelteKitPanelRegistry } from '../src/contracts'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import { defineSvelteKitPanelRegistry, type CreatePanelPageLoadOptions } from '../src/contracts'
 
 describe('SvelteKit runtime inference', () => {
+  it('keeps panel paths out of page-load configuration', () => {
+    expectTypeOf<CreatePanelPageLoadOptions>().not.toHaveProperty('loginPath')
+  })
+
   it('preserves actor and tenant types in registry callbacks', () => {
     const runtime = {
       bootstrap: async () => [],

@@ -208,13 +208,21 @@ export function requireNextPanelsRuntime(runtime?: NextPanelsRuntime): NextPanel
   return resolved
 }
 
-export async function resolveNextPanelPath(panelId: string, runtimeInput?: NextPanelsRuntime): Promise<string> {
+async function resolvedPanel(panelId: string, runtimeInput?: NextPanelsRuntime) {
   assertIdentifier(panelId, 'Panel IDs')
   const runtime = requireNextPanelsRuntime(runtimeInput)
   const panels = await definitions(runtime, panelId, 'panel')
   const panel = panels.find(definition => definition.manifest.id === panelId)
   if (!panel) throw new NextPanelPageNotFoundError(`panel:${panelId}`)
-  return panel.manifest.path
+  return panel
+}
+
+export async function resolveNextPanelPath(panelId: string, runtimeInput?: NextPanelsRuntime): Promise<string> {
+  return (await resolvedPanel(panelId, runtimeInput)).manifest.path
+}
+
+export async function resolveNextPanelLoginPath(panelId: string, runtimeInput?: NextPanelsRuntime): Promise<string> {
+  return (await resolvedPanel(panelId, runtimeInput)).manifest.auth?.login?.path ?? '/login'
 }
 
 export async function resolveNextPanelBillingResponse(

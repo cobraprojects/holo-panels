@@ -21,7 +21,7 @@ class Actor {
   declare readonly id: number
 }
 
-const panel = definePanel('admin', Actor).path('/admin').compile()
+const panel = definePanel('admin', Actor).path('/admin').login().loginRouteSlug('sign-in').compile()
 const posts = definePage('posts', { load: () => ({}) }).path('/admin/posts').compile()
 const auth: HoloAuth<object> = {
   guard: () => ({ provider: async () => 'session', user: async () => null }),
@@ -36,9 +36,9 @@ const runtime: NextPanelsRuntime = {
 
 describe('Next generated panel login route', () => {
   it('redirects unauthenticated requests to the panel-configured login path', async () => {
-    const page = createPanelPage({ loginPath: '/control/sign-in', panelId: 'admin', runtime })
+    const page = createPanelPage({ panelId: 'admin', runtime })
 
-    await expect(page({ params: Promise.resolve({ panelsPath: ['posts'] }) })).rejects.toThrow('redirect:/control/sign-in?next=%2Fadmin%2Fposts')
-    expect(redirect).toHaveBeenCalledWith('/control/sign-in?next=%2Fadmin%2Fposts')
+    await expect(page({ params: Promise.resolve({ panelsPath: ['posts'] }) })).rejects.toThrow('redirect:/admin/sign-in?next=%2Fadmin%2Fposts')
+    expect(redirect).toHaveBeenCalledWith('/admin/sign-in?next=%2Fadmin%2Fposts')
   })
 })

@@ -274,6 +274,21 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     expect(mocks.contextCalls).toBe(1)
   })
 
+  it('derives the unauthenticated redirect from the compiled panel definition', async () => {
+    const configured = registry()
+    const configuredPanel = definePanel('admin').path('/control').login().loginRouteSlug('sign-in').compile()
+    configured.value.runtime.bootstrap = async () => {
+      throw Object.assign(new Error('Authentication is required'), { code: 'unauthenticated' })
+    }
+    const value: SvelteKitPanelRegistry = { ...configured.value, panels: { admin: configuredPanel } }
+    const { createPanelPageLoad } = await import('../src/server')
+
+    await expect(createPanelPageLoad({ panelId: 'admin', registry: value })(event('GET', { path: 'posts' }))).rejects.toMatchObject({
+      location: '/control/sign-in',
+      status: 303,
+    })
+  })
+
   it('supports separate fixed registries for multiple panel route shells', async () => {
     const admin = registry()
     const staff = registry()

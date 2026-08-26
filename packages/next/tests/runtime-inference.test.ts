@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { defineNextPanelsRuntime } from '../src/contracts'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import { defineNextPanelsRuntime, type CreatePanelPageOptions } from '../src/contracts'
 import { createPanelOperationRoute } from '../src/operation'
 import type { HoloAuth } from '@holo-js/panels-react'
 
@@ -16,6 +16,10 @@ const auth: HoloAuth<Actor> = {
 }
 
 describe('Next runtime inference', () => {
+  it('keeps panel paths out of page factory configuration', () => {
+    expectTypeOf<CreatePanelPageOptions>().not.toHaveProperty('loginPath')
+  })
+
   it('infers operation scope from runtime resolvers', async () => {
     const observed: string[] = []
     const runtime = defineNextPanelsRuntime({

@@ -41,7 +41,7 @@ function nextTemplates(panelId: string, panelPath: string, directories: Framewor
       path: pagePath,
       kind: 'panel-page',
       panelIds: [panelId],
-      body: `import { createGeneratedNextPanelsRuntime, createPanelPage } from '@holo-js/panels-next'\nimport serverRegistry from '${serverRegistryImport}'\nimport { PanelsClient } from './panels-client'\n\nconst runtime = createGeneratedNextPanelsRuntime(serverRegistry)\n\nexport default createPanelPage({ client: PanelsClient, loginPath: '${loginPath ?? '/login'}', panelId: '${panelId}', runtime })\n`,
+      body: `import { createGeneratedNextPanelsRuntime, createPanelPage } from '@holo-js/panels-next'\nimport serverRegistry from '${serverRegistryImport}'\nimport { PanelsClient } from './panels-client'\n\nconst runtime = createGeneratedNextPanelsRuntime(serverRegistry)\n\nexport default createPanelPage({ client: PanelsClient, panelId: '${panelId}', runtime })\n`,
     },
     {
       path: clientPath,
@@ -73,7 +73,7 @@ function nuxtTemplates(panelId: string, panelPath: string, directories: Framewor
       path: pagePath,
       kind: 'panel-page',
       panelIds: [panelId],
-      body: `<script setup lang="ts">\nimport '${themeImport(pagePath)}'\nimport { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } from '@holo-js/panels-nuxt'\nimport { registerPanelApplicationRenderers } from '${applicationRendererImport}'\nimport { registerPanelPluginRenderers } from '${rendererImport}'\n\ndefinePageMeta({\n  middleware: async (to) => {\n    try {\n      await useRequestFetch()('/holo/panels/${panelId}/auth/mfa-status')\n    } catch {\n      return navigateTo(\`${loginPath ?? '/login'}?next=\${encodeURIComponent(to.fullPath)}\`, { redirectCode: 302 })\n    }\n  },\n})\n\nconst panelPage = await usePanelPage({ panelId: '${panelId}' })\nconst registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createNuxtPanelComponentRegistry()))\n</script>\n\n<template>\n  <PanelPage :page="panelPage" :registry="registry" />\n</template>\n`,
+      body: `<script setup lang="ts">\nimport '${themeImport(pagePath)}'\nimport { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } from '@holo-js/panels-nuxt'\nimport { registerPanelApplicationRenderers } from '${applicationRendererImport}'\nimport { registerPanelPluginRenderers } from '${rendererImport}'\n\ndefinePageMeta({\n  middleware: async (to) => {\n    let loginPath = '/login'\n    try {\n      const presentation = await useRequestFetch()('/holo/panels/${panelId}/auth/presentation')\n      const configuredLoginPath = presentation && typeof presentation === 'object' ? Reflect.get(presentation, 'loginPath') : null\n      if (typeof configuredLoginPath === 'string') loginPath = configuredLoginPath\n      await useRequestFetch()('/holo/panels/${panelId}/auth/mfa-status')\n    } catch {\n      return navigateTo(\`\${loginPath}?next=\${encodeURIComponent(to.fullPath)}\`, { redirectCode: 302 })\n    }\n  },\n})\n\nconst panelPage = await usePanelPage({ panelId: '${panelId}' })\nconst registry = registerPanelApplicationRenderers(registerPanelPluginRenderers(createNuxtPanelComponentRegistry()))\n</script>\n\n<template>\n  <PanelPage :page="panelPage" :registry="registry" />\n</template>\n`,
     },
     ...(loginPath ? [nuxtLoginTemplate(panelId, loginPath, directories, managedPaths)] : []),
   ]
@@ -102,7 +102,7 @@ function svelteKitTemplates(panelId: string, panelPath: string, directories: Fra
       path: pageServerPath,
       kind: 'panel-page',
       panelIds: [panelId],
-      body: `import { createGeneratedSvelteKitPanelsRegistry, createPanelPageLoad } from '@holo-js/panels-sveltekit/server'\nimport serverRegistry from '${registryImport}'\n\nconst registry = createGeneratedSvelteKitPanelsRegistry(serverRegistry)\n\nexport const load = createPanelPageLoad({ loginPath: '${loginPath ?? '/login'}', panelId: '${panelId}', registry })\n`,
+      body: `import { createGeneratedSvelteKitPanelsRegistry, createPanelPageLoad } from '@holo-js/panels-sveltekit/server'\nimport serverRegistry from '${registryImport}'\n\nconst registry = createGeneratedSvelteKitPanelsRegistry(serverRegistry)\n\nexport const load = createPanelPageLoad({ panelId: '${panelId}', registry })\n`,
     },
     {
       path: pagePath,

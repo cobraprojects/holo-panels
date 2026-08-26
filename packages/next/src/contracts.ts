@@ -81,7 +81,6 @@ export function defineNextPanelsRuntime<
 
 export interface CreatePanelPageOptions<TRuntime = NextPanelsRuntime> {
   readonly client?: ComponentType<Pick<NextPanelClientProps, 'payload'>>
-  readonly loginPath?: string
   readonly panelId: string
   readonly runtime?: TRuntime
 }

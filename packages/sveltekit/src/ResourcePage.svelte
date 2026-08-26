@@ -592,6 +592,7 @@
               ? request.selection.recordIds
               : resourceOperationIdentifiers(records, resource.recordId, resource.routeKey, request.recordId)),
             resourceId: resource.id,
+            source: 'table',
           },
           signal: requestSignal(requestController.signal, signal),
         })

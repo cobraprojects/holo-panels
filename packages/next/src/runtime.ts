@@ -13,6 +13,7 @@ import {
   PanelRuntime,
   createNavigationSeed,
   preparePageRoutes,
+  resolvePanelNavigationSeed,
   resolvePageData,
   resolveWidget,
   type CompiledWidgetDefinition,
@@ -284,6 +285,7 @@ export async function resolveNextPanelPage(
         strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
         tenant: runtime.resolveTenant ? await runtime.resolveTenant(request) : tenantContext?.tenantId,
       }
+      const navigation = await resolvePanelNavigationSeed(discoveredPanel.manifest.navigation, pages, context)
       const loadedPage = await resolvePageData(match.definition, { ...context, parameters: match.parameters! })
       let page = loadedPage
       let tableState: Readonly<TableQueryState> | null = loadedPage.manifest.pageType === 'list'
@@ -326,10 +328,14 @@ export async function resolveNextPanelPage(
         resolvedPageWidgets(match.definition.manifest.widgets.header, [...resolvedWidgets.values()], context, widgetResource, 'header'),
         resolvedPageWidgets(match.definition.manifest.widgets.footer, [...resolvedWidgets.values()], context, widgetResource, 'footer'),
       ])
-      return { page, widgets: { footer, header } }
+      return { navigation, page, widgets: { footer, header } }
     })
     const effects = await takeSessionEffects(resolvedAuth.guard(panel.guard), panelId)
-    return Object.freeze({ bootstrap: bootstrap as unknown as NextPanelPagePayload['bootstrap'], effects, page: pageResult.page, path, widgets: pageResult.widgets })
+    const authorizedBootstrap = Object.freeze({
+      ...bootstrap,
+      manifest: Object.freeze({ ...bootstrap.manifest, navigation: pageResult.navigation }),
+    })
+    return Object.freeze({ bootstrap: authorizedBootstrap as unknown as NextPanelPagePayload['bootstrap'], effects, page: pageResult.page, path, widgets: pageResult.widgets })
   })
 }
 

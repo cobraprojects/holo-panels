@@ -91,6 +91,23 @@ describe('Next panel adapter', () => {
     await expect(resolveNextPanelPage('admin', ['..'], new Request('https://example.test/admin'), configured)).rejects.toThrow('unsafe segment')
   })
 
+  it('includes every authorized discovered page in navigation and omits denied pages', async () => {
+    const denied = definePage('secret', { actor: Actor, load: () => ({}) })
+      .authorize(() => false)
+      .path('/admin/secret')
+      .navigation({ label: 'Secret', sort: 2 })
+      .compile()
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts'), runtime({
+      registry: {
+        'admin:page:posts': async () => posts,
+        'admin:page:secret': async () => denied,
+        'admin:panel:admin': async () => panel,
+      },
+    }))
+
+    expect(payload.bootstrap.manifest.navigation.map(item => item.id)).toEqual(['posts'])
+  })
+
   it('derives fixed routes from the compiled panel path when the ID differs', async () => {
     const controlPanel = definePanel('backoffice', Actor).path('/control').presentActor(currentActor => ({ id: currentActor.id })).compile()
     const controlPage = definePage('control-posts', { actor: Actor, load: () => ({ ready: true }) }).path('/control/posts').compile()
@@ -326,11 +343,28 @@ describe('Next panel adapter', () => {
       },
     }
 
-    const markup = renderToString(<NextPanelClient payload={tenantPayload} />)
+    const markup = renderToString(<NextPanelClient payload={{
+      ...tenantPayload,
+      page: { ...tenantPayload.page, breadcrumbs: [{ label: 'Posts', path: '/admin/posts' }] },
+    }} />)
 
     expect(markup).toContain('aria-label="Tenant menu"')
     expect(markup).toContain('data-slot="dropdown-menu-trigger"')
     expect(markup).toContain('Acme')
+    const container = document.createElement('div')
+    container.innerHTML = markup
+    const sidebar = container.querySelector('.hp-panel-sidebar')
+    const tenantMenu = sidebar?.querySelector('[aria-label="Tenant menu"]')
+    const navigation = sidebar?.querySelector('.hp-panel-navigation-body')
+    const accountMenu = sidebar?.querySelector('[aria-label="Account menu"]')
+    expect(tenantMenu).not.toBeNull()
+    expect(navigation).not.toBeNull()
+    expect(accountMenu).not.toBeNull()
+    expect(tenantMenu?.compareDocumentPosition(navigation!).toString()).toBe(Node.DOCUMENT_POSITION_FOLLOWING.toString())
+    expect(navigation?.compareDocumentPosition(accountMenu!).toString()).toBe(Node.DOCUMENT_POSITION_FOLLOWING.toString())
+    const pageHeader = container.querySelector('.hp-panel-page-header')
+    expect(pageHeader?.querySelector('.hp-panel-page-heading .hp-panel-breadcrumbs')).not.toBeNull()
+    expect(pageHeader?.querySelector('.hp-panel-page-actions')).not.toBeNull()
     const hidden = renderToString(<NextPanelClient payload={{
       ...tenantPayload,
       bootstrap: { ...tenantPayload.bootstrap, manifest: { ...tenantPayload.bootstrap.manifest, tenancy: { enabled: true, switcher: false } } },

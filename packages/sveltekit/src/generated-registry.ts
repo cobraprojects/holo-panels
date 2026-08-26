@@ -7,6 +7,7 @@ import {
   executeGeneratedUploadOperation,
   executePanelDatabaseNotificationOperation,
   preparePageRoutes,
+  resolvePanelNavigationSeed,
   resolvePageData,
   resolveWidget,
   toJsonValue,
@@ -273,7 +274,24 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
   const runtime: PanelRuntimeLike<object> = {
     async bootstrap(panelIds: readonly string[], signal: AbortSignal) {
       const panels = await Promise.all(panelIds.map(panelId => discoveredPanel(serverRegistry, panelId)))
-      return await new PanelRuntime(await auth({ holo }), panels).bootstrap(panelIds, signal)
+      const panelRuntime = new PanelRuntime(await auth({ holo }), panels)
+      const bootstraps = await panelRuntime.bootstrap(panelIds, signal)
+      return await Promise.all(bootstraps.map(async bootstrap => {
+        const panel = panels.find(candidate => candidate.manifest.id === bootstrap.manifest.id)!
+        const pages = preparePageRoutes(await definitions(serverRegistry, bootstrap.manifest.id, 'page'))
+        const navigation = await panelRuntime.execute(bootstrap.manifest.id, 'bootstrap', signal, async scope => {
+          const tenancy = panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
+          return await resolvePanelNavigationSeed(panel.manifest.navigation, pages, {
+            actor: scope.actor,
+            locale: 'en',
+            panelId: bootstrap.manifest.id,
+            services: await holo.getProject(),
+            signal,
+            tenant: tenancy?.tenantId,
+          })
+        })
+        return Object.freeze({ ...bootstrap, manifest: Object.freeze({ ...bootstrap.manifest, navigation }) })
+      }))
     },
     async execute<TResult>(panelId: string, operation: PanelOperation, signal: AbortSignal, handler: (scope: PanelAuthenticatedScope<object>) => TResult | Promise<TResult>): Promise<TResult> {
       const panel = await discoveredPanel(serverRegistry, panelId)

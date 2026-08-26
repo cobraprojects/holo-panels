@@ -389,6 +389,10 @@
   {/each}
 </svelte:head>
 
+{#snippet accountMenu()}
+  {#if data.panel.manifest.userMenuEnabled !== false}<DropdownMenu><DropdownMenuTrigger>{#snippet child({ props })}<Button {...props} aria-label="Account menu" class="hp-panel-user-trigger hp-panel-user-action hp-panel-action--compact" variant="outline">{#if AvatarComponent}<AvatarComponent actor={data.panel.actor} label={account} />{:else}<Avatar class="hp-panel-user-glyph hp:size-6">{#if avatarUrl}<AvatarImage alt={account} src={avatarUrl} />{/if}<AvatarFallback>{account.slice(0, 2).toLocaleUpperCase()}</AvatarFallback></Avatar>{/if}<span>{account}</span><Icon aria-hidden="true" name="chevrons-up-down" /></Button>{/snippet}</DropdownMenuTrigger><DropdownMenuContent align="end" data-holo-panel>{#each userMenuItems as item (item.id)}<DropdownMenuItem variant={item.id === 'panel-logout' ? 'destructive' : 'default'} onSelect={() => selectUserMenuItem(item.id)}>{#if 'icon' in item && item.icon}<Icon name={item.icon} />{/if}{item.label}</DropdownMenuItem>{/each}</DropdownMenuContent></DropdownMenu>{/if}
+{/snippet}
+
 <SidebarProvider open={!sidebarCollapsed} onOpenChange={(open) => { sidebarCollapsed = !open }}>
 <div
   bind:this={shellElement}
@@ -443,11 +447,11 @@
     {/if}
     <PanelsRenderHookRenderer hook={PanelsRenderHook.GLOBAL_SEARCH_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <div class="hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact">
-      {#if data.panel.tenancy && data.panel.manifest.tenancy?.switcher !== false}<div class="hp-panel-tenant-action hp-panel-action--compact"><SvelteTenantSwitcher shell={{ onSwitched: () => window.location.reload(), store: tenantStore, transport: tenantTransport }} /></div>{/if}
       {#if notificationStore && notificationConfiguration?.placement === 'topbar'}
         <div class="hp-panel-notification-action hp-panel-action--compact"><NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={navigate} panelId={data.panel.manifest.id} placement="topbar" {registry} store={notificationStore} /></div>
       {/if}
-      {#if data.panel.manifest.userMenuEnabled !== false}<DropdownMenu><DropdownMenuTrigger>{#snippet child({ props })}<Button {...props} aria-label="Account menu" class="hp-panel-user-trigger hp-panel-user-action hp-panel-action--compact" variant="outline">{#if AvatarComponent}<AvatarComponent actor={data.panel.actor} label={account} />{:else}<Avatar class="hp-panel-user-glyph hp:size-6">{#if avatarUrl}<AvatarImage alt={account} src={avatarUrl} />{/if}<AvatarFallback>{account.slice(0, 2).toLocaleUpperCase()}</AvatarFallback></Avatar>{/if}<span>{account}</span><Icon aria-hidden="true" name="chevrons-up-down" /></Button>{/snippet}</DropdownMenuTrigger><DropdownMenuContent align="end" data-holo-panel>{#each userMenuItems as item (item.id)}<DropdownMenuItem variant={item.id === 'panel-logout' ? 'destructive' : 'default'} onSelect={() => selectUserMenuItem(item.id)}>{#if 'icon' in item && item.icon}<Icon name={item.icon} />{/if}{item.label}</DropdownMenuItem>{/each}</DropdownMenuContent></DropdownMenu>{/if}
+      {#if data.panel.manifest.navigationMode === 'topbar' && data.panel.tenancy && data.panel.manifest.tenancy?.switcher !== false}<div class="hp-panel-tenant-action hp-panel-action--compact"><SvelteTenantSwitcher shell={{ onSwitched: () => window.location.reload(), store: tenantStore, transport: tenantTransport }} /></div>{/if}
+      {#if data.panel.manifest.navigationMode === 'topbar'}{@render accountMenu()}{/if}
     </div>
     <PanelsRenderHookRenderer hook={PanelsRenderHook.TOPBAR_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   </header>{/if}
@@ -456,7 +460,7 @@
 
   {#if data.panel.manifest.navigationEnabled !== false && data.panel.manifest.navigationMode === 'sidebar'}
   {#if SidebarComponent}<SidebarComponent actor={data.panel.actor} manifest={data.panel.manifest} page={data.page} />{:else}<Sidebar class="hp-panel-sidebar" collapsible={data.panel.manifest.sidebarCollapsible ? (data.panel.manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon') : 'none'}>
-    <SidebarHeader><Button class="hp-panel-brand hp:w-full hp:justify-start" href={data.panel.manifest.routing?.homeUrl ?? data.panel.manifest.path} variant="ghost">{#if data.panel.manifest.branding.logo}<img alt="" src={data.panel.manifest.branding.logo} />{:else}<span aria-hidden="true" class="hp-panel-brand-mark">H</span>{/if}<strong>{data.panel.manifest.branding.name}</strong></Button></SidebarHeader>
+    <SidebarHeader><Button class="hp-panel-brand hp:w-full hp:justify-start" href={data.panel.manifest.routing?.homeUrl ?? data.panel.manifest.path} variant="ghost">{#if data.panel.manifest.branding.logo}<img alt="" src={data.panel.manifest.branding.logo} />{:else}<span aria-hidden="true" class="hp-panel-brand-mark">H</span>{/if}<strong>{data.panel.manifest.branding.name}</strong></Button>{#if data.panel.tenancy && data.panel.manifest.tenancy?.switcher !== false}<div class="hp-panel-tenant-action"><SvelteTenantSwitcher shell={{ onSwitched: () => window.location.reload(), store: tenantStore, transport: tenantTransport }} /></div>{/if}</SidebarHeader>
     <PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_NAV_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <SidebarContent><nav aria-label="Panel navigation" class="hp-panel-navigation hp-panel-navigation-body" id={navigationId}>
@@ -474,18 +478,15 @@
       {/each}
     </nav></SidebarContent>
     <PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_NAV_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
-    <SidebarFooter>{#if notificationStore && notificationConfiguration?.placement === 'sidebar'}<NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={navigate} panelId={data.panel.manifest.id} placement="sidebar" {registry} store={notificationStore} />{/if}<PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_FOOTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></SidebarFooter>
+    <SidebarFooter>{#if notificationStore && notificationConfiguration?.placement === 'sidebar'}<NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={navigate} panelId={data.panel.manifest.id} placement="sidebar" {registry} store={notificationStore} />{/if}{@render accountMenu()}<PanelsRenderHookRenderer hook={PanelsRenderHook.SIDEBAR_FOOTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></SidebarFooter>
   </Sidebar>{/if}
   {/if}
 
   <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   <SidebarInset class="hp-panel-content hp:col-start-2 hp:row-start-2 hp:mx-auto hp:flex hp:w-full hp:min-w-0 hp:flex-col hp:gap-6 hp:p-4 hp:pt-6 hp:md:p-6" style="max-width: var(--hp-content-max-width)">
     <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
-    {#if data.panel.manifest.layout?.breadcrumbs !== false && data.page.breadcrumbs.length > 0}
-      <Breadcrumb class="hp-panel-breadcrumbs"><BreadcrumbList>{#each data.page.breadcrumbs as breadcrumb, index (breadcrumb.path)}<BreadcrumbItem>{#if index === data.page.breadcrumbs.length - 1}<BreadcrumbPage>{breadcrumb.label}</BreadcrumbPage>{:else}<BreadcrumbLink href={breadcrumb.path}>{breadcrumb.label}</BreadcrumbLink>{/if}</BreadcrumbItem>{#if index < data.page.breadcrumbs.length - 1}<BreadcrumbSeparator />{/if}{/each}</BreadcrumbList></Breadcrumb>
-    {/if}
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
-    <header class="hp-panel-page-header hp-panel-main-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between"><div class="hp:space-y-1"><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} /><h1 class="hp:text-3xl hp:font-bold hp:tracking-tight">{data.page.heading ?? data.page.title}</h1>
+    <header class="hp-panel-page-header hp-panel-main-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between"><div class="hp-panel-page-heading hp:space-y-1">{#if data.panel.manifest.layout?.breadcrumbs !== false && data.page.breadcrumbs.length > 0}<Breadcrumb class="hp-panel-breadcrumbs"><BreadcrumbList>{#each data.page.breadcrumbs as breadcrumb, index (breadcrumb.path)}<BreadcrumbItem>{#if index === data.page.breadcrumbs.length - 1}<BreadcrumbPage>{breadcrumb.label}</BreadcrumbPage>{:else}<BreadcrumbLink href={breadcrumb.path}>{breadcrumb.label}</BreadcrumbLink>{/if}</BreadcrumbItem>{#if index < data.page.breadcrumbs.length - 1}<BreadcrumbSeparator />{/if}{/each}</BreadcrumbList></Breadcrumb>{/if}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} /><h1 class="hp:text-3xl hp:font-bold hp:tracking-tight">{data.page.heading ?? data.page.title}</h1>
     {#if data.page.subheading}<p class="hp:text-muted-foreground">{data.page.subheading}</p>{/if}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_HEADING_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></div><div aria-label="Page actions" class="hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2" role="group"><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} /><div bind:this={pageActionsElement} class="hp:contents"></div><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} /></div></header>
     <div class="hp-panel-main-body hp:flex hp:flex-col hp:gap-6">
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />

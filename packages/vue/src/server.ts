@@ -9,6 +9,7 @@ export {
   executeGeneratedGlobalSearch,
   executeGeneratedResourceOperation,
   preparePageRoutes,
+  resolvePanelNavigationSeed,
   resolvePageData,
   resolveWidget,
 } from '@holo-js/panels-core'

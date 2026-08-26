@@ -459,6 +459,15 @@ describe('P9-D Nuxt adapter', () => {
     expect(html).toContain('aria-label="Tenant menu"')
     expect(html).toContain('data-slot="dropdown-menu-trigger"')
     expect(html).toContain('Acme')
+    const sidebarStart = html.indexOf('hp-panel-sidebar')
+    const tenantMenu = html.indexOf('aria-label="Tenant menu"', sidebarStart)
+    const navigation = html.indexOf('hp-panel-navigation-body', sidebarStart)
+    const accountMenu = html.indexOf('aria-label="Account menu"', sidebarStart)
+    expect(sidebarStart).toBeGreaterThanOrEqual(0)
+    expect(tenantMenu).toBeGreaterThan(sidebarStart)
+    expect(navigation).toBeGreaterThan(tenantMenu)
+    expect(accountMenu).toBeGreaterThan(navigation)
+    expect(html).toMatch(/hp-panel-page-header[\s\S]*hp-panel-page-heading[\s\S]*hp-panel-breadcrumbs[\s\S]*hp-panel-page-actions/u)
     const hidden = await renderToString(createSSRApp(PanelPage, {
       page: {
         ...tenantPage,

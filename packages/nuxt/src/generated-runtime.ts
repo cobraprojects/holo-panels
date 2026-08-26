@@ -5,6 +5,7 @@ import {
   executeGeneratedUploadOperation,
   executePanelDatabaseNotificationOperation,
   preparePageRoutes,
+  resolvePanelNavigationSeed,
   resolvePageData,
   resolveWidget,
   type CompiledPageDefinition,
@@ -166,10 +167,11 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
     resolvedPageWidgets(match.definition.manifest.widgets.header, [...resolvedWidgets.values()], resolutionContext, widgetResource, 'header'),
     resolvedPageWidgets(match.definition.manifest.widgets.footer, [...resolvedWidgets.values()], resolutionContext, widgetResource, 'footer'),
   ])
+  const navigation = await resolvePanelNavigationSeed(discoveredPanel.manifest.navigation, pages, resolutionContext)
   return {
     bootstrap: {
       actor: await panel.server.presentActor(context.actor),
-      manifest: panel.manifest,
+      manifest: Object.freeze({ ...panel.manifest, navigation }),
       notifications: null,
       provider: context.provider,
     },

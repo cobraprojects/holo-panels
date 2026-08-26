@@ -6,6 +6,7 @@ export {
   PanelSubscriptionRequiredError,
   createNavigationSeed,
   preparePageRoutes,
+  resolvePanelNavigationSeed,
   resolveWidget,
   resolvePageData,
 } from '@holo-js/panels-core'

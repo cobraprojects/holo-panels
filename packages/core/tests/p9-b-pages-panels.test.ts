@@ -10,7 +10,7 @@ import {
   type PageBuilder,
 } from '../src/pages/page'
 import { PageAccessError, preparePageRoutes, resolvePageData } from '../src/pages/resolution'
-import { createNavigationSeed } from '../src/panels/navigation'
+import { createNavigationSeed, resolvePanelNavigationSeed } from '../src/panels/navigation'
 import { definePanel, type PanelBuilder } from '../src/panels/panel'
 import { PanelRuntime, type PanelRuntimeError } from '../src/panels/runtime'
 import type { JsonObject } from '../src/protocol/json'
@@ -102,14 +102,29 @@ describe('P9-B page definitions', () => {
   })
 
   it('enforces page authorization and deterministic navigation seeds', async () => {
-    const denied = defineViewPage('secret').authorize(() => false).compile()
-    await expect(resolvePageData(denied, { actor: {}, locale: 'en', panelId: 'admin', parameters: {}, services: {}, signal, tenant: null })).rejects.toBeInstanceOf(PageAccessError)
+    const context = { actor: { id: 7, role: 'admin' }, locale: 'en', panelId: 'admin', parameters: {}, services: { source: 'posts' }, signal, tenant: 'acme' }
+    const denied = defineViewPage('secret').authorize(() => false).navigation({ label: 'Secret' }).compile()
+    await expect(resolvePageData(denied, context)).rejects.toBeInstanceOf(PageAccessError)
 
     const pages = [
       defineListPage('posts').path('/posts').navigation({ label: 'Posts', sort: 20 }).compile(),
       defineCustomPage('dashboard').path('/dashboard').navigation({ label: 'Dashboard', sort: 10 }).compile(),
+      denied,
+      defineCustomPage('secret-child').path('/secret/child').navigation({ label: 'Secret child', parent: 'secret' }).compile(),
     ]
-    expect(createNavigationSeed(pages).map(item => item.id)).toEqual(['dashboard', 'posts'])
+    expect(createNavigationSeed(pages).map(item => item.id)).toEqual(['secret', 'secret-child', 'dashboard', 'posts'])
+    await expect(resolvePanelNavigationSeed(
+      [
+        { badge: null, group: null, icon: null, id: 'posts', label: 'Published posts', parent: null, path: '/posts', sort: 20 },
+        { badge: null, group: null, icon: null, id: 'manual', label: 'Manual', parent: null, path: '/manual', sort: 30 },
+      ],
+      pages,
+      context,
+    )).resolves.toEqual([
+      expect.objectContaining({ id: 'dashboard' }),
+      expect.objectContaining({ id: 'posts', label: 'Published posts' }),
+      expect.objectContaining({ id: 'manual' }),
+    ])
   })
 
   it('prepares static page routes ahead of dynamic routes and rejects ambiguous patterns', () => {

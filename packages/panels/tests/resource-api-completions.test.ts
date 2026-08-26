@@ -39,9 +39,10 @@ function compilerOptions(workspaceRoot: string): ts.CompilerOptions {
 function languageService(
   project: GeneratedProject,
   source: string,
+  overrides: ts.CompilerOptions = {},
 ): ts.LanguageService {
   const { fileName, projectRoot, workspaceRoot } = project
-  const options = compilerOptions(workspaceRoot)
+  const options = { ...compilerOptions(workspaceRoot), ...overrides }
   const sourceFiles = new Set([...ts.sys.readDirectory(projectRoot, ['.ts', '.d.ts']), fileName])
 
   return ts.createLanguageService({
@@ -590,10 +591,44 @@ describe('Resource API completions', () => {
     const checkPath = join(project.projectRoot, '.holo-js/generated/panels', checks.path)
     await writeFile(checkPath, checks.contents)
     const service = languageService(project, source)
+    const sourceMessages = service.getSemanticDiagnostics(project.fileName)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
     const messages = service.getSemanticDiagnostics(checkPath)
       .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
 
+    expect(sourceMessages).toEqual([])
     expect(messages).toEqual([expect.stringContaining('Type \'"category"\' does not satisfy the constraint \'"author"\'')])
+  })
+
+  it('keeps generated relationship checks valid with unused-local diagnostics enabled', async () => {
+    const source = [
+      "import { RelationManager } from '@holo-js/panels-resources'",
+      '',
+      'export default class AuthorRelationManager extends RelationManager {',
+      "  protected static override relationship = 'author'",
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedRelationManagerProject(source)
+    const checks = await renderResourceTypeChecks(project.projectRoot, [{
+      exportName: 'default',
+      modelName: 'Post',
+      projectPath: 'server/admin/resources/posts/PostResource.ts',
+      tableName: 'posts',
+    }], [{
+      exportName: 'default',
+      ownerResourceExportName: 'default',
+      ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.ts',
+      projectPath: 'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts',
+      relationship: 'author',
+    }])
+    const checkPath = join(project.projectRoot, '.holo-js/generated/panels', checks.path)
+    await writeFile(checkPath, checks.contents)
+    const diagnostics = languageService(project, source, { noUnusedLocals: true })
+      .getSemanticDiagnostics(checkPath)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(diagnostics).toEqual([])
   })
 
   it('rejects manual record generics on resources and relation managers', async () => {

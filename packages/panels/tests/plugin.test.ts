@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { normalizeHoloProjectConfig, type HoloProjectPrepareContext } from '@holo-js/kernel'
@@ -145,6 +145,8 @@ describe('Holo Panels plugin', () => {
     const migrationPath = 'database/changes/2026_08_26_000001_posts.ts'
     const resourcePath = 'server/admin/resources/posts/PostResource.ts'
     const managerPath = 'server/admin/resources/posts/relation-managers/PostRelationManager.ts'
+    const resourceSource = `import Post, { relationship } from '../../../../domain/models/Post'\n\nexport default {\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'posts',\n  kind: 'resource',\n  model: Post,\n  relations: [{ relationship }],\n}\n`
+    const managerSource = `import { relationship } from '../../../../../domain/models/Post'\n\nexport default {\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'posts.relation',\n  kind: 'relation-manager',\n  relationName: relationship,\n}\n`
     await Promise.all([
       mkdir(join(projectRoot, '.holo-js/generated'), { recursive: true }),
       mkdir(join(projectRoot, 'domain/models'), { recursive: true }),
@@ -160,11 +162,12 @@ describe('Holo Panels plugin', () => {
       writeFile(join(projectRoot, modelPath), modelSource('comments')),
       writeFile(join(projectRoot, migrationPath), 'export default {}\n'),
       writeFile(join(projectRoot, 'server/admin/AdminPanel.ts'), `export default {\n  client: { path: '/admin' },\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'admin',\n  kind: 'panel',\n  route: '/admin',\n}\n`),
-      writeFile(join(projectRoot, resourcePath), `import Post, { relationship } from '../../../../domain/models/Post'\n\nexport default {\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'posts',\n  kind: 'resource',\n  model: Post,\n  relations: [{ relationship }],\n}\n`),
-      writeFile(join(projectRoot, managerPath), `import { relationship } from '../../../../../domain/models/Post'\n\nexport default {\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'posts.relation',\n  kind: 'relation-manager',\n  relationName: relationship,\n}\n`),
+      writeFile(join(projectRoot, resourcePath), resourceSource),
+      writeFile(join(projectRoot, managerPath), managerSource),
     ])
     const config = normalizeHoloProjectConfig({
-      paths: { migrations: 'database/changes', models: 'domain/models' },
+      migrations: [migrationPath],
+      models: [modelPath],
     })
     const prepared = await preparer.prepare(createPrepareContext(
       new AbortController().signal,
@@ -203,6 +206,66 @@ describe('Holo Panels plugin', () => {
 
     expect(migrationChanged.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')?.contents)
       .toContain('readonly relationship: "tags"')
+
+    await rm(join(projectRoot, managerPath))
+    const managerDeleted = await preparer.prepare(createPrepareContext(
+      new AbortController().signal,
+      projectRoot,
+      false,
+      {
+        config,
+        run: { command: 'dev', kind: 'incremental', changes: [{ kind: 'deleted', path: managerPath }] },
+      },
+    ))
+
+    expect(managerDeleted.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')?.contents)
+      .not.toContain('PostRelationManager')
+    expect(managerDeleted.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-checks.ts')?.contents)
+      .not.toContain('RelationManagerRelationship')
+    expect(await readFile(join(projectRoot, resourcePath), 'utf8')).toBe(resourceSource)
+    expect(await readFile(join(projectRoot, modelPath), 'utf8')).toBe(modelSource('tags'))
+
+    const addedManagerPath = 'server/admin/resources/posts/relation-managers/AddedRelationManager.ts'
+    await writeFile(join(projectRoot, addedManagerPath), managerSource)
+    const managerAdded = await preparer.prepare(createPrepareContext(
+      new AbortController().signal,
+      projectRoot,
+      false,
+      {
+        config,
+        run: { command: 'dev', kind: 'incremental', changes: [{ kind: 'created', path: addedManagerPath }] },
+      },
+    ))
+
+    expect(managerAdded.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')?.contents)
+      .toContain('AddedRelationManager')
+
+    const renamedManagerPath = 'server/admin/resources/posts/relation-managers/RenamedRelationManager.ts'
+    await rename(join(projectRoot, addedManagerPath), join(projectRoot, renamedManagerPath))
+    const managerRenamed = await preparer.prepare(createPrepareContext(
+      new AbortController().signal,
+      projectRoot,
+      false,
+      {
+        config,
+        run: {
+          command: 'dev',
+          kind: 'incremental',
+          changes: [
+            { kind: 'deleted', path: addedManagerPath },
+            { kind: 'created', path: renamedManagerPath },
+          ],
+        },
+      },
+    ))
+    const renamedBindings = managerRenamed.generatedArtifacts
+      ?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')
+      ?.contents
+
+    expect(renamedBindings).toContain('RenamedRelationManager')
+    expect(renamedBindings).not.toContain('AddedRelationManager')
+    expect(await readFile(join(projectRoot, resourcePath), 'utf8')).toBe(resourceSource)
+    expect(await readFile(join(projectRoot, modelPath), 'utf8')).toBe(modelSource('tags'))
   })
 
   it('stops before preparing when the host aborts the run', async () => {

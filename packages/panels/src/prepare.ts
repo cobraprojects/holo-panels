@@ -1,5 +1,5 @@
 import { lstat, readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import {
   DiscoveryCompiler,
   PanelsDiscoveryError,
@@ -43,8 +43,8 @@ function typeDependencyRoots(context: HoloProjectPrepareContext): readonly strin
   return [
     context.config.paths.models,
     context.config.paths.migrations,
-    ...context.config.models,
-    ...context.config.migrations,
+    ...context.config.models.map(path => dirname(path)),
+    ...context.config.migrations.map(path => dirname(path)),
   ].map(normalizedProjectPath)
 }
 

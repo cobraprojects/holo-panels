@@ -16,11 +16,11 @@
     },
     {
       "path": "internal-ui.ts",
-      "checksum": "a2a091b9d32d188a703470b4d2d5b44435afcc46a5a716e98a85a666cc7e0346"
+      "checksum": "7071ac140d78cda104a7da9d01c436fed4c6959b1dc3fbe63c57dac4f1b8c63e"
     },
     {
       "path": "page.ts",
-      "checksum": "27a989841eb228a6aff50d2114e61feef27e21fbf3730479f902b9467efbaec7"
+      "checksum": "26cb326e49e85a877eac1a765043a4b17c4436cf312e1f7b08f287b13a03324e"
     },
     {
       "path": "validation.ts",

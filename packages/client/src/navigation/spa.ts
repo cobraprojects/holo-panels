@@ -24,7 +24,7 @@ function anchorFromEvent(event: Event, root: HTMLElement): HTMLAnchorElement | n
 }
 
 function destination(anchor: HTMLAnchorElement, exceptions: readonly string[]): URL | null {
-  if (anchor.hasAttribute('download') || anchor.target && anchor.target !== '_self') return null
+  if (anchor.hasAttribute('download') || anchor.relList.contains('external') || anchor.target && anchor.target !== '_self') return null
   const url = new URL(anchor.href, globalThis.location.href)
   if (url.hash || url.origin !== globalThis.location.origin || excluded(url, exceptions)) return null
   return url

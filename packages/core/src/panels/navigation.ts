@@ -2,7 +2,7 @@ import type { CompiledPageDefinition, PageContext } from '../pages/contracts'
 import type { JsonObject } from '../protocol/json'
 import type { PanelNavigationSeed } from './contracts'
 
-function compare(left: PanelNavigationSeed, right: PanelNavigationSeed): number {
+function compareNavigationSeeds(left: PanelNavigationSeed, right: PanelNavigationSeed): number {
   return left.sort - right.sort || left.label.localeCompare(right.label) || left.id.localeCompare(right.id)
 }
 
@@ -25,7 +25,7 @@ export function createNavigationSeed<TData extends JsonObject, TActor, TTenant, 
     if (item.parent !== null && !ids.has(item.parent)) throw new Error(`Panel navigation parent "${item.parent}" is not registered`)
   }
   return Object.freeze(items
-    .sort(compare)
+    .sort(compareNavigationSeeds)
     .map(item => Object.freeze(item)))
 }
 
@@ -53,5 +53,5 @@ export async function resolvePanelNavigationSeed<TActor, TTenant, TServices>(
       removed = true
     }
   }
-  return Object.freeze([...items.values()].sort(compare).map(item => Object.freeze(item)))
+  return Object.freeze([...items.values()].sort(compareNavigationSeeds).map(item => Object.freeze(item)))
 }

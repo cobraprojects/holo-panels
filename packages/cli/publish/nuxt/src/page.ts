@@ -98,6 +98,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -1302,6 +1303,26 @@ export const PanelPage = defineComponent({
         const item = bootstrap.manifest.userMenu.find(candidate => candidate.id === id)
         if (item) void router.push(item.path)
       }
+      const accountMenu = (): VNode | null => bootstrap.manifest.userMenuEnabled === false ? null : h(DropdownMenu, {}, () => [
+        h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': 'Account menu', class: 'hp-panel-user-trigger hp-panel-user-action', variant: 'outline' }, () => [
+          AvatarComponent
+            ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps)
+            : h(Avatar, { class: 'hp-panel-user-glyph' }, () => [
+                avatarUrl ? h(AvatarImage, { alt: account, src: avatarUrl }) : null,
+                h(AvatarFallback, {}, () => account.slice(0, 2).toUpperCase()),
+              ]),
+          h('span', account),
+          PanelsIcon('chevron-down'),
+        ])),
+        h(DropdownMenuContent, { align: 'end' }, () => userMenuItems.flatMap((item, index) => [
+          index === themeMenuItems.length && index > 0 ? h(DropdownMenuSeparator, { key: `${item.id}-separator` }) : null,
+          h(DropdownMenuItem, {
+            key: item.id,
+            onSelect: () => selectUserMenuItem(item.id),
+            variant: item.id === 'panel-logout' ? 'destructive' : 'default',
+          }, () => [item.icon ? PanelsIcon(item.icon) : null, h('span', item.label)]),
+        ])),
+      ])
       const currentSearchState = searchState.value
       const globalSearch = searchStore && currentSearchState ? h('div', {
         class: 'hp-global-search hp-panel-topbar-center hp:relative hp:w-full hp:max-w-md',
@@ -1396,28 +1417,9 @@ export const PanelPage = defineComponent({
             globalSearch,
             renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER),
             h('div', { class: 'hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact' }, [
-              tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action hp-panel-action--compact' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
               configuration?.placement === 'topbar' ? h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger]) : null,
-              bootstrap.manifest.userMenuEnabled === false ? null : h(DropdownMenu, {}, () => [
-                h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': 'Account menu', class: 'hp-panel-user-trigger hp-panel-user-action', variant: 'outline' }, () => [
-                  AvatarComponent
-                    ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps)
-                    : h(Avatar, { class: 'hp-panel-user-glyph' }, () => [
-                        avatarUrl ? h(AvatarImage, { alt: account, src: avatarUrl }) : null,
-                        h(AvatarFallback, {}, () => account.slice(0, 2).toUpperCase()),
-                      ]),
-                  h('span', account),
-                  PanelsIcon('chevron-down'),
-                ])),
-                h(DropdownMenuContent, { align: 'end' }, () => userMenuItems.flatMap((item, index) => [
-                  index === themeMenuItems.length && index > 0 ? h(DropdownMenuSeparator, { key: `${item.id}-separator` }) : null,
-                  h(DropdownMenuItem, {
-                    key: item.id,
-                    onSelect: () => selectUserMenuItem(item.id),
-                    variant: item.id === 'panel-logout' ? 'destructive' : 'default',
-                  }, () => [item.icon ? PanelsIcon(item.icon) : null, h('span', item.label)]),
-                ])),
-              ]),
+              bootstrap.manifest.navigationMode === 'topbar' && tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action hp-panel-action--compact' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
+              bootstrap.manifest.navigationMode === 'topbar' ? accountMenu() : null,
             ]),
             renderHook(PanelsRenderHook.TOPBAR_END),
           ]),
@@ -1428,11 +1430,13 @@ export const PanelPage = defineComponent({
                   ? h(SidebarComponent, { actor: props.page.bootstrap.actor, manifest: bootstrap.manifest, page } satisfies PanelChromeComponentProps<typeof page>)
                   : h(Sidebar, { class: 'hp-panel-sidebar', collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none' }, () => [
                       renderHook(PanelsRenderHook.SIDEBAR_START),
+                      h(SidebarHeader, { class: 'hp-panel-navigation-header' }, () => [
+                        tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
+                      ]),
                       renderHook(PanelsRenderHook.SIDEBAR_NAV_START),
                       navigation(props.page, 'sidebar', navigationOpen.value, navigationId, () => { navigationOpen.value = false }),
                       renderHook(PanelsRenderHook.SIDEBAR_NAV_END),
-                      configuration?.placement === 'sidebar' ? h(SidebarFooter, {}, () => notificationTrigger) : null,
-                      renderHook(PanelsRenderHook.SIDEBAR_FOOTER),
+                      h(SidebarFooter, {}, () => [configuration?.placement === 'sidebar' ? notificationTrigger : null, accountMenu(), renderHook(PanelsRenderHook.SIDEBAR_FOOTER)]),
                     ]),
                 SidebarComponent && configuration?.placement === 'sidebar' ? h('div', { class: 'hp-panel-navigation-footer hp-panel-actions--compact' }, [h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger])]) : null,
               ]
@@ -1440,14 +1444,13 @@ export const PanelPage = defineComponent({
           renderHook(PanelsRenderHook.CONTENT_BEFORE),
           h(SidebarInset, { class: 'hp-panel-content hp:col-start-2 hp:row-start-2 hp:mx-auto hp:flex hp:w-full hp:min-w-0 hp:flex-col hp:gap-6 hp:p-4 hp:pt-6 hp:md:p-6', style: { maxWidth: 'var(--hp-content-max-width)' } }, () => [
             renderHook(PanelsRenderHook.CONTENT_START),
-            bootstrap.manifest.layout?.breadcrumbs === false ? null : h(Breadcrumb, { class: 'hp-panel-breadcrumbs' }, () => h(BreadcrumbList, {}, () => page.breadcrumbs.flatMap((item, index) => [
+            renderHook(PanelsRenderHook.PAGE_START, page.data),
+            h('header', { class: 'hp-panel-page-header hp-panel-main-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between' }, [h('div', { class: 'hp-panel-page-heading hp:space-y-1' }, [bootstrap.manifest.layout?.breadcrumbs === false ? null : h(Breadcrumb, { class: 'hp-panel-breadcrumbs' }, () => h(BreadcrumbList, {}, () => page.breadcrumbs.flatMap((item, index) => [
               index > 0 ? h(BreadcrumbSeparator, { key: `${item.path}:separator` }) : null,
               h(BreadcrumbItem, { key: `${item.path}:${index}` }, () => index === page.breadcrumbs.length - 1
                 ? h(BreadcrumbPage, {}, () => item.label)
                 : h(BreadcrumbLink, { href: item.path }, () => item.label)),
-            ]))),
-            renderHook(PanelsRenderHook.PAGE_START, page.data),
-            h('header', { class: 'hp-panel-page-header hp-panel-main-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between' }, [h('div', { class: 'hp:space-y-1' }, [renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, page.data), h('h1', { class: 'hp:text-3xl hp:font-bold hp:tracking-tight' }, page.heading ?? page.title), page.subheading ? h('p', { class: 'hp:text-muted-foreground' }, page.subheading) : null, renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, page.data)]), h('div', { 'aria-label': 'Page actions', class: 'hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2', role: 'group' }, [renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, page.data), h('div', { class: 'hp:contents', id: pageActionsTarget.slice(1) }), renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, page.data)])]),
+            ]))), renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, page.data), h('h1', { class: 'hp:text-3xl hp:font-bold hp:tracking-tight' }, page.heading ?? page.title), page.subheading ? h('p', { class: 'hp:text-muted-foreground' }, page.subheading) : null, renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, page.data)]), h('div', { 'aria-label': 'Page actions', class: 'hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2', role: 'group' }, [renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, page.data), h('div', { class: 'hp:contents', id: pageActionsTarget.slice(1) }), renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, page.data)])]),
             h('div', { class: 'hp-panel-main-body hp:flex hp:flex-col hp:gap-6' }, [
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, page.data),
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, page.data),

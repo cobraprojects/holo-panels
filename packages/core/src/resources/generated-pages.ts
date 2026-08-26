@@ -17,7 +17,7 @@ import {
 } from '../tables/grouping'
 import { ResourceExecutor } from './executor'
 import { serializeResourceRecord } from './resource-serialization'
-import { authorizeHoloPolicy, isHoloPolicyMissingError } from './holo-authorization'
+import { authorizeHoloPolicy, canHoloPolicy, isHoloPolicyMissingError } from './holo-authorization'
 import type { ResourceDefinition, ResourceModel, ResourceQuery, ResourceRecord } from './contracts'
 import { RelationManagerExecutor, RelationRecordNotFoundError } from '../relations/executor'
 import { allowedRelationOperations } from '../relations/metadata'
@@ -1047,7 +1047,7 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
     kind: 'page',
     manifest,
     server: {
-      authorize: () => true,
+      authorize: (context: PageContext<object, unknown, unknown>) => canHoloPolicy(context.actor, 'viewAny', definition.model, context.strictAuthorization),
       breadcrumbs: [{ label: plural, path: manifest.path.split('/:record')[0]! }],
       heading: manifest.pageType === 'list' ? null : `${label(manifest.pageType)} ${label(singularize(plural))}`,
       load,

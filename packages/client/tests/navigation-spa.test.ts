@@ -58,6 +58,7 @@ describe('panel SPA navigation', () => {
     expect(navigate).toHaveBeenLastCalledWith('/admin/categories')
     expect(click('/admin/export', anchor => anchor.download = 'records.csv').defaultPrevented).toBe(false)
     expect(click('/admin/report', anchor => anchor.target = '_blank').defaultPrevented).toBe(false)
+    expect(click('/admin/help', anchor => anchor.rel = 'external').defaultPrevented).toBe(false)
     expect(click('https://other.example/admin/posts').defaultPrevented).toBe(false)
     expect(click('/admin/posts', undefined, { metaKey: true }).defaultPrevented).toBe(false)
     expect(navigate).toHaveBeenCalledTimes(1)

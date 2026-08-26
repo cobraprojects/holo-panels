@@ -70,6 +70,7 @@ interface ResourceRecordComposition<TRecord> {
 interface ResourceActionDefinition {
   readonly id: string
   readonly kind: string
+  readonly mount?: 'bulk' | 'modal' | 'notification' | 'page' | 'record'
 }
 
 type ContextTypeCompatible<TActual, TExpected> = unknown extends TActual ? true : TActual extends TExpected ? true : false

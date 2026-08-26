@@ -79,7 +79,7 @@ export async function runInfolistActionAcceptanceJourney(
     createIdempotencyKey: () => `acceptance-${++sequence}`,
     transport: {
       async execute(request) {
-        requests.push({ actionId: request.actionId, input: request.input, ...(request.recordIds ? { recordIds: request.recordIds } : {}) })
+        requests.push({ actionId: request.actionId, input: request.input, mount: request.mount, ...(request.recordIds ? { recordIds: request.recordIds } : {}) })
         if (request.actionId === actions.denied.id) throw new Error('Action denied by policy')
         await publishFinished
         return { effects: [], items: [], result: 'published', status: 'succeeded' }

@@ -167,6 +167,7 @@
             actionId: request.actionId,
             idempotencyKey: request.idempotencyKey,
             input: request.input,
+            mount: request.mount,
             recordIds: toJsonValue(request.recordIds ?? []),
             resourceId: resource?.id ?? '',
           },
@@ -584,6 +585,7 @@
             actionId: request.actionId,
             idempotencyKey: globalThis.crypto.randomUUID(),
             intent: action.kind ?? request.actionId,
+            mount: action.scope === 'bulk' ? 'bulk' : 'record',
             recordIds: toJsonValue(request.selection?.mode === 'explicit'
               ? request.selection.recordIds
               : resourceOperationIdentifiers(records, resource.recordId, resource.routeKey, request.recordId)),

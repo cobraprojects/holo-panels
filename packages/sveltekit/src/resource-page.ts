@@ -210,7 +210,7 @@ function actionManifest(value: JsonValue): ClientActionManifest | null {
   const label = stringValue(action?.label)
   const kind = stringValue(action?.kind)
   const mount = stringValue(action?.mount)
-  const kinds = new Set(['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'])
+  const kinds = new Set(['associate', 'attach', 'create', 'custom', 'delete', 'detach', 'dissociate', 'edit', 'editPivot', 'force-delete', 'replicate', 'restore', 'view'])
   const mounts = new Set(['bulk', 'modal', 'notification', 'page', 'record'])
   if (!action || !id || !label || !kind || !mount || !kinds.has(kind) || !mounts.has(mount)) return null
   return {

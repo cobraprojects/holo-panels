@@ -373,6 +373,13 @@ function flattenedActions<TRecord extends object>(actions: readonly TableAction<
   return actions.flatMap(action => 'actions' in action ? (action as ActionGroup<ActionContract<TRecord>>).actions : [action])
 }
 
+function pageActionDefinitions(pages: readonly ResourcePageRegistration[]): readonly object[] {
+  return pages.flatMap((page) => {
+    const mount = page.pageType === 'edit' || page.pageType === 'view' ? 'record' : 'page'
+    return [...page.actions.header, ...page.actions.footer].map(action => Object.freeze({ ...action.compile(), mount }))
+  })
+}
+
 export function defineImporter<TResource extends ResourceClass>(
   id: string,
   resource: TResource,
@@ -506,7 +513,15 @@ export abstract class Resource {
     }
     const readOnly = Reflect.get(this, 'isReadOnly')
     if (typeof readOnly === 'function' && Reflect.apply(readOnly, this, []) === true) builder = builder.readOnly()
-    return builder.compile() as CompiledResourceDefinition
+    const compiled = builder.compile() as CompiledResourceDefinition
+    const actions = Reflect.get(compiled, 'actions')
+    return Object.freeze({
+      ...compiled,
+      actions: Object.freeze([
+        ...(Array.isArray(actions) ? actions : []),
+        ...pageActionDefinitions(pages),
+      ]),
+    })
   }
 
   static compileDiscoveryDefinition(): CompiledResourceDefinition { return this.compile() }

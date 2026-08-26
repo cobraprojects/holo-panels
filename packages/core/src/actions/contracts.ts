@@ -80,7 +80,7 @@ export interface ActionPresentationManifest {
 }
 
 export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> extends ActionPresentationDefinition<TRecord, TActor, TTenant, TServices> {
-  readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>) => boolean | Promise<boolean>
+  readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>, input: Readonly<TInput>) => boolean | Promise<boolean>
   readonly confirmation?: string | null
   readonly disabled?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, boolean>
   readonly failureNotification?: ActionFailureNotification<ActionContext<TRecord, TActor, TTenant, TServices>>

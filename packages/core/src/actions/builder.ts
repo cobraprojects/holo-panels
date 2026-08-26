@@ -30,7 +30,7 @@ interface ActionBuilderState<TRecord, TInput extends JsonObject, TResult, TActor
   authorize: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>['authorize'] | null
   badge?: ActionResolvable<Context<TRecord, TActor, TTenant, TServices>, string | null>
   color?: ActionResolvable<Context<TRecord, TActor, TTenant, TServices>, string | null>
-  confirmation?: string
+  confirmation?: string | null
   disabled?: ActionResolvable<Context<TRecord, TActor, TTenant, TServices>, boolean>
   failureNotification?: ActionFailureNotification<Context<TRecord, TActor, TTenant, TServices>>
   handle: ActionHandler<TRecord, TInput, TResult, TActor, TTenant, TServices> | null
@@ -161,8 +161,8 @@ export class ActionBuilder<TRecord, TInput extends JsonObject, TResult, TActor, 
     return this
   }
 
-  requiresConfirmation(message = 'Are you sure?'): this {
-    this.#state.confirmation = message
+  requiresConfirmation(value: boolean | string = true): this {
+    this.#state.confirmation = typeof value === 'string' ? value : value ? 'Are you sure?' : null
     return this
   }
 

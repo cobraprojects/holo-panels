@@ -1,6 +1,7 @@
 import {
   ActionsRenderHook,
   type ActionContext as CoreActionContext,
+  type ActionDefinition,
   type ActionKind,
   type ActionModalWidth,
   type ActionMount,
@@ -406,33 +407,32 @@ export class Action<
     }
   }
 
-  compile(): Readonly<Record<string, unknown>> {
-    const modal = this.#modal
+  compile(): Readonly<ActionDefinition<TRecord, TData & JsonObject, TResult, TActor, TTenant, TServices>> {
     return Object.freeze({
-      authorize: this.#authorize,
-      badge: this.#badge,
-      color: this.#color,
+      authorize: (context: CoreActionContext<TRecord, TActor, TTenant, TServices>, data: Readonly<TData & JsonObject>) => this.#authorize(this.executionContext(data, context)),
+      badge: literal(this.#badge),
+      color: literal(this.#color),
       confirmation: this.#confirmation,
-      disabled: this.#disabled,
+      disabled: typeof this.#disabled === 'boolean' ? this.#disabled : false,
       failureNotification: this.#failureNotification ?? undefined,
-      handle: this.#handler,
-      icon: this.#icon,
+      handle: (data: TData & JsonObject, context: CoreActionContext<TRecord, TActor, TTenant, TServices>) => this.#handler(data, this.executionContext(data, context)),
+      icon: literal(this.#icon),
       id: this.id,
       kind: this.kind,
-      label: this.#label,
-      modal: modal ? {
-        description: modal.description,
-        heading: modal.heading,
-        nestedActions: modal.nestedActions.map(action => action.id),
-        schema: modal.schema ? { manifest: modal.schema.compile() } : undefined,
-        slideOver: modal.slideOver,
-        width: modal.width,
-      } : undefined,
+      label: typeof this.#label === 'string' ? this.#label : headline(this.id),
       mount: this.mount,
       successNotification: this.#successNotification ?? undefined,
       size: this.#size,
-      tooltip: this.#tooltip,
-      visible: this.#visible,
+      tooltip: literal(this.#tooltip),
+      visible: typeof this.#visible === 'boolean' ? this.#visible : true,
+    })
+  }
+
+  private executionContext(data: Readonly<TData>, context: CoreActionContext<TRecord, TActor, TTenant, TServices>): ActionContext<TRecord, TData, TActor, TTenant, TServices> {
+    return Object.freeze({
+      ...context,
+      data,
+      selectedRecords: Object.freeze(context.record ? [context.record] : []),
     })
   }
 
@@ -579,7 +579,9 @@ export const DeleteBulkAction = Object.freeze({ make: <TRecord extends object = 
 export const AssociateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('associate', 'associate', 'page') })
 export const AttachAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('attach', 'attach', 'page') })
 export const DetachAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('detach', 'detach', 'record') })
+export const DetachBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('detach', 'detach') })
 export const DissociateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('dissociate', 'dissociate', 'record') })
+export const DissociateBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('dissociate', 'dissociate') })
 export const EditPivotAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('editPivot', 'editPivot', 'record') })
 export const ReplicateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('replicate', 'replicate', 'record') })
 export const ForceDeleteAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('force-delete', 'force-delete', 'record') })
@@ -607,7 +609,9 @@ export interface ActionFactory<
   readonly DeleteAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
   readonly DeleteBulkAction: { make(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
   readonly DetachAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly DetachBulkAction: { make(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
   readonly DissociateAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
+  readonly DissociateBulkAction: { make(): BulkAction<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
   readonly EditAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
   readonly EditPivotAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
   readonly ExportAction: { make(): Action<TRecord, TData, void, TActor, TTenant, TServices, TSchemaFactory> }
@@ -641,7 +645,9 @@ export function createActionFactory<
     DeleteAction: Object.freeze({ make: () => action('delete', 'delete', 'record') }),
     DeleteBulkAction: Object.freeze({ make: () => bulkAction('delete', 'delete') }),
     DetachAction: Object.freeze({ make: () => action('detach', 'detach', 'record') }),
+    DetachBulkAction: Object.freeze({ make: () => bulkAction('detach', 'detach') }),
     DissociateAction: Object.freeze({ make: () => action('dissociate', 'dissociate', 'record') }),
+    DissociateBulkAction: Object.freeze({ make: () => bulkAction('dissociate', 'dissociate') }),
     EditAction: Object.freeze({ make: () => action('edit', 'edit', 'record') }),
     EditPivotAction: Object.freeze({ make: () => action('editPivot', 'editPivot', 'record') }),
     ExportAction: Object.freeze({ make: () => action('export', 'custom', 'page') }),

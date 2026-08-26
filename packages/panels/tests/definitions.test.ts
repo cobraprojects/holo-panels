@@ -44,12 +44,15 @@ class ListPosts extends ListRecords {
   static override get resource() { return PostResource }
 
   protected override getHeaderActions() {
-    return PostResource.actions(({ CreateAction }) => [CreateAction.make()
-      .label('New post')
-      .visible(({ record }) => {
-        expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
-        return true
-      })])
+    return PostResource.actions(({ CreateAction }) => [
+      CreateAction.make()
+        .label('New post')
+        .visible(({ record }) => {
+          expectTypeOf(record).toEqualTypeOf<PostRecord | null>()
+          return true
+        }),
+      PostResource.publishAction,
+    ])
   }
 }
 
@@ -215,7 +218,7 @@ describe('Filament 5-shaped public API', () => {
     const editResource = pages[3]?.body?.properties.resource
 
     expect(pages.map(page => [page.pageType, page.path, page.actions.header])).toEqual([
-      ['list', '/admin/posts', ['create']],
+      ['list', '/admin/posts', ['create', 'publish']],
       ['create', '/admin/posts/create', []],
       ['view', '/admin/posts/:record', ['edit']],
       ['edit', '/admin/posts/:record/edit', ['view', 'delete']],
@@ -232,6 +235,9 @@ describe('Filament 5-shaped public API', () => {
       expect.objectContaining({ icon: 'view', id: 'view', kind: 'view' }),
       expect.objectContaining({ color: 'danger', confirmation: 'Are you sure?', icon: 'delete', id: 'delete', kind: 'delete' }),
     ])
+    expect(PostResource.compile().actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'publish', mount: 'page' }),
+    ]))
   })
 
   it('uses one inferred action type in tables, pages, modal schemas, and notifications', async () => {

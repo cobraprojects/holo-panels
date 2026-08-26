@@ -501,7 +501,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds
           : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, recordIds: [...recordIds], resourceId }, signal)
+        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, mount: manifest.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
@@ -835,7 +835,7 @@ function actionManifest(value: JsonObject): ClientActionManifest | null {
   const id = text(value.id)
   const kind = value.kind
   const mount = value.mount
-  if (!id || !['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'].includes(text(kind)) || !['bulk', 'modal', 'notification', 'page', 'record'].includes(text(mount))) return null
+  if (!id || !['associate', 'attach', 'create', 'custom', 'delete', 'detach', 'dissociate', 'edit', 'editPivot', 'force-delete', 'replicate', 'restore', 'view'].includes(text(kind)) || !['bulk', 'modal', 'notification', 'page', 'record'].includes(text(mount))) return null
   return {
     badge: typeof value.badge === 'string' ? value.badge : null,
     color: typeof value.color === 'string' ? value.color : null,
@@ -878,6 +878,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
           idempotencyKey: request.idempotencyKey,
           input: request.input,
           intent: kind,
+          mount: request.mount,
           recordIds: [recordId],
           resourceId,
         }, signal)

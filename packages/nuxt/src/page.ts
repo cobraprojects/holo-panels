@@ -259,11 +259,36 @@ function relationManagers(value: unknown): VueRelationManagerRendererProps['mana
   })
 }
 
+function isRenderSlot(value: unknown): boolean {
+  return isObject(value)
+    && typeof value.component === 'string'
+    && (typeof value.order === 'undefined' || typeof value.order === 'number')
+    && (typeof value.properties === 'undefined' || isObject(value.properties))
+}
+
+function isActionModal(value: unknown): value is NonNullable<ClientActionManifest['modal']> {
+  if (!isObject(value)) return false
+  const schema = value.schema
+  const validSchema = schema === null || isObject(schema)
+    && schema.kind === 'schema'
+    && typeof schema.id === 'string'
+    && Array.isArray(schema.components)
+  return (value.content === null || isRenderSlot(value.content))
+    && (value.description === null || typeof value.description === 'string')
+    && (value.footer === null || isRenderSlot(value.footer))
+    && (value.heading === null || typeof value.heading === 'string')
+    && Array.isArray(value.nestedActions)
+    && value.nestedActions.every(item => typeof item === 'string')
+    && validSchema
+    && typeof value.slideOver === 'boolean'
+    && ['small', 'medium', 'large', 'extra-large', 'screen'].includes(String(value.width))
+}
+
 function clientAction(value: unknown): ClientActionManifest | null {
   if (!isObject(value) || typeof value.id !== 'string' || typeof value.label !== 'string') return null
   const kind = String(value.kind)
   const mount = typeof value.mount === 'string' ? value.mount : 'record'
-  if (!['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'].includes(kind) || !['bulk', 'modal', 'notification', 'page', 'record'].includes(mount)) return null
+  if (!['associate', 'attach', 'create', 'custom', 'delete', 'detach', 'dissociate', 'edit', 'editPivot', 'force-delete', 'replicate', 'restore', 'view'].includes(kind) || !['bulk', 'modal', 'notification', 'page', 'record'].includes(mount)) return null
   return {
     badge: typeof value.badge === 'string' ? value.badge : null,
     color: typeof value.color === 'string' ? value.color : null,
@@ -273,7 +298,7 @@ function clientAction(value: unknown): ClientActionManifest | null {
     id: value.id,
     kind: kind as ClientActionManifest['kind'],
     label: value.label,
-    modal: null,
+    modal: isActionModal(value.modal) ? value.modal : null,
     mount: mount as ClientActionManifest['mount'],
     size: ['extra-small', 'small', 'medium', 'large', 'extra-large'].includes(String(value.size)) ? value.size as ClientActionManifest['size'] : 'medium',
     tooltip: typeof value.tooltip === 'string' ? value.tooltip : null,
@@ -371,7 +396,7 @@ function resourceTableAction(action: JsonObject, routes: JsonObject): ResourceTa
       scope,
     }
   }
-  if (typeof action.label !== 'string' || !['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'].includes(String(action.kind))) return null
+  if (typeof action.label !== 'string' || !['associate', 'attach', 'create', 'custom', 'delete', 'detach', 'dissociate', 'edit', 'editPivot', 'force-delete', 'replicate', 'restore', 'view'].includes(String(action.kind))) return null
   const kind = action.kind as ClientActionManifest['kind']
   const path = kind === 'edit' || kind === 'view' ? routes[kind] : null
   return {
@@ -618,7 +643,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       async execute(request, signal) {
         if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Resource record is unavailable')
         if (!recordActions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },
@@ -813,7 +838,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
           const recordIds = request.selection?.mode === 'explicit'
             ? request.selection.recordIds
             : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), recordIds: [...recordIds], resourceId: schema.resourceId }, signal)
+          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), mount: action.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId: schema.resourceId }, signal)
           refresh()
         },
       },
@@ -851,7 +876,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       async execute(request, signal) {
         if (routeValue === null) throw new Error('Resource record is unavailable')
         if (!actions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },

@@ -403,6 +403,64 @@ describe('P7-B text formatting and manifest security', () => {
     expect(result.effects).toEqual([])
   })
 
+  it('selects the registered action by both ID and mount', async () => {
+    const page = vi.fn(() => ({ source: 'page' }))
+    const notification = vi.fn(() => ({ source: 'notification' }))
+    const resource = {
+      actions: [
+        { authorize: () => true, handle: notification, id: 'publish', kind: 'custom', label: 'Publish', mount: 'notification', transactional: false },
+        { authorize: () => true, handle: page, id: 'publish', kind: 'custom', label: 'Publish', mount: 'page', transactional: false },
+      ],
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [] },
+      id: 'posts',
+      kind: 'resource',
+      model: {
+        definition: { name: 'Post', primaryKey: 'id', softDeletes: false },
+        getConnectionName: () => undefined,
+      },
+      shared: true,
+      table: { columns: [] },
+    }
+
+    const result = await executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'publish', mount: 'page', resourceId: 'posts' },
+    })
+
+    expect(result.data).toMatchObject({ result: { source: 'page' } })
+    expect(page).toHaveBeenCalledOnce()
+    expect(notification).not.toHaveBeenCalled()
+  })
+
+  it('rejects omitted destructive actions without executing their mutation path', async () => {
+    const remove = vi.fn()
+    const resource = {
+      actions: [],
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [] },
+      id: 'posts',
+      kind: 'resource',
+      model: {
+        definition: { name: 'Post', primaryKey: 'id', softDeletes: false },
+        getConnectionName: () => undefined,
+        query: () => ({ where: () => ({ first: async () => ({ delete: remove, toJSON: () => ({ id: 1 }) }) }) }),
+      },
+      shared: true,
+      table: { columns: [] },
+    }
+
+    await expect(executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'omitted-delete', intent: 'delete', recordIds: [1], resourceId: 'posts' },
+    })).rejects.toThrow('not registered')
+    expect(remove).not.toHaveBeenCalled()
+  })
+
   it('compiles every text formatter as deterministic client state', () => {
     const manifest = columnsFor(PostRecord).text('title')
       .badge()

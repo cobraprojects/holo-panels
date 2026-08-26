@@ -189,7 +189,11 @@ export interface ResourceDefinition<
   TTenant,
   TSoftDeletes extends boolean,
 > extends DiscoverableDefinition<'resource'> {
-  readonly actions: readonly Readonly<{ readonly id: string, readonly kind: string }>[]
+  readonly actions: readonly Readonly<{
+    readonly id: string
+    readonly kind: string
+    readonly mount?: 'bulk' | 'modal' | 'notification' | 'page' | 'record'
+  }>[]
   readonly baseQuery: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery
   readonly capabilities: ResourceCapabilities<TSoftDeletes>
   readonly client: ResourceClientManifest<TRecord, TSoftDeletes>

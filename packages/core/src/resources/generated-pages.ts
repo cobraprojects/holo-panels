@@ -243,7 +243,7 @@ function actionManifestSeed(action: object): ActionManifest {
     ? Reflect.get(modal, 'nestedActions').filter((item: unknown): item is string => typeof item === 'string')
     : []
   const kindValue = Reflect.get(action, 'kind')
-  const kind = (['create', 'custom', 'delete', 'edit', 'force-delete', 'replicate', 'restore', 'view'].includes(String(kindValue)) ? kindValue : 'custom') as ActionKind
+  const kind = (['associate', 'attach', 'create', 'custom', 'delete', 'detach', 'dissociate', 'edit', 'editPivot', 'force-delete', 'replicate', 'restore', 'view'].includes(String(kindValue)) ? kindValue : 'custom') as ActionKind
   const defaults = builtInActionPresentation(kind === 'custom' ? String(Reflect.get(action, 'id')) : kind)
   return {
     badge: staticActionValue(Reflect.get(action, 'badge')),
@@ -863,8 +863,9 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
   const canDelete = capabilities.delete
   const configuredActions = (definition.actions ?? []).map(action => actionManifestSeed(action))
   const hasExplicitPages = explicitResourcePages(definition).length > 0
+  const pageActionScope = pageType === 'edit' || pageType === 'view' ? 'record' : 'header'
   const pageActions = resourcePageActions(definition, pageType).map(action => 'manifest' in action && typeof action.manifest === 'function'
-    ? action.manifest('record') as ActionManifest
+    ? action.manifest(pageActionScope) as ActionManifest
     : actionManifestSeed(action))
   const recordActions = hasExplicitPages ? pageActions : configuredActions.filter(action => action.mount === 'record')
   const tableActions = configuredActions.flatMap(action => {
@@ -1335,8 +1336,12 @@ async function tableQueryState(
 function configuredAction(
   definition: RuntimeDefinition,
   actionId: string,
+  mount: ActionMount | null,
 ): ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined> {
-  const action = (definition.actions ?? []).find(candidate => candidate.id === actionId)
+  const candidates = (definition.actions ?? []).filter(candidate => candidate.id === actionId)
+  const action = mount
+    ? candidates.find(candidate => candidate.mount === mount)
+    : candidates.find(candidate => candidate.mount === 'record') ?? (candidates.length === 1 ? candidates[0] : undefined)
   if (!action || typeof Reflect.get(action, 'authorize') !== 'function' || typeof Reflect.get(action, 'handle') !== 'function') {
     throw new Error('[Holo Panels] The generated resource action is not registered.')
   }
@@ -1405,7 +1410,10 @@ async function executeCustomAction(
   input: GeneratedResourceOperationInput,
   actionId: string,
 ): Promise<GeneratedResourceOperationResult> {
-  const action = executableResourceAction(configuredAction(definition, actionId), definition, executor, input)
+  const requestedMount = ['bulk', 'modal', 'notification', 'page', 'record'].includes(String(input.payload.mount))
+    ? input.payload.mount as ActionMount
+    : actionRecordIds(input.payload).length > 1 ? 'bulk' : null
+  const action = executableResourceAction(configuredAction(definition, actionId, requestedMount), definition, executor, input)
   const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
     records: {
       resolve: (id, scope) => executor.resolveActionRecord(id, { ...input.context, ...scope }),
@@ -1637,7 +1645,11 @@ export async function executeGeneratedResourceOperation(
     ? input.payload.intent
     : typeof input.payload.mutation === 'string' ? input.payload.mutation : ''
   const actionId = typeof input.payload.actionId === 'string' ? input.payload.actionId : ''
-  const deleting = input.operation === 'action' && (intent === 'delete' || actionId.includes('delete'))
+  const deleting = input.operation === 'action'
+    && actionId === 'delete-record'
+    && intent === 'delete'
+    && explicitResourcePages(definition).length === 0
+    && definition.capabilities?.delete === true
   if (input.operation === 'action' && intent === 'relation') {
     return executeRelationOperation(definition, executor, input)
   }

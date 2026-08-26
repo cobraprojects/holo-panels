@@ -281,7 +281,7 @@ describe('P9 example phase gate', () => {
     const edit = await resolveNextPanelPage('admin', ['posts', '4', 'edit'], new Request('https://panels.test/admin/posts/4/edit'), runtime)
     expect(edit.page.data.record).toEqual(expect.objectContaining({ id: 4, slug: 'edited-post', title: 'Edited post' }))
     await expect(resolveNextPanelPage('admin', ['posts', '3'], new Request('https://panels.test/admin/posts/3'), runtime)).rejects.toThrow('not found')
-    await runtime.execute?.({ operation: 'action', panelId: 'admin', payload: { actionId: 'delete-record', recordIds: [4], resourceId: 'posts' }, request: scope.request, scope })
+    await runtime.execute?.({ operation: 'action', panelId: 'admin', payload: { actionId: 'delete', input: {}, mount: 'record', recordIds: [4], resourceId: 'posts' }, request: scope.request, scope })
     const afterDelete = await resolveNextPanelPage('admin', ['posts'], new Request('https://panels.test/admin/posts'), runtime)
     expect(afterDelete.page.data.records).toEqual([
       expect.objectContaining({ id: 1 }),
@@ -312,7 +312,7 @@ describe('P9 example phase gate', () => {
     expect(view.data).toMatchObject({ page: { data: { record: { slug: 'first-post' } } } })
     await runtime.execute(context('form-submit', admin, { authorId: '1', body: 'Body', category: 'News', categoryId: 'news', city: 'Cairo', excerpt: 'Excerpt', mutation: 'create', resourceId: 'posts', slug: 'created-post', status: 'draft', title: 'Created post' }))
     await runtime.execute(context('form-submit', admin, { category: 'Guides', city: 'Giza', mutation: 'update', record: 4, resourceId: 'posts', slug: 'edited-post', title: 'Edited post' }))
-    await runtime.execute(context('action', admin, { actionId: 'delete-record', recordIds: [4], resourceId: 'posts' }))
+    await runtime.execute(context('action', admin, { actionId: 'delete', input: {}, mount: 'record', recordIds: [4], resourceId: 'posts' }))
     await expect(runtime.execute(context('form-submit', denied, { authorId: '2', body: 'Body', category: 'News', categoryId: 'news', city: 'Cairo', excerpt: 'Excerpt', mutation: 'create', resourceId: 'posts', slug: 'denied', status: 'draft', title: 'Denied' }))).rejects.toThrow()
     await expect(runtime.execute(context('form-submit', admin, { mutation: 'create', resourceId: 'posts', title: 'secret stack marker' }))).rejects.toThrow()
     expect(records.some(record => record.slug === 'edited-post')).toBe(false)
@@ -371,7 +371,7 @@ describe('P9 example phase gate', () => {
     await invoke(svelteAdmin, { intent: 'create', recordId: '', resourceId: 'posts', values: { category: 'News', city: 'Cairo', slug: 'created-post', title: 'Created Post' } })
     expect(records.some(record => record.slug === 'created-post')).toBe(true)
     await invoke(svelteAdmin, { intent: 'update', recordId: 4, resourceId: 'posts', values: { category: 'Guides', city: 'Giza', slug: 'edited-post', title: 'Edited Post' } })
-    await registry.operations?.action?.({ event: svelteEvent('/holo/panels/admin/action'), holo, operation: 'action', panelId: 'admin', payload: { actionId: 'posts.delete', input: {}, recordIds: [4], resourceId: 'posts' }, scope: svelteScope(svelteAdmin), tenant: 'tenant-a' })
+    await registry.operations?.action?.({ event: svelteEvent('/holo/panels/admin/action'), holo, operation: 'action', panelId: 'admin', payload: { actionId: 'delete', input: {}, mount: 'record', recordIds: [4], resourceId: 'posts' }, scope: svelteScope(svelteAdmin), tenant: 'tenant-a' })
     await expect(invoke(svelteDenied, { intent: 'create', resourceId: 'posts', values: { category: 'News', city: 'Cairo', slug: 'denied', title: 'Denied' } })).rejects.toThrow()
     await expect(invoke(svelteAdmin, { intent: 'create', resourceId: 'posts', values: { category: 'Guides', city: 'Atlantis', slug: 'invalid-city', title: 'private implementation detail' } })).rejects.toThrow()
     expect(records.some(record => record.slug === 'edited-post')).toBe(false)

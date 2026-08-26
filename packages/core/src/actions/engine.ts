@@ -204,7 +204,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     input: TInput,
     context: ActionContext<TRecord, TActor, TTenant, TServices>,
   ): Promise<TResult> {
-    if (!await definition.authorize(context)) throw new ActionExecutionError('denied', 'The action is not authorized')
+    if (!await definition.authorize(context, input)) throw new ActionExecutionError('denied', 'The action is not authorized')
     await this.enforceRateLimit(definition, context)
     const mutated = definition.mutateInput ? await definition.mutateInput(structuredClone(input), context) : structuredClone(input)
     const operation = async (): Promise<TResult> => {

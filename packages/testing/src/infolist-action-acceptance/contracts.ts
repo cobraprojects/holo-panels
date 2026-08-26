@@ -44,6 +44,7 @@ export interface InfolistActionAcceptanceJourneyReport {
   readonly requests: readonly {
     readonly actionId: string
     readonly input: Readonly<Record<string, unknown>>
+    readonly mount: ClientActionManifest['mount']
     readonly recordIds?: readonly (number | string)[]
   }[]
   readonly submittingMarkup: string

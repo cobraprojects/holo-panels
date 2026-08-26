@@ -115,4 +115,16 @@ describe('fluent action authoring', () => {
     expect(() => actions.action('publish').action(async () => true).compile()).toThrow('requires authorization')
     expect(() => actions.action('publish').authorize(() => true).compile()).toThrow('requires a handler')
   })
+
+  it('allows confirmation to be disabled explicitly', () => {
+    const action = createResourceActionComposer<Post, PublishInput, Actor, Tenant, Services>()
+      .action('delete')
+      .authorize(() => true)
+      .action(async () => undefined)
+      .requiresConfirmation()
+      .requiresConfirmation(false)
+      .compile()
+
+    expect(action.confirmation).toBeNull()
+  })
 })

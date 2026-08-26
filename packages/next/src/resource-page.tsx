@@ -51,21 +51,26 @@ export interface NextResourceOperationResult {
 }
 
 export interface NextResourceOperationTransport {
-  execute(operation: 'action' | 'form-submit' | 'options' | 'table-data', payload: JsonObject): Promise<NextResourceOperationResult>
+  execute(operation: 'action' | 'form-submit' | 'options' | 'table-data', payload: JsonObject, signal?: AbortSignal): Promise<NextResourceOperationResult>
 }
 
 type ResourceOperation = Parameters<NextResourceOperationTransport['execute']>[0]
-type ScopedResourceOperation = (
-  operation: ResourceOperation,
-  payload: JsonObject,
-  signal?: AbortSignal,
-) => Promise<NextResourceOperationResult>
 
-const scopedResourceOperations = new WeakMap<NextResourceOperationTransport, ScopedResourceOperation>()
 const ClientRequestSignalContext = createContext<AbortSignal | null>(null)
 
 function requestSignal(owner: AbortSignal, operation?: AbortSignal): AbortSignal {
   return operation ? AbortSignal.any([owner, operation]) : owner
+}
+
+function ownedResourceOperation(transport: NextResourceOperationTransport, owner: AbortSignal): NextResourceOperationTransport {
+  return Object.freeze({
+    async execute(operation: ResourceOperation, payload: JsonObject, signal?: AbortSignal) {
+      const ownedSignal = requestSignal(owner, signal)
+      const result = await transport.execute(operation, payload, ownedSignal)
+      if (ownedSignal.aborted) throw new DOMException('The operation was aborted', 'AbortError')
+      return result
+    },
+  })
 }
 
 function ownedUploadAdapter(adapter: ReturnType<typeof createBrowserUploadAdapter>, owner: AbortSignal): ReturnType<typeof createBrowserUploadAdapter> {
@@ -79,13 +84,15 @@ function ownedUploadAdapter(adapter: ReturnType<typeof createBrowserUploadAdapte
   return Object.freeze(owned)
 }
 
-function executeResourceOperation(
+async function executeResourceOperation(
   transport: NextResourceOperationTransport,
   operation: ResourceOperation,
   payload: JsonObject,
   signal?: AbortSignal,
 ): Promise<NextResourceOperationResult> {
-  return scopedResourceOperations.get(transport)?.(operation, payload, signal) ?? transport.execute(operation, payload)
+  const result = await transport.execute(operation, payload, signal)
+  if (signal?.aborted) throw new DOMException('The operation was aborted', 'AbortError')
+  return result
 }
 
 type ResourceValues = Record<string, JsonValue>
@@ -272,7 +279,7 @@ function resourcePath(panelPath: string, resource: JsonObject): string {
   return `${panelBase}/${encodeURIComponent(resourceSlug)}`
 }
 
-function browserTransport(panelId: string, ownerSignal: AbortSignal, effects?: ClientEffectSession): NextResourceOperationTransport {
+function browserTransport(panelId: string, effects?: ClientEffectSession): NextResourceOperationTransport {
   const transport = new PanelsTransport({
     adapter: {
       async send(request) {
@@ -281,22 +288,21 @@ function browserTransport(panelId: string, ownerSignal: AbortSignal, effects?: C
       },
     },
   })
-  const execute: ScopedResourceOperation = async (operation, payload, signal) => {
-    const descriptor = operation === 'table-data'
-      ? { kind: 'read' as const, name: operation }
-      : { kind: 'mutation' as const, name: operation, supportsIdempotency: true }
-    const response = await transport.execute(descriptor, {
-      endpoint: `/holo/panels/${encodeURIComponent(panelId)}/${operation}`,
-      panelId,
-      payload,
-      signal: requestSignal(ownerSignal, signal),
-    })
-    await effects?.apply(response)
-    return response.ok ? { data: object(response.data), ok: true } : { error: response.error.message, ok: false }
+  return {
+    async execute(operation, payload, signal) {
+      const descriptor = operation === 'table-data'
+        ? { kind: 'read' as const, name: operation }
+        : { kind: 'mutation' as const, name: operation, supportsIdempotency: true }
+      const response = await transport.execute(descriptor, {
+        endpoint: `/holo/panels/${encodeURIComponent(panelId)}/${operation}`,
+        panelId,
+        payload,
+        signal,
+      })
+      await effects?.apply(response)
+      return response.ok ? { data: object(response.data), ok: true } : { error: response.error.message, ok: false }
+    },
   }
-  const operation = { execute: (name: ResourceOperation, payload: JsonObject) => execute(name, payload) }
-  scopedResourceOperations.set(operation, execute)
-  return operation
 }
 
 function configuredRoute(resource: JsonObject, name: 'create' | 'edit' | 'view', recordId?: string | number): string | null {
@@ -979,7 +985,10 @@ export function NextPanelResourcePage({ createRedirect = 'edit', data, editRedir
     () => registryInput ?? registerReactFieldRenderers(createDefaultComponentRegistry()),
     [registryInput],
   )
-  const operation = useMemo(() => operationInput ?? browserTransport(panelId, requestController.signal, effects), [effects, operationInput, panelId, requestController.signal])
+  const operation = useMemo(
+    () => ownedResourceOperation(operationInput ?? browserTransport(panelId, effects), requestController.signal),
+    [effects, operationInput, panelId, requestController.signal],
+  )
   const pageOperation = text(properties.operation) || 'view'
   const resource = object(properties.resource)
   const basePath = resourcePath(panelPath, resource)

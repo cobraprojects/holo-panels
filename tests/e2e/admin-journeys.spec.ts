@@ -550,6 +550,44 @@ test.describe('authenticated admin journeys', () => {
     await expectSameDocument(page, sentinel)
   })
 
+  test('keeps the replacement client usable when navigation interrupts a form submission', async ({ page }) => {
+    const disposedSessionErrors = collectDisposedSessionErrors(page)
+    await login(page)
+    await gotoPanelPage(page, '/admin/posts')
+    await page.getByRole('button', { name: 'Edit' }).or(page.getByRole('link', { name: 'Edit' })).first().click()
+    await expect(page.getByRole('heading', { name: 'Edit Post' })).toBeVisible()
+
+    let releaseSubmission = (): void => undefined
+    const submissionGate = new Promise<void>((resolve) => {
+      releaseSubmission = resolve
+    })
+    let delayed = false
+    const formSubmitRoute = '**/holo/panels/admin/form-submit'
+    await page.route(formSubmitRoute, async (route) => {
+      if (delayed) {
+        await route.continue()
+        return
+      }
+      delayed = true
+      await submissionGate
+      await route.continue().catch(() => undefined)
+    })
+
+    try {
+      const submission = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/holo/panels/admin/form-submit'))
+      await page.getByRole('button', { name: /^Save\b/iu }).click()
+      await submission
+      await page.getByRole('navigation', { name: 'Panel navigation' }).getByRole('link', { name: 'Categories', exact: true }).click()
+      await expect(page).toHaveURL(/\/admin\/categories$/u)
+      await expect(page.getByRole('heading', { level: 1, name: 'Categories' })).toBeVisible()
+    } finally {
+      releaseSubmission()
+      await page.unroute(formSubmitRoute)
+    }
+
+    expect(disposedSessionErrors).toEqual([])
+  })
+
   test('searches tenant-scoped resources from the generated shell', async ({ page }) => {
     await login(page)
     const search = page.getByRole('combobox', { name: 'Global search' })

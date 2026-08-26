@@ -20,11 +20,11 @@
     },
     {
       "path": "panel-client.tsx",
-      "checksum": "80493485369f7191730505d6ae221b9e2db27dabae5829e57ff862aa163788d8"
+      "checksum": "0429f09d1f46864a45b5318cf7d2e06377d8b44a7bbd99fd148f235440c58100"
     },
     {
       "path": "resource-page.tsx",
-      "checksum": "8da6249112b47c1dba9b664059b250e4a9f5ac0248b1c0039a15b1eb41465559"
+      "checksum": "a11b1952d5ac5f43d2a8de9b2efe0bd52447a9943d285005d21532e492432471"
     }
   ]
 }

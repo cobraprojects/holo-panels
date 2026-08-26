@@ -16,7 +16,7 @@ import { ClientEffectSession, ClientToastStore } from '@holo-js/panels-react'
 import { nextPanelAcceptanceFixture } from '../../../apps/example-next/tests/p9-panel-acceptance-next'
 import { NextPanelClient } from '../src/panel-client'
 import { createPanelOperationRoute } from '../src/operation'
-import { NextPanelResourcePage } from '../src/resource-page'
+import { NextPanelResourcePage, type NextResourceOperationTransport } from '../src/resource-page'
 import { resolveNextPanelPage } from '../src/runtime'
 import type { NextPanelPagePayload, NextPanelsRuntime } from '../src/contracts'
 
@@ -211,26 +211,30 @@ describe('Next notification and effect integration', () => {
         signal: init?.signal ?? (input instanceof Request ? input.signal : null),
       }))
     }))
-    const toastStore = new ClientToastStore()
-    const effects = new ClientEffectSession({ panelId: 'admin', toastStore })
+    const source = await payload()
+    const resourcePayload = (path: string, title: string): NextPanelPagePayload => ({
+      ...source,
+      page: {
+        ...source.page,
+        data: { record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title } },
+        heading: 'Edit Post',
+        manifest: {
+          ...source.page.manifest,
+          body: { component: 'resource-page', properties: editProperties() },
+        },
+      },
+      path,
+    })
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
-    const resource = (key: string, title: string) => <NextPanelResourcePage
-      data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title } }}
-      effects={effects}
-      key={key}
-      panelId="admin"
-      panelPath="/admin"
-      properties={editProperties()}
-    />
 
-    await act(async () => root.render(resource('first', 'First post')))
+    await act(async () => root.render(<NextPanelClient payload={resourcePayload('/admin/posts/first-post/edit', 'First post')} />))
     await click(container, 'Save post')
     expect(requests).toHaveLength(1)
 
     await act(async () => {
-      root.render(resource('replacement', 'Replacement post'))
+      root.render(<NextPanelClient payload={resourcePayload('/admin/posts/replacement-post/edit', 'Replacement post')} />)
       await Promise.resolve()
     })
     expect(requests[0]?.signal?.aborted).toBe(true)
@@ -253,9 +257,48 @@ describe('Next notification and effect integration', () => {
       protocolVersion: '1.0',
     }))
 
-    await vi.waitFor(() => expect(toastStore.state.items.map(item => item.title)).toEqual(['Current response']))
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Current response'))
+    expect(document.body.textContent).not.toContain('Obsolete response')
     await act(async () => root.unmount())
-    effects.dispose()
+  })
+
+  it('scopes a custom resource transport to its mounted client', async () => {
+    const requests: Array<{
+      readonly signal: AbortSignal | undefined
+      resolve(result: { readonly data: JsonObject, readonly ok: true }): void
+    }> = []
+    const operation: NextResourceOperationTransport = {
+      async execute(_operation, _payload, signal) {
+        return await new Promise(resolve => requests.push({ resolve, signal }))
+      },
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const resource = (key: string, title: string) => <NextPanelResourcePage
+      data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title } }}
+      key={key}
+      operation={operation}
+      panelId="admin"
+      panelPath="/admin"
+      properties={editProperties()}
+    />
+
+    await act(async () => root.render(resource('first', 'First post')))
+    await click(container, 'Save post')
+    await act(async () => root.render(resource('replacement', 'Replacement post')))
+    expect(requests[0]?.signal?.aborted).toBe(true)
+
+    await click(container, 'Save post')
+    expect(requests[1]?.signal?.aborted).toBe(false)
+    requests[0]?.resolve({ data: { record: { id: 1, slug: 'first-post', title: 'Obsolete post' } }, ok: true })
+    await act(async () => await Promise.resolve())
+    expect([...container.querySelectorAll('input')].some(input => input.value === 'Replacement post')).toBe(true)
+
+    requests[1]?.resolve({ data: { record: { id: 1, slug: 'first-post', title: 'Current post' } }, ok: true })
+    await act(async () => await Promise.resolve())
+    expect(requests[1]?.signal?.aborted).toBe(false)
+    await act(async () => root.unmount())
   })
 
   it('rejects a multibyte operation envelope above 4 MiB without flashing success effects', async () => {

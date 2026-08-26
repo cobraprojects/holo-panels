@@ -7,7 +7,7 @@ These rules apply to every task in this repository. The approved architecture an
 - Holo Panels is a separate official Holo-JS plugin repository. Do not move its implementation into the Holo-JS repository.
 - Use existing Holo-JS services and the existing `holo` CLI. Do not create competing database, auth, authorization, validation, notification, queue, storage, media, realtime, security, router, or CLI systems.
 - Changes required in Holo-JS must be implemented and reviewed in the adjacent Holo-JS repository as explicitly identified cross-repository tasks.
-- Do not introduce, rename, remove, or reshape a user-facing API without proposing the exact API and obtaining explicit user approval first.
+- Require explicit approval only for application-facing APIs users are expected to write or edit, including resource definitions, generated application files, documented configuration, and hand-written integration code. Package implementation contracts do not require approval merely because they are exported or visible in generated declarations.
 - The fluent APIs, package boundaries, protocol rules, security boundaries, and distribution model in the implementation plan are approved constraints. Do not silently substitute a different architecture.
 
 ## Implementation tracking

@@ -133,6 +133,12 @@ export class ResourceExecutor<
     await this.resolveNestedParent(context)
   }
 
+  async authorizeViewAny(context: ResourceExecutionContext<TActor, TTenant>): Promise<void> {
+    this.assertTenantScope(context)
+    await this.#authorization.authorizeClass(context.actor, 'viewAny', this.#definition.model)
+    await this.resolveNestedParent(context)
+  }
+
   async authorizeUpdate(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<void> {
     await this.resolveAuthorized(id, 'update', context)
   }

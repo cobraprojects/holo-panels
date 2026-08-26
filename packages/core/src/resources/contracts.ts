@@ -193,6 +193,7 @@ export interface ResourceDefinition<
     readonly id: string
     readonly kind: string
     readonly mount?: 'bulk' | 'modal' | 'notification' | 'page' | 'record'
+    readonly source?: string
   }>[]
   readonly baseQuery: (query: TQuery, context: ResourceExecutionContext<TActor, TTenant>) => TQuery
   readonly capabilities: ResourceCapabilities<TSoftDeletes>

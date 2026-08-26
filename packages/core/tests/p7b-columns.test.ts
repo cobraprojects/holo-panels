@@ -395,7 +395,7 @@ describe('P7-B text formatting and manifest security', () => {
       context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
       operation: 'action',
       panelId: 'admin',
-      payload: { actionId: 'publish', idempotencyKey: 'publish-1', input: { title: 'Ready' }, resourceId: 'posts' },
+      payload: { actionId: 'publish', idempotencyKey: 'publish-1', input: { title: 'Ready' }, mount: 'page', resourceId: 'posts' },
     })
 
     expect(handle).toHaveBeenCalledWith({ title: 'Ready' }, expect.objectContaining({ actor: { id: 'admin' }, mount: 'page' }))
@@ -435,6 +435,45 @@ describe('P7-B text formatting and manifest security', () => {
     expect(notification).not.toHaveBeenCalled()
   })
 
+  it('selects same-mounted page actions by their registered source', async () => {
+    const create = vi.fn(() => ({ source: 'create' }))
+    const list = vi.fn(() => ({ source: 'list' }))
+    const resource = {
+      actions: [
+        { authorize: () => true, handle: create, id: 'publish', kind: 'custom', label: 'Publish', mount: 'page', source: 'create', transactional: false },
+        { authorize: () => true, handle: list, id: 'publish', kind: 'custom', label: 'Publish', mount: 'page', source: 'list', transactional: false },
+      ],
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [] },
+      id: 'posts',
+      kind: 'resource',
+      model: {
+        definition: { name: 'Post', primaryKey: 'id', softDeletes: false },
+        getConnectionName: () => undefined,
+      },
+      shared: true,
+      table: { columns: [] },
+    }
+
+    const result = await executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'publish', mount: 'page', resourceId: 'posts', source: 'list' },
+    })
+
+    expect(result.data).toMatchObject({ result: { source: 'list' } })
+    expect(list).toHaveBeenCalledOnce()
+    expect(create).not.toHaveBeenCalled()
+
+    await expect(executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'publish', mount: 'page', resourceId: 'posts' },
+    })).rejects.toThrow('not registered')
+  })
+
   it('rejects omitted destructive actions without executing their mutation path', async () => {
     const remove = vi.fn()
     const resource = {
@@ -459,6 +498,31 @@ describe('P7-B text formatting and manifest security', () => {
       payload: { actionId: 'omitted-delete', intent: 'delete', recordIds: [1], resourceId: 'posts' },
     })).rejects.toThrow('not registered')
     expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('rejects registered action requests without an allow-listed mount', async () => {
+    const handle = vi.fn()
+    const resource = {
+      actions: [{ authorize: () => true, handle, id: 'publish', kind: 'custom', label: 'Publish', mount: 'page', transactional: false }],
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [] },
+      id: 'posts',
+      kind: 'resource',
+      model: {
+        definition: { name: 'Post', primaryKey: 'id', softDeletes: false },
+        getConnectionName: () => undefined,
+      },
+      shared: true,
+      table: { columns: [] },
+    }
+
+    await expect(executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'publish', resourceId: 'posts' },
+    })).rejects.toThrow('allow-listed mount')
+    expect(handle).not.toHaveBeenCalled()
   })
 
   it('compiles every text formatter as deterministic client state', () => {

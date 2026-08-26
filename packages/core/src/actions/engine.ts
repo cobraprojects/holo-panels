@@ -142,8 +142,15 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       throw new Error('Only record and bulk actions accept record IDs')
     }
     if (definition.mount === 'record' || definition.mount === 'bulk') {
+      const resolvedRecords = await Promise.all(recordIds.map(async recordId => ({
+        record: await this.options.records.resolve(recordId, scope),
+        recordId,
+      })))
+      const selectedRecords = Object.freeze(resolvedRecords.flatMap(({ record }) => record ? [record] : []))
       const executions: Array<RecordExecution<TRecord, TRecordId, TResult, TActor, TTenant, TServices>> = []
-      for (const recordId of recordIds) executions.push(await this.executeRecord(definition, request, scope, recordId))
+      for (const resolved of resolvedRecords) {
+        executions.push(await this.executeRecord(definition, request, scope, resolved.recordId, resolved.record, selectedRecords))
+      }
       const items = executions.map(execution => execution.item)
       const succeeded = items.every(item => item.status === 'succeeded')
       const effects = succeeded
@@ -173,9 +180,10 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     request: ActionExecutionRequest<TInput, TRecordId>,
     scope: { readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     recordId: TRecordId,
+    record: TRecord | null,
+    selectedRecords: readonly TRecord[],
   ): Promise<RecordExecution<TRecord, TRecordId, TResult, TActor, TTenant, TServices>> {
-    const record = await this.options.records.resolve(recordId, scope)
-    const context = this.context(definition, scope, record)
+    const context = this.context(definition, scope, record, selectedRecords)
     if (!record) return Object.freeze({ context, item: Object.freeze({ recordId, status: 'denied' }) })
     const expected = request.expectedVersions?.[String(recordId)]
     if (expected !== undefined && this.options.records.version(record) !== expected) return Object.freeze({ context, item: Object.freeze({ recordId, status: 'stale' }) })
@@ -195,8 +203,9 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     scope: { readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     record: TRecord | null,
+    selectedRecords: readonly TRecord[] = Object.freeze([]),
   ): ActionContext<TRecord, TActor, TTenant, TServices> {
-    return Object.freeze({ ...scope, mount: definition.mount, record })
+    return Object.freeze({ ...scope, mount: definition.mount, record, selectedRecords })
   }
 
   private async executeWithContext<TInput extends JsonObject, TResult>(

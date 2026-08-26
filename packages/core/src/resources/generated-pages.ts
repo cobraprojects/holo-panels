@@ -227,6 +227,12 @@ function staticActionValue(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
+function staticActionObject(value: unknown): JsonObject | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const serialized = toJsonValue(value)
+  return serialized && typeof serialized === 'object' && !Array.isArray(serialized) ? serialized : null
+}
+
 function staticActionPresentationValue(value: unknown, fallback: string | null): string | null {
   if (typeof value === 'undefined') return fallback
   return staticActionValue(value)
@@ -256,13 +262,23 @@ function actionManifestSeed(action: object): ActionManifest {
     label: actionLabel(action),
     modal: modal
       ? {
-          content: null,
+          alignment: ['center', 'end', 'start'].includes(String(Reflect.get(modal, 'alignment'))) ? Reflect.get(modal, 'alignment') as 'center' | 'end' | 'start' : 'center',
+          autofocus: Reflect.get(modal, 'autofocus') !== false,
+          cancelActionLabel: staticActionValue(Reflect.get(modal, 'cancelActionLabel')),
+          closeByClickingAway: Reflect.get(modal, 'closeByClickingAway') !== false,
+          closeByEscaping: Reflect.get(modal, 'closeByEscaping') !== false,
+          content: staticActionObject(Reflect.get(modal, 'content')),
           description: staticActionValue(Reflect.get(modal, 'description')),
-          footer: null,
+          footer: staticActionObject(Reflect.get(modal, 'footer')),
           heading: staticActionValue(Reflect.get(modal, 'heading')),
+          icon: staticActionValue(Reflect.get(modal, 'icon')),
+          iconColor: staticActionValue(Reflect.get(modal, 'iconColor')),
           nestedActions,
-          schema: null,
+          schema: staticActionObject(Reflect.get(modal, 'schema')),
           slideOver: Reflect.get(modal, 'slideOver') === true,
+          stickyFooter: Reflect.get(modal, 'stickyFooter') === true,
+          stickyHeader: Reflect.get(modal, 'stickyHeader') === true,
+          submitActionLabel: staticActionValue(Reflect.get(modal, 'submitActionLabel')),
           width: ['small', 'medium', 'large', 'extra-large', 'screen'].includes(String(Reflect.get(modal, 'width')))
             ? Reflect.get(modal, 'width') as ActionModalWidth
             : 'medium',
@@ -1337,11 +1353,12 @@ function configuredAction(
   definition: RuntimeDefinition,
   actionId: string,
   mount: ActionMount | null,
+  source: string | null,
 ): ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined> {
   const candidates = (definition.actions ?? []).filter(candidate => candidate.id === actionId)
-  const action = mount
-    ? candidates.find(candidate => candidate.mount === mount)
-    : candidates.find(candidate => candidate.mount === 'record') ?? (candidates.length === 1 ? candidates[0] : undefined)
+  const sourcedCandidates = source ? candidates.filter(candidate => Reflect.get(candidate, 'source') === source) : candidates
+  const mountedCandidates = mount ? sourcedCandidates.filter(candidate => candidate.mount === mount) : sourcedCandidates
+  const action = mountedCandidates.length === 1 ? mountedCandidates[0] : undefined
   if (!action || typeof Reflect.get(action, 'authorize') !== 'function' || typeof Reflect.get(action, 'handle') !== 'function') {
     throw new Error('[Holo Panels] The generated resource action is not registered.')
   }
@@ -1410,10 +1427,13 @@ async function executeCustomAction(
   input: GeneratedResourceOperationInput,
   actionId: string,
 ): Promise<GeneratedResourceOperationResult> {
-  const requestedMount = ['bulk', 'modal', 'notification', 'page', 'record'].includes(String(input.payload.mount))
-    ? input.payload.mount as ActionMount
-    : actionRecordIds(input.payload).length > 1 ? 'bulk' : null
-  const action = executableResourceAction(configuredAction(definition, actionId, requestedMount), definition, executor, input)
+  const requestedMount = input.payload.mount
+  if (!['bulk', 'modal', 'notification', 'page', 'record'].includes(String(requestedMount))) {
+    throw new Error('[Holo Panels] Registered action requests require an allow-listed mount.')
+  }
+  const source = typeof input.payload.source === 'string' && input.payload.source ? input.payload.source : null
+  const action = executableResourceAction(configuredAction(definition, actionId, requestedMount as ActionMount, source), definition, executor, input)
+  if (action.mount === 'page') await executor.authorizeViewAny(input.context)
   const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
     records: {
       resolve: (id, scope) => executor.resolveActionRecord(id, { ...input.context, ...scope }),

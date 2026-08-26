@@ -1,7 +1,7 @@
 import type { JsonObject } from '../protocol/json'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
 import type { Effect } from '../protocol/effects'
-import type { CompiledSchema, RenderSlotReference, SchemaManifest } from '../schemas/contracts'
+import type { CompiledSchema, RenderSlotReference } from '../schemas/contracts'
 import type { ExtensionTypeId } from '../plugins/type-id'
 
 export type ActionKind = 'associate' | 'attach' | 'create' | 'custom' | 'delete' | 'detach' | 'dissociate' | 'edit' | 'editPivot' | 'force-delete' | 'replicate' | 'restore' | 'view'
@@ -11,6 +11,7 @@ export interface ActionContext<TRecord, TActor, TTenant, TServices> {
   readonly actor: TActor
   readonly mount: ActionMount
   readonly record: TRecord | null
+  readonly selectedRecords?: readonly TRecord[]
   readonly services: TServices
   readonly signal: AbortSignal
   readonly tenant: TTenant
@@ -31,24 +32,44 @@ export type ActionModalWidth = 'small' | 'medium' | 'large' | 'extra-large' | 's
 export type ActionSize = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large'
 
 export interface ActionModalOptions<TContext> {
-  readonly content?: RenderSlotReference
+  readonly alignment?: 'center' | 'end' | 'start'
+  readonly autofocus?: boolean
+  readonly cancelActionLabel?: string | null
+  readonly closeByClickingAway?: boolean
+  readonly closeByEscaping?: boolean
+  readonly content?: RenderSlotReference | JsonObject
   readonly description?: ActionResolvable<TContext, string | null>
-  readonly footer?: RenderSlotReference
+  readonly footer?: RenderSlotReference | JsonObject
   readonly heading?: ActionResolvable<TContext, string | null>
+  readonly icon?: string | null
+  readonly iconColor?: string | null
   readonly nestedActions?: readonly string[]
-  readonly schema?: CompiledSchema<JsonObject, TContext>
+  readonly schema?: CompiledSchema<JsonObject, TContext> | JsonObject
   readonly slideOver?: boolean
+  readonly stickyFooter?: boolean
+  readonly stickyHeader?: boolean
+  readonly submitActionLabel?: string | null
   readonly width?: ActionModalWidth
 }
 
 export interface ActionModalManifest {
-  readonly content: RenderSlotReference | null
+  readonly alignment: 'center' | 'end' | 'start'
+  readonly autofocus: boolean
+  readonly cancelActionLabel: string | null
+  readonly closeByClickingAway: boolean
+  readonly closeByEscaping: boolean
+  readonly content: RenderSlotReference | JsonObject | null
   readonly description: string | null
-  readonly footer: RenderSlotReference | null
+  readonly footer: RenderSlotReference | JsonObject | null
   readonly heading: string | null
+  readonly icon: string | null
+  readonly iconColor: string | null
   readonly nestedActions: readonly string[]
-  readonly schema: SchemaManifest<JsonObject> | null
+  readonly schema: JsonObject | null
   readonly slideOver: boolean
+  readonly stickyFooter: boolean
+  readonly stickyHeader: boolean
+  readonly submitActionLabel: string | null
   readonly width: ActionModalWidth
 }
 

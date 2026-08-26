@@ -376,7 +376,7 @@ function flattenedActions<TRecord extends object>(actions: readonly TableAction<
 function pageActionDefinitions(pages: readonly ResourcePageRegistration[]): readonly object[] {
   return pages.flatMap((page) => {
     const mount = page.pageType === 'edit' || page.pageType === 'view' ? 'record' : 'page'
-    return [...page.actions.header, ...page.actions.footer].map(action => Object.freeze({ ...action.compile(), mount }))
+    return [...page.actions.header, ...page.actions.footer].map(action => Object.freeze({ ...action.compile(), mount, source: page.pageType }))
   })
 }
 
@@ -518,7 +518,7 @@ export abstract class Resource {
     return Object.freeze({
       ...compiled,
       actions: Object.freeze([
-        ...(Array.isArray(actions) ? actions : []),
+        ...(Array.isArray(actions) ? actions.map(action => Object.freeze({ ...action, source: 'table' })) : []),
         ...pageActionDefinitions(pages),
       ]),
     })

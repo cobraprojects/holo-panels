@@ -170,6 +170,7 @@
             mount: request.mount,
             recordIds: toJsonValue(request.recordIds ?? []),
             resourceId: resource?.id ?? '',
+            source: pageType,
           },
           signal: requestSignal(requestController.signal, signal),
         })
@@ -472,6 +473,7 @@
             intent: pageType === 'create' ? 'create' : 'update',
             recordId: recordRouteIdentifier(record),
             resourceId: resource.id,
+            source: 'table',
             values: toJsonValue(context.values),
           },
           signal: requestSignal(requestController.signal, context.signal),

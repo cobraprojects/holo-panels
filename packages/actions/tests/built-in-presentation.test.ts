@@ -1,4 +1,4 @@
-import { ActionEngine } from '@holo-js/panels-core'
+import { ActionEngine, compileActionManifest, resolveActionState } from '@holo-js/panels-core'
 import { describe, expect, it, vi } from 'vitest'
 import {
   Action,
@@ -102,5 +102,95 @@ describe('built-in action presentation', () => {
     expect(result.items[0]).toEqual({ recordId: 7, result: { id: 7, reason: 'reviewed' }, status: 'succeeded' })
     expect(authorize).toHaveBeenCalledOnce()
     expect(handle).toHaveBeenCalledOnce()
+  })
+
+  it('provides every resolved record to bulk action callbacks', async () => {
+    const selections: Array<readonly number[]> = []
+    const definition = createActionFactory<{ readonly id: number }>().BulkAction.make('publish')
+      .authorize(() => true)
+      .action((_data, context) => {
+        selections.push(context.selectedRecords.map(record => record.id))
+      })
+      .compile()
+    const engine = new ActionEngine<{ readonly id: number }, number, object, unknown, object>({
+      records: { resolve: async id => ({ id }), version: () => null },
+      transaction: { run: operation => operation() },
+    })
+
+    await engine.execute(definition, {
+      idempotencyKey: 'publish-many',
+      input: {},
+      mount: 'bulk',
+      recordIds: [3, 5, 8],
+    }, {
+      actor: {},
+      services: {},
+      signal: new AbortController().signal,
+      tenant: null,
+    })
+
+    expect(selections).toEqual([[3, 5, 8], [3, 5, 8], [3, 5, 8]])
+  })
+
+  it('preserves resolver-backed presentation and modal configuration in compiled definitions', async () => {
+    const definition = Action.make<{ readonly id: number }>('review')
+      .label(context => `Review ${context.record?.id ?? 'record'}`)
+      .icon(context => context.record ? 'document' : 'question')
+      .color(context => context.record ? 'warning' : 'gray')
+      .disabled(context => context.record === null)
+      .visible(context => context.actor !== null)
+      .tooltip(context => context.record ? 'Review this record' : null)
+      .modalHeading(context => `Review ${context.record?.id ?? 'record'}?`)
+      .modalDescription(context => context.record ? 'Check the selected record.' : null)
+      .modalAlignment('end')
+      .modalAutofocus(false)
+      .modalCancelActionLabel('Keep editing')
+      .closeModalByClickingAway(false)
+      .closeModalByEscaping(false)
+      .modalContent({ component: 'app.review-summary' })
+      .modalFooter({ component: 'app.review-footer' })
+      .modalIcon('document')
+      .modalIconColor('warning')
+      .modalSubmitActionLabel('Review')
+      .stickyModalFooter()
+      .stickyModalHeader()
+      .action(() => undefined)
+      .compile()
+    const context = {
+      actor: {},
+      mount: 'record' as const,
+      record: { id: 9 },
+      selectedRecords: [{ id: 9 }],
+      services: {},
+      signal: new AbortController().signal,
+      tenant: null,
+    }
+    const state = await resolveActionState(definition, context)
+    const manifest = await compileActionManifest(definition, state.label, context, state)
+
+    expect(manifest).toMatchObject({
+      color: 'warning',
+      disabled: false,
+      icon: 'document',
+      label: 'Review 9',
+      modal: {
+        alignment: 'end',
+        autofocus: false,
+        cancelActionLabel: 'Keep editing',
+        closeByClickingAway: false,
+        closeByEscaping: false,
+        content: { component: 'app.review-summary' },
+        description: 'Check the selected record.',
+        footer: { component: 'app.review-footer' },
+        heading: 'Review 9?',
+        icon: 'document',
+        iconColor: 'warning',
+        stickyFooter: true,
+        stickyHeader: true,
+        submitActionLabel: 'Review',
+      },
+      tooltip: 'Review this record',
+      visible: true,
+    })
   })
 })

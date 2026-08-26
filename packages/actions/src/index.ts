@@ -5,6 +5,7 @@ import {
   type ActionKind,
   type ActionModalWidth,
   type ActionMount,
+  type ActionResolvable,
   type ActionSize,
   builtInActionPresentation,
   type JsonObject,
@@ -410,29 +411,66 @@ export class Action<
   compile(): Readonly<ActionDefinition<TRecord, TData & JsonObject, TResult, TActor, TTenant, TServices>> {
     return Object.freeze({
       authorize: (context: CoreActionContext<TRecord, TActor, TTenant, TServices>, data: Readonly<TData & JsonObject>) => this.#authorize(this.executionContext(data, context)),
-      badge: literal(this.#badge),
-      color: literal(this.#color),
+      badge: this.coreResolver(this.#badge),
+      color: this.coreResolver(this.#color),
       confirmation: this.#confirmation,
-      disabled: typeof this.#disabled === 'boolean' ? this.#disabled : false,
+      disabled: this.coreResolver(this.#disabled),
       failureNotification: this.#failureNotification ?? undefined,
       handle: (data: TData & JsonObject, context: CoreActionContext<TRecord, TActor, TTenant, TServices>) => this.#handler(data, this.executionContext(data, context)),
-      icon: literal(this.#icon),
+      icon: this.coreResolver(this.#icon),
       id: this.id,
       kind: this.kind,
-      label: typeof this.#label === 'string' ? this.#label : headline(this.id),
+      label: this.coreResolver(this.#label),
+      modal: this.compiledModal(),
       mount: this.mount,
       successNotification: this.#successNotification ?? undefined,
       size: this.#size,
-      tooltip: literal(this.#tooltip),
-      visible: typeof this.#visible === 'boolean' ? this.#visible : true,
+      tooltip: this.coreResolver(this.#tooltip),
+      visible: this.coreResolver(this.#visible),
     })
+  }
+
+  private compiledModal(): ActionDefinition<TRecord, TData & JsonObject, TResult, TActor, TTenant, TServices>['modal'] {
+    const modal = this.#modal
+    if (!modal) return undefined
+    const schema = modal.schema ? toJsonValue(modal.schema.compile()) : null
+    if (schema !== null && (Array.isArray(schema) || typeof schema !== 'object')) throw new TypeError('Action modal schemas must serialize to JSON objects')
+    return Object.freeze({
+      alignment: modal.alignment,
+      autofocus: modal.autofocus,
+      cancelActionLabel: modal.cancelActionLabel,
+      closeByClickingAway: modal.closeByClickingAway,
+      closeByEscaping: modal.closeByEscaping,
+      content: modal.content ?? undefined,
+      description: this.coreResolver(modal.description),
+      footer: modal.footer ?? undefined,
+      heading: this.coreResolver(modal.heading),
+      icon: modal.icon,
+      iconColor: modal.iconColor,
+      nestedActions: Object.freeze(modal.nestedActions.map(action => action.id)),
+      schema: schema ?? undefined,
+      slideOver: modal.slideOver,
+      stickyFooter: modal.stickyFooter,
+      stickyHeader: modal.stickyHeader,
+      submitActionLabel: modal.submitActionLabel,
+      width: modal.width,
+    })
+  }
+
+  private coreResolver<TValue>(
+    value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TValue>,
+  ): ActionResolvable<CoreActionContext<TRecord, TActor, TTenant, TServices>, TValue> {
+    if (typeof value !== 'function') return value
+    const resolve = value as (context: ActionContext<TRecord, TData, TActor, TTenant, TServices>) => TValue | Promise<TValue>
+    const data = Object.freeze({}) as Readonly<TData>
+    return context => resolve(this.executionContext(data, context))
   }
 
   private executionContext(data: Readonly<TData>, context: CoreActionContext<TRecord, TActor, TTenant, TServices>): ActionContext<TRecord, TData, TActor, TTenant, TServices> {
     return Object.freeze({
       ...context,
       data,
-      selectedRecords: Object.freeze(context.record ? [context.record] : []),
+      selectedRecords: context.selectedRecords ?? Object.freeze(context.record ? [context.record] : []),
     })
   }
 

@@ -643,7 +643,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       async execute(request, signal) {
         if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Resource record is unavailable')
         if (!recordActions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId, source: 'edit' }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },
@@ -838,7 +838,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
           const recordIds = request.selection?.mode === 'explicit'
             ? request.selection.recordIds
             : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), mount: action.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId: schema.resourceId }, signal)
+          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), mount: action.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId: schema.resourceId, source: 'table' }, signal)
           refresh()
         },
       },
@@ -876,7 +876,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       async execute(request, signal) {
         if (routeValue === null) throw new Error('Resource record is unavailable')
         if (!actions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId, source: 'view' }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },

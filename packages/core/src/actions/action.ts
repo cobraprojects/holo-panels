@@ -9,6 +9,7 @@ import type {
   ActionResolvedState,
   ActionResolvable,
 } from './contracts'
+import type { CompiledSchema } from '../schemas/contracts'
 import { builtInActionPresentation } from './presentation'
 
 const ACTION_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u
@@ -17,6 +18,17 @@ async function resolve<TContext, TValue>(value: ActionResolvable<TContext, TValu
   return typeof value === 'function'
     ? (value as (current: TContext) => TValue | Promise<TValue>)(context)
     : value
+}
+
+function isCompiledSchema<TContext>(value: CompiledSchema<JsonObject, TContext> | JsonObject): value is CompiledSchema<JsonObject, TContext> {
+  return Reflect.get(value, 'kind') === 'schema' && Array.isArray(Reflect.get(value, 'components'))
+}
+
+async function modalSchema<TContext>(value: CompiledSchema<JsonObject, TContext> | JsonObject | undefined, context: TContext): Promise<JsonObject | null> {
+  if (!value) return null
+  const serialized = toJsonValue(isCompiledSchema(value) ? await toSchemaManifest(value, context) : value)
+  if (!serialized || Array.isArray(serialized) || typeof serialized !== 'object') throw new TypeError('Action modal schemas must serialize to JSON objects')
+  return serialized
 }
 
 export async function resolveActionState<TRecord, TActor, TTenant, TServices>(
@@ -62,13 +74,23 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   const defaults = builtInActionPresentation(definition.kind)
   const modal = definition.modal
     ? {
+        alignment: definition.modal.alignment ?? 'center',
+        autofocus: definition.modal.autofocus ?? true,
+        cancelActionLabel: definition.modal.cancelActionLabel ?? null,
+        closeByClickingAway: definition.modal.closeByClickingAway ?? true,
+        closeByEscaping: definition.modal.closeByEscaping ?? true,
         content: definition.modal.content ?? null,
         description: definition.modal.description === undefined ? null : await resolve(definition.modal.description, context),
         footer: definition.modal.footer ?? null,
         heading: definition.modal.heading === undefined ? null : await resolve(definition.modal.heading, context),
+        icon: definition.modal.icon ?? null,
+        iconColor: definition.modal.iconColor ?? null,
         nestedActions: [...(definition.modal.nestedActions ?? [])],
-        schema: definition.modal.schema ? await toSchemaManifest(definition.modal.schema, context) : null,
+        schema: await modalSchema(definition.modal.schema, context),
         slideOver: definition.modal.slideOver ?? false,
+        stickyFooter: definition.modal.stickyFooter ?? false,
+        stickyHeader: definition.modal.stickyHeader ?? false,
+        submitActionLabel: definition.modal.submitActionLabel ?? null,
         width: definition.modal.width ?? 'medium',
       }
     : null

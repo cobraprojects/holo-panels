@@ -501,7 +501,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds
           : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, mount: manifest.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId }, signal)
+        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, mount: manifest.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId, source: 'table' }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
@@ -796,7 +796,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   const recordIdentifier = record[routeKey]
   return <>
     {pageOperation === 'edit' && (typeof recordIdentifier === 'number' || typeof recordIdentifier === 'string')
-      ? <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={recordIdentifier} registry={registry} resource={resource} />
+      ? <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={recordIdentifier} registry={registry} resource={resource} source="edit" />
       : null}
     <form className="hp-resource-form hp:grid hp:gap-6" onSubmit={event => void submit(event)}>
       <Card>
@@ -854,13 +854,14 @@ function actionManifest(value: JsonObject): ClientActionManifest | null {
   }
 }
 
-function ResourcePageActions({ basePath, operation, panelId, recordId, registry, resource }: {
+function ResourcePageActions({ basePath, operation, panelId, recordId, registry, resource, source }: {
   readonly basePath: string
   readonly operation: NextResourceOperationTransport
   readonly panelId: string
   readonly recordId: string | number
   readonly registry: ComponentRegistry
   readonly resource: JsonObject
+  readonly source: 'edit' | 'view'
 }): ReactNode {
   const router = useRouter()
   const resourceId = text(resource.id)
@@ -881,6 +882,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
           mount: request.mount,
           recordIds: [recordId],
           resourceId,
+          source,
         }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('The record could not be updated.')
@@ -888,7 +890,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
         return { effects: [], items: [{ recordId, status: 'succeeded' as const }], status: 'succeeded' as const }
       },
     },
-  }), [actionKinds, basePath, operation, recordId, resourceId])
+  }), [actionKinds, basePath, operation, recordId, resourceId, source])
   useEffect(() => () => {
     while (store.activeFrame) store.close()
   }, [store])
@@ -947,7 +949,7 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
     setRelations(relationManagers(result.data?.relations))
   }
   return <article className="hp-resource-view"><h2>{text(record[recordTitle])}</h2>
-    <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={text(record[routeKey])} registry={registry} resource={resource} />
+    <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={text(record[routeKey])} registry={registry} resource={resource} source="view" />
     <div className="hp-infolist">{entries.map(definition => <ReactEntryRenderer key={text(definition.id) || text(definition.path)} panelId={panelId} registry={registry} store={entryStore(definition, record)} />)}</div>
     {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} />{readOnlyRelations
       ? <ReactRelationManagerRenderer managers={relations} />

@@ -38,7 +38,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       data-slot="sheet-content"
       data-panels-component="slide-over"
       :class="cn(
-        'hp:bg-background hp:data-[state=open]:animate-in hp:data-[state=closed]:animate-out hp:fixed hp:z-50 hp:flex hp:flex-col hp:gap-4 hp:shadow-lg hp:transition hp:ease-in-out hp:data-[state=closed]:duration-300 hp:data-[state=open]:duration-500',
+        'hp:bg-background hp:data-[state=open]:animate-in hp:data-[state=closed]:animate-out hp:fixed hp:z-50 hp:flex hp:flex-col hp:gap-4 hp:shadow-lg hp:transition hp:duration-200 hp:ease-in-out',
         side === 'right'
           && 'hp:data-[state=closed]:slide-out-to-right hp:data-[state=open]:slide-in-from-right hp:inset-y-0 hp:right-0 hp:h-full hp:w-3/4 hp:border-l hp:sm:max-w-sm',
         side === 'left'

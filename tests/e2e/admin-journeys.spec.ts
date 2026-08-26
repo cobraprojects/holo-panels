@@ -372,6 +372,7 @@ test.describe('authenticated admin journeys', () => {
       const result = {
         buttonBackground: view.getComputedStyle(button).backgroundColor,
         buttonRadius: view.getComputedStyle(button).borderRadius,
+        buttonSize: [button.getBoundingClientRect().width, button.getBoundingClientRect().height],
         externalRadius: view.getComputedStyle(external).borderRadius,
         formDisplay: view.getComputedStyle(form).display,
         inputHeight: input.getBoundingClientRect().height,
@@ -383,12 +384,34 @@ test.describe('authenticated admin journeys', () => {
     })
 
     expect(styles.buttonBackground).not.toBe('rgba(0, 0, 0, 0)')
-    expect(styles.buttonRadius).not.toBe('0px')
+    expect(styles.buttonRadius).toBe('8px')
+    expect(styles.buttonSize[1]).toBe(36)
     expect(styles.externalRadius).toBe('0px')
     expect(styles.formDisplay).toBe('grid')
-    expect(styles.inputHeight).toBeGreaterThanOrEqual(32)
-    expect(styles.inputRadius).not.toBe('0px')
+    expect(styles.inputHeight).toBe(36)
+    expect(styles.inputRadius).toBe('8px')
     expect(styles.rootFont).toContain('ui-sans-serif')
+
+    await page.getByRole('button', { name: 'Account menu' }).click()
+    await page.getByRole('menuitem', { name: /Dark(?: theme)?/u }).click()
+    await expect(page.locator('[data-holo-panel]').first()).toHaveAttribute('data-theme', 'dark')
+    const darkGeometry = await page.locator('body').evaluate((body) => {
+      const input = body.querySelector<HTMLElement>('.hp-resource-form [data-slot="input"]')
+      const button = body.querySelector<HTMLElement>('[data-holo-panel] button[type="submit"]')
+      if (!input || !button) throw new Error('The dark panel controls are unavailable')
+      return {
+        buttonRadius: getComputedStyle(button).borderRadius,
+        buttonSize: [button.getBoundingClientRect().width, button.getBoundingClientRect().height],
+        inputHeight: input.getBoundingClientRect().height,
+        inputRadius: getComputedStyle(input).borderRadius,
+      }
+    })
+    expect(darkGeometry).toEqual({
+      buttonRadius: styles.buttonRadius,
+      buttonSize: styles.buttonSize,
+      inputHeight: styles.inputHeight,
+      inputRadius: styles.inputRadius,
+    })
   })
 
   test('executes grouped bulk actions through the table and reports failures with Sonner', async ({ page }) => {
@@ -444,8 +467,35 @@ test.describe('authenticated admin journeys', () => {
     await waitForPanelReady(page)
     await expect(navigation).not.toBeInViewport()
     await toggle.click()
-    await expect(page.getByRole('dialog', { name: 'Sidebar' })).toBeVisible()
+    const drawer = page.getByRole('dialog', { name: 'Sidebar' })
+    await expect(drawer).toBeVisible()
     await expect(navigation).toBeInViewport()
+    await expect.poll(async () => drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+    const entranceMotion = await drawer.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return {
+        duration: style.animationDuration,
+        easing: style.animationTimingFunction,
+      }
+    })
+    expect(entranceMotion).toEqual({
+      duration: '0.2s',
+      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    })
+
+    await page.keyboard.press('Escape')
+    await expect(drawer).toHaveAttribute('data-state', 'closed')
+    const exitMotionDuration = await drawer.evaluate(element => getComputedStyle(element).animationDuration)
+    expect(exitMotionDuration).toBe('0.2s')
+    await expect(drawer).toBeHidden()
+    await expect(toggle).toBeFocused()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await toggle.click()
+    await expect(drawer).toBeVisible()
+    const reducedMotionDuration = await drawer.evaluate(element => Number.parseFloat(getComputedStyle(element).animationDuration))
+    expect(reducedMotionDuration).toBeLessThanOrEqual(0.001)
+    await page.keyboard.press('Tab')
+    expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true)
   })
 
   test('collapses navigation groups without hiding unrelated destinations', async ({ page }) => {

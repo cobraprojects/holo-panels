@@ -65,7 +65,7 @@ function SheetContent({
         data-panels-component="slide-over"
         data-side={side}
         className={cn(
-          "hp:fixed hp:z-50 hp:flex hp:flex-col hp:gap-4 hp:bg-background hp:shadow-lg hp:transition hp:ease-in-out hp:data-[state=closed]:animate-out hp:data-[state=closed]:duration-300 hp:data-[state=open]:animate-in hp:data-[state=open]:duration-500",
+          "hp:fixed hp:z-50 hp:flex hp:flex-col hp:gap-4 hp:bg-background hp:shadow-lg hp:transition hp:duration-200 hp:ease-in-out hp:data-[state=closed]:animate-out hp:data-[state=open]:animate-in",
           side === "right" &&
             "hp:inset-y-0 hp:right-0 hp:h-full hp:w-3/4 hp:border-l hp:data-[state=closed]:slide-out-to-right hp:data-[state=open]:slide-in-from-right hp:sm:max-w-sm",
           side === "left" &&

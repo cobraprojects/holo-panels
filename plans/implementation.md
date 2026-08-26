@@ -1733,6 +1733,8 @@ Acceptance criteria:
 
 Evidence: framework tests verify canonical shadcn `data-slot` output, keyboard interaction, focus restoration, source-located missing-registration failures, mismatch-free SSR hydration, isolated `hp:` Tailwind styling, generated authentication composition, and full admin behavior across React, Vue, and Svelte. The shared acceptance journeys cover tables, actions, notifications, relation managers, navigation, and widgets in all three production examples.
 
+Ticket #8 remediation evidence on 2026-08-26: the built Next.js, Nuxt, and SvelteKit browser journey verified the official shadcn-family mobile Sheet in every renderer, stable Holo composition classes, identical 200 ms motion, trapped and restored focus, Escape dismissal, the reduced-motion override, and shared light and dark control geometry. Isolated theme tests cover application-source exclusion and registered extension compilation. Render-hook and UI-publishing suites cover the approved extension locations and conflict-safe optional source publishing.
+
 ## 38. Phase P6: forms
 
 Objective: deliver production-capable form authoring, state, validation, relationships, uploads, and custom field extension.

@@ -18,6 +18,8 @@
 		"data-slot": dataSlot = "input",
 		...restProps
 	}: Props = $props();
+
+	const inputClass = "hp:h-9 hp:rounded-md hp:border hp:border-input hp:bg-transparent hp:px-3 hp:py-1 hp:text-base hp:transition-colors hp:file:h-7 hp:file:text-sm hp:file:font-medium hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:disabled:bg-input/50 hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:md:text-sm hp:dark:bg-input/30 hp:dark:disabled:bg-input/80 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:w-full hp:min-w-0 hp:outline-none hp:file:inline-flex hp:file:border-0 hp:file:bg-transparent hp:file:text-foreground hp:placeholder:text-muted-foreground hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed hp:disabled:opacity-50";
 </script>
 
 {#if type === "file"}
@@ -25,7 +27,7 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			"hp:h-8 hp:rounded-lg hp:border hp:border-input hp:bg-transparent hp:px-2.5 hp:py-1 hp:text-base hp:transition-colors hp:file:h-6 hp:file:text-sm hp:file:font-medium hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:disabled:bg-input/50 hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:md:text-sm hp:dark:bg-input/30 hp:dark:disabled:bg-input/80 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:w-full hp:min-w-0 hp:outline-none hp:file:inline-flex hp:file:border-0 hp:file:bg-transparent hp:file:text-foreground hp:placeholder:text-muted-foreground hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed hp:disabled:opacity-50",
+			inputClass,
 			className
 		)}
 		type="file"
@@ -37,7 +39,7 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			"hp:h-8 hp:rounded-lg hp:border hp:border-input hp:bg-transparent hp:px-2.5 hp:py-1 hp:text-base hp:transition-colors hp:file:h-6 hp:file:text-sm hp:file:font-medium hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:disabled:bg-input/50 hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:md:text-sm hp:dark:bg-input/30 hp:dark:disabled:bg-input/80 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:w-full hp:min-w-0 hp:outline-none hp:file:inline-flex hp:file:border-0 hp:file:bg-transparent hp:file:text-foreground hp:placeholder:text-muted-foreground hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed hp:disabled:opacity-50",
+			inputClass,
 			className
 		)}
 		{type}

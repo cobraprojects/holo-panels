@@ -4,7 +4,7 @@
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
 
 	export const buttonVariants = tv({
-		base: "hp:rounded-lg hp:border hp:border-transparent hp:bg-clip-padding hp:text-sm hp:font-medium hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:active:not-aria-[haspopup]:translate-y-px hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:[&_svg:not([class*='size-'])]:size-4 hp:group/button hp:inline-flex hp:shrink-0 hp:items-center hp:justify-center hp:whitespace-nowrap hp:transition-all hp:outline-none hp:select-none hp:disabled:pointer-events-none hp:disabled:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0",
+		base: "hp:rounded-md hp:border hp:border-transparent hp:bg-clip-padding hp:text-sm hp:font-medium hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:active:not-aria-[haspopup]:translate-y-px hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:[&_svg:not([class*='size-'])]:size-4 hp:group/button hp:inline-flex hp:shrink-0 hp:items-center hp:justify-center hp:whitespace-nowrap hp:transition-all hp:outline-none hp:select-none hp:disabled:pointer-events-none hp:disabled:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0",
 		variants: {
 			variant: {
 				default: "hp:bg-primary hp:text-primary-foreground hp:[a]:hover:bg-primary/80",
@@ -15,7 +15,7 @@
 				link: "hp:text-primary hp:underline-offset-4 hp:hover:underline",
 			},
 			size: {
-				default: "hp:h-8 hp:gap-1.5 hp:px-2.5 hp:has-data-[icon=inline-end]:pr-2 hp:has-data-[icon=inline-start]:pl-2",
+				default: "hp:h-9 hp:gap-2 hp:px-4 hp:py-2 hp:has-data-[icon=inline-end]:pr-3 hp:has-data-[icon=inline-start]:pl-3",
 				xs: "hp:h-6 hp:gap-1 hp:rounded-[min(var(--radius-md),10px)] hp:px-2 hp:text-xs hp:in-data-[slot=button-group]:rounded-lg hp:has-data-[icon=inline-end]:pr-1.5 hp:has-data-[icon=inline-start]:pl-1.5 hp:[&_svg:not([class*='size-'])]:size-3",
 				sm: "hp:h-7 hp:gap-1 hp:rounded-[min(var(--radius-md),12px)] hp:px-2.5 hp:text-[0.8rem] hp:in-data-[slot=button-group]:rounded-lg hp:has-data-[icon=inline-end]:pr-1.5 hp:has-data-[icon=inline-start]:pl-1.5 hp:[&_svg:not([class*='size-'])]:size-3.5",
 				lg: "hp:h-9 hp:gap-1.5 hp:px-2.5 hp:has-data-[icon=inline-end]:pr-2 hp:has-data-[icon=inline-start]:pl-2",

@@ -30,14 +30,18 @@ describe('panel theme compiler', () => {
     expect(css.length).toBeLessThan(150_000)
   })
 
-  it('does not include the consumer frontend source tree', async () => {
+  it('includes registered panel extensions without scanning the consumer frontend source tree', async () => {
     const projectRoot = await project()
     const frontend = join(projectRoot, 'src')
+    const extension = join(projectRoot, 'resources/panels/extensions')
     await mkdir(frontend, { recursive: true })
+    await mkdir(extension, { recursive: true })
     await writeFile(join(frontend, 'page.tsx'), '<div className="hp:bg-fuchsia-950" />\n', 'utf8')
+    await writeFile(join(extension, 'summary.tsx'), '<div className="hp:bg-emerald-600" />\n', 'utf8')
 
     const css = await buildPanelTheme({ projectRoot })
 
+    expect(css).toContain('.hp\\:bg-emerald-600')
     expect(css).not.toContain('.hp\\:bg-fuchsia-950')
     expect(await readFile(join(frontend, 'page.tsx'), 'utf8')).toContain('hp:bg-fuchsia-950')
   })

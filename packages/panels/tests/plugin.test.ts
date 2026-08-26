@@ -18,19 +18,20 @@ function createPrepareContext(
   signal = new AbortController().signal,
   projectRoot = '/project',
   framework = false,
+  overrides: Partial<Pick<HoloProjectPrepareContext, 'config' | 'run'>> = {},
 ): HoloProjectPrepareContext {
   return {
     projectRoot,
     generatedRoot: join(projectRoot, '.holo-js/generated'),
     pluginGeneratedRoot: join(projectRoot, '.holo-js/generated/panels'),
-    config: normalizeHoloProjectConfig(),
+    config: overrides.config ?? normalizeHoloProjectConfig(),
     plugin: {
       id: 'panels',
       name: 'Holo Panels',
       packageName: '@holo-js/panels',
       packageRoot: '/project/node_modules/@holo-js/panels',
     },
-    run: {
+    run: overrides.run ?? {
       kind: 'full',
       command: 'prepare',
       reason: 'explicit',
@@ -87,6 +88,7 @@ describe('Holo Panels plugin', () => {
       'panel-routes.json',
       'registry.json',
       'resource-type-bindings.d.ts',
+      'resource-type-checks.ts',
       'theme.css',
     ])
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'registry.json')?.contents)
@@ -134,6 +136,73 @@ describe('Holo Panels plugin', () => {
       .toContain("../../../resources/panels/renderers/react")
     expect(result.generatedArtifacts?.find(artifact => artifact.path === 'framework-artifacts.json')?.contents)
       .toContain('"checksum"')
+  })
+
+  it('rebuilds relation bindings when custom model and migration paths change during development', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-relation-watch-'))
+    temporaryDirectories.push(projectRoot)
+    const modelPath = 'domain/models/Post.ts'
+    const migrationPath = 'database/changes/2026_08_26_000001_posts.ts'
+    const resourcePath = 'server/admin/resources/posts/PostResource.ts'
+    const managerPath = 'server/admin/resources/posts/relation-managers/PostRelationManager.ts'
+    await Promise.all([
+      mkdir(join(projectRoot, '.holo-js/generated'), { recursive: true }),
+      mkdir(join(projectRoot, 'domain/models'), { recursive: true }),
+      mkdir(join(projectRoot, 'database/changes'), { recursive: true }),
+      mkdir(join(projectRoot, 'server/admin/resources/posts/relation-managers'), { recursive: true }),
+    ])
+    const modelSource = (relationship: string): string => `export const relationship = '${relationship}'\n\nexport default {\n  create() { return {} },\n  definition: { name: 'Post', primaryKey: 'id', relations: {}, softDeletes: false, table: { tableName: 'posts' } },\n  query() { return {} },\n}\n`
+    await Promise.all([
+      writeFile(join(projectRoot, '.holo-js/generated/registry.json'), `${JSON.stringify({
+        models: [{ exportName: 'default', name: 'Post', sourcePath: modelPath, tableName: 'posts' }],
+        version: 1,
+      })}\n`),
+      writeFile(join(projectRoot, modelPath), modelSource('comments')),
+      writeFile(join(projectRoot, migrationPath), 'export default {}\n'),
+      writeFile(join(projectRoot, 'server/admin/AdminPanel.ts'), `export default {\n  client: { path: '/admin' },\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'admin',\n  kind: 'panel',\n  route: '/admin',\n}\n`),
+      writeFile(join(projectRoot, resourcePath), `import Post, { relationship } from '../../../../domain/models/Post'\n\nexport default {\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'posts',\n  kind: 'resource',\n  model: Post,\n  relations: [{ relationship }],\n}\n`),
+      writeFile(join(projectRoot, managerPath), `import { relationship } from '../../../../../domain/models/Post'\n\nexport default {\n  discoveryMarker: '@holo-js/panels/discovery/v1',\n  id: 'posts.relation',\n  kind: 'relation-manager',\n  relationName: relationship,\n}\n`),
+    ])
+    const config = normalizeHoloProjectConfig({
+      paths: { migrations: 'database/changes', models: 'domain/models' },
+    })
+    const prepared = await preparer.prepare(createPrepareContext(
+      new AbortController().signal,
+      projectRoot,
+      false,
+      { config },
+    ))
+
+    expect(prepared.watch?.roots).toEqual(['server', 'resources', 'domain/models', 'database/changes'])
+    expect(prepared.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')?.contents)
+      .toContain('readonly relationship: "comments"')
+
+    await writeFile(join(projectRoot, modelPath), modelSource('tags'))
+    const modelChanged = await preparer.prepare(createPrepareContext(
+      new AbortController().signal,
+      projectRoot,
+      false,
+      {
+        config,
+        run: { command: 'dev', kind: 'incremental', changes: [{ kind: 'changed', path: modelPath }] },
+      },
+    ))
+
+    expect(modelChanged.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')?.contents)
+      .toContain('readonly relationship: "tags"')
+
+    const migrationChanged = await preparer.prepare(createPrepareContext(
+      new AbortController().signal,
+      projectRoot,
+      false,
+      {
+        config,
+        run: { command: 'dev', kind: 'incremental', changes: [{ kind: 'changed', path: migrationPath }] },
+      },
+    ))
+
+    expect(migrationChanged.generatedArtifacts?.find(artifact => artifact.path === 'resource-type-bindings.d.ts')?.contents)
+      .toContain('readonly relationship: "tags"')
   })
 
   it('stops before preparing when the host aborts the run', async () => {

@@ -145,7 +145,9 @@ This creates `server/admin/resources/posts/PostResource.ts` and relation-manager
 
 The generated resource extends `Resource` and declares `protected static override model = Post`. Generated relation managers extend `RelationManager` and declare only `protected static override relationship = 'comments'`. Form fields, table columns, relation paths, and callback records are inferred from the migration-generated Holo model registry. Do not copy columns into the model or add generic arguments to resource components.
 
-`holo prepare` and `holo build` regenerate `.holo-js/generated/panels/resource-type-bindings.d.ts`. `holo dev` watches resource and relation-manager files and updates the same binding when files are created, changed, renamed, or deleted.
+`holo prepare` and `holo build` regenerate `.holo-js/generated/panels/resource-type-bindings.d.ts` and `resource-type-checks.ts`. The first file supplies inferred types. The second keeps invalid parent-model relationships visible to strict typecheck even when the application enables `skipLibCheck`.
+
+`holo dev` regenerates both files when resources, relation managers, models, or migrations are added, changed, renamed, or deleted. Custom model and migration paths are watched too.
 
 Without `--generate`, the resource generator creates empty, type-safe form and table definitions for you to fill through autocomplete. Existing targets are never overwritten unless `--force` names each exact generated project-relative file.
 

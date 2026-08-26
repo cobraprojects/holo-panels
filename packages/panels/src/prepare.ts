@@ -20,13 +20,44 @@ import {
   defineHoloProjectPreparer,
   HOLO_PROJECT_PREPARE_API_VERSION,
   HoloProjectPrepareError,
+  type HoloProjectPrepareContext,
 } from '@holo-js/kernel'
 import { resolveFrameworkProjectDirectories } from './framework-project-directories'
 import { preparePanelPlugins, type PanelPluginPreparationInput } from './plugin-preparation'
-import { renderResourceTypeBindings } from './resource-type-bindings'
+import { renderResourceTypeBindings, renderResourceTypeChecks } from './resource-type-bindings'
 
 const compilers = new Map<string, DiscoveryCompiler>()
 const frameworkIds = new Set<string>(['next', 'nuxt', 'sveltekit'])
+
+function normalizedProjectPath(path: string): string {
+  return path.replaceAll('\\', '/').replace(/^\.\//u, '').replace(/\/$/u, '')
+}
+
+function pathIsWithin(path: string, root: string): boolean {
+  const normalizedPath = normalizedProjectPath(path)
+  const normalizedRoot = normalizedProjectPath(root)
+  return normalizedRoot === '.' || normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`)
+}
+
+function typeDependencyRoots(context: HoloProjectPrepareContext): readonly string[] {
+  return [
+    context.config.paths.models,
+    context.config.paths.migrations,
+    ...context.config.models,
+    ...context.config.migrations,
+  ].map(normalizedProjectPath)
+}
+
+function minimalWatchRoots(roots: readonly string[]): readonly string[] {
+  const unique = [...new Set(roots.map(normalizedProjectPath).filter(Boolean))]
+  return unique.filter(root => !unique.some(candidate => candidate !== root && pathIsWithin(root, candidate)))
+}
+
+function changedTypeDependency(context: HoloProjectPrepareContext): boolean {
+  if (context.run.kind === 'full') return false
+  const roots = typeDependencyRoots(context)
+  return context.run.changes.some(change => roots.some(root => pathIsWithin(change.path, root)))
+}
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -187,7 +218,8 @@ const preparer = defineHoloProjectPreparer({
     context.signal.throwIfAborted()
 
     let compiler = compilers.get(context.projectRoot)
-    if (!compiler || context.run.kind === 'full') {
+    const rebuildDiscovery = context.run.kind === 'full' || changedTypeDependency(context)
+    if (!compiler || rebuildDiscovery) {
       compiler = new DiscoveryCompiler({
         projectRoot: context.projectRoot,
         loadModule: createProjectDiscoveryModuleLoader(context.projectRoot),
@@ -196,16 +228,21 @@ const preparer = defineHoloProjectPreparer({
     }
 
     try {
-      const result = await compiler.compile(context.run.kind === 'incremental' ? context.run.changes : [])
+      const result = await compiler.compile(context.run.kind === 'incremental' && !rebuildDiscovery ? context.run.changes : [])
       const resourceTypeBindings = await renderResourceTypeBindings(
         context.projectRoot,
         result.resourceTypeBindings,
         result.relationManagerTypeBindings,
       )
-      const discoveryArtifacts = [...result.artifacts, resourceTypeBindings]
+      const resourceTypeChecks = await renderResourceTypeChecks(
+        context.projectRoot,
+        result.resourceTypeBindings,
+        result.relationManagerTypeBindings,
+      )
+      const discoveryArtifacts = [...result.artifacts, resourceTypeBindings, resourceTypeChecks]
       const panelTheme = await buildPanelTheme({ projectRoot: context.projectRoot })
       discoveryArtifacts.push({ path: 'theme.css', contents: panelTheme })
-      const watchRoots = [...new Set([...result.watchRoots, 'resources'])]
+      const watchRoots = minimalWatchRoots([...result.watchRoots, 'resources', ...typeDependencyRoots(context)])
       const activeFramework = frameworkId(context.framework?.id)
       const pluginInputs = result.definitions
         .filter(definition => definition.kind === 'panel')

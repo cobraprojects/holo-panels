@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { renderResourceTypeBindings } from '../src/resource-type-bindings'
+import { renderResourceTypeBindings, renderResourceTypeChecks } from '../src/resource-type-bindings'
 
 const temporaryDirectories: string[] = []
 
@@ -56,5 +56,48 @@ describe('resource type bindings', () => {
       projectPath: 'server/admin/resources/missing/MissingResource.ts',
       tableName: 'missing',
     }], [])).rejects.toThrow('Holo did not generate that model')
+  })
+
+  it('removes obsolete relation-manager bindings from the managed artifact', async () => {
+    const root = await project()
+    const resource = [{
+      exportName: 'default',
+      modelName: 'Post',
+      projectPath: 'server/admin/resources/posts/PostResource.ts',
+      tableName: 'posts',
+    }] as const
+    const withManager = await renderResourceTypeBindings(root, resource, [{
+      exportName: 'default',
+      ownerResourceExportName: 'default',
+      ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.ts',
+      projectPath: 'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
+      relationship: 'comments',
+    }])
+    const withoutManager = await renderResourceTypeBindings(root, resource, [])
+
+    expect(withManager.contents).toContain('CommentsRelationManager')
+    expect(withoutManager.contents).not.toContain('CommentsRelationManager')
+    expect(withoutManager.contents).not.toContain('RelationManagerTypeRegistry')
+    expect(withoutManager.contents).not.toContain('relation:server/admin/resources/posts/relation-managers')
+  })
+
+  it('emits executable TypeScript checks for parent-model relationships', async () => {
+    const root = await project()
+    const artifact = await renderResourceTypeChecks(root, [{
+      exportName: 'default',
+      modelName: 'Post',
+      projectPath: 'server/admin/resources/posts/PostResource.ts',
+      tableName: 'posts',
+    }], [{
+      exportName: 'default',
+      ownerResourceExportName: 'default',
+      ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.ts',
+      projectPath: 'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
+      relationship: 'comments',
+    }])
+
+    expect(artifact.path).toBe('resource-type-checks.ts')
+    expect(artifact.contents).toContain('type RelationManagerRelationship0 = HoloPanelsRelationName<')
+    expect(artifact.contents).toContain(', "comments">')
   })
 })

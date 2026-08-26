@@ -1092,6 +1092,7 @@ Holo Panels preparation generates under the application's existing `.holo-js/gen
 ├── navigation.ts
 ├── permissions.ts
 ├── resource-type-bindings.d.ts
+├── resource-type-checks.ts
 ├── types.d.ts
 ├── framework-artifacts.json
 └── registry.json

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
-import { renderResourceTypeBindings } from '../src/resource-type-bindings'
+import { renderResourceTypeBindings, renderResourceTypeChecks } from '../src/resource-type-bindings'
 
 const temporaryDirectories: string[] = []
 
@@ -84,6 +84,7 @@ export const users = defineGeneratedTable('users', {
   id: column.id(),
   name: column.string(),
   email: column.string(),
+  metadata: column.json<{ label: string }>(),
   published: column.boolean(),
   title: column.integer(),
 })
@@ -174,7 +175,7 @@ async function writeResourceBindings(projectRoot: string): Promise<void> {
   await writeFile(join(generatedRoot, 'panels', bindings.path), bindings.contents)
 }
 
-async function generatedRelationManagerProject(source: string): Promise<GeneratedProject> {
+async function generatedRelationManagerProject(source: string, relationship = 'author'): Promise<GeneratedProject> {
   const workspaceRoot = resolve(import.meta.dirname, '../../..')
   const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-relation-manager-api-'))
   const fileName = join(projectRoot, 'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts')
@@ -207,7 +208,7 @@ export default class PostResource extends Resource {
     ownerResourceExportName: 'default',
     ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.ts',
     projectPath: 'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts',
-    relationship: 'author',
+    relationship,
   }])
   await writeFile(join(projectRoot, '.holo-js/generated/panels', bindings.path), bindings.contents)
   return { fileName, projectRoot, workspaceRoot }
@@ -536,7 +537,10 @@ describe('Resource API completions', () => {
       'export default class AuthorRelationManager extends RelationManager {',
       "  protected static override relationship = 'author'",
       "  static form = this.configureForm((schema, field) => schema.components([field.TextInput.make('name'), field.TextInput.make('')]))",
+      "  static values = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('title').default(1).afterStateUpdated(state => { state?.toFixed() })]))",
       "  static table = this.configureTable((table, { TextColumn }) => table.columns([TextColumn.make('email'), TextColumn.make('')]))",
+      "  static inviteAction = this.action(({ Action }) => Action.make('invite')).action((_data, { record }) => record?.metadata.label)",
+      "  static invalidAction = this.action(({ Action }) => Action.make('invalid')).action((_data, { record }) => record?.category)",
       "  static invalid = this.configureForm((schema, { TextInput }) => schema.components([TextInput.make('category')]))",
       '}',
       '',
@@ -554,10 +558,42 @@ describe('Resource API completions', () => {
       .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
 
     expect(completionsAt("field.TextInput.make('')")).toContain('name')
+    expect(completionsAt("field.TextInput.make('')")).toContain('metadata.label')
     expect(completionsAt("TextColumn.make('')")).toContain('email')
     expect(completionsAt("field.TextInput.make('')")).not.toContain('category')
-    expect(messages).toHaveLength(3)
     expect(messages.filter(message => message.includes('"category"'))).toHaveLength(1)
+    expect(messages.filter(message => message.includes("Property 'category' does not exist"))).toHaveLength(1)
+  })
+
+  it('rejects a relationship outside the generated parent model', async () => {
+    const source = [
+      "import { RelationManager } from '@holo-js/panels-resources'",
+      '',
+      'export default class InvalidRelationManager extends RelationManager {',
+      "  protected static override relationship = 'category'",
+      '}',
+      '',
+    ].join('\n')
+    const project = await generatedRelationManagerProject(source, 'category')
+    const checks = await renderResourceTypeChecks(project.projectRoot, [{
+      exportName: 'default',
+      modelName: 'Post',
+      projectPath: 'server/admin/resources/posts/PostResource.ts',
+      tableName: 'posts',
+    }], [{
+      exportName: 'default',
+      ownerResourceExportName: 'default',
+      ownerResourceProjectPath: 'server/admin/resources/posts/PostResource.ts',
+      projectPath: 'server/admin/resources/posts/relation-managers/AuthorRelationManager.ts',
+      relationship: 'category',
+    }])
+    const checkPath = join(project.projectRoot, '.holo-js/generated/panels', checks.path)
+    await writeFile(checkPath, checks.contents)
+    const service = languageService(project, source)
+    const messages = service.getSemanticDiagnostics(checkPath)
+      .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+
+    expect(messages).toEqual([expect.stringContaining('Type \'"category"\' does not satisfy the constraint \'"author"\'')])
   })
 
   it('rejects manual record generics on resources and relation managers', async () => {

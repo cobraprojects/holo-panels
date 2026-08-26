@@ -59,7 +59,7 @@ import {
   type UploadPolicy,
 } from '@holo-js/panels-vue'
 import { useRouter } from '#imports'
-import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, type Component, type PropType, type VNode } from 'vue'
+import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, watch, type Component, type PropType, type VNode } from 'vue'
 import type { NuxtPanelPage, NuxtPanelPageData, PanelPageProps } from './contracts'
 import {
   Avatar,
@@ -126,8 +126,24 @@ interface PanelPageRuntime {
   readonly pageActionsTarget: string
   readonly registry: ComponentRegistry
   readonly renderHookScopes: readonly string[]
+  readonly signal: AbortSignal
   readonly toastStore: ClientToastStore
   readonly transport: PanelsTransport
+}
+
+function requestSignal(owner: AbortSignal, operation?: AbortSignal): AbortSignal {
+  return operation ? AbortSignal.any([owner, operation]) : owner
+}
+
+function ownedUploadAdapter(adapter: ReturnType<typeof createBrowserUploadAdapter>, owner: AbortSignal): ReturnType<typeof createBrowserUploadAdapter> {
+  const owned: ReturnType<typeof createBrowserUploadAdapter> = {
+    create: (context, file, signal) => adapter.create(context, file, requestSignal(owner, signal)),
+    delete: (context, id, token, signal) => adapter.delete(context, id, token, requestSignal(owner, signal)),
+    deleteExisting: (context, id, signal) => adapter.deleteExisting(context, id, requestSignal(owner, signal)),
+    resolve: (context, id, token, signal) => adapter.resolve(context, id, token, requestSignal(owner, signal)),
+    write: (context, upload, contents, signal, onProgress) => adapter.write(context, upload, contents, requestSignal(owner, signal), onProgress),
+  }
+  return Object.freeze(owned)
 }
 
 function resourceRenderHook(runtime: PanelPageRuntime, hook: PanelsRenderHook, data: JsonObject): VNode {
@@ -470,11 +486,12 @@ function panelsTransport(): PanelsTransport {
   })
 }
 
-async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'action' | 'form-submit', payload: JsonObject): Promise<unknown> {
+async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'action' | 'form-submit', payload: JsonObject, signal?: AbortSignal): Promise<unknown> {
   const response = await runtime.transport.execute({ kind: 'mutation', name: operation, supportsIdempotency: true }, {
     endpoint: `/holo/panels/${encodeURIComponent(panelId)}/${operation}`,
     panelId,
     payload,
+    signal: requestSignal(runtime.signal, signal),
   })
   await runtime.effects.apply(response)
   if (!response.ok) throw new Error(response.error.message)
@@ -494,7 +511,7 @@ function optionsFor(source: ResourceOptionSource, dependencies: Readonly<Record<
   return source.optionsByDependency?.[String(selected)] ?? []
 }
 
-function optionStore(panelId: string, resourceId: string, field: ResourceField, values: Readonly<ResourceValues>): OptionStore<string | number> | undefined {
+function optionStore(runtime: PanelPageRuntime, panelId: string, resourceId: string, field: ResourceField, values: Readonly<ResourceValues>): OptionStore<string | number> | undefined {
   const source = field.optionSource
   if (!source) return undefined
   const dependency = source.dependency
@@ -508,34 +525,34 @@ function optionStore(panelId: string, resourceId: string, field: ResourceField, 
     resourceId,
     tenantKey: 'current',
     transport: {
-      async hydrateSelected(request, selectedValues) {
+      async hydrateSelected(request, selectedValues, signal) {
         if (source.server) {
-          const response = await runtimeOptions(panelId, resourceId, field.path, 'hydrate', request, selectedValues, fieldValues(values))
+          const response = await runtimeOptions(runtime, panelId, resourceId, field.path, 'hydrate', request, selectedValues, fieldValues(values), signal)
           return response.options
         }
         const selected = new Set(selectedValues)
         return optionsFor(source, request.dependencies).filter(option => selected.has(option.value))
       },
-      async list(request) {
-        if (source.server) return await runtimeOptions(panelId, resourceId, field.path, 'list', request, [], fieldValues(values))
+      async list(request, signal) {
+        if (source.server) return await runtimeOptions(runtime, panelId, resourceId, field.path, 'list', request, [], fieldValues(values), signal)
         const options = optionsFor(source, request.dependencies)
         return { hasMore: false, options, page: request.page, perPage: request.perPage, total: options.length }
       },
-      async validateSelection(request, selectedValues) {
-        if (source.server) return (await runtimeOptions(panelId, resourceId, field.path, 'validate', request, selectedValues, fieldValues(values))).valid === true
+      async validateSelection(request, selectedValues, signal) {
+        if (source.server) return (await runtimeOptions(runtime, panelId, resourceId, field.path, 'validate', request, selectedValues, fieldValues(values), signal)).valid === true
         const allowed = new Set(optionsFor(source, request.dependencies).map(option => option.value))
         return selectedValues.every(value => allowed.has(value))
       },
       ...(source.server && field.properties.canCreateOption === true ? {
-        async create(request, label) {
-          const result = await runtimeOptions(panelId, resourceId, field.path, 'create', request, [], fieldValues(values), label)
+        async create(request, label, signal) {
+          const result = await runtimeOptions(runtime, panelId, resourceId, field.path, 'create', request, [], fieldValues(values), signal, label)
           if (!result.option) throw new Error('The created option response is invalid')
           return result.option
         },
       } : {}),
       ...(source.server && field.properties.canEditOption === true ? {
-        async edit(request, value, label) {
-          const result = await runtimeOptions(panelId, resourceId, field.path, 'edit', request, [], fieldValues(values), label, value)
+        async edit(request, value, label, signal) {
+          const result = await runtimeOptions(runtime, panelId, resourceId, field.path, 'edit', request, [], fieldValues(values), signal, label, value)
           if (!result.option) throw new Error('The edited option response is invalid')
           return result.option
         },
@@ -549,6 +566,7 @@ function fieldValues(values: Readonly<ResourceValues>): JsonObject {
 }
 
 async function runtimeOptions(
+  runtime: PanelPageRuntime,
   panelId: string,
   resourceId: string,
   fieldId: string,
@@ -556,12 +574,12 @@ async function runtimeOptions(
   request: Readonly<{ readonly dependencies: Readonly<Record<string, unknown>>, readonly page: number, readonly perPage: number, readonly search: string }>,
   selectedValues: readonly (number | string)[],
   values: JsonObject,
+  signal: AbortSignal,
   label?: string,
   value?: number | string,
 ): Promise<{ readonly hasMore: boolean, readonly option?: ResourceOption, readonly options: readonly ResourceOption[], readonly page: number, readonly perPage: number, readonly total?: number, readonly valid?: boolean }> {
-  const transport = panelsTransport()
   const payload = mutationPayload({ action, dependencies: request.dependencies, fieldId, page: request.page, perPage: request.perPage, resourceId, search: request.search, selectedValues, values, ...(label ? { label } : {}), ...(typeof value === 'number' || typeof value === 'string' ? { value } : {}) })
-  const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, { endpoint: `/holo/panels/${encodeURIComponent(panelId)}/options`, panelId, payload })
+  const response = await runtime.transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, { endpoint: `/holo/panels/${encodeURIComponent(panelId)}/options`, panelId, payload, signal: requestSignal(runtime.signal, signal) })
   if (!response.ok) throw new Error(response.error.message)
   const data = response.data
   const options = Array.isArray(data.options) ? data.options.filter((option): option is JsonObject => isObject(option)).flatMap((option) => typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
@@ -596,10 +614,10 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   const actionStore = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
-      async execute(request) {
+      async execute(request, signal) {
         if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Resource record is unavailable')
         if (!recordActions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId })
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },
@@ -610,9 +628,14 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     event.returnValue = ''
   }
   onMounted(() => window.addEventListener('beforeunload', preventUnload))
-  onUnmounted(() => window.removeEventListener('beforeunload', preventUnload))
+  onUnmounted(() => {
+    window.removeEventListener('beforeunload', preventUnload)
+    store.cancelRequests()
+    while (actionStore.activeFrame) actionStore.close()
+    for (const upload of uploadStores.values()) upload.reset()
+  })
   const optionStores = new Map(schema.fields.flatMap(field => {
-    const options = optionStore(panelId, schema.resourceId, field, values)
+    const options = optionStore(runtime, panelId, schema.resourceId, field, values)
     return options ? [[field.path, options] as const] : []
   }))
   const collectionStores = new Map(schema.fields.flatMap(field => {
@@ -624,14 +647,14 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     const uploadPolicy = isObject(field.properties.uploadPolicy) ? field.properties.uploadPolicy as unknown as UploadPolicy : undefined
     if (field.type !== 'panels:field:upload' || !uploadPolicy) return []
     const upload = createUploadStore({
-      adapter: createBrowserUploadAdapter({
+      adapter: ownedUploadAdapter(createBrowserUploadAdapter({
         endpoint: `/holo/panels/${encodeURIComponent(panelId)}/upload`,
         fieldId: field.path,
         intent: page.manifest.pageType === 'edit' ? 'edit' : 'create',
         panelId,
         recordId: typeof routeValue === 'string' || typeof routeValue === 'number' ? routeValue : null,
         resourceId: schema.resourceId,
-      }),
+      }), runtime.signal),
       context: { actorId: 'current', fieldId: field.path, panelId, resourceId: schema.resourceId },
       policy: uploadPolicy,
     })
@@ -661,7 +684,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
         ...(typeof routeValue === 'string' || typeof routeValue === 'number' ? { record: routeValue } : {}),
         resourceId: schema.resourceId,
         ...request.values,
-      }))
+      }), request.signal)
       if (isObject(result) && isObject(result.record)) {
         const nextRouteValue = valueAtPath(result.record, schema.routeKey)
         if (typeof nextRouteValue === 'string' || typeof nextRouteValue === 'number') {
@@ -699,6 +722,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       endpoint: `/holo/panels/${encodeURIComponent(panelId)}/options`,
       panelId,
       payload: mutationPayload({ ownerId: routeValue, relationManagerId: managerId, resourceId: schema.resourceId, search }),
+      signal: runtime.signal,
     })
     if (!response.ok) throw new Error(response.error.message)
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
@@ -759,6 +783,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       endpoint: `/holo/panels/${encodeURIComponent(panelId)}/table-data`,
       panelId,
       payload: mutationPayload({ filters: query.filters, page: query.page, perPage: query.perPage, resourceId: schema.resourceId, search: query.search, sort: query.sort }),
+      signal: runtime.signal,
     }).then(async (response) => {
       await runtime.effects.apply(response)
       if (!response.ok) {
@@ -777,7 +802,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
   return h('div', { class: 'hp-resource-page' }, [createAction && createRoute ? h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': createAction.id, 'data-color': createAction.color ?? undefined, href: createRoute, variant: 'default' }, () => [createAction.icon ? PanelsIcon(createAction.icon) : null, h('span', createAction.label)])) : null, resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE, page.data), h(VueTableRenderer, {
     table: {
       actionTransport: {
-        async execute(request: { readonly actionId: string, readonly recordId?: number | string, readonly selection?: { readonly mode: 'all-matching' } | { readonly mode: 'explicit', readonly recordIds: readonly (number | string)[] } }) {
+        async execute(request: { readonly actionId: string, readonly recordId?: number | string, readonly selection?: { readonly mode: 'all-matching' } | { readonly mode: 'explicit', readonly recordIds: readonly (number | string)[] } }, signal: AbortSignal) {
           const action = executableResourceTableActions(schema.actions).find(candidate => candidate.id === request.actionId)
           if (!action) throw new Error('Resource action is unavailable')
           if ((action.kind === 'edit' || action.kind === 'view') && request.recordId !== undefined) {
@@ -787,7 +812,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
           const recordIds = request.selection?.mode === 'explicit'
             ? request.selection.recordIds
             : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), recordIds: [...recordIds], resourceId: schema.resourceId })
+          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), recordIds: [...recordIds], resourceId: schema.resourceId }, signal)
           refresh()
         },
       },
@@ -822,10 +847,10 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
   const store = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
-      async execute(request) {
+      async execute(request, signal) {
         if (routeValue === null) throw new Error('Resource record is unavailable')
         if (!actions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId })
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, recordIds: [routeValue], resourceId: schema.resourceId }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },
@@ -850,6 +875,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       endpoint: `/holo/panels/${encodeURIComponent(panelId)}/options`,
       panelId,
       payload: mutationPayload({ ownerId: routeValue, relationManagerId: managerId, resourceId: schema.resourceId, search }),
+      signal: runtime.signal,
     })
     if (!response.ok) throw new Error(response.error.message)
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
@@ -876,6 +902,7 @@ const VueResourcePage = defineComponent({
     readOnlyRelations: { type: Boolean, default: true },
     resourceCreatePageRedirect: { type: String as PropType<'edit' | 'index' | 'view'>, default: 'edit' },
     resourceEditPageRedirect: { type: String as PropType<'index' | 'view' | null>, default: null },
+    signal: { type: Object as PropType<AbortSignal>, required: true },
     transport: { type: Object as PropType<PanelsTransport>, required: true },
     toastStore: { type: Object as PropType<ClientToastStore>, required: true },
     unsavedChangesAlerts: { type: Boolean, default: false },
@@ -883,6 +910,8 @@ const VueResourcePage = defineComponent({
   setup(props) {
     const router = useRouter()
     const schema = resourceSchema(props.page)
+    const requestController = new AbortController()
+    onUnmounted(() => requestController.abort())
     const runtime = {
       effects: props.effects,
       manifest: props.panelManifest,
@@ -890,6 +919,7 @@ const VueResourcePage = defineComponent({
       pageActionsTarget: props.pageActionsTarget,
       registry: props.registry,
       renderHookScopes: [props.page.manifest.id, schema.resourceId],
+      signal: requestSignal(props.signal, requestController.signal),
       toastStore: props.toastStore,
       transport: props.transport,
     }
@@ -1026,7 +1056,7 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
 
 function pageBody(page: NuxtPanelPage, registry: ComponentRegistry, resolveResource: PanelPageProps['resolveResource'], runtime: PanelPageRuntime): VNode {
   const component = resourceComponent(page.page, resolveResource)
-  if (component) return h(component, { effects: runtime.effects, key: page.path, page: page.page, pageActionsTarget: runtime.pageActionsTarget, panelId: page.bootstrap.manifest.id, panelManifest: page.bootstrap.manifest, readOnlyRelations: page.bootstrap.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true, registry, resourceCreatePageRedirect: page.bootstrap.manifest.runtime?.resourceCreatePageRedirect ?? 'edit', resourceEditPageRedirect: page.bootstrap.manifest.runtime?.resourceEditPageRedirect ?? null, toastStore: runtime.toastStore, transport: runtime.transport, unsavedChangesAlerts: page.bootstrap.manifest.runtime?.unsavedChangesAlerts ?? false })
+  if (component) return h(component, { effects: runtime.effects, key: page.path, page: page.page, pageActionsTarget: runtime.pageActionsTarget, panelId: page.bootstrap.manifest.id, panelManifest: page.bootstrap.manifest, readOnlyRelations: page.bootstrap.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true, registry, resourceCreatePageRedirect: page.bootstrap.manifest.runtime?.resourceCreatePageRedirect ?? 'edit', resourceEditPageRedirect: page.bootstrap.manifest.runtime?.resourceEditPageRedirect ?? null, signal: runtime.signal, toastStore: runtime.toastStore, transport: runtime.transport, unsavedChangesAlerts: page.bootstrap.manifest.runtime?.unsavedChangesAlerts ?? false })
   return h('section', { 'data-panels-page-type': page.page.manifest.pageType })
 }
 
@@ -1101,6 +1131,7 @@ export const PanelPage = defineComponent({
       ? registry.resolve(props.page.bootstrap.manifest.branding.avatarProvider, panelId, 'panel avatar provider')
       : null
     const transport = panelsTransport()
+    const requestController = new AbortController()
     const tenantShell = props.page.bootstrap.tenancy ? (() => {
       const store = new PanelShellStore(panelId)
       store.bootstrap(props.page.bootstrap, props.page.path)
@@ -1130,7 +1161,7 @@ export const PanelPage = defineComponent({
           endpoint: `/holo/panels/${encodeURIComponent(panelId)}/global-search`,
           panelId,
           payload: { term },
-          signal,
+          signal: requestSignal(requestController.signal, signal),
         })
         if (!response.ok) throw new Error(response.error.message)
         return searchResponse(response.data, panelId, term)
@@ -1154,6 +1185,12 @@ export const PanelPage = defineComponent({
       invalidateTable: async effect => dispatchPanelEvent('holo-panels:invalidate-table', { panelId, tableId: effect.tableId }),
       redirect: async effect => browserNavigate(effect.url, effect.replace),
       refresh: async effect => dispatchPanelEvent('holo-panels:refresh', { panelId, target: effect.target ?? 'page' }),
+    })
+    let effectBatch = 0
+    watch(() => props.page.effects, (next, previous) => {
+      if (next === previous || !next || next.length === 0) return
+      effectBatch += 1
+      void effects.apply({ data: null, effects: [...next], id: `session-effects-${effectBatch}`, ok: true, protocolVersion: PROTOCOL_VERSION }).catch(() => undefined)
     })
     onMounted(() => {
       portalContainer.value = shellElement.value
@@ -1208,6 +1245,7 @@ export const PanelPage = defineComponent({
     onUnmounted(() => {
       if (disposed) return
       disposed = true
+      requestController.abort()
       unsubscribeSearch?.()
       unregisterResize?.()
       unregisterSearchShortcut?.()
@@ -1423,6 +1461,7 @@ export const PanelPage = defineComponent({
                 pageActionsTarget,
                 registry,
                 renderHookScopes: pageScopes,
+                signal: requestController.signal,
                 toastStore,
                 transport,
               }),

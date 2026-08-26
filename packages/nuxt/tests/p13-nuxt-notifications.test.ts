@@ -1,6 +1,6 @@
 import { panelNotification } from '@holo-js/panels-core'
 import { ClientToastStore } from '@holo-js/panels-vue'
-import { createApp, nextTick } from 'vue'
+import { createApp, defineComponent, h, nextTick, shallowRef } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PanelPage, type NuxtPanelPage } from '../src'
 import { configureNuxtNavigation } from './nuxt-imports'
@@ -130,6 +130,51 @@ async function openNotifications(container: HTMLElement): Promise<void> {
 }
 
 describe('Nuxt P13 notification integration', () => {
+  it('aborts only the replaced resource client and ignores its late effects', async () => {
+    document.cookie = 'XSRF-TOKEN=signed; path=/'
+    const pending: Array<{
+      readonly id: string
+      readonly signal: AbortSignal | null
+      resolve(response: Response): void
+    }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const fields = new URLSearchParams(String(init?.body ?? ''))
+      const envelope = JSON.parse(fields.get('request') ?? '{}') as { readonly id: string }
+      return await new Promise<Response>(resolve => pending.push({ id: envelope.id, resolve, signal: init?.signal ?? null }))
+    }))
+    const current = shallowRef(resourcePage())
+    const Harness = defineComponent(() => () => h(PanelPage, { page: current.value }))
+    const container = document.createElement('div')
+    document.body.append(container)
+    const push = vi.spyOn(ClientToastStore.prototype, 'push')
+    const app = createApp(Harness)
+    app.mount(container)
+    await nextTick()
+
+    container.querySelector<HTMLFormElement>('form')?.requestSubmit()
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    current.value = {
+      ...current.value,
+      page: {
+        ...current.value.page,
+        manifest: { ...current.value.page.manifest, path: '/admin/articles/create-again' },
+      },
+      path: '/admin/articles/create-again',
+    }
+    await nextTick()
+    expect(pending[0]?.signal?.aborted).toBe(true)
+
+    container.querySelector<HTMLFormElement>('form')?.requestSubmit()
+    await vi.waitFor(() => expect(pending).toHaveLength(2))
+    expect(pending[1]?.signal?.aborted).toBe(false)
+    pending[0]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', level: 'danger', message: 'Obsolete response' }], id: pending[0].id, ok: true, protocolVersion: '1.0' }))
+    pending[1]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', level: 'success', message: 'Current response' }], id: pending[1].id, ok: true, protocolVersion: '1.0' }))
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1))
+    expect(push.mock.calls[0]?.[0]).toMatchObject({ title: 'Current response' })
+    app.unmount()
+  })
+
   it('coalesces duplicate realtime invalidation while configured polling remains active', async () => {
     vi.useFakeTimers()
     document.cookie = 'XSRF-TOKEN=signed; path=/'

@@ -84,4 +84,37 @@ describe('P8-B client action state', () => {
     await expect(denied).rejects.toThrow('Not authorized')
     expect(store.activeFrame).toEqual(expect.objectContaining({ error: 'Not authorized', phase: 'failed' }))
   })
+
+  it('starts a fresh submission when the same action reopens before its obsolete request settles', async () => {
+    const requests: Array<{
+      readonly signal: AbortSignal
+      resolve(value: ActionExecutionResult<number | string, string>): void
+    }> = []
+    const store = new ClientActionStore<string>({
+      createIdempotencyKey: () => `request-${String(requests.length + 1).padStart(8, '0')}`,
+      transport: {
+        execute: (_request, signal) => new Promise(resolve => requests.push({ resolve, signal })),
+      },
+    })
+
+    store.mount(manifest('save'))
+    const obsolete = store.submit()
+    store.close()
+    expect(requests[0]?.signal.aborted).toBe(true)
+
+    store.mount(manifest('save'))
+    const current = store.submit()
+    expect(current).not.toBe(obsolete)
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.signal.aborted).toBe(false)
+
+    requests[0]?.resolve({ effects: [], items: [], result: 'obsolete', status: 'succeeded' })
+    await obsolete
+    expect(store.activeFrame).toMatchObject({ phase: 'submitting', requestVersion: 1 })
+    expect(requests[1]?.signal.aborted).toBe(false)
+
+    requests[1]?.resolve({ effects: [], items: [], result: 'current', status: 'succeeded' })
+    await current
+    expect(store.activeFrame).toMatchObject({ phase: 'succeeded', result: { result: 'current' } })
+  })
 })

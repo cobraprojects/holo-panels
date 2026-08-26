@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
+import { ClientToastStore } from '@holo-js/panels-svelte'
 import PanelPage from '../src/PanelPage.svelte'
 import type { PanelPageData } from '../src/contracts'
 import { configureSvelteKitNavigation } from './sveltekit-navigation'
@@ -56,7 +57,84 @@ function pageData(): PanelPageData {
   }
 }
 
+function createResourcePageData(): PanelPageData {
+  const current = pageData()
+  return {
+    ...current,
+    page: {
+      ...current.page,
+      data: {
+        resource: {
+          actions: [],
+          basePath: '/admin/articles',
+          columns: [],
+          createLabel: 'Create article',
+          dependencies: [],
+          entries: [],
+          fields: [{ label: 'Title', path: 'title', properties: {}, required: false, type: 'text' }],
+          filterMode: 'live',
+          filters: [],
+          id: 'articles',
+          label: 'Articles',
+          options: {},
+          recordActions: [],
+          recordId: 'id',
+          routeKey: 'id',
+          routes: { create: '/admin/articles/create', edit: '/admin/articles/:record/edit', view: '/admin/articles/:record' },
+          saveLabel: 'Save article',
+          tableActions: [],
+        },
+      },
+      manifest: {
+        ...current.page.manifest,
+        body: { component: 'resource-page', properties: {} },
+        id: 'articles.create',
+        pageType: 'create',
+        path: '/admin/articles/create',
+      },
+    },
+  }
+}
+
 describe('SvelteKit panel SPA navigation', () => {
+  it('mounts the replacement client before aborting obsolete work and ignores its late effects', async () => {
+    document.cookie = 'XSRF-TOKEN=signed; path=/'
+    const pending: Array<{
+      readonly id: string
+      readonly signal: AbortSignal | null
+      resolve(response: Response): void
+    }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const fields = new URLSearchParams(String(init?.body ?? ''))
+      const envelope = JSON.parse(fields.get('request') ?? '{}') as { readonly id: string }
+      return await new Promise<Response>(resolve => pending.push({ id: envelope.id, resolve, signal: init?.signal ?? null }))
+    }))
+    const firstContainer = document.createElement('div')
+    const replacementContainer = document.createElement('div')
+    document.body.append(firstContainer, replacementContainer)
+    const push = vi.spyOn(ClientToastStore.prototype, 'push')
+    const first = mount(PanelPage, { props: { data: createResourcePageData() }, target: firstContainer })
+    await tick()
+    firstContainer.querySelector<HTMLFormElement>('form')?.requestSubmit()
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+
+    const replacement = mount(PanelPage, { props: { data: createResourcePageData() }, target: replacementContainer })
+    await tick()
+    await unmount(first)
+    expect(pending[0]?.signal?.aborted).toBe(true)
+    replacementContainer.querySelector<HTMLFormElement>('form')?.requestSubmit()
+    await vi.waitFor(() => expect(pending).toHaveLength(2))
+    expect(pending[1]?.signal?.aborted).toBe(false)
+
+    pending[0]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', level: 'danger', message: 'Obsolete response' }], id: pending[0].id, ok: true, protocolVersion: '1.0' }))
+    pending[1]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', level: 'success', message: 'Current response' }], id: pending[1].id, ok: true, protocolVersion: '1.0' }))
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1))
+    expect(push.mock.calls[0]?.[0]).toMatchObject({ title: 'Current response' })
+
+    await unmount(replacement)
+    vi.unstubAllGlobals()
+  })
+
   it('navigates same-origin links, honors exceptions, and prefetches on hover', async () => {
     const container = document.createElement('div')
     document.body.append(container)

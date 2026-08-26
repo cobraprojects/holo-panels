@@ -174,6 +174,7 @@ export class PanelsTransport {
         }
         throw new PanelsTransportError(normalizeTransportError(error))
       }
+      if (options.signal?.aborted) throw abortError()
 
       let decoded: Readonly<ResponseEnvelope<TData>>
       try {

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto'
-import { expect, test, type Page, type Request } from '@playwright/test'
+import { expect, test, type ConsoleMessage, type Page, type Request } from '@playwright/test'
 
 const guardResponses = Object.freeze({
   next: { location: '/admin/login?next=%2Fadmin', status: 307 },
@@ -17,6 +17,18 @@ const generatedResources = Object.freeze([
   { id: 'membership-acme-admin', label: 'Membership', plural: 'Memberships', slug: 'memberships' },
   { id: 'user-acme-admin', label: 'User', plural: 'Users', slug: 'users' },
 ])
+
+function collectDisposedSessionErrors(page: Page): string[] {
+  const errors: string[] = []
+  const record = (message: string): void => {
+    if (/disposed.{0,40}session|session.{0,40}disposed/iu.test(message)) errors.push(message)
+  }
+  page.on('pageerror', error => record(error.message))
+  page.on('console', (message: ConsoleMessage) => {
+    if (message.type() === 'error') record(message.text())
+  })
+  return errors
+}
 
 async function login(page: Page): Promise<void> {
   await page.goto('/admin/login', { waitUntil: 'networkidle' })
@@ -601,6 +613,7 @@ test.describe('authenticated admin journeys', () => {
 
   test('creates, edits, relates, and deletes tenant-scoped content', async ({ page }, testInfo) => {
     test.setTimeout(120_000)
+    const disposedSessionErrors = collectDisposedSessionErrors(page)
     await login(page)
     const suffix = `${testInfo.project.name}-${Date.now()}`
     const title = `Browser journey ${suffix}`
@@ -796,6 +809,7 @@ test.describe('authenticated admin journeys', () => {
 
     await gotoPanelPage(page, '/admin/posts')
     await deleteRow(page, editedTitle)
+    expect(disposedSessionErrors).toEqual([])
   })
   test('switches only to an authorized tenant', async ({ page }) => {
     await login(page)

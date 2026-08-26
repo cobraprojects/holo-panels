@@ -73,6 +73,7 @@ export class ClientActionStore<TResult = unknown> {
     if (!frame) return
     this.#controllers.get(frame.manifest.id)?.abort()
     this.#controllers.delete(frame.manifest.id)
+    this.#active.delete(frame.manifest.id)
     this.publish(this.#state.frames.slice(0, -1))
   }
 
@@ -93,17 +94,17 @@ export class ClientActionStore<TResult = unknown> {
       ...(recordIds ? { recordIds } : {}),
     }, controller.signal)
     const execution = request.then(result => {
-      this.settle(frame.manifest.id, requestVersion, { phase: 'succeeded', result })
+      this.settle(frame.manifest.id, requestVersion, controller, { phase: 'succeeded', result })
       return result
     }).catch((cause: unknown) => {
-      this.settle(frame.manifest.id, requestVersion, {
+      this.settle(frame.manifest.id, requestVersion, controller, {
         error: cause instanceof Error ? cause.message : 'Action failed',
         phase: 'failed',
       })
       throw cause
     }).finally(() => {
-      this.#active.delete(frame.manifest.id)
-      this.#controllers.delete(frame.manifest.id)
+      if (this.#active.get(frame.manifest.id) === execution) this.#active.delete(frame.manifest.id)
+      if (this.#controllers.get(frame.manifest.id) === controller) this.#controllers.delete(frame.manifest.id)
     })
     this.#active.set(frame.manifest.id, execution)
     return execution
@@ -119,7 +120,8 @@ export class ClientActionStore<TResult = unknown> {
     this.publish(this.#state.frames.map(candidate => candidate === frame ? { ...candidate, ...changes } : candidate))
   }
 
-  private settle(id: string, requestVersion: number, changes: Partial<ClientActionFrame<TResult>>): void {
+  private settle(id: string, requestVersion: number, controller: AbortController, changes: Partial<ClientActionFrame<TResult>>): void {
+    if (this.#controllers.get(id) !== controller || controller.signal.aborted) return
     const frame = this.activeFrame
     if (!frame || frame.manifest.id !== id || frame.requestVersion !== requestVersion) return
     this.replace(frame, changes)

@@ -82,19 +82,7 @@ import { useRouter } from 'next/navigation.js'
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { NextPanelClientProps } from './contracts'
 import { Button, InputGroup, InputGroupAddon, InputGroupInput, PanelsIcon } from './internal-ui'
-
-function useStrictModeSafeDisposal<TValue extends object>(value: TValue, dispose: (current: TValue) => void): void {
-  const generations = useRef(new WeakMap<object, number>())
-  useEffect(() => {
-    const generation = (generations.current.get(value) ?? 0) + 1
-    generations.current.set(value, generation)
-    return () => {
-      globalThis.queueMicrotask(() => {
-        if (generations.current.get(value) === generation) dispose(value)
-      })
-    }
-  }, [dispose, value])
-}
+import { useStrictModeSafeDisposal } from './client-lifecycle'
 
 const disposeEffectSession = (session: ClientEffectSession): void => session.dispose()
 

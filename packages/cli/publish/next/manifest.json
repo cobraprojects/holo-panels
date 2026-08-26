@@ -7,6 +7,10 @@
       "checksum": "08ba05f995786e338b3b453f92e6c3f62effa238a39a7a04b805fedf365871b0"
     },
     {
+      "path": "client-lifecycle.ts",
+      "checksum": "bfd42eea8aff1b7dc34de95f20dae616a897cd4d14e572427f35a45ec1c84027"
+    },
+    {
       "path": "contracts.ts",
       "checksum": "725364cb06ca3bcfbad42d7c8fcaeb9451dcd00ede797349d0b05757a9406d4e"
     },
@@ -16,11 +20,11 @@
     },
     {
       "path": "panel-client.tsx",
-      "checksum": "255f923852a7c874dc6a58402be8264992d88fbb5c6f062f63f3060e486cb6d5"
+      "checksum": "80493485369f7191730505d6ae221b9e2db27dabae5829e57ff862aa163788d8"
     },
     {
       "path": "resource-page.tsx",
-      "checksum": "c910beec413503170607e6fb8dc2ccd76cfef253e760136e3be9ddd572818fcc"
+      "checksum": "8da6249112b47c1dba9b664059b250e4a9f5ac0248b1c0039a15b1eb41465559"
     }
   ]
 }

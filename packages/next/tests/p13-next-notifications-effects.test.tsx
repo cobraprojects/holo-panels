@@ -196,6 +196,68 @@ describe('Next notification and effect integration', () => {
     await act(async () => root.unmount())
   })
 
+  it('replaces a resource client before aborting its requests and ignores the obsolete response', async () => {
+    document.cookie = 'XSRF-TOKEN=valid; Path=/'
+    const requests: Array<{
+      readonly id: string
+      readonly signal: AbortSignal | null
+      resolve(response: Response): void
+    }> = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const request = await decodedRequest(input, init)
+      return await new Promise<Response>(resolve => requests.push({
+        id: request.id,
+        resolve,
+        signal: init?.signal ?? (input instanceof Request ? input.signal : null),
+      }))
+    }))
+    const toastStore = new ClientToastStore()
+    const effects = new ClientEffectSession({ panelId: 'admin', toastStore })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const resource = (key: string, title: string) => <NextPanelResourcePage
+      data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title } }}
+      effects={effects}
+      key={key}
+      panelId="admin"
+      panelPath="/admin"
+      properties={editProperties()}
+    />
+
+    await act(async () => root.render(resource('first', 'First post')))
+    await click(container, 'Save post')
+    expect(requests).toHaveLength(1)
+
+    await act(async () => {
+      root.render(resource('replacement', 'Replacement post'))
+      await Promise.resolve()
+    })
+    expect(requests[0]?.signal?.aborted).toBe(true)
+    await click(container, 'Save post')
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.signal?.aborted).toBe(false)
+
+    requests[0]?.resolve(Response.json({
+      data: { record: { id: 1, slug: 'first-post', title: 'Obsolete post' } },
+      effects: [{ kind: 'toast', level: 'danger', message: 'Obsolete response' }],
+      id: requests[0].id,
+      ok: true,
+      protocolVersion: '1.0',
+    }))
+    requests[1]?.resolve(Response.json({
+      data: { record: { id: 1, slug: 'first-post', title: 'Current post' } },
+      effects: [{ kind: 'toast', level: 'success', message: 'Current response' }],
+      id: requests[1].id,
+      ok: true,
+      protocolVersion: '1.0',
+    }))
+
+    await vi.waitFor(() => expect(toastStore.state.items.map(item => item.title)).toEqual(['Current response']))
+    await act(async () => root.unmount())
+    effects.dispose()
+  })
+
   it('rejects a multibyte operation envelope above 4 MiB without flashing success effects', async () => {
     const effects = [
       { kind: 'redirect' as const, url: '/admin' },

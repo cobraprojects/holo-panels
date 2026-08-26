@@ -40,8 +40,9 @@ import {
   type UploadPolicy,
 } from '@holo-js/panels-react'
 import { useRouter } from 'next/navigation.js'
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Button, Card, CardContent, CardFooter, PanelsIcon } from './internal-ui'
+import { useClientRequestController } from './client-lifecycle'
 
 export interface NextResourceOperationResult {
   readonly data?: JsonObject
@@ -51,6 +52,40 @@ export interface NextResourceOperationResult {
 
 export interface NextResourceOperationTransport {
   execute(operation: 'action' | 'form-submit' | 'options' | 'table-data', payload: JsonObject): Promise<NextResourceOperationResult>
+}
+
+type ResourceOperation = Parameters<NextResourceOperationTransport['execute']>[0]
+type ScopedResourceOperation = (
+  operation: ResourceOperation,
+  payload: JsonObject,
+  signal?: AbortSignal,
+) => Promise<NextResourceOperationResult>
+
+const scopedResourceOperations = new WeakMap<NextResourceOperationTransport, ScopedResourceOperation>()
+const ClientRequestSignalContext = createContext<AbortSignal | null>(null)
+
+function requestSignal(owner: AbortSignal, operation?: AbortSignal): AbortSignal {
+  return operation ? AbortSignal.any([owner, operation]) : owner
+}
+
+function ownedUploadAdapter(adapter: ReturnType<typeof createBrowserUploadAdapter>, owner: AbortSignal): ReturnType<typeof createBrowserUploadAdapter> {
+  const owned: ReturnType<typeof createBrowserUploadAdapter> = {
+    create: (context, file, signal) => adapter.create(context, file, requestSignal(owner, signal)),
+    delete: (context, id, token, signal) => adapter.delete(context, id, token, requestSignal(owner, signal)),
+    deleteExisting: (context, id, signal) => adapter.deleteExisting(context, id, requestSignal(owner, signal)),
+    resolve: (context, id, token, signal) => adapter.resolve(context, id, token, requestSignal(owner, signal)),
+    write: (context, upload, contents, signal, onProgress) => adapter.write(context, upload, contents, requestSignal(owner, signal), onProgress),
+  }
+  return Object.freeze(owned)
+}
+
+function executeResourceOperation(
+  transport: NextResourceOperationTransport,
+  operation: ResourceOperation,
+  payload: JsonObject,
+  signal?: AbortSignal,
+): Promise<NextResourceOperationResult> {
+  return scopedResourceOperations.get(transport)?.(operation, payload, signal) ?? transport.execute(operation, payload)
 }
 
 type ResourceValues = Record<string, JsonValue>
@@ -237,7 +272,7 @@ function resourcePath(panelPath: string, resource: JsonObject): string {
   return `${panelBase}/${encodeURIComponent(resourceSlug)}`
 }
 
-function browserTransport(panelId: string, effects?: ClientEffectSession): NextResourceOperationTransport {
+function browserTransport(panelId: string, ownerSignal: AbortSignal, effects?: ClientEffectSession): NextResourceOperationTransport {
   const transport = new PanelsTransport({
     adapter: {
       async send(request) {
@@ -246,20 +281,22 @@ function browserTransport(panelId: string, effects?: ClientEffectSession): NextR
       },
     },
   })
-  return {
-    async execute(operation, payload) {
-      const descriptor = operation === 'table-data'
-        ? { kind: 'read' as const, name: operation }
-        : { kind: 'mutation' as const, name: operation, supportsIdempotency: true }
-      const response = await transport.execute(descriptor, {
-        endpoint: `/holo/panels/${encodeURIComponent(panelId)}/${operation}`,
-        panelId,
-        payload,
-      })
-      await effects?.apply(response)
-      return response.ok ? { data: object(response.data), ok: true } : { error: response.error.message, ok: false }
-    },
+  const execute: ScopedResourceOperation = async (operation, payload, signal) => {
+    const descriptor = operation === 'table-data'
+      ? { kind: 'read' as const, name: operation }
+      : { kind: 'mutation' as const, name: operation, supportsIdempotency: true }
+    const response = await transport.execute(descriptor, {
+      endpoint: `/holo/panels/${encodeURIComponent(panelId)}/${operation}`,
+      panelId,
+      payload,
+      signal: requestSignal(ownerSignal, signal),
+    })
+    await effects?.apply(response)
+    return response.ok ? { data: object(response.data), ok: true } : { error: response.error.message, ok: false }
   }
+  const operation = { execute: (name: ResourceOperation, payload: JsonObject) => execute(name, payload) }
+  scopedResourceOperations.set(operation, execute)
+  return operation
 }
 
 function configuredRoute(resource: JsonObject, name: 'create' | 'edit' | 'view', recordId?: string | number): string | null {
@@ -439,7 +476,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
   }), [columns, data.total, panelId, records, resourceId, table.filterMode])
   const refresh = (): void => {
     const query = store.query
-    void operation.execute('table-data', {
+    void executeResourceOperation(operation, 'table-data', {
       filters: query.filters,
       page: query.page,
       perPage: query.perPage,
@@ -463,13 +500,13 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
   return <div className="hp-resource-page">{createAction && createRoute ? <PanelsPageActions><Button asChild className="hp-action-trigger"><a data-action-id={text(createAction.id)} data-color={text(createAction.color) || undefined} href={createRoute}>{typeof createAction.icon === 'string' ? <PanelsIcon name={createAction.icon} /> : null}<span>{text(createAction.label) || text(labels.create) || 'Create'}</span></a></Button></PanelsPageActions> : null}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
     actions={actions}
     actionTransport={{
-      async execute(request) {
+      async execute(request, signal) {
         const manifest = actionDefinitions.get(request.actionId)
         if (!manifest) throw new Error('The requested action is not available.')
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds
           : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, recordIds: [...recordIds], resourceId })
+        const result = await executeResourceOperation(operation, 'action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, recordIds: [...recordIds], resourceId }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
@@ -560,6 +597,8 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
   readonly resourceId: string
   readonly values: Readonly<ResourceValues>
 }): ReactNode {
+  const ownerSignal = useContext(ClientRequestSignalContext)
+  if (!ownerSignal) throw new Error('Resource fields require a client request owner')
   const dynamic = dependentOptions(definition.properties as JsonObject, values)
   const inlineOptions = useMemo(() => staticOptions(definition.properties as JsonObject), [definition.properties])
   const sourceKind = text(Reflect.get(definition.properties, 'optionSource'))
@@ -568,21 +607,27 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
   const collectionStore = useMemo(() => collection ? new CollectionStore(collectionValues(valueAtPath(values, definition.path)), 'resource-item') : undefined, [collection, definition.path, values])
   const uploadPolicy = definition.type === 'panels:field:upload' ? Reflect.get(definition.properties, 'uploadPolicy') as UploadPolicy | undefined : undefined
   const uploadStore = useMemo(() => uploadPolicy ? createUploadStore({
-    adapter: createBrowserUploadAdapter({
+    adapter: ownedUploadAdapter(createBrowserUploadAdapter({
       endpoint: `/holo/panels/${encodeURIComponent(panelId)}/upload`,
       fieldId: definition.path,
       intent: pageOperation === 'edit' ? 'edit' : 'create',
       panelId,
       recordId: typeof recordId === 'string' || typeof recordId === 'number' ? recordId : null,
       resourceId,
-    }),
+    }), ownerSignal),
     context: { actorId: 'current', fieldId: definition.path, panelId, resourceId },
     policy: uploadPolicy,
-  }) : undefined, [definition.path, pageOperation, panelId, recordId, resourceId, uploadPolicy])
-  useEffect(() => uploadStore?.subscribe((snapshot) => {
-    const stored = snapshot.items.filter(item => item.status === 'stored' && item.sessionId && item.token).map(item => ({ id: item.id, sessionId: item.sessionId!, token: item.token! }))
-    form.set(definition.path, (uploadPolicy?.maximumFiles === 1 ? stored[0] ?? '' : stored) as JsonValue)
-  }), [definition.path, form, uploadPolicy?.maximumFiles, uploadStore])
+  }) : undefined, [definition.path, ownerSignal, pageOperation, panelId, recordId, resourceId, uploadPolicy])
+  useEffect(() => {
+    const unsubscribe = uploadStore?.subscribe((snapshot) => {
+      const stored = snapshot.items.filter(item => item.status === 'stored' && item.sessionId && item.token).map(item => ({ id: item.id, sessionId: item.sessionId!, token: item.token! }))
+      form.set(definition.path, (uploadPolicy?.maximumFiles === 1 ? stored[0] ?? '' : stored) as JsonValue)
+    })
+    return () => {
+      unsubscribe?.()
+      uploadStore?.reset()
+    }
+  }, [definition.path, form, uploadPolicy?.maximumFiles, uploadStore])
   const optionStore = useMemo(() => dynamic || inlineOptions.length > 0 || serverOptions ? new OptionStore<string | number>({
     dependencies: dynamic ? { [dynamic.dependency]: valueAtPath(values, dynamic.dependency) ?? null } : {},
     fieldId: definition.path,
@@ -592,17 +637,17 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
     resourceId,
     tenantKey: 'current',
     transport: {
-      async hydrateSelected(_request, selected) {
+      async hydrateSelected(_request, selected, signal) {
         if (serverOptions) {
-          const result = await operation.execute('options', { action: 'hydrate', dependencies: { ..._request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } })
+          const result = await executeResourceOperation(operation, 'options', { action: 'hydrate', dependencies: { ..._request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to hydrate options.')
           return staticOptions({ options: result.data.options ?? [] })
         }
         return selected.flatMap(value => typeof value === 'string' && value.length > 0 ? [{ label: value, value }] : [])
       },
-      async list(request) {
+      async list(request, signal) {
         if (serverOptions) {
-          const result = await operation.execute('options', { action: 'list', dependencies: { ...request.dependencies }, fieldId: definition.path, page: request.page, perPage: request.perPage, resourceId, search: request.search, values: { ...values } })
+          const result = await executeResourceOperation(operation, 'options', { action: 'list', dependencies: { ...request.dependencies }, fieldId: definition.path, page: request.page, perPage: request.perPage, resourceId, search: request.search, values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to load options.')
           const available = staticOptions({ options: result.data.options ?? [] })
           return { hasMore: result.data.hasMore === true, options: available, page: request.page, perPage: request.perPage, total: typeof result.data.total === 'number' ? result.data.total : available.length }
@@ -612,9 +657,9 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
           : inlineOptions
         return { hasMore: false, options: available, page: 1, perPage: request.perPage }
       },
-      async validateSelection(request, selected) {
+      async validateSelection(request, selected, signal) {
         if (serverOptions) {
-          const result = await operation.execute('options', { action: 'validate', dependencies: { ...request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } })
+          const result = await executeResourceOperation(operation, 'options', { action: 'validate', dependencies: { ...request.dependencies }, fieldId: definition.path, resourceId, selectedValues: [...selected], values: { ...values } }, signal)
           return result.ok && result.data?.valid === true
         }
         const available = new Set(dynamic
@@ -623,8 +668,8 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
         return selected.every(value => available.has(value))
       },
       ...(serverOptions && Reflect.get(definition.properties, 'canCreateOption') === true ? {
-        async create(request, label) {
-          const result = await operation.execute('options', { action: 'create', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, values: { ...values } })
+        async create(request, label, signal) {
+          const result = await executeResourceOperation(operation, 'options', { action: 'create', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to create option.')
           const option = staticOptions({ options: [result.data.option ?? null] })[0]
           if (!option) throw new Error('The created option response is invalid.')
@@ -632,8 +677,8 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
         },
       } : {}),
       ...(serverOptions && Reflect.get(definition.properties, 'canEditOption') === true ? {
-        async edit(request, value, label) {
-          const result = await operation.execute('options', { action: 'edit', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, value, values: { ...values } })
+        async edit(request, value, label, signal) {
+          const result = await executeResourceOperation(operation, 'options', { action: 'edit', dependencies: { ...request.dependencies }, fieldId: definition.path, label, resourceId, value, values: { ...values } }, signal)
           if (!result.ok || !result.data) throw new Error(result.error ?? 'Unable to edit option.')
           const option = staticOptions({ options: [result.data.option ?? null] })[0]
           if (!option) throw new Error('The edited option response is invalid.')
@@ -689,6 +734,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   }, [fields, formManifest, record])
   const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest) }), [formManifest, initialValues])
   const state = useFormStore<ResourceValues>(form)
+  useEffect(() => () => form.cancelRequests(), [form])
   useEffect(() => {
     if (!unsavedChangesAlerts || state.dirtyPaths.length === 0) return
     const preventUnload = (event: BeforeUnloadEvent): void => {
@@ -705,7 +751,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   const [relations, setRelations] = useState(() => relationManagers(data.relations))
   useEffect(() => setRelations(relationManagers(data.relations)), [data.relations])
   const loadRelationOptions: NonNullable<ReactRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
-    const result = await operation.execute('options', {
+    const result = await executeResourceOperation(operation, 'options', {
       ownerId: record[routeKey] ?? null,
       relationManagerId: managerId,
       resourceId,
@@ -719,7 +765,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     })
   }
   const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request) => {
-    const result = await operation.execute('action', {
+    const result = await executeResourceOperation(operation, 'action', {
       intent: 'relation',
       managerId: request.managerId,
       ownerId: record[routeKey] ?? null,
@@ -738,7 +784,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     await form.submit(async context => {
       const errors = Object.fromEntries(fields.filter(field => field.required && (context.values[field.path] === '' || context.values[field.path] === null || typeof context.values[field.path] === 'undefined')).map(field => [field.path, 'This field is required.']))
       if (Object.keys(errors).length > 0) return { errors, focusFirstError: true }
-      const result = await operation.execute('form-submit', { ...context.values, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId })
+      const result = await executeResourceOperation(operation, 'form-submit', { ...context.values, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, context.signal)
       if (!result.ok) return { errors: { [fields[0]?.path ?? routeKey]: result.error ?? 'The record could not be saved.' }, focusFirstError: true }
       setSaved(true)
       const savedRecord = object(result.data?.record)
@@ -829,17 +875,17 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
   const store = useMemo(() => new ClientActionStore({
     createIdempotencyKey: () => globalThis.crypto.randomUUID(),
     transport: {
-      async execute(request) {
+      async execute(request, signal) {
         const kind = actionKinds.get(request.actionId)
         if (!kind) throw new Error('The requested action is not available.')
-        const result = await operation.execute('action', {
+        const result = await executeResourceOperation(operation, 'action', {
           actionId: request.actionId,
           idempotencyKey: request.idempotencyKey,
           input: request.input,
           intent: kind,
           recordIds: [recordId],
           resourceId,
-        })
+        }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('The record could not be updated.')
         if (kind === 'delete' || kind === 'force-delete') router.push(basePath)
@@ -847,6 +893,9 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
       },
     },
   }), [actionKinds, basePath, operation, recordId, resourceId])
+  useEffect(() => () => {
+    while (store.activeFrame) store.close()
+  }, [store])
   if (actions.length === 0) return null
   return <PanelsPageActions>
     {actions.map((action) => {
@@ -879,7 +928,7 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
   const [relations, setRelations] = useState(() => relationManagers(data.relations))
   useEffect(() => setRelations(relationManagers(data.relations)), [data.relations])
   const loadRelationOptions: NonNullable<ReactRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
-    const result = await operation.execute('options', { ownerId: record[routeKey] ?? null, relationManagerId: managerId, resourceId, search })
+    const result = await executeResourceOperation(operation, 'options', { ownerId: record[routeKey] ?? null, relationManagerId: managerId, resourceId, search })
     if (!result.ok) throw new Error(result.error ?? 'Related records could not be loaded.')
     return objects(result.data?.options).flatMap(option => {
       const value = option.value
@@ -888,7 +937,7 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
     })
   }
   const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request) => {
-    const result = await operation.execute('action', {
+    const result = await executeResourceOperation(operation, 'action', {
       intent: 'relation',
       managerId: request.managerId,
       ownerId: record[routeKey] ?? null,
@@ -925,16 +974,20 @@ export function NextPanelResourcePage({ createRedirect = 'edit', data, editRedir
   readonly renderHookScopes?: readonly string[]
   readonly unsavedChangesAlerts?: boolean
 }): ReactNode {
+  const requestController = useClientRequestController()
   const registry = useMemo(
     () => registryInput ?? registerReactFieldRenderers(createDefaultComponentRegistry()),
     [registryInput],
   )
-  const operation = useMemo(() => operationInput ?? browserTransport(panelId, effects), [effects, operationInput, panelId])
+  const operation = useMemo(() => operationInput ?? browserTransport(panelId, requestController.signal, effects), [effects, operationInput, panelId, requestController.signal])
   const pageOperation = text(properties.operation) || 'view'
   const resource = object(properties.resource)
   const basePath = resourcePath(panelPath, resource)
   const renderHookManifest = panelManifest ?? Object.freeze({ id: panelId, slots: Object.freeze({}) })
-  if (pageOperation === 'list') return <ResourceList data={data} operation={operation} panelId={panelId} panelManifest={renderHookManifest} registry={registry} renderHookScopes={renderHookScopes} resource={resource} />
-  if (pageOperation === 'create' || pageOperation === 'edit') return <ResourceForm basePath={basePath} createRedirect={createRedirect} data={data} editRedirect={editRedirect} operation={operation} pageOperation={pageOperation} panelId={panelId} panelManifest={renderHookManifest} registry={registry} renderHookScopes={renderHookScopes} resource={resource} unsavedChangesAlerts={unsavedChangesAlerts} />
-  return <ResourceView basePath={basePath} data={data} operation={operation} panelId={panelId} panelManifest={renderHookManifest} readOnlyRelations={readOnlyRelations} registry={registry} renderHookScopes={renderHookScopes} resource={resource} />
+  const page = pageOperation === 'list'
+    ? <ResourceList data={data} operation={operation} panelId={panelId} panelManifest={renderHookManifest} registry={registry} renderHookScopes={renderHookScopes} resource={resource} />
+    : pageOperation === 'create' || pageOperation === 'edit'
+      ? <ResourceForm basePath={basePath} createRedirect={createRedirect} data={data} editRedirect={editRedirect} operation={operation} pageOperation={pageOperation} panelId={panelId} panelManifest={renderHookManifest} registry={registry} renderHookScopes={renderHookScopes} resource={resource} unsavedChangesAlerts={unsavedChangesAlerts} />
+      : <ResourceView basePath={basePath} data={data} operation={operation} panelId={panelId} panelManifest={renderHookManifest} readOnlyRelations={readOnlyRelations} registry={registry} renderHookScopes={renderHookScopes} resource={resource} />
+  return <ClientRequestSignalContext.Provider value={requestController.signal}>{page}</ClientRequestSignalContext.Provider>
 }

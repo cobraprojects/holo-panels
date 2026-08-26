@@ -138,7 +138,6 @@ export class UploadStore {
     for (const controller of this.#controllers.values()) controller.abort()
     this.#controllers.clear()
     this.#queue.splice(0)
-    this.#active = 0
     this.publish(existing.map(existingItem))
   }
 

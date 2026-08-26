@@ -204,6 +204,29 @@ describe('panels client transport', () => {
     expect(recorder.requests).toHaveLength(1)
   })
 
+  it('discards a response that arrives after its owner aborts an adapter that ignores cancellation', async () => {
+    const controller = new AbortController()
+    let resolveResponse: ((response: TransportHttpResponse) => void) | undefined
+    const recorder = createTransportRecorder([() => new Promise(resolve => { resolveResponse = resolve })])
+    const client = new PanelsTransport({
+      adapter: recorder,
+      csrfProvider,
+      createId: () => '00000000-0000-4000-8000-000000000001',
+    })
+    const execution = client.execute(readOperation, {
+      endpoint: '/operations',
+      panelId: 'admin',
+      payload: { page: 1 },
+      signal: controller.signal,
+    })
+
+    controller.abort()
+    resolveResponse?.(success('00000000-0000-4000-8000-000000000001', { records: ['obsolete'] }))
+
+    await expect(execution).rejects.toMatchObject({ name: 'AbortError' })
+    expect(recorder.requests).toHaveLength(1)
+  })
+
   it('rejects protocol mismatch without retrying or returning state data', async () => {
     const recorder = createTransportRecorder([{
       status: 200,

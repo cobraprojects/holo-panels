@@ -48,6 +48,10 @@
   } from './resource-page'
 
   let { data, effects, pageActionsTarget, registry }: { readonly data: PanelPageData, readonly effects: ClientEffectSession, readonly pageActionsTarget?: HTMLElement, readonly registry?: SvelteComponentRegistry } = $props()
+  const requestController = $derived.by(() => {
+    data.page.manifest.path
+    return new AbortController()
+  })
   const endpoint = $derived(`/holo/panels/${data.panel.manifest.id}`)
   const pageType = $derived(data.page.manifest.pageType)
   const resource = $derived(resourcePageMetadata(data.page.data.resource ?? data.page.manifest.body?.properties.resource, data.page.manifest.path, pageType))
@@ -115,14 +119,14 @@
     if (field.type !== 'panels:field:upload' || !policy || !resource) return []
     const routeId = recordRouteIdentifier(record)
     const upload = createUploadStore({
-      adapter: createBrowserUploadAdapter({
+      adapter: ownedUploadAdapter(createBrowserUploadAdapter({
         endpoint: `${endpoint}/upload`,
         fieldId: field.path,
         intent: pageType === 'edit' ? 'edit' : 'create',
         panelId: data.panel.manifest.id,
         recordId: routeId === '' ? null : routeId,
         resourceId: resource.id,
-      }),
+      }), requestController.signal),
       context: { actorId: String(data.panel.actor.id ?? 'current'), fieldId: field.path, panelId: data.panel.manifest.id, resourceId: resource.id },
       policy,
     })
@@ -166,7 +170,7 @@
             recordIds: toJsonValue(request.recordIds ?? []),
             resourceId: resource?.id ?? '',
           },
-          signal,
+          signal: requestSignal(requestController.signal, signal),
         })
         await effects.apply(response)
         if (!response.ok) throw new Error(response.error.message)
@@ -199,8 +203,37 @@
       const policy = resource?.fields.find(field => field.path === path)?.properties?.uploadPolicy
       form.set(path, uploadPolicy(policy)?.maximumFiles === 1 ? stored[0] ?? '' : stored)
     }))
-    return () => unsubscribers.forEach(unsubscribe => unsubscribe())
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe())
+      for (const upload of uploadStores.values()) upload.reset()
+    }
   })
+
+  $effect(() => {
+    const controller = requestController
+    const activeForm = form
+    const activeActionStore = actionStore
+    return () => {
+      controller.abort()
+      activeForm.cancelRequests()
+      while (activeActionStore.activeFrame) activeActionStore.close()
+    }
+  })
+
+  function requestSignal(owner: AbortSignal, operation?: AbortSignal): AbortSignal {
+    return operation ? AbortSignal.any([owner, operation]) : owner
+  }
+
+  function ownedUploadAdapter(adapter: ReturnType<typeof createBrowserUploadAdapter>, owner: AbortSignal): ReturnType<typeof createBrowserUploadAdapter> {
+    const owned: ReturnType<typeof createBrowserUploadAdapter> = {
+      create: (context, file, signal) => adapter.create(context, file, requestSignal(owner, signal)),
+      delete: (context, id, token, signal) => adapter.delete(context, id, token, requestSignal(owner, signal)),
+      deleteExisting: (context, id, signal) => adapter.deleteExisting(context, id, requestSignal(owner, signal)),
+      resolve: (context, id, token, signal) => adapter.resolve(context, id, token, requestSignal(owner, signal)),
+      write: (context, upload, contents, signal, onProgress) => adapter.write(context, upload, contents, requestSignal(owner, signal), onProgress),
+    }
+    return Object.freeze(owned)
+  }
 
   function uploadPolicy(value: unknown): UploadPolicy | null {
     return value && typeof value === 'object' && !Array.isArray(value) ? value as UploadPolicy : null
@@ -365,29 +398,29 @@
       resourceId: resource?.id ?? '',
       tenantKey: String(data.panel.actor.id ?? ''),
       transport: {
-        async hydrateSelected(request, selected) {
+        async hydrateSelected(request, selected, signal) {
           if (!definition.server) return available.filter(option => selected.includes(option.value))
-          const response = await optionRequest(fieldId, 'hydrate', request, selected)
+          const response = await optionRequest(fieldId, 'hydrate', request, selected, signal)
           return response.options
         },
-        async list(request) {
+        async list(request, signal) {
           if (!definition.server) return page
-          return await optionRequest(fieldId, 'list', request, [])
+          return await optionRequest(fieldId, 'list', request, [], signal)
         },
-        async validateSelection(request, selected) {
+        async validateSelection(request, selected, signal) {
           if (!definition.server) return selected.every(value => available.some(option => option.value === value))
-          return (await optionRequest(fieldId, 'validate', request, selected)).valid === true
+          return (await optionRequest(fieldId, 'validate', request, selected, signal)).valid === true
         },
         ...(definition.server && definition.canCreate ? {
-          async create(request, label) {
-            const response = await optionRequest(fieldId, 'create', request, [], label)
+          async create(request, label, signal) {
+            const response = await optionRequest(fieldId, 'create', request, [], signal, label)
             if (!response.option) throw new Error('The created option response is invalid')
             return response.option
           },
         } : {}),
         ...(definition.server && definition.canEdit ? {
-          async edit(request, value, label) {
-            const response = await optionRequest(fieldId, 'edit', request, [], label, value)
+          async edit(request, value, label, signal) {
+            const response = await optionRequest(fieldId, 'edit', request, [], signal, label, value)
             if (!response.option) throw new Error('The edited option response is invalid')
             return response.option
           },
@@ -401,6 +434,7 @@
     action: 'create' | 'edit' | 'hydrate' | 'list' | 'validate',
     request: Readonly<{ readonly dependencies: Readonly<Record<string, JsonValue>>, readonly page: number, readonly perPage: number, readonly search: string }>,
     selectedValues: readonly (number | string)[],
+    signal: AbortSignal,
     label?: string,
     value?: number | string,
   ): Promise<{ readonly hasMore: boolean, readonly option?: { readonly label: string, readonly value: number | string }, readonly options: readonly { readonly label: string, readonly value: number | string }[], readonly page: number, readonly perPage: number, readonly total?: number, readonly valid?: boolean }> {
@@ -408,6 +442,7 @@
       endpoint: `${endpoint}/options`,
       panelId: data.panel.manifest.id,
       payload: { action, dependencies: toJsonValue(request.dependencies), fieldId, page: request.page, perPage: request.perPage, resourceId: resource?.id ?? '', search: request.search, selectedValues: toJsonValue(selectedValues), values: toJsonValue($formState.values), ...(label ? { label } : {}), ...(typeof value === 'number' || typeof value === 'string' ? { value } : {}) },
+      signal: requestSignal(requestController.signal, signal),
     })
     await effects.apply(response)
     if (!response.ok) throw new Error(response.error.message)
@@ -438,7 +473,7 @@
             resourceId: resource.id,
             values: toJsonValue(context.values),
           },
-          signal: context.signal,
+          signal: requestSignal(requestController.signal, context.signal),
         })
         await effects.apply(response)
         if (!response.ok) throw new Error(response.error.message)
@@ -482,6 +517,7 @@
         resourceId: resource.id,
         ...(request.values ? { values: toJsonValue(request.values) } : {}),
       },
+      signal: requestController.signal,
     })
     await effects.apply(response)
     if (!response.ok) throw new Error(response.error.message)
@@ -496,6 +532,7 @@
       endpoint: `${endpoint}/options`,
       panelId: data.panel.manifest.id,
       payload: { ownerId, relationManagerId: managerId, resourceId: resource.id, search },
+      signal: requestController.signal,
     })
     await effects.apply(response)
     if (!response.ok) throw new Error(response.error.message)
@@ -509,6 +546,7 @@
       endpoint: `${endpoint}/table-data`,
       panelId: data.panel.manifest.id,
       payload: { filters: toJsonValue(query.filters), page: query.page, perPage: query.perPage, resourceId: resource.id, search: query.search, sort: toJsonValue(query.sort) },
+      signal: requestController.signal,
     })
     await effects.apply(response)
     if (!response.ok) {
@@ -551,7 +589,7 @@
               : resourceOperationIdentifiers(records, resource.recordId, resource.routeKey, request.recordId)),
             resourceId: resource.id,
           },
-          signal,
+          signal: requestSignal(requestController.signal, signal),
         })
         await effects.apply(response)
         if (!response.ok) throw new Error(response.error.message)

@@ -114,6 +114,40 @@ describe('upload client store', () => {
     expect(store.state.items).toEqual([])
   })
 
+  it('keeps replacement uploads queued until cancelled work releases its concurrency slot', async () => {
+    const starts: string[] = []
+    let concurrent = 0
+    let maximumConcurrent = 0
+    const transport = adapter()
+    transport.create = async (_context, upload, signal) => {
+      starts.push(upload.name)
+      concurrent += 1
+      maximumConcurrent = Math.max(maximumConcurrent, concurrent)
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const onAbort = (): void => reject(Object.assign(new Error('cancelled'), { name: 'AbortError' }))
+          signal.addEventListener('abort', onAbort, { once: true })
+          setTimeout(resolve, 0)
+        })
+      } finally {
+        concurrent -= 1
+      }
+      return await adapter().create(_context, upload, signal)
+    }
+    const store = createUploadStore({ adapter: transport, context, maximumConcurrency: 1, policy })
+
+    store.add([file('obsolete.png')])
+    expect(starts).toEqual(['obsolete.png'])
+    store.reset()
+    store.add([file('replacement.png')])
+    expect(starts).toEqual(['obsolete.png'])
+
+    await settled()
+    expect(starts).toEqual(['obsolete.png', 'replacement.png'])
+    expect(maximumConcurrent).toBe(1)
+    expect(store.state.items).toEqual([expect.objectContaining({ name: 'replacement.png', status: 'stored' })])
+  })
+
   it('sends binary upload contents as multipart data to the fixed panel route', async () => {
     const send = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       expect(_url).toBe('/holo/panels/admin/upload')

@@ -1,6 +1,6 @@
 import { createNextHoloHelpers } from '@holo-js/adapter-next/runtime'
 import type { HoloAuth } from '@holo-js/panels-react'
-import { executeGeneratedGlobalSearch, executeGeneratedResourceOperation, executeGeneratedUploadOperation, executePanelDatabaseNotificationOperation, toJsonValue, type CompiledPanelDefinition } from '@holo-js/panels-react/server'
+import { executeGeneratedGlobalSearch, executeGeneratedResourceOperation, executeGeneratedUploadOperation, executeGeneratedWidgetOperation, executePanelDatabaseNotificationOperation, toJsonValue, type CompiledPanelDefinition } from '@holo-js/panels-react/server'
 import type { NextPanelServerRegistry, NextPanelsRuntime } from './contracts'
 
 const holo = createNextHoloHelpers({ projectRoot: process.cwd() })
@@ -91,6 +91,13 @@ export function createGeneratedNextPanelsRuntime(registry: NextPanelServerRegist
         }
       }
       if (input.operation !== 'action' && input.operation !== 'form-submit' && input.operation !== 'options' && input.operation !== 'table-data') throw new Error(`[Holo Panels] Generated operation "${input.operation}" is not available.`)
+      if (input.operation === 'action' && input.payload.widgetId !== undefined) {
+        const loader = registry[`${input.panelId}:panel:${input.panelId}`]
+        if (!loader) throw new Error('[Holo Panels] The requested panel is not registered.')
+        const value = await loader()
+        const panel = ('compile' in value && typeof value.compile === 'function' ? value.compile() : value) as CompiledPanelDefinition<object>
+        return executeGeneratedWidgetOperation(registry, input.payload, input.scope, panel)
+      }
       const resourceId = input.payload.resourceId
       if (typeof resourceId !== 'string') throw new Error('[Holo Panels] Generated resource operations require a resource ID.')
       const loader = registry[`${input.panelId}:resource:${resourceId}`]
@@ -108,6 +115,7 @@ export function createGeneratedNextPanelsRuntime(registry: NextPanelServerRegist
           ...(input.scope.tenantBindings ? { tenantBindings: input.scope.tenantBindings } : {}),
         },
         operation: input.operation,
+        panel,
         panelId: input.panelId,
         payload: input.payload,
         strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,

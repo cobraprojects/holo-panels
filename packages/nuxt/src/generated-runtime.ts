@@ -1,4 +1,5 @@
 import {
+  executeGeneratedWidgetOperation,
   createNavigationSeed,
   executeGeneratedGlobalSearch,
   executeGeneratedResourceOperation,
@@ -253,6 +254,23 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
         }
       }
       if (context.operation !== 'action' && context.operation !== 'form-submit' && context.operation !== 'options' && context.operation !== 'table-data') throw Object.assign(new Error('Panel operation not found'), { statusCode: 404 })
+      if (context.operation === 'action' && context.input.widgetId !== undefined) {
+        const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)
+        if (!panel) throw Object.assign(new Error('Panel not found'), { statusCode: 404 })
+        const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
+        const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
+        return executeGeneratedWidgetOperation(registry, context.input, {
+          actor: context.actor,
+          locale: 'en',
+          panelId: context.panelId,
+          provider: context.provider,
+          services: (await context.getApp()).runtime,
+          signal: context.signal,
+          tenant: context.tenant ?? tenancy?.tenantId,
+          ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+          ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+        }, panel)
+      }
       const resourceId = context.input.resourceId
       if (typeof resourceId !== 'string') throw Object.assign(new Error('Resource ID is required'), { statusCode: 422 })
       const loader = registry[`${context.panelId}:resource:${resourceId}`]
@@ -272,6 +290,7 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
           } : {}),
         },
         operation: context.operation,
+        panel,
         panelId: context.panelId,
         payload: context.input,
         strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,

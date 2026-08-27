@@ -13,6 +13,7 @@
     PanelsTransport,
     PanelShellStore,
     WidgetStore,
+    createWidgetActionStore,
     panelConfigurationStyleAttribute,
     providePanelsRenderHooks,
     registerPanelNotificationStore,
@@ -144,6 +145,8 @@
     keybindings: data.panel.manifest.globalSearchConfiguration?.keybindings,
   }) : null)
   const headerWidgets = $derived(data.widgets.header.map(widget => ({
+    actions: widget.actions,
+    actionStore: createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId: data.panel.manifest.id, resourceId: widget.resourceId, transport: browserTransport(), widgetId: widget.manifest.id }),
     manifest: widget.manifest as SvelteWidgetManifest,
     panelId: data.panel.manifest.id,
     placement: 'dashboard' as const,
@@ -153,6 +156,8 @@
     }),
   })))
   const footerWidgets = $derived(data.widgets.footer.map(widget => ({
+    actions: widget.actions,
+    actionStore: createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId: data.panel.manifest.id, resourceId: widget.resourceId, transport: browserTransport(), widgetId: widget.manifest.id }),
     manifest: widget.manifest as SvelteWidgetManifest,
     panelId: data.panel.manifest.id,
     placement: 'dashboard' as const,
@@ -161,6 +166,11 @@
       initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status },
     }),
   })))
+
+  $effect(() => {
+    const widgets = [...headerWidgets, ...footerWidgets]
+    return () => { for (const widget of widgets) while (widget.actionStore.activeFrame) widget.actionStore.close() }
+  })
 
   function searchResponse(value: unknown, panelId: string, term: string): ClientSearchResponse {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Global search returned an invalid response')

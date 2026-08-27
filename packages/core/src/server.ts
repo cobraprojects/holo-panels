@@ -12,6 +12,7 @@ export { bootPanel, executePanelPipeline, panelErrorNotificationEffect, PanelRun
 export { executePanelRoute, resolvePanelRoute } from './panels/routes'
 export type { HoloAuth } from './panels/contracts'
 export { ResourceExecutor } from './resources/executor'
+export { executeGeneratedWidgetOperation, executeWidgetAction } from './widgets/execution'
 export { createGeneratedResourcePage, executeGeneratedGlobalSearch, executeGeneratedResourceOperation, executeGeneratedUploadOperation } from './resources/generated-pages'
 export type { GeneratedResourceOperationInput, GeneratedResourceOperationResult, GeneratedUploadOperationInput } from './resources/generated-pages'
 export type { ResourceExecutionContext } from './resources/contracts'

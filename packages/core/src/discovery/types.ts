@@ -37,6 +37,7 @@ export interface DiscoverableDefinition<TKind extends DiscoverableKind = Discove
   readonly panelId?: string
   readonly route?: string
   readonly permissionKeys?: readonly string[]
+  readonly permissionReferences?: readonly string[]
   readonly componentKeys?: readonly string[]
   readonly navigationKeys?: readonly string[]
   readonly default?: boolean

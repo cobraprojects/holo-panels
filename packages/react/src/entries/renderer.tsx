@@ -15,6 +15,7 @@ import {
   type EntrySafeContentSegment,
 } from '@holo-js/panels-client'
 import { Button } from '../internal-ui'
+import { ReactActionRenderer } from '../actions/renderer'
 import { colorValue, entryRendererName, entryText, safeEntryUrl } from './helpers'
 import type {
   ReactCustomEntryProps,
@@ -174,6 +175,7 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
     }
   }
   const attributes = entryAttributes(entry)
+  const actions = props.actionStore ? (props.actions ?? []).filter(action => entry.actions.includes(action.id)) : []
   return <section
     {...attributes}
     aria-labelledby={entry.label ? labelId : undefined}
@@ -190,12 +192,13 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
       : content}</div>
     <EntrySlot entry={entry} placement="after" props={props} />
     {entry.copyable ? <Button onClick={() => void copy()} type="button">Copy</Button> : null}
-    {entry.actions.map(action => <Button disabled={entry.pending || !props.action} key={action} onClick={() => void runAction(action)} type="button">{action}</Button>)}
+    {props.actionStore ? null : entry.actions.map(action => <Button disabled={entry.pending || !props.action} key={action} onClick={() => void runAction(action)} type="button">{action}</Button>)}
     <span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>
     {entry.pending ? <span role="status">Loading entry</span> : null}
     {entry.error ? <span role="alert">{entry.error}</span> : null}
     {actionError ? <span role="alert">{actionError}</span> : null}
     <EntrySlot entry={entry} placement="below" props={props} />
+    {props.actionStore && actions[0] ? <ReactActionRenderer actions={actions} manifest={actions[0]} panelId={props.panelId} recordIds={props.recordIds} registry={props.registry} store={props.actionStore} /> : null}
   </section>
 }
 

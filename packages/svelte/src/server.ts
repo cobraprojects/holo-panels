@@ -1,4 +1,5 @@
 export { ActionExecutionError } from '@holo-js/panels-core'
+export { executeGeneratedWidgetOperation } from '@holo-js/panels-core/server'
 export {
   PageAccessError,
   PanelRuntime,

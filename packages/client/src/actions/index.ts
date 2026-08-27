@@ -1,4 +1,5 @@
 export { ClientActionStore } from './store'
+export { createWidgetActionStore } from './widget'
 export { ClientTransferStore } from './transfers'
 export type {
   ClientExportStartRequest,

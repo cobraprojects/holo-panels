@@ -1,4 +1,4 @@
-import type { JsonValue } from '@holo-js/panels-client'
+import { ClientActionStore, type ClientActionManifest, type JsonValue } from '@holo-js/panels-client'
 import { createApp, createSSRApp, defineComponent, h, nextTick, type App } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -70,6 +70,17 @@ afterEach(() => {
 })
 
 describe('P8-A Vue entry renderer', () => {
+  it('renders registered action labels and opens their shared confirmation', async () => {
+    const action: ClientActionManifest = { badge: null, color: 'danger', confirmation: 'Delete this post?', disabled: false, icon: 'trash', id: 'delete', kind: 'delete', label: 'Delete post', modal: null, mount: 'record', size: 'medium', tooltip: null, type: 'delete', visible: true }
+    const actionStore = new ClientActionStore({ createIdempotencyKey: () => 'delete-entry', transport: { execute: async () => ({ effects: [], items: [], status: 'succeeded' }) } })
+    const container = mountEntries([{ actions: [action], actionStore, recordIds: [7], store: new EntryStore(snapshot('text', 'Draft', { actions: ['delete'] })) }])
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action-id="delete"]')
+    expect(trigger?.textContent).toContain('Delete post')
+    trigger?.click()
+    await nextTick()
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('Delete this post?')
+  })
+
   it('renders every built-in entry with accessible, safe semantics', () => {
     const entries = [
       snapshot('text', 'Published', { inlineLabel: true, properties: { badge: true }, tooltip: 'Current status' }),

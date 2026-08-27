@@ -170,6 +170,10 @@ abstract class ChildComponent<TRecord extends object = object> extends Component
     return this.schema(components)
   }
 
+  getComponents(): readonly SchemaComponentContract<TRecord>[] {
+    return this.#children
+  }
+
   protected override componentProperties(): JsonObject {
     return {
       children: this.#children.map(compileSchemaComponentManifest),

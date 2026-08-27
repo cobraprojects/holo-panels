@@ -508,7 +508,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
   }
   const createAction = objects(resource.actions).find(action => action.kind === 'create' && action.visible !== false)
   const createRoute = configuredRoute(resource, 'create')
-  return <div className="hp-resource-page">{createAction && createRoute ? <PanelsPageActions><Button asChild className="hp-action-trigger"><a data-action-id={text(createAction.id)} data-color={text(createAction.color) || undefined} href={createRoute}>{typeof createAction.icon === 'string' ? <PanelsIcon name={createAction.icon} /> : null}<span>{text(createAction.label) || text(labels.create) || 'Create'}</span></a></Button></PanelsPageActions> : null}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
+  return <div className="hp-resource-page">{createAction && createRoute ? <PanelsPageActions><Button asChild className="hp-action-trigger"><a data-action-id={text(createAction.id)} data-color={text(createAction.color) || undefined} href={createRoute}>{typeof createAction.icon === 'string' ? <PanelsIcon name={createAction.icon} /> : null}<span>{text(createAction.label) || text(labels.create) || 'Create'}</span></a></Button></PanelsPageActions> : null}<ResourcePageActions basePath="" operation={operation} panelId={panelId} registry={registry} resource={resource} source="list" /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
     actions={actions}
     actionTransport={{
       async execute(request, signal) {
@@ -874,14 +874,14 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
   readonly basePath: string
   readonly operation: NextResourceOperationTransport
   readonly panelId: string
-  readonly recordId: string | number
+  readonly recordId?: string | number
   readonly registry: ComponentRegistry
   readonly resource: JsonObject
-  readonly source: 'edit' | 'view'
+  readonly source: 'edit' | 'list' | 'view'
 }): ReactNode {
   const router = useRouter()
   const resourceId = text(resource.id)
-  const actions = useMemo(() => objects(resource.actions).map(actionManifest).filter((action): action is ClientActionManifest => action !== null && action.visible), [resource])
+  const actions = useMemo(() => objects(resource.actions).map(actionManifest).filter((action): action is ClientActionManifest => action !== null && action.visible && action.mount === (recordId === undefined ? 'page' : 'record')), [recordId, resource])
   const executableActions = useMemo(() => actions.filter(action => action.kind !== 'edit' && action.kind !== 'view' && action.kind !== 'create'), [actions])
   const actionKinds = useMemo(() => new Map(executableActions.map(action => [action.id, action.kind])), [executableActions])
   const store = useMemo(() => new ClientActionStore({
@@ -901,7 +901,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
             input: request.input,
             intent: kind,
             mount: request.mount,
-            recordIds: [recordId],
+            ...(recordId === undefined ? {} : { recordIds: [recordId] }),
             resourceId,
             source,
           }, signal)
@@ -917,8 +917,8 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
           publishPanelActionFailure(panelId, result.effects)
           throw new Error('The record could not be updated.')
         }
-        if (kind === 'delete' || kind === 'force-delete') router.push(basePath)
-        return { effects: [], items: [{ recordId, status: 'succeeded' as const }], status: 'succeeded' as const }
+        if (recordId !== undefined && (kind === 'delete' || kind === 'force-delete')) router.push(basePath)
+        return { effects: [], items: recordId === undefined ? [] : [{ recordId, status: 'succeeded' as const }], status: 'succeeded' as const }
       },
     },
   }), [actionKinds, basePath, operation, recordId, resourceId, source])
@@ -933,9 +933,44 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
         return route ? <Button asChild className="hp-action-trigger" key={action.id} variant="outline"><a data-action-id={action.id} data-color={action.color ?? undefined} href={route}>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>{action.label}</span></a></Button> : null
       }
       if (action.kind === 'create') return null
-      return <ReactActionRenderer key={action.id} manifest={action} panelId={panelId} recordIds={[recordId]} registry={registry} store={store} />
+      return null
     })}
+    {executableActions[0] ? <ReactActionRenderer actions={executableActions} manifest={executableActions[0]} panelId={panelId} recordIds={recordId === undefined ? undefined : [recordId]} registry={registry} store={store} /> : null}
   </PanelsPageActions>
+}
+
+function ResourceEntry({ definition, operation, panelId, record, recordId, registry, resourceId }: {
+  readonly definition: JsonObject
+  readonly operation: NextResourceOperationTransport
+  readonly panelId: string
+  readonly record: JsonObject
+  readonly recordId: number | string
+  readonly registry: ComponentRegistry
+  readonly resourceId: string
+}): ReactNode {
+  const actions = useMemo(() => objects(definition.actionManifests).map(actionManifest).filter((action): action is ClientActionManifest => action !== null && action.visible), [definition])
+  const source = `infolist:${text(definition.path)}`
+  const store = useMemo(() => new ClientActionStore({
+    createIdempotencyKey: () => globalThis.crypto.randomUUID(),
+    transport: {
+      async execute(request, signal) {
+        if (!actions.some(action => action.id === request.actionId)) throw new Error('The entry action is not available.')
+        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [recordId], resourceId, source }, signal).catch((cause: unknown) => {
+          if (!signal.aborted) publishPanelActionFailure(panelId, cause instanceof NextResourceEffectError ? cause.effects : [])
+          throw cause
+        })
+        if (!result.ok || result.data?.status === 'partial') {
+          publishPanelActionFailure(panelId, result.effects)
+          throw new Error(result.error ?? 'The entry action could not be completed.')
+        }
+        return { effects: [], items: [], status: 'succeeded' as const }
+      },
+    },
+  }), [actions, operation, recordId, resourceId, source])
+  useEffect(() => () => {
+    while (store.activeFrame) store.close()
+  }, [store])
+  return <ReactEntryRenderer actions={actions} actionStore={store} panelId={panelId} recordIds={[recordId]} registry={registry} store={entryStore(definition, record)} />
 }
 
 function ResourceView({ basePath, data, operation, panelId, panelManifest, readOnlyRelations, registry, renderHookScopes, resource }: {
@@ -981,7 +1016,7 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
   }
   return <article className="hp-resource-view"><h2>{text(record[recordTitle])}</h2>
     <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={text(record[routeKey])} registry={registry} resource={resource} source="view" />
-    <div className="hp-infolist">{entries.map(definition => <ReactEntryRenderer key={text(definition.id) || text(definition.path)} panelId={panelId} registry={registry} store={entryStore(definition, record)} />)}</div>
+    <div className="hp-infolist">{entries.map(definition => <ResourceEntry definition={definition} key={text(definition.id) || text(definition.path)} operation={operation} panelId={panelId} record={record} recordId={text(record[routeKey])} registry={registry} resourceId={resourceId} />)}</div>
     {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} />{readOnlyRelations
       ? <ReactRelationManagerRenderer managers={relations} />
       : <ReactRelationManagerRenderer loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} />}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}

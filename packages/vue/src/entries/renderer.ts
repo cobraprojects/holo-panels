@@ -1,4 +1,5 @@
 import { Button } from '../internal-ui'
+import { VueActionRenderer } from '../actions/renderer'
 import { defineComponent, h, onScopeDispose, ref, shallowRef, type Component, type PropType, type VNode, type VNodeChild } from 'vue'
 import {
   entryRichTextMetadata,
@@ -176,12 +177,20 @@ export const VueEntryRenderer = defineComponent({
         h('div', { class: 'hp-entry-state' }, [linked]),
         slot(entry, componentProps.entry, 'after'),
         entry.copyable ? h(Button, { type: 'button', onClick: () => void copy() }, 'Copy') : null,
-        ...entry.actions.map(action => h(Button, {
+        ...(componentProps.entry.actionStore ? [] : entry.actions.map(action => h(Button, {
           disabled: entry.pending || !componentProps.entry.action,
           key: action,
           type: 'button',
           onClick: () => void runAction(action),
-        }, action)),
+        }, action))),
+        componentProps.entry.actionStore && componentProps.entry.actions?.[0] ? h(VueActionRenderer, {
+          action: componentProps.entry.actions[0],
+          actions: componentProps.entry.actions.filter(action => entry.actions.includes(action.id)),
+          panelId: componentProps.entry.panelId,
+          recordIds: componentProps.entry.recordIds,
+          registry: componentProps.entry.registry,
+          store: componentProps.entry.actionStore,
+        }) : null,
         h('span', { 'aria-live': 'polite', class: 'hp-visually-hidden' }, copyStatus.value),
         entry.pending ? h('span', { role: 'status' }, 'Loading entry') : null,
         entry.error ? h('span', { role: 'alert' }, entry.error) : null,

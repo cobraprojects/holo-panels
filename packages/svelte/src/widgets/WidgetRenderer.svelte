@@ -9,6 +9,7 @@
   import { panelColorAppearance } from '@holo-js/panels-ui'
   import { onMount, type Component } from 'svelte'
   import { toSvelteSnapshot } from '../stores'
+  import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { SvelteCustomWidgetProps, SvelteWidgetRendererProps } from './contracts'
   import { chartData, chartLabels, chartValue, customData, safeWidgetUrl, statsData, tableData, type SvelteChartData, type SvelteChartSeries, widgetLabel } from './helpers'
 
@@ -108,7 +109,7 @@
     })
   }
 
-  let { manifest, store, registry, panelId, placement = 'dashboard', tableRenderer, onAction }: SvelteWidgetRendererProps = $props()
+  let { actions, actionStore, manifest, store, registry, panelId, placement = 'dashboard', tableRenderer, onAction }: SvelteWidgetRendererProps = $props()
   const widgetState = $derived.by(() => toSvelteSnapshot(store))
   const stats = $derived(statsData($widgetState.data))
   const chart = $derived(chartData($widgetState.data))
@@ -146,6 +147,7 @@
 {#if $widgetState.status !== 'hidden'}
   <Card bind:ref={root} aria-busy={$widgetState.loading} aria-labelledby={`${manifest.id}-heading`} class="hp-widget" data-panels-widget={manifest.id} data-placement={placement} data-widget-family={manifest.family}>
     <CardHeader>
+      {#if $widgetState.status === 'ready' && actions?.[0] && actionStore}<ActionRenderer action={actions[0]} {actions} {panelId} {registry} store={actionStore} />{/if}
       <CardTitle id={`${manifest.id}-heading`}>{widgetLabel(manifest)}</CardTitle>
       {#if manifest.description}<CardDescription>{manifest.description}</CardDescription>{/if}
     </CardHeader>
@@ -173,7 +175,17 @@
               {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`} class="hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}">{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
               {#if stat.chart.length > 0}<dd><span aria-label={`${stat.label} trend: ${stat.chart.join(', ')}`} class="hp-widget-sparkline" role="img">{stat.chart.join(' · ')}</span></dd>{/if}
             </CardContent>
-            {#if stat.action || safeWidgetUrl(stat.url)}<CardFooter>{#if stat.action}<dd><Button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</Button></dd>{/if}{#if safeWidgetUrl(stat.url)}<dd><Button href={safeWidgetUrl(stat.url) ?? undefined} variant="outline">View {stat.label}</Button></dd>{/if}</CardFooter>{/if}
+            {#if stat.action || safeWidgetUrl(stat.url)}
+              <CardFooter>
+                {#if stat.action && actionStore}
+                  {@const action = actions?.find(candidate => candidate.id === stat.action && candidate.visible)}
+                  {#if action}<dd><Button disabled={action.disabled} type="button" data-action={action.id} onclick={() => actionStore?.mount(action)}>{action.label}</Button></dd>{/if}
+                {:else if stat.action}
+                  <dd><Button type="button" data-action={stat.action} onclick={() => void onAction?.(stat.action!, manifest.id)}>{stat.action}</Button></dd>
+                {/if}
+                {#if safeWidgetUrl(stat.url)}<dd><Button href={safeWidgetUrl(stat.url) ?? undefined} variant="outline">View {stat.label}</Button></dd>{/if}
+              </CardFooter>
+            {/if}
           </Card>
         {/each}
       </dl>

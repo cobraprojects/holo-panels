@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '../internal-ui'
 import { safeExternalUrl } from '@holo-js/panels-client'
+import { VueActionRenderer } from '../actions/renderer'
 import { panelColorAppearance } from '@holo-js/panels-ui'
 import {
   defineComponent,
@@ -100,7 +101,7 @@ function sparkline(values: readonly number[], label: string): VNode | null {
   ])
 }
 
-function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAction']): VNode {
+function statContent(stat: VueWidgetStat, props: VueWidgetRendererProps): VNode {
   const content = [
     stat.icon ? PanelsIcon(stat.icon) : null,
     h('span', { class: 'hp-widget-stat__label' }, stat.label),
@@ -117,6 +118,11 @@ function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAc
     style: appearance.custom ? { '--hp-widget-color': appearance.custom } : undefined,
   }
   if (url) return h(Button, { ...attributes, as: 'a', href: url, variant: 'ghost' }, () => content)
+  if (stat.action && props.actionStore) {
+    const action = props.actions?.find(candidate => candidate.id === stat.action && candidate.visible)
+    return action ? h(Button, { ...attributes, disabled: action.disabled, onClick: () => props.actionStore?.mount(action), type: 'button', variant: 'ghost' }, () => content) : h(Card, attributes, () => h(CardContent, {}, () => content))
+  }
+  const onAction = props.onAction
   if (stat.action && onAction) return h(Button, {
     ...attributes,
     type: 'button',
@@ -128,7 +134,7 @@ function statContent(stat: VueWidgetStat, onAction: VueWidgetRendererProps['onAc
 
 function renderStats(data: VueStatsWidgetData, props: VueWidgetRendererProps): VNodeChild {
   return data.stats.length > 0
-    ? h('div', { class: 'hp-widget-stats' }, data.stats.map(stat => h('div', { key: stat.id }, [statContent(stat, props.onAction)])))
+    ? h('div', { class: 'hp-widget-stats' }, data.stats.map(stat => h('div', { key: stat.id }, [statContent(stat, props)])))
     : null
 }
 
@@ -361,6 +367,7 @@ export const VueWidgetRenderer = defineComponent({
           manifest.description ? h(CardDescription, {}, () => manifest.description) : null,
         ]) : null,
         h(CardContent, {}, () => [
+          state.value.status === 'ready' && componentProps.widget.actions?.[0] && componentProps.widget.actionStore ? h(VueActionRenderer, { action: componentProps.widget.actions[0], actions: componentProps.widget.actions, panelId: componentProps.widget.panelId, registry: componentProps.widget.registry, store: componentProps.widget.actionStore }) : null,
           filterControls(componentProps.widget, state.value),
           empty ? h(Empty, { class: 'hp-widget-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No data'), h(EmptyDescription, {}, () => manifest.emptyState)])) : content,
         ]),

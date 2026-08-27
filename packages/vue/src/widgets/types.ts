@@ -1,4 +1,6 @@
 import type {
+  ClientActionManifest,
+  ClientActionStore,
   ChartWidgetData,
   CustomWidgetData,
   JsonValue,
@@ -38,6 +40,8 @@ export interface VueCustomWidgetProps {
 }
 
 export interface VueWidgetRendererProps {
+  readonly actions?: readonly ClientActionManifest[]
+  readonly actionStore?: ClientActionStore<unknown>
   readonly manifest: VueWidgetManifest
   readonly onAction?: (action: string, stat: VueWidgetStat) => void | Promise<void>
   readonly panelId?: string

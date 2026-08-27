@@ -204,7 +204,7 @@ function filterDefinition(value: JsonValue): SvelteTableFilter | null {
   }
 }
 
-function actionManifest(value: JsonValue): ClientActionManifest | null {
+export function actionManifest(value: JsonValue): ClientActionManifest | null {
   const action = objectValue(value)
   const id = stringValue(action?.id)
   const label = stringValue(action?.label)

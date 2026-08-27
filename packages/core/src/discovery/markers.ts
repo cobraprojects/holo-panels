@@ -40,6 +40,7 @@ export function isDiscoverableDefinition(value: unknown): value is DiscoverableD
     && hasOptionalString(value, 'panelId')
     && hasOptionalString(value, 'route')
     && (typeof value.permissionKeys === 'undefined' || isStringArray(value.permissionKeys))
+    && (typeof value.permissionReferences === 'undefined' || isStringArray(value.permissionReferences))
     && (typeof value.componentKeys === 'undefined' || isStringArray(value.componentKeys))
     && (typeof value.navigationKeys === 'undefined' || isStringArray(value.navigationKeys))
     && (typeof value.default === 'undefined' || typeof value.default === 'boolean')

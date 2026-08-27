@@ -1,4 +1,5 @@
 import { toJsonValue } from '../protocol/serialization'
+import { compileActionManifest, resolveActionState } from '../actions/action'
 import type { JsonValue } from '../protocol/json'
 import type { TableQueryResult, TableQueryState } from '../tables/query/contracts'
 import type {
@@ -55,7 +56,12 @@ export async function resolveWidget<TData extends JsonValue, TActor, TTenant, TS
   const data = await definition.server.data(dataContext)
   assertNotAborted(context.signal)
   toJsonValue(data)
-  return { data, manifest: definition.manifest, status: 'ready' }
+  const actions = await Promise.all((definition.server.actions ?? []).map(async (action) => {
+    const scope = { ...context, mount: action.mount, record: null }
+    const state = await resolveActionState(action, scope)
+    return compileActionManifest(action, state.label, scope, state)
+  }))
+  return { ...(actions.length > 0 ? { actions } : {}), ...(resource ? { resourceId: resource.resourceId } : {}), data, manifest: definition.manifest, status: 'ready' }
 }
 
 export interface TableWidgetExecutor<TRecord, TContext> {

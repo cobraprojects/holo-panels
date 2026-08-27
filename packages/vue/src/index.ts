@@ -45,6 +45,7 @@ export {
   TransportDecodingError,
   PanelsTransport,
   ClientActionStore,
+  createWidgetActionStore,
   CollectionStore,
   createBrowserUploadAdapter,
   createUploadStore,

@@ -3,6 +3,8 @@ import { toJsonValue } from '../protocol/serialization'
 import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/db'
 import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
 import type { Effect } from '../protocol/effects'
+import type { CompiledPanelDefinition } from '../panels/contracts'
+import { authorizePanelActionPermissions } from '../actions/authorization'
 import type { CompiledPageDefinition, PageContext, PageManifest, PageType } from '../pages/contracts'
 import { defaultSlugTransform } from '../fields/basic'
 import { OptionService, type OptionQueryRequest, type OptionSource, type OptionValue } from '../fields/options'
@@ -16,6 +18,7 @@ import {
   type CompiledSummaryDefinition,
 } from '../tables/grouping'
 import { ResourceExecutor } from './executor'
+import { infolistComponents } from './infolist-actions'
 import { serializeResourceRecord } from './resource-serialization'
 import { authorizeHoloPolicy, canHoloPolicy, isHoloPolicyMissingError } from './holo-authorization'
 import type { ResourceDefinition, ResourceModel, ResourceQuery, ResourceRecord } from './contracts'
@@ -65,6 +68,7 @@ export interface GeneratedResourceOperationInput {
     readonly scopeTenantQuery?: <TQuery>(query: TQuery) => TQuery
   }
   readonly operation: 'action' | 'form-submit' | 'options' | 'table-data'
+  readonly panel?: CompiledPanelDefinition<object>
   readonly panelId: string
   readonly payload: JsonObject
   readonly strictAuthorization?: boolean
@@ -164,18 +168,6 @@ function compositionArrayMember(value: object | undefined, key: string): readonl
   return Array.isArray(member)
     ? member.filter((item): item is object => item !== null && (typeof item === 'object' || typeof item === 'function'))
     : Object.freeze([])
-}
-
-function compositionMembers(value: object | undefined, key: string): readonly object[] {
-  const members = Array.isArray(value)
-    ? value.filter((item): item is object => item !== null && (typeof item === 'object' || typeof item === 'function'))
-    : compositionArrayMember(value, key)
-  return members.flatMap((member) => {
-    const compiled = 'compile' in member && typeof member.compile === 'function' ? member.compile() : member
-    if (!compiled || typeof compiled !== 'object') return []
-    const manifest = objectMember(compiled, 'manifest')
-    return [manifest ?? compiled]
-  })
 }
 
 function compiledObject(value: object | undefined): object | undefined {
@@ -877,7 +869,7 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
   const plural = typeof navigation.label === 'string' ? navigation.label : label(slug)
   const singular = singularize(plural)
   const canDelete = capabilities.delete
-  const configuredActions = (definition.actions ?? []).map(action => actionManifestSeed(action))
+  const configuredActions = (definition.actions ?? []).filter(action => !String(Reflect.get(action, 'source')).startsWith('infolist:')).map(action => actionManifestSeed(action))
   const hasExplicitPages = explicitResourcePages(definition).length > 0
   const pageActionScope = pageType === 'edit' || pageType === 'view' ? 'record' : 'header'
   const pageActions = resourcePageActions(definition, pageType).map(action => 'manifest' in action && typeof action.manifest === 'function'
@@ -888,7 +880,7 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
     const scope = action.mount === 'bulk' ? 'bulk' : action.mount === 'page' ? 'header' : action.mount === 'record' ? 'row' : null
     return scope ? [{ color: action.color, confirmation: action.confirmation, icon: action.icon, id: action.id, kind: action.kind, label: action.label, removesRecord: false, scope }] : []
   })
-  const configuredEntries = compositionMembers(definition.infolist, 'entries')
+  const configuredEntries = infolistComponents(definition.infolist).map(entry => objectMember(entry, 'manifest') ?? entry)
   const entries = (configuredEntries.length > 0 ? configuredEntries : fields).map((entry, index) => {
     const source = objectMember(entry, 'source')
     const pathValue = Reflect.get(entry, 'path') ?? Reflect.get(source ?? {}, 'path')
@@ -1089,7 +1081,10 @@ async function resolveGeneratedPageActions(
     if (candidates.length > 1) throw new Error('[Holo Panels] The generated page action registration is ambiguous.')
     return { definition: candidates[0], manifest: entry }
   })
-  if (!entries.some(entry => entry.definition)) return manifest
+  const infolist = objectMember(resource, 'infolist')
+  const infolistEntries = arrayMember(infolist, 'entries')
+  const infolistActions = (definition.actions ?? []).filter(action => String(Reflect.get(action, 'source')).startsWith('infolist:'))
+  if (!entries.some(entry => entry.definition) && infolistActions.length === 0) return manifest
   const executor = new ResourceExecutor(definition, { strictAuthorization: context.strictAuthorization })
   const recordId = manifest.pageType === 'edit' || manifest.pageType === 'view' ? context.parameters.record : undefined
   const record = recordId ? await executor.resolveActionRecord(recordId, context) : null
@@ -1100,11 +1095,21 @@ async function resolveGeneratedPageActions(
     const state = await resolveActionState(compiled, scope)
     return { ...entry.manifest, ...await compileActionManifest(compiled, state.label, scope, state) }
   }))
+  const resolvedEntries = await Promise.all(infolistEntries.map(async (entry) => {
+    const registered = infolistActions.filter(action => Reflect.get(action, 'source') === `infolist:${String(Reflect.get(entry, 'path'))}`)
+    const actionManifests = await Promise.all(registered.map(async (action) => {
+      const compiled = action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>
+      const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+      const state = await resolveActionState(compiled, scope)
+      return compileActionManifest(compiled, state.label, scope, state)
+    }))
+    return actionManifests.length > 0 ? { ...entry, actionManifests } : entry
+  }))
   const body = {
     ...manifest.body,
     properties: jsonObject({
       ...properties,
-      resource: { ...resource, actions },
+      resource: { ...resource, actions, ...(infolist ? { infolist: { ...infolist, entries: resolvedEntries } } : {}) },
     }),
   }
   return Object.freeze({ ...manifest, body })
@@ -1470,6 +1475,7 @@ async function executeCustomAction(
   }
   const source = typeof input.payload.source === 'string' && input.payload.source ? input.payload.source : null
   const action = executableResourceAction(configuredAction(definition, actionId, requestedMount as ActionMount, source), definition, executor, input)
+  if (input.panel) await authorizePanelActionPermissions(input.panel, { ...input.context, panelId: input.panelId }, [`${definition.id}.${action.mount === 'page' ? 'viewAny' : 'view'}`, `actions.${action.id}.view`])
   if (action.mount === 'page') await executor.authorizeViewAny(input.context)
   const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
     records: {
@@ -1688,6 +1694,15 @@ export async function executeGeneratedGlobalSearch(input: GeneratedGlobalSearchI
     }
   }
   return jsonObject({ panelId: input.panelId, results, term })
+}
+
+export async function resolveGeneratedResourceWidget(resource: object, widgetId: string, context: GeneratedResourceOperationInput['context'], strictAuthorization: boolean): Promise<object | null> {
+  const definition = resourceDefinition(resource)
+  await new ResourceExecutor(definition, { strictAuthorization }).authorizeViewAny(context)
+  const matches = compositionArrayMember(definition, 'widgets').map((widget): object => 'compile' in widget && typeof widget.compile === 'function' ? widget.compile() : widget)
+    .filter(widget => Reflect.get(widget, 'kind') === 'widget' && Reflect.get(Reflect.get(widget, 'manifest'), 'id') === widgetId)
+  if (matches.length > 1) throw new Error('Resource widget IDs must be unique')
+  return matches[0] ?? null
 }
 
 export async function executeGeneratedResourceOperation(

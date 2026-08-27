@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { componentDefault, definePanelsConfig } from '@holo-js/panels-core'
+import { componentDefault, defineAction, definePanelsConfig, defineStatsWidget } from '@holo-js/panels-core'
 import { DiscoveryCompiler } from '../../src/discovery/compiler'
 import { PanelsDiscoveryError } from '../../src/discovery/error'
 import {
@@ -404,10 +404,27 @@ describe('Holo Panels discovery compiler', () => {
     expect(created.relationManagerTypeBindings).toHaveLength(1)
   })
 
+  it('prepares shared registered action permission references without weakening duplicate declarations', async () => {
+    const projectRoot = await createProject()
+    const action = defineAction('publish').authorize(() => true).action(() => null)
+    const registration = { compile: () => action.compile(), id: 'publish', resourceRecordType: {} }
+    const modules = new Map<string, DiscoveryModule>([
+      ['server/admin/AdminPanel.ts', { default: definition({ kind: 'panel', id: 'admin' }) }],
+      ['server/admin/widgets/First.ts', { default: defineStatsWidget('first').actions([registration]).data(() => ({ stats: [] })) }],
+      ['server/admin/widgets/Second.ts', { default: defineStatsWidget('second').actions([registration]).data(() => ({ stats: [] })) }],
+      ['server/admin/resources/posts/PostResource.ts', { default: definition({ kind: 'resource', id: 'posts', permissionReferences: ['actions.publish.view', 'widgets.first.view'] }) }],
+    ])
+    for (const path of modules.keys()) await touch(projectRoot, path)
+    const result = await new DiscoveryCompiler({ projectRoot, loadModule: moduleLoader(projectRoot, modules) }).compile()
+    expect(result.definitions.filter(item => item.permissionKeys.includes('actions.publish.view'))).toHaveLength(3)
+    expect(result.definitions.find(item => item.id === 'posts')?.permissionKeys).toEqual(['actions.publish.view', 'widgets.first.view'])
+  })
+
   it.each([
     ['id', definition({ kind: 'page', id: 'duplicate', route: '/one' }), definition({ kind: 'page', id: 'duplicate', route: '/two' })],
     ['route', definition({ kind: 'page', id: 'one', route: '/same' }), definition({ kind: 'page', id: 'two', route: '/same' })],
     ['permission', definition({ kind: 'page', id: 'one', permissionKeys: ['same'] }), definition({ kind: 'page', id: 'two', permissionKeys: ['same'] })],
+    ['owned permission with references', definition({ kind: 'page', id: 'one', permissionKeys: ['same'], permissionReferences: ['same'] }), definition({ kind: 'page', id: 'two', permissionKeys: ['same'], permissionReferences: ['same'] })],
     ['component-key', definition({ kind: 'page', id: 'one', componentKeys: ['same'] }), definition({ kind: 'page', id: 'two', componentKeys: ['same'] })],
     ['navigation-key', definition({ kind: 'page', id: 'one', navigationKeys: ['same'] }), definition({ kind: 'page', id: 'two', navigationKeys: ['same'] })],
   ])('reports source-located duplicate %s errors', async (_kind, first, second) => {

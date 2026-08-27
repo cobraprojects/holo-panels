@@ -1,4 +1,6 @@
 import type { JsonObject, JsonValue } from '../protocol/json'
+import type { ActionManifest } from '../actions/contracts'
+import type { RegisteredAction } from '../actions/registration'
 import type { TableQueryState } from '../tables/query/contracts'
 
 export type WidgetFamily = 'chart' | 'custom' | 'stats' | 'table'
@@ -61,6 +63,7 @@ export interface WidgetDataContext<TActor, TTenant, TServices, TRecord extends o
 }
 
 export interface WidgetServerHandles<TData extends JsonValue, TActor, TTenant, TServices, TRecord extends object = object> {
+  readonly actions?: readonly RegisteredAction<TRecord>[]
   readonly authorize: (context: WidgetContext<TActor, TTenant, TServices>) => boolean | Promise<boolean>
   readonly data: (context: WidgetDataContext<TActor, TTenant, TServices, TRecord>) => TData | Promise<TData>
   readonly visible: (context: WidgetContext<TActor, TTenant, TServices>) => boolean | Promise<boolean>
@@ -135,6 +138,8 @@ export interface CustomWidgetData extends JsonObject {
 }
 
 export interface ResolvedWidget<TData extends JsonValue> {
+  readonly actions?: readonly Readonly<ActionManifest>[]
+  readonly resourceId?: string
   readonly data: TData | null
   readonly manifest: WidgetManifest
   readonly status: 'hidden' | 'ready' | 'unauthorized'

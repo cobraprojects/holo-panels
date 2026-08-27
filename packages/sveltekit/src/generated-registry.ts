@@ -1,5 +1,6 @@
 import { createSvelteKitHoloHelpers } from '@holo-js/adapter-sveltekit'
 import {
+  executeGeneratedWidgetOperation,
   PanelRuntime,
   createNavigationSeed,
   executeGeneratedGlobalSearch,
@@ -187,6 +188,21 @@ async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, reg
 async function resourceOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
   await input.holo.getProject()
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw Object.assign(new Error('Resource input is invalid'), { status: 422 })
+  if (input.operation === 'action' && input.payload.widgetId !== undefined) {
+    const panel = await discoveredPanel(registry, input.panelId)
+    const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+    return executeGeneratedWidgetOperation(registry, input.payload, {
+      actor: input.scope.actor,
+      locale: input.event.request.headers.get('accept-language')?.split(',')[0]?.trim() || 'en',
+      panelId: input.panelId,
+      provider: input.scope.provider,
+      services: await input.holo.getProject(),
+      signal: input.scope.signal,
+      tenant: input.tenant ?? tenancy?.tenantId,
+      ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+      ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+    }, panel)
+  }
   const resourceId = input.payload.resourceId
   if (typeof resourceId !== 'string') throw Object.assign(new Error('Resource ID is required'), { status: 422 })
   const loader = registry[`${input.panelId}:resource:${resourceId}`]
@@ -204,6 +220,7 @@ async function resourceOperation(input: PanelOperationInput<object>, registry: S
       } : {}),
     },
     operation: input.operation === 'action' ? 'action' : input.operation === 'options' ? 'options' : input.operation === 'table-data' ? 'table-data' : 'form-submit',
+    panel,
     panelId: input.panelId,
     payload: input.payload,
     strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,

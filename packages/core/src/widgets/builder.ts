@@ -1,4 +1,5 @@
 import { ConstructionBuilder } from '../builders/construction-builder'
+import { compileRegisteredActions, type ActionRegistration } from '../actions/registration'
 import { DISCOVERY_MARKER, type DiscoverableBuilder, type DiscoverableDefinition } from '../discovery/types'
 import { toJsonValue } from '../protocol/serialization'
 import type { JsonValue } from '../protocol/json'
@@ -24,6 +25,7 @@ const IDENTIFIER = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
 const WIDGET_EXTENSION_TYPE = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*:widget:[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
 
 interface WidgetState<TData extends JsonValue, TActor, TTenant, TServices, TRecord extends object> {
+  actions: readonly ActionRegistration<TRecord>[]
   authorize: WidgetServerHandles<TData, TActor, TTenant, TServices, TRecord>['authorize']
   columnSpan: WidgetColumnSpan
   columnStart: number | null
@@ -64,6 +66,7 @@ export class WidgetBuilder<
       throw new Error('Widget types require a stable identifier or widget extension type ID')
     }
     super({
+      actions: [],
       authorize: () => true,
       columnSpan: 1,
       columnStart: null,
@@ -85,6 +88,10 @@ export class WidgetBuilder<
 
   heading(value: string | null): this {
     return this.writeState('heading', value)
+  }
+
+  actions(actions: readonly ActionRegistration<TRecord>[]): this {
+    return this.writeState('actions', [...actions])
   }
 
   description(value: string | null): this {
@@ -156,6 +163,7 @@ export class WidgetBuilder<
       id: this.id,
       kind: this.kind,
       permissionKeys: [`widgets.${this.id}.view`],
+      permissionReferences: this.readState().actions.map(action => `actions.${action.id}.view`),
     })
   }
 
@@ -178,7 +186,7 @@ export class WidgetBuilder<
     return {
       kind: 'widget',
       manifest,
-      server: { authorize: state.authorize, data: state.data, visible: state.visible },
+      server: { actions: compileRegisteredActions(state.actions, 'page'), authorize: state.authorize, data: state.data, visible: state.visible },
     }
   }
 }

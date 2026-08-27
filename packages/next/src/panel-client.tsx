@@ -2,6 +2,7 @@
 
 import {
   ClientEffectSession,
+  createWidgetActionStore,
   GlobalSearchStore,
   installPanelSpaNavigation,
   ClientNotificationInboxStore,
@@ -207,7 +208,8 @@ function initialWidgetResult(widget: ResolvedPageWidget) {
   return widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status }
 }
 
-function ResolvedWidgetView({ panelId, registry, widget }: {
+function ResolvedWidgetView({ effects, panelId, registry, widget }: {
+  readonly effects: ClientEffectSession
   readonly panelId: string
   readonly registry: ComponentRegistry
   readonly widget: ResolvedPageWidget
@@ -217,10 +219,13 @@ function ResolvedWidgetView({ panelId, registry, widget }: {
     async () => initialWidgetResult(widget),
     { initialResult: initialWidgetResult(widget) },
   ), [widget])
-  return <ReactWidgetRenderer manifest={widget.manifest as ReactWidgetManifest} navigate={browserNavigate} panelId={panelId} registry={registry} store={store} />
+  const actionStore = useMemo(() => createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId, resourceId: widget.resourceId, transport: browserPanelsTransport(), widgetId: widget.manifest.id }), [effects, panelId, widget.manifest.id, widget.resourceId])
+  useEffect(() => () => { while (actionStore.activeFrame) actionStore.close() }, [actionStore])
+  return <ReactWidgetRenderer actions={widget.actions} actionStore={actionStore} manifest={widget.manifest as ReactWidgetManifest} navigate={browserNavigate} panelId={panelId} registry={registry} store={store} />
 }
 
-function ResolvedWidgetGrid({ label, panelId, registry, widgets }: {
+function ResolvedWidgetGrid({ effects, label, panelId, registry, widgets }: {
+  readonly effects: ClientEffectSession
   readonly label: string
   readonly panelId: string
   readonly registry: ComponentRegistry
@@ -238,7 +243,7 @@ function ResolvedWidgetGrid({ label, panelId, registry, widgets }: {
     label={label}
     widgets={widgets.map(widget => ({
       manifest: widget.manifest as ReactWidgetManifest,
-      render: () => <ResolvedWidgetView panelId={panelId} registry={registry} widget={widget} />,
+      render: () => <ResolvedWidgetView effects={effects} panelId={panelId} registry={registry} widget={widget} />,
     }))}
     width={width}
   />
@@ -494,9 +499,9 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
         {renderHook(PanelsRenderHook.PAGE_START, payload.page.data)}
         <div className="hp-panel-page-header hp:flex hp:flex-col hp:gap-4 hp:sm:flex-row hp:sm:items-center hp:sm:justify-between"><div className="hp-panel-page-heading hp:space-y-1">{manifest.layout?.breadcrumbs !== false && payload.page.breadcrumbs.length > 0 ? <Breadcrumb className="hp-panel-breadcrumbs"><BreadcrumbList>{payload.page.breadcrumbs.map((item, index) => <Fragment key={item.path}><BreadcrumbItem>{index === payload.page.breadcrumbs.length - 1 ? <BreadcrumbPage>{item.label}</BreadcrumbPage> : <BreadcrumbLink href={item.path}>{item.label}</BreadcrumbLink>}</BreadcrumbItem>{index < payload.page.breadcrumbs.length - 1 ? <BreadcrumbSeparator /> : null}</Fragment>)}</BreadcrumbList></Breadcrumb> : null}{renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, payload.page.data)}<h1 className="hp:text-3xl hp:font-bold hp:tracking-tight">{payload.page.heading ?? payload.page.title}</h1>{payload.page.subheading ? <p className="hp:text-muted-foreground">{payload.page.subheading}</p> : null}{renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, payload.page.data)}</div><div aria-label="Page actions" className="hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2" role="group">{renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, payload.page.data)}<div className="hp:contents" ref={setPageActionsContainer} />{renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, payload.page.data)}</div></div>
         <section className="hp-panel-page hp:flex hp:flex-col hp:gap-6" data-page={payload.page.manifest.id} data-slot="page">
-          {renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, payload.page.data)}<ResolvedWidgetGrid label="Page header widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.header} />{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_END, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER, payload.page.data)}
+          {renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, payload.page.data)}<ResolvedWidgetGrid effects={effects} label="Page header widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.header} />{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_END, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER, payload.page.data)}
           {body?.component === 'resource-page' ? <Suspense fallback={<div aria-busy="true">Loading resource…</div>}><LazyResourcePage createRedirect={manifest.runtime?.resourceCreatePageRedirect ?? 'edit'} data={payload.page.data} editRedirect={manifest.runtime?.resourceEditPageRedirect ?? null} effects={effects} key={payload.path} panelId={state.panelId} panelManifest={manifest} panelPath={manifest.path} properties={body.properties} readOnlyRelations={manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true} registry={registry} renderHookScopes={pageScopes} unsavedChangesAlerts={manifest.runtime?.unsavedChangesAlerts ?? false} /></Suspense> : hasPageData(payload.page.data) ? <div className="hp-panel-page-surface">{displayJson(payload.page.data)}</div> : null}
-          {renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_START, payload.page.data)}<ResolvedWidgetGrid label="Page footer widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.footer} />{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_END, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER, payload.page.data)}
+          {renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_START, payload.page.data)}<ResolvedWidgetGrid effects={effects} label="Page footer widgets" panelId={state.panelId} registry={registry} widgets={payload.widgets.footer} />{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_END, payload.page.data)}{renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER, payload.page.data)}
         </section>
         {renderHook(PanelsRenderHook.PAGE_END, payload.page.data)}
       </div>

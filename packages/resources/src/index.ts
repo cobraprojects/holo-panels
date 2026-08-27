@@ -515,12 +515,14 @@ export abstract class Resource {
     if (typeof readOnly === 'function' && Reflect.apply(readOnly, this, []) === true) builder = builder.readOnly()
     const compiled = builder.compile() as CompiledResourceDefinition
     const actions = Reflect.get(compiled, 'actions')
+    const pageActions = pageActionDefinitions(pages)
     return Object.freeze({
       ...compiled,
       actions: Object.freeze([
-        ...(Array.isArray(actions) ? actions.map(action => Object.freeze({ ...action, source: 'table' })) : []),
-        ...pageActionDefinitions(pages),
+        ...(Array.isArray(actions) ? actions.map(action => Object.freeze({ ...action, source: Reflect.get(action, 'source') ?? 'table' })) : []),
+        ...pageActions,
       ]),
+      permissionReferences: Object.freeze([...new Set([...(Array.isArray(compiled.permissionReferences) ? compiled.permissionReferences.filter((key): key is string => typeof key === 'string') : []), ...pageActions.map(action => `actions.${Reflect.get(action, 'id')}.view`)])]),
     })
   }
 

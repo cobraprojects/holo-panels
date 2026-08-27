@@ -272,7 +272,7 @@ function validateDefinitions(definitions: readonly DiscoveredDefinition[]): void
     idOwners.set(idKey, definition)
 
     const scopedValues: readonly [string, readonly string[], Map<string, DiscoveredDefinition>][] = [
-      ['permission', definition.permissionKeys, permissionOwners],
+      ['permission', definition.permissionKeys.filter(key => !definition.permissionReferences?.includes(key)), permissionOwners],
       ['component-key', definition.componentKeys, componentOwners],
       ['navigation-key', definition.navigationKeys, navigationOwners],
     ]
@@ -319,7 +319,8 @@ function convertDefinition(candidate: Candidate, loaded: LoadedExport): Discover
     projectPath: candidate.projectPath,
     exportName,
     ...(definition.route ? { route: definition.route } : {}),
-    permissionKeys: uniqueSorted(definition.permissionKeys ?? []),
+    permissionKeys: uniqueSorted([...(definition.permissionKeys ?? []), ...(definition.permissionReferences ?? [])]),
+    ...(definition.permissionReferences?.length ? { permissionReferences: uniqueSorted(definition.permissionReferences.filter(key => !definition.permissionKeys?.includes(key))) } : {}),
     componentKeys: uniqueSorted(definition.componentKeys ?? []),
     navigationKeys: uniqueSorted(definition.navigationKeys ?? []),
     default: definition.default ?? false,
@@ -364,7 +365,8 @@ function registeredDefinitions(
       projectPath: candidate.projectPath,
       exportName: `${loaded.exportName}.${value.kind}.${value.id}`,
       ...(value.route ? { route: value.route } : {}),
-      permissionKeys: uniqueSorted(value.permissionKeys ?? []),
+      permissionKeys: uniqueSorted([...(value.permissionKeys ?? []), ...(value.permissionReferences ?? [])]),
+      ...(value.permissionReferences?.length ? { permissionReferences: uniqueSorted(value.permissionReferences.filter(key => !value.permissionKeys?.includes(key))) } : {}),
       componentKeys: uniqueSorted(value.componentKeys ?? []),
       navigationKeys: uniqueSorted(value.navigationKeys ?? []),
       default: value.default ?? false,

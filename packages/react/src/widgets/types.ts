@@ -1,4 +1,6 @@
 import type {
+  ClientActionManifest,
+  ClientActionStore,
   CustomWidgetData,
   TableWidgetData,
   WidgetClientManifest,
@@ -28,6 +30,8 @@ export interface ReactTableWidgetProps {
 }
 
 export interface ReactWidgetRendererProps {
+  readonly actions?: readonly ClientActionManifest[]
+  readonly actionStore?: ClientActionStore<unknown>
   readonly action?: (action: string) => void | Promise<void>
   readonly manifest: ReactWidgetManifest
   readonly navigate?: (url: string) => void

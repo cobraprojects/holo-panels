@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { JsonValue } from '@holo-js/panels-client'
+import { ClientActionStore, type ClientActionManifest, type JsonValue } from '@holo-js/panels-client'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import type { Component, flushSync, hydrate, mount, unmount } from 'svelte'
 import type { render } from 'svelte/server'
@@ -104,6 +104,23 @@ afterEach(async () => {
 })
 
 describe('P8-A Svelte entry renderer', () => {
+  it('renders registered action labels and opens their shared confirmation', async () => {
+    const action: ClientActionManifest = { badge: null, color: 'danger', confirmation: 'Delete this post?', disabled: false, icon: 'trash', id: 'delete', kind: 'delete', label: 'Delete post', modal: null, mount: 'record', size: 'medium', tooltip: null, type: 'delete', visible: true }
+    const actionStore = new ClientActionStore({ createIdempotencyKey: () => 'delete-entry', transport: { execute: async () => ({ effects: [], items: [], status: 'succeeded' }) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(EntryFixture, { props: { entries: [{ actions: [action], actionStore, recordIds: [7], store: new EntryStore(snapshot('text', 'Draft', { actions: ['delete'] })) }] }, target: container })
+    mounted.push({ component, container })
+    flushClient()
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action-id="delete"]')
+    expect(trigger?.textContent).toContain('Delete post')
+    trigger?.click()
+    flushClient()
+    await Promise.resolve()
+    flushClient()
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('Delete this post?')
+  })
+
   it('renders all built-ins with safe accessible semantics', () => {
     const entries = [
       snapshot('text', 'Published', { inlineLabel: true, properties: { badge: true }, tooltip: 'Current status' }),

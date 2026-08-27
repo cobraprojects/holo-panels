@@ -22,6 +22,7 @@ import {
   type WidgetStat,
 } from '@holo-js/panels-client'
 import { Button, Input } from '../internal-ui'
+import { ReactActionRenderer } from '../actions/renderer'
 import {
   Card,
   CardContent,
@@ -94,8 +95,10 @@ function Sparkline({ stat }: { readonly stat: WidgetStat }): ReactNode {
   </svg>
 }
 
-function StatContent({ action, navigate, stat }: {
+function StatContent({ action, actions, actionStore, navigate, stat }: {
   readonly action?: ReactWidgetRendererProps['action']
+  readonly actions?: ReactWidgetRendererProps['actions']
+  readonly actionStore?: ReactWidgetRendererProps['actionStore']
   readonly navigate?: ReactWidgetRendererProps['navigate']
   readonly stat: WidgetStat
 }): ReactNode {
@@ -108,6 +111,10 @@ function StatContent({ action, navigate, stat }: {
     } : undefined}>{content}</a>
   }
   const statAction = stat.action
+  if (statAction && actionStore) {
+    const registered = actions?.find(candidate => candidate.id === statAction && candidate.visible)
+    return registered ? <Button disabled={registered.disabled} onClick={() => actionStore.mount(registered)} type="button">{content}</Button> : content
+  }
   if (statAction && action) return <Button onClick={() => void action(statAction)} type="button">{content}</Button>
   return content
 }
@@ -125,7 +132,7 @@ function StatsWidget({ data, props }: { readonly data: StatsWidgetData, readonly
       key={stat.id}
       style={style}
     >
-      <StatContent action={props.action} navigate={props.navigate} stat={stat} />
+      <StatContent action={props.action} actions={props.actions} actionStore={props.actionStore} navigate={props.navigate} stat={stat} />
     </li>
   })}</ul>
 }
@@ -317,6 +324,7 @@ export function ReactWidgetRenderer(props: ReactWidgetRendererProps): ReactNode 
   }, [props.manifest.lazy, props.store])
   if (state.status === 'hidden') return null
   const content = <>
+    {state.status === 'ready' && props.actions?.[0] && props.actionStore ? <ReactActionRenderer actions={props.actions} manifest={props.actions[0]} panelId={props.panelId} registry={props.registry} store={props.actionStore} /> : null}
     <WidgetFilters props={props} state={state} />
     {state.status === 'idle' ? <Button onClick={() => void props.store.activate()} type="button">Load widget</Button> : null}
     {state.status === 'loading' ? <p aria-live="polite" role="status">Loading widget…</p> : null}

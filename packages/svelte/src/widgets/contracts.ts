@@ -1,4 +1,6 @@
 import type {
+  ClientActionManifest,
+  ClientActionStore,
   JsonObject,
   JsonValue,
   WidgetClientManifest,
@@ -42,6 +44,8 @@ export interface SvelteCustomWidgetProps extends Record<string, unknown> {
 }
 
 export interface SvelteWidgetRendererProps extends Record<string, unknown> {
+  readonly actions?: readonly ClientActionManifest[]
+  readonly actionStore?: ClientActionStore<unknown>
   readonly manifest: SvelteWidgetManifest
   readonly onAction?: (actionId: string, widgetId: string) => Promise<void> | void
   readonly panelId?: string

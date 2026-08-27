@@ -1,4 +1,5 @@
 import { ConstructionBuilder } from '../../builders/construction-builder'
+import { compileRegisteredActions, type ActionRegistration } from '../../actions/registration'
 import { toJsonValue } from '../../protocol/serialization'
 import type { JsonObject, JsonValue } from '../../protocol/json'
 import {
@@ -25,6 +26,7 @@ import type {
 
 interface EntryState<TRecord, TValue> {
   actions: string[]
+  registeredActions: ActionRegistration<TRecord>[]
   copyable: boolean
   defaultValue: JsonValue
   extraAttributes: JsonObject
@@ -120,6 +122,7 @@ export abstract class EntryBuilder<TRecord, TValue, TType extends string> extend
   protected constructor(type: TType, source: EntryStateSource) {
     super({
       actions: [],
+      registeredActions: [],
       copyable: false,
       defaultValue: null,
       extraAttributes: {},
@@ -226,9 +229,11 @@ export abstract class EntryBuilder<TRecord, TValue, TType extends string> extend
     return this.addFormat({ kind: 'url', value })
   }
 
-  action(id: string): this {
+  action(action: string | ActionRegistration<TRecord>): this {
+    const id = typeof action === 'string' ? action : action.id
     stableIdentifier(id, 'Entry actions')
     if (this.readState().actions.includes(id)) throw new Error(`Duplicate entry action "${id}"`)
+    if (typeof action !== 'string') this.writeState('registeredActions', [...this.readState().registeredActions, action])
     return this.writeState('actions', [...this.readState().actions, id])
   }
 
@@ -269,6 +274,7 @@ export abstract class EntryBuilder<TRecord, TValue, TType extends string> extend
       throw new TypeError('Entry manifests must serialize to JSON objects')
     }
     const server: EntryServerHandles<TRecord, TValue> = {
+      actions: compileRegisteredActions(state.registeredActions, 'record'),
       ...(state.state ? { state: state.state } : {}),
       ...(state.tooltip ? { tooltip: state.tooltip } : {}),
       ...(state.url ? { url: state.url } : {}),

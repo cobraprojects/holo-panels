@@ -1,4 +1,5 @@
 import type { JsonObject, JsonValue } from '../../protocol/json'
+import type { RegisteredAction } from '../../actions/registration'
 import type {
   RenderSlotReference,
   ResponsiveValue,
@@ -53,6 +54,7 @@ export interface EntryManifest {
 }
 
 export interface EntryServerHandles<TRecord, TValue> {
+  readonly actions?: readonly RegisteredAction<TRecord>[]
   readonly visibility?: EntryResolver<TRecord, TValue, boolean>
   readonly state?: EntryResolver<TRecord, TValue, unknown>
   readonly tooltip?: EntryResolver<TRecord, TValue, string | null>

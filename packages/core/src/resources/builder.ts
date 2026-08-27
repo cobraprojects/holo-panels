@@ -1,4 +1,5 @@
 import { DISCOVERY_MARKER } from '../discovery/types'
+import { collectInfolistActions } from './infolist-actions'
 import type { ClientManifestValue, DiscoverableBuilder, DiscoveryDirectories } from '../discovery/types'
 import { createResourceActionComposer, type ResourceActionComposer } from '../actions'
 import type { OptionalRuntimeTypeValue, RecordTypeSource, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
@@ -156,6 +157,18 @@ function compileResourceComposition(value: object | undefined): object | undefin
   const compiled: unknown = value.compile()
   if (typeof compiled !== 'object' || compiled === null) throw new TypeError('[Holo Panels] Resource compositions must compile to objects.')
   return compiled
+}
+
+function widgetPermissionReferences(widgets: readonly object[]): readonly string[] {
+  return widgets.flatMap((widget) => {
+    const compiled = compileResourceComposition(widget)
+    if (!compiled) return []
+    const manifest = Reflect.get(compiled, 'manifest')
+    const server = Reflect.get(compiled, 'server')
+    const id = manifest && typeof manifest === 'object' ? Reflect.get(manifest, 'id') : undefined
+    const actions = server && typeof server === 'object' ? Reflect.get(server, 'actions') : undefined
+    return typeof id === 'string' ? [`widgets.${id}.view`, ...(Array.isArray(actions) ? actions.map(action => `actions.${Reflect.get(action, 'id')}.view`) : [])] : []
+  })
 }
 
 function protectedAttributes(model: { readonly definition: ResourceModelDefinition }): ReadonlySet<string> {
@@ -489,12 +502,14 @@ export class ResourceBuilder<
     const form = compileResourceComposition(this.#state.form)
     const infolist = compileResourceComposition(this.#state.infolist)
     const table = compileResourceComposition(this.#state.table)
+    const actions = Object.freeze([...this.#state.actions, ...collectInfolistActions<TRecord>(this.#state.infolist)])
     return Object.freeze({
       ...this.#state,
       ...(form ? { form } : {}),
       ...(infolist ? { infolist } : {}),
       ...(table ? { table } : {}),
-      actions: Object.freeze([...this.#state.actions]),
+      actions,
+      permissionReferences: [...new Set([...actions.map(action => `actions.${action.id}.view`), ...widgetPermissionReferences(this.#state.widgets)])],
       capabilities,
       client,
       componentKeys: Object.freeze(componentKeys),

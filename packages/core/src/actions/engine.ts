@@ -70,11 +70,19 @@ export class ActionExecutionError extends Error {
   }
 }
 
-export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TTenant, TServices> {
-  readonly #executions: CachedExecution<TRecordId>[] = []
-  readonly #rateLimits = new Map<string, RateLimitWindow>()
+export class ActionEngineState<TRecordId extends number | string> {
+  readonly executions: CachedExecution<TRecordId>[] = []
+  readonly rateLimits = new Map<string, RateLimitWindow>()
+}
 
-  constructor(readonly options: ActionEngineOptions<TRecord, TRecordId, TActor, TTenant>) {}
+export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TTenant, TServices> {
+  readonly #executions: CachedExecution<TRecordId>[]
+  readonly #rateLimits: Map<string, RateLimitWindow>
+
+  constructor(readonly options: ActionEngineOptions<TRecord, TRecordId, TActor, TTenant>, state = new ActionEngineState<TRecordId>()) {
+    this.#executions = state.executions
+    this.#rateLimits = state.rateLimits
+  }
 
   execute<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
@@ -83,6 +91,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   ): Promise<ActionExecutionResult<TRecordId, TResult>> {
     const now = Date.now()
     this.pruneExecutions(now)
+    const identity = this.options.identity?.(scope)
     const fingerprint = canonicalJson({
       expectedVersions: request.expectedVersions ?? null,
       input: request.input,
@@ -91,9 +100,9 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     })
     const cached = this.#executions.find(entry => (
       entry.actionId === definition.id
-      && Object.is(entry.actor, scope.actor)
+      && Object.is(entry.actor, identity?.actor ?? scope.actor)
       && entry.idempotencyKey === request.idempotencyKey
-      && Object.is(entry.tenant, scope.tenant)
+      && Object.is(entry.tenant, identity?.tenant ?? scope.tenant)
     ))
     if (cached) {
       if (cached.fingerprint !== fingerprint) {
@@ -107,13 +116,13 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     const execution = this.run(definition, request, scope)
     const cachedExecution: CachedExecution<TRecordId> = {
       actionId: definition.id,
-      actor: scope.actor,
+      actor: identity?.actor ?? scope.actor,
       expiresAt: now + EXECUTION_TTL_MS,
       fingerprint,
       idempotencyKey: request.idempotencyKey,
       promise: execution,
       settled: false,
-      tenant: scope.tenant,
+      tenant: identity?.tenant ?? scope.tenant,
     }
     this.#executions.push(cachedExecution)
     if (this.#executions.length > MAX_CACHED_EXECUTIONS) this.#executions.splice(0, this.#executions.length - MAX_CACHED_EXECUTIONS)

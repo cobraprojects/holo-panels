@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '../ui/button'
+  import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { Component } from 'svelte'
   import { entryRichTextMetadata, entryUsesMarkdown, safeEntryAttributes, safeMarkdownBlocks } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'
@@ -7,7 +8,7 @@
   import type { SvelteCustomEntryProps, SvelteEntryRendererProps } from './contracts'
   import { colorValue, entryLayoutStyle, entryText, objectEntries, safeEntryUrl, valueList } from './helpers'
 
-  let { store, registry, panelId, action }: SvelteEntryRendererProps = $props()
+  let { store, registry, panelId, action, actions = [], actionStore, recordIds }: SvelteEntryRendererProps = $props()
   const entryState = $derived.by(() => toSvelteSnapshot(store))
   const safeUrl = $derived(safeEntryUrl($entryState.url))
   const imageUrl = $derived(safeEntryUrl(typeof $entryState.state === 'string' ? $entryState.state : null))
@@ -122,9 +123,12 @@
   </div>
   <EntrySlot entry={$entryState} {panelId} placement="after" {registry} />
   {#if $entryState.copyable}<Button type="button" onclick={() => void copy()}>Copy</Button>{/if}
-  {#each $entryState.actions as entryAction (entryAction)}
+  {#each actionStore ? [] : $entryState.actions as entryAction (entryAction)}
     <Button type="button" disabled={$entryState.pending || !action} onclick={() => void runAction(entryAction)}>{entryAction}</Button>
   {/each}
+  {#if actionStore && actions[0]}
+    <ActionRenderer action={actions[0]} actions={actions.filter(item => $entryState.actions.includes(item.id))} {panelId} {recordIds} {registry} store={actionStore} />
+  {/if}
   <span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span>
   {#if $entryState.pending}<span role="status">Loading entry</span>{/if}
   {#if $entryState.error}<span role="alert">{$entryState.error}</span>{/if}

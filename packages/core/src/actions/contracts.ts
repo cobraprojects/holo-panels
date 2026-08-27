@@ -185,6 +185,7 @@ export interface ActionExecutionResult<TRecordId extends number | string, TResul
 }
 
 export interface ActionEngineOptions<TRecord, TRecordId extends number | string, TActor, TTenant> {
+  readonly identity?: (scope: { readonly actor: TActor, readonly tenant: TTenant }) => { readonly actor: string, readonly tenant: string } | null
   readonly notifications?: ActionNotificationSender<TActor, TTenant>
   readonly records: ActionRecordResolver<TRecord, TRecordId, TActor, TTenant>
   readonly transaction: ActionTransaction

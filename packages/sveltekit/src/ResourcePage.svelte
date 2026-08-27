@@ -38,6 +38,7 @@
   } from '@holo-js/panels-svelte'
   import type { PanelPageData } from './contracts'
   import {
+    actionManifest,
     jsonRecord,
     jsonRecords,
     resourcePageMetadata,
@@ -156,7 +157,15 @@
       },
     },
   }))
-  const actionStore = $derived.by(() => new ClientActionStore<JsonObject>({
+  const actionStore = $derived(createActionStore(pageType))
+  const entryHosts = $derived((resource?.entries ?? []).map(definition => ({
+    actions: Array.isArray(definition.actionManifests) ? definition.actionManifests.flatMap(value => { const action = actionManifest(value); return action ? [action] : [] }) : [],
+    definition,
+    store: createActionStore(`infolist:${definition.path}`),
+  })))
+
+  function createActionStore(source: string): ClientActionStore<JsonObject> {
+    return new ClientActionStore<JsonObject>({
     createIdempotencyKey: () => globalThis.crypto.randomUUID(),
     transport: {
       async execute(request, signal) {
@@ -171,7 +180,7 @@
             mount: request.mount,
             recordIds: toJsonValue(request.recordIds ?? []),
             resourceId: resource?.id ?? '',
-            source: pageType,
+            source,
           },
           signal: requestSignal(requestController.signal, signal),
         }).catch((cause: unknown) => {
@@ -184,14 +193,15 @@
           publishPanelActionFailure(data.panel.manifest.id, response.effects)
           throw cause
         }
-        if (!response.ok) {
+        if (!response.ok || response.data.status === 'partial') {
           publishPanelActionFailure(data.panel.manifest.id, response.effects)
-          throw new Error(response.error.message)
+          throw new Error(response.ok ? 'The action could not be completed for every record.' : response.error.message)
         }
         return { effects: [], items: [], result: response.data, status: 'succeeded' }
       },
     },
-  }))
+    })
+  }
   let submitError = $state<string | null>(null)
 
   $effect(() => {
@@ -227,10 +237,12 @@
     const controller = requestController
     const activeForm = form
     const activeActionStore = actionStore
+    const activeEntries = entryHosts
     return () => {
       controller.abort()
       activeForm.cancelRequests()
       while (activeActionStore.activeFrame) activeActionStore.close()
+      for (const entry of activeEntries) while (entry.store.activeFrame) entry.store.close()
     }
   })
 
@@ -584,6 +596,10 @@
       {@const createAction = resource.recordActions.find(action => action.kind === 'create')}
       <PanelsPageActions to={pageActionsTarget}><Button class="hp-button hp-action-trigger" data-action-id={createAction?.id} data-color={createAction?.color ?? undefined} href={createRoute}>{#if createAction?.icon}<Icon name={createAction.icon} />{/if}<span>{createAction?.label ?? resource.createLabel}</span></Button></PanelsPageActions>
     {/if}
+    <PanelsPageActions to={pageActionsTarget}>
+      {@const actions = resource.recordActions.filter(action => action.mount === 'page' && action.visible && action.kind !== 'create')}
+      {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} panelId={data.panel.manifest.id} {registry} store={actionStore} />{/if}
+    </PanelsPageActions>
   <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />
   <SvelteTableRenderer table={{
     actions: rowActions,
@@ -661,8 +677,8 @@
   {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId: data.panel.manifest.id }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
 {:else if pageType === 'view' && record}
   <article class="hp-resource-view"><div class="hp-infolist">
-    {#each resource.entries as definition (String(definition.id ?? definition.path))}
-      <EntryRenderer panelId={data.panel.manifest.id} store={entryStore(definition, record)} />
+    {#each entryHosts as entry (String(entry.definition.id ?? entry.definition.path))}
+      <EntryRenderer actions={entry.actions} actionStore={entry.store} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} {registry} store={entryStore(entry.definition, record)} />
     {/each}
   </div>
   {#if editRoute && resource.recordActions.some(action => action.kind === 'edit' && data.page.manifest.actions.header.includes(action.id))}

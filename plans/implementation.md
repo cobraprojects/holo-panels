@@ -38,7 +38,7 @@ Master phase checklist:
 - [x] P10: relation managers
 - [x] P11: navigation, clusters, and global search
 - [x] P12: widgets and dashboards
-- [ ] P13: notifications and database notifications
+- [x] P13: notifications and database notifications
 - [x] P14: Shield, auth pages, multi-factor authentication, and tenancy
 - [x] P15: imports and exports
 - [x] P16: extended parity and plugin ecosystem
@@ -2147,7 +2147,7 @@ Parallel lanes: temporary toasts and database notification UI/runtime may run in
 ### P13-A: temporary notifications
 
 - [x] Implement fluent panel notification presentation builder.
-- [ ] Implement status, title, body, icon, color, duration, persistent, close, and actions. Reopened with #13 on 2026-08-27. Shared-engine toast action tests pass in #12; #13 still owns the final notification acceptance run.
+- [x] Implement status, title, body, icon, color, duration, persistent, close, and actions. Ticket #13 revalidated the shared actions from #12 on 2026-08-27. Notification and icon colors now affect all three renderers, and `Notification.iconColor()` survives toast and database delivery. Component and built-browser tests observe the rendered colors.
 - [x] Integrate action success/failure notifications and session/response effects.
 - [x] Implement client-originated safe notifications with no trusted server action execution.
 - [x] Add accessibility live-region, queue, duplicate, persistent, and action tests.
@@ -2164,7 +2164,11 @@ Parallel lanes: temporary toasts and database notification UI/runtime may run in
 
 Evidence: the immutable presentation builder, versioned Holo-compatible payload, safe client toast queue, panel-shell configuration, action success/failure effects, one-time guard-scoped redirect toast handoff, polling lifecycle, simultaneous polling/realtime invalidation, React/Vue/Svelte renderers and placement triggers, namespaced custom notification renderers, framework-neutral umbrella exports, production Holo store and Flux adapters, and security/behavior suites pass. The approved server-only `databaseNotificationInbox(...)` API resolves recipient, tenant, and realtime identity exclusively from authenticated scope and authorizes every operation; callbacks remain outside serialized manifests, hostile client scope fields are ignored, mutations fail atomically for foreign IDs, and realtime channels are withheld unless list access is authorized. Next, Nuxt, and SvelteKit register the same production notification executor on their fixed operation routes, and the example applications include Holo Notifications configuration and database migrations. Layered acceptance uses the adjacent Holo-JS production SQLite store without an injected Panels store, verifies admin/vendor and tenant isolation plus read/unread/delete and poll-style refresh, exercises each framework HTTP route, and separately verifies queued delivery, polling/realtime coexistence, invalidation coalescing, reconnect behavior, navigation, and duplicate prevention. Adjacent Holo-JS changes provide validated paginated notification queries, atomic scoped mutations, portable JSON-null matching, atomic file/database/Redis session flash/take, and request-scoped auth guard flash/take. Full Holo-JS validation for the affected host work and the complete Holo Panels `bun run validate` gate passed locally on 2026-07-28, including zero-warning framework typechecks, ESLint, all package tests, architecture/dependency/publish checks, example parity, all builds, packed lifecycle acceptance across all three frameworks, 13-package packed install/import smoke tests, isolated consumer checks, and packed fixture typechecks.
 
-- [ ] **P13 phase gate:** a queued database notification appears through polling and realtime, can be acted on/read/deleted, and remains isolated between admin and vendor guards. Reopened with #13 on 2026-08-27. The shared-engine work and nested-action tests pass in #12. Revalidate the complete notification journey under #13 before closing this gate.
+- [x] **P13 phase gate:** a queued database notification appears through polling and realtime, can be acted on/read/deleted, and remains isolated between admin and vendor guards. Revalidated for #13 on 2026-08-27, using the shared Action engine completed in #12.
+
+Ticket #13 evidence: `packages/testing/tests/p13-holo-notification-runtime.test.ts` observes queued Holo delivery, polling/realtime coexistence, deduplication, read/unread/delete, and recipient/guard/tenant isolation through the real runtime. `packages/panels/tests/notification-actions.test.ts` verifies signed nested toast actions after a JSON roundtrip, parent authorization revocation, confirmation, duplicate submission prevention, and dismissal. React, Vue, and Svelte component tests distinguish loading, failed, and empty inbox states and observe notification/icon colors. Built-browser tests in `tests/e2e/admin-journeys.spec.ts` verify sanitized failures, keyboard opening and focus restoration, visible icons, custom/status colors, and RTL borders across Next, Nuxt, and SvelteKit. Implementation commits are `1e3f705` and `15b3a02`.
+
+Final ticket #13 validation passed on 2026-08-27: language-service diagnostics for all 14 changed TypeScript files; zero-error, zero-warning Svelte checks; all package and example typechecks; full ESLint; all 1,223 workspace tests; 33 tooling tests; architecture, dependency, declaration, generated API, conditional-export, publish-metadata, and example-parity checks. All 21 package builds, all three example builds, and all 96 browser tests passed. Packed installation lifecycles passed for all three frameworks, along with installation/import checks for all 21 packages, independent consumer typechecks, and third-party plugin checks. The validation components ran separately; full ESLint required an 8 GB Node heap. Standards and spec reviews have no remaining findings. Validation uses Holo-JS prerequisite `24578d12` locally; distribution still requires a published Holo release containing that commit.
 
 ## 46. Phase P14: Shield, auth pages, multi-factor authentication, and tenancy
 

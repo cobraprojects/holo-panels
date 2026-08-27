@@ -1,13 +1,19 @@
 import type { JsonObject, JsonValue } from '../protocol/json'
+import type { NotificationActionReference } from './action-reference'
 
 export type PanelNotificationStatus = 'danger' | 'info' | 'success' | 'warning'
-export type PanelNotificationActionKind = 'dismiss' | 'mark-read' | 'mark-unread' | 'navigate'
+export type PanelNotificationActionKind = 'dismiss' | 'execute' | 'mark-read' | 'mark-unread' | 'navigate'
 
 export interface PanelNotificationAction extends JsonObject {
   id: string
   kind: PanelNotificationActionKind
   label: string
   url: string | null
+}
+
+export type PanelNotificationExecutionAction = PanelNotificationAction & {
+  readonly execution: NotificationActionReference
+  readonly actionManifest?: JsonObject
 }
 
 export interface PanelNotificationPresentation extends JsonObject {
@@ -59,6 +65,7 @@ export interface PanelNotificationStore {
 }
 
 export interface PanelNotificationStoreQuery {
+  readonly id?: string
   readonly guard: string
   readonly panelId: string
   readonly recipient: PanelNotificationRecipient

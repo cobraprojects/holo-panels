@@ -83,6 +83,7 @@
         polling: notificationConfiguration.polling,
         realtime: realtimeConnection(notificationConfiguration.realtime, data.panel.notifications?.realtimeChannel ?? null),
         transport: createPanelNotificationTransport(browserTransport(), {
+          applyEffects: response => effects.apply(response),
           endpoint: `/holo/panels/${data.panel.manifest.id}/notification`,
           panelId: data.panel.manifest.id,
         }),

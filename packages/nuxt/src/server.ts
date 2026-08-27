@@ -17,6 +17,7 @@ import {
   AuthControllerError,
   decodeTransportServerRequest,
   executePanelPipeline,
+  takePanelNotificationEffects,
   executePanelRoute,
   panelErrorNotificationEffect,
   executePanelAuthOperation,
@@ -429,8 +430,12 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
         signal: scope.signal,
         tenant: await options.runtime.resolveTenant?.(event),
       }
+      const execute = async () => {
+        const result = await options.runtime.execute(context)
+        return { ...result, effects: [...(result.effects ?? []), ...takePanelNotificationEffects()] }
+      }
       const result = scope.definition
-        ? await executePanelPipeline(scope.definition, { actor: scope.actor, guard: scope.definition.guard, panelId, provider: scope.provider, signal: scope.signal }, operation, () => options.runtime.execute(context))
+        ? await executePanelPipeline(scope.definition, { actor: scope.actor, guard: scope.definition.guard, panelId, provider: scope.provider, signal: scope.signal }, operation, execute)
         : await options.runtime.execute(context)
       const data = toJsonValue(result.data)
       const response = successEnvelope(id, data, result.effects ?? [])

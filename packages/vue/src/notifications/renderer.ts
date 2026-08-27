@@ -27,6 +27,7 @@ import {
   Toaster,
 } from '../internal-ui'
 import { safeExternalUrl, type ClientToast } from '@holo-js/panels-client'
+import { VueActionRenderer } from '../actions'
 import { toast as sonnerToast } from 'vue-sonner'
 import { defineComponent, Fragment, h, onMounted, onUnmounted, shallowRef, toRaw, type PropType, type VNode, type VNodeChild } from 'vue'
 import type {
@@ -169,7 +170,9 @@ export const VueToastViewport = defineComponent({
   },
 })
 
-function notificationActions(item: VueDatabaseNotification, controls: VueNotificationControls, navigate?: (url: string) => void): VNode {
+function notificationActions(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>): VNode {
+  const { navigate } = props
+  const host = props.store.actionHost(item.id)
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null).map(action => {
     const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
     if (url) return h('a', { href: url, key: action.id, onClick: navigate ? (event: Event) => { event.preventDefault(); navigate(url) } : undefined }, action.label)
@@ -178,6 +181,7 @@ function notificationActions(item: VueDatabaseNotification, controls: VueNotific
     return deleteNotificationAction(action.label, controls.delete, action.id)
   })
   return h('div', { 'aria-label': `${item.presentation.title} actions`, class: 'hp-notification-actions', 'data-slot': 'notification-actions', role: 'group' }, [
+    ...(host?.actions[0] ? [h(VueActionRenderer, { action: host.actions[0], actions: host.actions, panelId: props.panelId, registry: props.registry, store: host.store })] : []),
     ...actions,
     item.read
       ? h(Button, { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, 'Mark unread')
@@ -202,14 +206,14 @@ function deleteNotificationAction(label: string, operation: () => Promise<unknow
   ])
 }
 
-function defaultNotification(item: VueDatabaseNotification, controls: VueNotificationControls, navigate?: (url: string) => void): VNode {
+function defaultNotification(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>): VNode {
   return h(Card, { 'aria-labelledby': `${item.id}-notification-title`, class: 'hp-notification-item-content' }, () => [
     h(CardHeader, {}, () => [
       h(CardTitle, { id: `${item.id}-notification-title` }, () => [item.presentation.icon ? PanelsIcon(item.presentation.icon) : null, item.presentation.title]),
       item.presentation.body ? h(CardDescription, {}, () => item.presentation.body) : null,
       h(CardDescription, {}, () => h('time', { class: 'hp-notification-item-time', datetime: item.createdAt }, item.createdAt)),
     ]),
-    h(CardFooter, {}, () => notificationActions(item, controls, navigate)),
+    h(CardFooter, {}, () => notificationActions(item, controls, props)),
   ])
 }
 
@@ -240,7 +244,7 @@ export const VueNotificationInbox = defineComponent({
         const Custom = props.registry?.has(rendererName, props.panelId)
           ? props.registry.resolve(rendererName, props.panelId, `notification "${item.id}"`)
           : null
-        const content = Custom ? h(Custom, { controls, notification: item } satisfies VueCustomNotificationProps) : defaultNotification(item, controls, props.navigate)
+        const content = Custom ? h(Custom, { controls, notification: item } satisfies VueCustomNotificationProps) : defaultNotification(item, controls, props)
         return h('li', { class: 'hp-notification-item', 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, 'data-slot': 'notification-item', key: item.id }, [content])
       })
       return h(Card, { 'aria-busy': state.value.loading, 'aria-label': 'Notification inbox', class: ['hp-notification-inbox hp:w-full', props.placement === 'page' ? null : 'hp:rounded-none hp:border-0 hp:shadow-none'], 'data-placement': props.placement }, () => [

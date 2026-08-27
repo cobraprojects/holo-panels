@@ -29,6 +29,7 @@ function loadRuntime(): Promise<HoloNotificationsRuntime> {
 function holoQuery(query: PanelNotificationStoreQuery): NotificationQuery {
   return {
     recipient: query.recipient,
+    ...(query.id === undefined ? {} : { id: query.id }),
     dataMatches: [
       { path: ['panel', 'version'], value: query.version },
       { path: ['panel', 'panelId'], value: query.panelId },

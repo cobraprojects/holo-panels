@@ -1,6 +1,7 @@
 import { DB } from '@holo-js/db'
 import { ActionEngine, ActionEngineState, ActionExecutionError } from '../actions/engine'
 import { authorizePanelActionPermissions } from '../actions/authorization'
+import { actionCacheIdentity } from '../actions/identity'
 import type { ActionExecutionRequest, ActionExecutionResult, ActionTransaction } from '../actions/contracts'
 import type { JsonObject, JsonValue } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
@@ -19,19 +20,6 @@ function executionState(widget: object, panelId: string): ActionEngineState<numb
   const state = panels.get(panelId) ?? new ActionEngineState<number | string>()
   panels.set(panelId, state)
   return state
-}
-
-function cacheIdentity(value: unknown): string | null {
-  if (value === null || value === undefined) return String(value)
-  if (typeof value === 'number' || typeof value === 'string') return JSON.stringify([typeof value, value])
-  if (typeof value !== 'object') return null
-  const constructor = Reflect.get(value, 'constructor')
-  const definition = typeof constructor === 'function' ? Reflect.get(constructor, 'definition') : undefined
-  const primaryKey = definition && typeof definition === 'object' ? Reflect.get(definition, 'primaryKey') : 'id'
-  const identifier = typeof primaryKey === 'string' ? Reflect.get(value, primaryKey) : undefined
-  return typeof identifier === 'number' || typeof identifier === 'string'
-    ? JSON.stringify([typeof constructor === 'function' ? constructor.name : 'object', typeof identifier, identifier])
-    : null
 }
 
 function compiledWidget(value: object): CompiledWidgetDefinition<JsonValue, object, unknown, unknown> {
@@ -78,8 +66,8 @@ export async function executeWidgetAction<TData extends JsonValue, TActor, TTena
   if (!await action.authorize({ ...context, mount: action.mount, record: null, selectedRecords: [] }, request.input)) throw new ActionExecutionError('denied', 'The action is not authorized')
   const engine = new ActionEngine<TRecord, number | string, TActor, TTenant, TServices>({
     identity: scope => {
-      const actor = cacheIdentity(scope.actor)
-      const tenant = cacheIdentity(scope.tenant)
+      const actor = actionCacheIdentity(scope.actor)
+      const tenant = actionCacheIdentity(scope.tenant)
       return actor !== null && tenant !== null ? { actor, tenant } : null
     },
     records: { resolve: async () => null, version: () => null },

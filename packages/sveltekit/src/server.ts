@@ -19,6 +19,7 @@ import {
   executePanelTenantOperation,
   bootPanel,
   panelErrorNotificationEffect,
+  takePanelNotificationEffects,
   PanelTenantOperationError,
   panelAuthOperationStatus,
   panelTenantOperationStatus,
@@ -363,7 +364,7 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
       if (!handler) throw Object.assign(new Error('Panel operation not found'), { status: 404 })
       const result: PanelOperationResult = await registry.runtime.execute(panelId, operation, requestSignal(event.request), async scope => {
         guard = await sessionGuard(scope.guard)
-        return handler({
+        const result = await handler({
           event,
           holo,
           ...(decoded.idempotencyKey ? { idempotencyKey: decoded.idempotencyKey } : {}),
@@ -373,6 +374,7 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
           scope,
           tenant: await registry.resolveTenant?.(event),
         })
+        return { ...result, effects: [...(result.effects ?? []), ...takePanelNotificationEffects()] }
       })
       const status = result.status ?? 200
       if (!Number.isInteger(status) || status < 200 || status > 299 || status === 204 || status === 205) throw new Error('Panel operation success statuses must support a JSON response body')

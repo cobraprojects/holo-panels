@@ -5,11 +5,15 @@ import {
   type PanelDatabaseNotificationItem,
   type PanelDatabaseNotificationPage,
   type PanelNotificationPresentation,
+  type ResponseEnvelope,
 } from '@holo-js/panels-core'
 import type { PanelsTransport } from '../transport'
 import type { ClientNotificationTransport } from './contracts'
+import { publishPanelActionFailure } from './feedback'
+import type { ClientActionRequest } from '../actions/contracts'
 
 export interface PanelNotificationTransportOptions {
+  readonly applyEffects?: (response: Readonly<ResponseEnvelope>) => Promise<void>
   readonly endpoint: string
   readonly panelId: string
 }
@@ -192,6 +196,37 @@ export function createPanelNotificationTransport(
 
   return Object.freeze({
     delete: (ids: readonly string[], signal: AbortSignal) => mutate('delete', ids, signal),
+    async executeAction(notificationId: string, request: ClientActionRequest, signal: AbortSignal) {
+      validateIds([notificationId, request.actionId])
+      if (request.mount !== 'notification' || request.recordIds?.length) throw new Error('Notification actions require a notification mount without record IDs')
+      const response = await transport.execute(MUTATION_OPERATION, {
+        endpoint: resolved.endpoint,
+        idempotencyKey: request.idempotencyKey,
+        panelId: resolved.panelId,
+        payload: { action: 'execute', actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, notificationId },
+        signal,
+      }).catch((cause: unknown) => {
+        if (!signal.aborted) publishPanelActionFailure(resolved.panelId)
+        throw cause
+      })
+      if (signal.aborted) throw signal.reason
+      try {
+        await resolved.applyEffects?.(response)
+      } catch (cause: unknown) {
+        publishPanelActionFailure(resolved.panelId, response.effects)
+        throw cause
+      }
+      if (!response.ok) {
+        publishPanelActionFailure(resolved.panelId, response.effects)
+        throw new Error(response.error.message)
+      }
+      const data = response.data
+      if (!isRecord(data) || data.status !== 'succeeded') {
+        publishPanelActionFailure(resolved.panelId, response.effects)
+        throw new Error('The notification action could not be completed')
+      }
+      return { effects: [], items: [], result: data.result, status: 'succeeded' as const }
+    },
     async list(page: number, pageSize: number, signal: AbortSignal): Promise<PanelDatabaseNotificationPage> {
       validatePagination(page, pageSize)
       const response = await transport.execute(LIST_OPERATION, {

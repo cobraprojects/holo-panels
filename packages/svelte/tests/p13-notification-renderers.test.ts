@@ -59,6 +59,30 @@ afterEach(async () => {
 })
 
 describe('P13 Svelte notification renderers', () => {
+  it('runs saved notification actions through the shared confirmation dialog', async () => {
+    const executeAction = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
+    const manifest = { badge: null, color: null, confirmation: 'Retry publishing?', disabled: false, icon: 'rotate-cw', id: 'retry', kind: 'custom', label: 'Retry', modal: null, mount: 'notification', size: 'medium', tooltip: null, type: 'custom', visible: true }
+    const store = new ClientNotificationInboxStore({ transport: {
+      delete: async () => 1, executeAction, markRead: async () => 1, markUnread: async () => 1,
+      list: async (page, pageSize) => ({ items: [{ createdAt: '2026-07-28T10:00:00.000Z', id: 'saved-1', presentation: { ...presentation, actions: [{ actionManifest: manifest, execution: { actionId: 'retry', resourceId: 'posts' }, id: 'retry', kind: 'execute', label: 'Retry', url: null }] }, read: false, type: 'standard' }], page, pageSize, total: 1, unread: 1 }),
+    } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(ClientFixture, { props: { inbox: { store } }, target: container })
+    mounted.push({ component, container })
+    flushClient()
+    await vi.waitFor(() => { flushClient(); expect(container.textContent).toContain('Retry') })
+    Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Retry')?.click()
+    flushClient()
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('Retry publishing?'))
+    expect(executeAction).not.toHaveBeenCalled()
+    Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find(button => button.textContent === 'Confirm')?.click()
+    flushClient()
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"] form')).not.toBeNull())
+    document.querySelector<HTMLFormElement>('[role="dialog"] form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await vi.waitFor(() => expect(executeAction).toHaveBeenCalledWith('saved-1', expect.objectContaining({ actionId: 'retry', mount: 'notification' }), expect.any(AbortSignal)))
+  })
+
   it('exports notification renderers from the package root', () => {
     expect(SvelteNotificationInbox).toBeDefined()
     expect(SvelteToastViewport).toBeDefined()

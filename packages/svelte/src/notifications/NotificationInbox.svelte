@@ -15,6 +15,7 @@
   import { PaginationContent, PaginationItem } from '../ui/pagination'
   import { Separator } from '../ui/separator'
   import { toSvelteState } from '../stores'
+  import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { SvelteCustomNotificationProps, SvelteDatabaseNotification, SvelteNotificationControls, SvelteNotificationInboxProps } from './contracts'
   import { notificationActions, notificationUrl, svelteNotificationRendererName } from './helpers'
 
@@ -55,6 +56,7 @@
     {#if $inboxState.items.length > 0}<ol class="hp-notification-list hp:divide-y" data-slot="notification-list">
       {#each $inboxState.items as item (item.id)}
         {@const itemControls = controls(item.id)}
+        {@const actionHost = store.actionHost(item.id)}
         {@const Custom = custom(item.type, item.id)}
         <li class="hp-notification-item hp:py-4 hp:first:pt-0 hp:last:pb-0" data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} data-slot="notification-item">
           {#if Custom}
@@ -70,6 +72,7 @@
                 {#if !item.read}<Badge variant="secondary">Unread</Badge>{/if}
               </div>
               <div aria-label={`${item.presentation.title} actions`} class="hp-notification-actions hp:flex hp:flex-wrap hp:gap-2" role="group">
+                {#if actionHost?.actions[0]}<ActionRenderer action={actionHost.actions[0]} actions={actionHost.actions} {panelId} {registry} store={actionHost.store} />{/if}
                 {#each notificationActions(item.presentation.actions) as action (action.id)}
                   {@const url = notificationUrl(action)}
                   {#if url}<Button href={url} size="sm" variant="outline" onclick={(event) => { if (navigate) { event.preventDefault(); navigate(url) } }}>{action.label}</Button>

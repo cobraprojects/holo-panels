@@ -323,7 +323,8 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
       'global-search': (input: PanelOperationInput<object>) => globalSearchOperation(input, serverRegistry),
       notification: async (input: PanelOperationInput<object>) => {
         await input.holo.getProject()
-        return { data: toJsonValue(await executePanelDatabaseNotificationOperation({ panel: await discoveredPanel(serverRegistry, input.panelId), payload: input.payload, scope: input.scope })) }
+        const result = await executePanelDatabaseNotificationOperation({ panel: await discoveredPanel(serverRegistry, input.panelId), payload: input.payload, registry: serverRegistry, scope: input.scope })
+        return { data: toJsonValue(result), effects: 'effects' in result ? result.effects : [] }
       },
       options: (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       'table-data': (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),

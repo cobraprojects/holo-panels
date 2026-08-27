@@ -7,6 +7,7 @@ import {
 } from '@holo-js/panels-actions'
 import {
   DISCOVERY_MARKER,
+  bindResourceActionOwner,
   defineExporter as defineCoreExporter,
   defineImporter as defineCoreImporter,
   type DefaultPanelActor,
@@ -436,7 +437,7 @@ export abstract class Resource {
     action: (action: ResourceActionFactory<ResourceRecordFor<RegisteredResourceModel<TResource>>>) => TResult,
   ): TResult {
     type TRecord = ResourceRecordFor<RegisteredResourceModel<TResource>>
-    return action(resourceActionFactory<TRecord>())
+    return bindResourceActionOwner(action(resourceActionFactory<TRecord>()), this)
   }
 
   static actions<TResource extends ResourceClass, const TActions extends readonly ActionContract<ResourceRecordFor<RegisteredResourceModel<TResource>>>[]>(

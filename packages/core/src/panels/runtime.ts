@@ -2,6 +2,7 @@ import { DB } from '@holo-js/db'
 import type { JsonObject } from '../protocol/json'
 import type { ToastEffect } from '../protocol/effects'
 import { toJsonValue } from '../protocol/serialization'
+import { withPanelNotificationContext } from '../notifications/dispatch-context'
 import type {
   CompiledPanelDefinition,
   HoloAuth,
@@ -75,12 +76,16 @@ export async function executePanelPipeline<TActor, TResult>(
   options: { readonly initial?: boolean } = {},
 ): Promise<TResult> {
   await bootPanel(panel)
-  const terminal = async (): Promise<TResult> => {
+  const terminal = (): Promise<TResult> => withPanelNotificationContext(async () => {
+    const tenancy = await panel.server.tenancy?.activeContext(scope)
+    const inbox = tenancy ? null : await panel.server.notifications?.inbox?.resolve(scope)
+    return { guard: panel.guard, panelId: panel.manifest.id, tenantId: tenancy?.tenantId ?? inbox?.tenantId ?? null }
+  }, async () => {
     if (panel.manifest.runtime?.databaseTransactions && TRANSACTIONAL_OPERATIONS.has(operation)) {
       return DB.writeTransaction(async () => await handler())
     }
     return handler()
-  }
+  })
   const configured = panel.server.middleware
   if (!configured) return terminal()
   const middleware = options.initial ?? operation === 'bootstrap'

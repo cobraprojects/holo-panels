@@ -190,7 +190,8 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
       if (context.operation === 'notification') {
         const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)
         if (!panel) throw Object.assign(new Error('Panel not found'), { statusCode: 404 })
-        return { data: await executePanelDatabaseNotificationOperation({ panel, payload: context.input, scope: { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal } }) }
+        const result = await executePanelDatabaseNotificationOperation({ panel, payload: context.input, registry, scope: { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal } })
+        return { data: result, effects: 'effects' in result ? result.effects : [] }
       }
       if (context.operation === 'global-search') {
         const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)

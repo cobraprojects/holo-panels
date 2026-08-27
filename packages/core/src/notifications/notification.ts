@@ -59,7 +59,7 @@ export class PanelNotification {
   #title = ''
 
   constructor(readonly id: string) {
-    if (!IDENTIFIER.test(id)) throw new Error('Notification IDs require stable dot or dash separated identifiers')
+    if (!IDENTIFIER.test(id) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(id)) throw new Error('Notification IDs require stable dot or dash separated identifiers')
   }
 
   title(value: string): this {
@@ -109,6 +109,7 @@ export class PanelNotification {
   }
 
   action(id: string, label: string, kind: PanelNotificationActionKind, url: string | null = null): this {
+    if (kind === 'execute') throw new Error('Executable notifications require a resource action reference')
     if (!IDENTIFIER.test(id)) throw new Error('Notification action IDs require stable identifiers')
     if (this.#actions.some(action => action.id === id)) throw new Error(`Duplicate notification action: ${id}`)
     if (kind === 'navigate' && url === null) throw new Error('Navigate notification actions require a URL')

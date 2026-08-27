@@ -4,6 +4,7 @@ import type {
   PanelDatabaseNotificationPage,
   PanelDatabaseNotificationPayload,
   PanelNotificationAuthorization,
+  PanelNotificationAction,
   PanelNotificationOperation,
   PanelNotificationPresentation,
   PanelNotificationRecipientResolver,
@@ -13,6 +14,7 @@ import type {
   PanelNotificationStoreQuery,
 } from './contracts'
 import { PanelNotification } from './notification'
+import { notificationExecution } from './presentation'
 
 const NOTIFICATION_TYPE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u
 
@@ -65,15 +67,25 @@ function parsedPresentation(value: unknown): PanelNotificationPresentation | nul
       .closeable(presentation.closeable)
       .duration(presentation.duration)
       .persistent(presentation.persistent)
+    const actions: PanelNotificationAction[] = []
     for (const value of presentation.actions) {
+      const executable = notificationExecution(value)
+      if (executable) {
+        if (actions.some(action => action.id === executable.id)) return null
+        actions.push(executable)
+        continue
+      }
       if (!isObject(value) || typeof value.id !== 'string' || typeof value.label !== 'string') return null
       if (value.kind !== 'dismiss' && value.kind !== 'mark-read' && value.kind !== 'mark-unread' && value.kind !== 'navigate') return null
       if (value.url !== null && typeof value.url !== 'string') return null
       if (value.kind === 'navigate' && (typeof value.url !== 'string' || !isSafeNavigationUrl(value.url))) return null
       if (value.kind !== 'navigate' && value.url !== null) return null
       builder.action(value.id, value.label, value.kind, value.url)
+      if (actions.some(action => action.id === value.id)) return null
+      actions.push(builder.presentation().actions.at(-1) as PanelNotificationAction)
     }
-    return builder.presentation()
+    const result = { ...builder.presentation(), actions }
+    return JSON.stringify(result).length <= 16_384 ? result : null
   } catch {
     return null
   }
@@ -162,6 +174,13 @@ export class PanelNotificationInbox {
       total: result.total,
       unread: result.unread,
     })
+  }
+
+  async find(scope: PanelNotificationScope, id: string): Promise<PanelDatabaseNotificationItem | null> {
+    await this.authorize('list', scope)
+    const query = { ...await this.resolveQuery(scope, 'list'), id }
+    const page = await this.#store.list(query, { limit: 1, offset: 0 })
+    return this.itemsFrom(page.records, query).find(item => item.id === id) ?? null
   }
 
   markRead(scope: PanelNotificationScope, ids: readonly string[]): Promise<number> {

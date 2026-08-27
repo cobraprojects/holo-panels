@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { safeExternalUrl, type ClientToast, type ClientToastStore } from '@holo-js/panels-client'
 import { toast as sonnerToast } from 'sonner'
 import { PanelsIcon } from '../internal-ui'
+import { ReactActionRenderer } from '../actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -146,13 +147,18 @@ function DeleteNotificationButton({ controls, label = 'Delete' }: { readonly con
   </AlertDialog>
 }
 
-function NotificationActions({ controls, item, navigate }: {
+function NotificationActions({ controls, item, navigate, panelId, registry, store }: {
   readonly controls: ReactNotificationControls
   readonly item: ReactDatabaseNotification
   readonly navigate?: (url: string) => void
+  readonly panelId?: string
+  readonly registry?: ReactNotificationInboxProps['registry']
+  readonly store: ReactNotificationInboxProps['store']
 }): ReactNode {
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null)
+  const host = store.actionHost(item.id)
   return <div aria-label={`${item.presentation.title} actions`} className="hp-notification-actions hp:flex hp:flex-wrap hp:gap-2" data-slot="notification-actions" role="group">
+    {host?.actions[0] ? <ReactActionRenderer actions={host.actions} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /> : null}
     {actions.map(action => {
       const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
       if (url) return <Button asChild key={action.id} size="sm" variant="outline"><a href={url} onClick={navigate ? event => { event.preventDefault(); navigate(url) } : undefined}><PanelsIcon name={notificationActionIcon(action.kind)} />{action.label}</a></Button>
@@ -211,7 +217,7 @@ export function ReactNotificationInbox({
             </div>
             {!item.read ? <Badge variant="secondary">Unread</Badge> : null}
           </div>
-          <NotificationActions controls={controls} item={item} navigate={navigate} />
+          <NotificationActions controls={controls} item={item} navigate={navigate} panelId={panelId} registry={registry} store={store} />
         </article>}
       </li>
     })}</ol> : null}

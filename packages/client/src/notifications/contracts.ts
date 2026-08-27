@@ -2,7 +2,9 @@ import type {
   PanelDatabaseNotificationPage,
   PanelNotificationAction,
   PanelNotificationPresentation,
+  ActionExecutionResult,
 } from '@holo-js/panels-core'
+import type { ClientActionRequest } from '../actions/contracts'
 
 export interface ClientToast extends PanelNotificationPresentation {
   readonly announced: boolean
@@ -19,6 +21,7 @@ export interface ClientToastState {
 export type ClientToastStateListener = (state: ClientToastState, previous: ClientToastState) => void
 
 export interface ClientNotificationTransport {
+  executeAction?(notificationId: string, request: ClientActionRequest, signal: AbortSignal): Promise<ActionExecutionResult<number | string, unknown>>
   delete(ids: readonly string[], signal: AbortSignal): Promise<number>
   list(page: number, pageSize: number, signal: AbortSignal): Promise<PanelDatabaseNotificationPage>
   markRead(ids: readonly string[], signal: AbortSignal): Promise<number>

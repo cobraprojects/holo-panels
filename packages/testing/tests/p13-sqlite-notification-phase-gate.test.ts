@@ -97,7 +97,7 @@ function record(id: string, guard: 'admin' | 'vendor', tenantId: string): Notifi
 }
 
 function page(result: Awaited<ReturnType<typeof executePanelDatabaseNotificationOperation>>): PanelDatabaseNotificationPage {
-  if (!('items' in result)) throw new Error('Expected a notification page')
+  if (!('page' in result)) throw new Error('Expected a notification page')
   return result
 }
 

@@ -24,12 +24,13 @@ export function createGeneratedNextPanelsRuntime(registry: NextPanelServerRegist
         if (!loader) throw new Error('[Holo Panels] The requested panel is not registered.')
         const value = await loader()
         const panel = ('compile' in value && typeof value.compile === 'function' ? value.compile() : value) as CompiledPanelDefinition<object>
-        const data = toJsonValue(await executePanelDatabaseNotificationOperation({
+        const result = await executePanelDatabaseNotificationOperation({
           panel,
           payload: input.payload,
+          registry,
           scope: { actor: input.scope.actor, guard: panel.guard, panelId: input.panelId, provider: input.scope.provider, signal: input.scope.signal },
-        }))
-        return { data }
+        })
+        return { data: toJsonValue(result), effects: 'effects' in result ? result.effects : [] }
       }
       if (input.operation === 'global-search') {
         const loader = registry[`${input.panelId}:panel:${input.panelId}`]

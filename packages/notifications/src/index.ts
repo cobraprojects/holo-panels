@@ -1,5 +1,5 @@
 import type { ActionColor } from '@holo-js/panels-actions'
-import type { JsonObject, PanelNotificationStatus } from '@holo-js/panels-core'
+import { dispatchPanelNotification, notificationActionReference, type JsonObject, type PanelNotificationStatus } from '@holo-js/panels-core'
 
 export type NotificationStatus = PanelNotificationStatus
 export type NotificationVerticalAlignment = 'center' | 'end' | 'start'
@@ -72,20 +72,24 @@ export class Notification {
   title(value: string): this { this.#title = value; return this }
 
   async send(): Promise<this> {
-    if (!notificationSender) throw new Error('No Holo Panels notification sender is configured')
-    await notificationSender.send(this.toPayload())
+    if (notificationSender) await notificationSender.send(this.toPayload())
+    else await dispatchPanelNotification(this.toPayload(), { kind: 'toast' })
     return this
   }
 
   async sendToDatabase(recipients: object | readonly object[], isEventDispatched = false): Promise<this> {
-    if (!notificationSender?.sendToDatabase) throw new Error('No Holo Panels database notification sender is configured')
-    await notificationSender.sendToDatabase(Array.isArray(recipients) ? recipients : [recipients], this.toPayload(), isEventDispatched)
+    if (notificationSender && !notificationSender.sendToDatabase) throw new Error('The configured notification sender does not support database delivery')
+    const targets = Array.isArray(recipients) ? recipients : [recipients]
+    if (notificationSender?.sendToDatabase) await notificationSender.sendToDatabase(targets, this.toPayload(), isEventDispatched)
+    else await dispatchPanelNotification(this.toPayload(), { broadcast: isEventDispatched, kind: 'database', recipients: targets })
     return this
   }
 
   async broadcast(recipients: object | readonly object[]): Promise<this> {
-    if (!notificationSender?.broadcast) throw new Error('No Holo Panels broadcast notification sender is configured')
-    await notificationSender.broadcast(Array.isArray(recipients) ? recipients : [recipients], this.toPayload())
+    if (notificationSender && !notificationSender.broadcast) throw new Error('The configured notification sender does not support broadcast delivery')
+    const targets = Array.isArray(recipients) ? recipients : [recipients]
+    if (notificationSender?.broadcast) await notificationSender.broadcast(targets, this.toPayload())
+    else await dispatchPanelNotification(this.toPayload(), { kind: 'broadcast', recipients: targets })
     return this
   }
 
@@ -93,7 +97,10 @@ export class Notification {
     const title = this.#title.trim()
     if (!title) throw new Error('Notifications require a title')
     return Object.freeze({
-      actions: Object.freeze(this.#actions.map(action => action.manifest('notification'))),
+      actions: Object.freeze(this.#actions.map(action => {
+        const execution = notificationActionReference(action)
+        return { ...action.manifest('notification'), ...(execution ? { execution } : {}) }
+      })),
       body: this.#body,
       color: this.#color,
       duration: this.#duration,

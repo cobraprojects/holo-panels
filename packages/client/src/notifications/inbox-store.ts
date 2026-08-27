@@ -1,4 +1,6 @@
-import type { JsonValue, PanelDatabaseNotificationPage, PanelNotificationAction } from '@holo-js/panels-core'
+import { notificationExecution, type ActionManifest, type JsonValue, type PanelDatabaseNotificationPage, type PanelNotificationAction } from '@holo-js/panels-core'
+import { ClientActionStore } from '../actions/store'
+import { isNotificationActionManifest } from './action-manifest'
 import type {
   ClientNotificationInboxListener,
   ClientNotificationInboxOptions,
@@ -31,6 +33,7 @@ function safeNavigationUrl(value: string): string | null {
 }
 
 export class ClientNotificationInboxStore {
+  readonly #actions = new Map<string, ClientActionStore>()
   readonly #listeners = new Set<ClientNotificationInboxListener>()
   readonly #options: ClientNotificationInboxOptions
   #active: AbortController | null = null
@@ -55,6 +58,24 @@ export class ClientNotificationInboxStore {
 
   get state(): ClientNotificationInboxState {
     return this.#state
+  }
+
+  actionHost(notificationId: string): { readonly actions: readonly ActionManifest[], readonly store: ClientActionStore } | null {
+    const execute = this.#options.transport.executeAction
+    if (!execute || this.#disposed) return null
+    const item = this.#state.items.find(candidate => candidate.id === notificationId)
+    const actions = item?.presentation.actions.flatMap(value => {
+      const action = notificationExecution(value)
+      const manifest = value && typeof value === 'object' && !Array.isArray(value) ? value.actionManifest : undefined
+      return action && isNotificationActionManifest(manifest, action.id) ? [manifest] : []
+    }) ?? []
+    if (actions.length === 0) return null
+    let store = this.#actions.get(notificationId)
+    if (!store) {
+      store = new ClientActionStore({ createIdempotencyKey: () => crypto.randomUUID(), transport: { execute: (request, signal) => execute(notificationId, request, signal) } })
+      this.#actions.set(notificationId, store)
+    }
+    return { actions, store }
   }
 
   subscribe(listener: ClientNotificationInboxListener): () => void {
@@ -153,6 +174,8 @@ export class ClientNotificationInboxStore {
   }
 
   stop(): void {
+    for (const store of this.#actions.values()) while (store.activeFrame) store.close()
+    this.#actions.clear()
     this.#requestVersion++
     this.#active?.abort()
     this.#active = null
@@ -277,6 +300,13 @@ export class ClientNotificationInboxStore {
   }
 
   private publish(changes: Partial<ClientNotificationInboxState>): void {
+    if (changes.items) {
+      for (const [id, store] of this.#actions) {
+        if (changes.items.some(item => item.id === id)) continue
+        while (store.activeFrame) store.close()
+        this.#actions.delete(id)
+      }
+    }
     const previous = this.#state
     this.#state = Object.freeze({ ...previous, ...changes, version: previous.version + 1 })
     for (const listener of this.#listeners) listener(this.#state, previous)

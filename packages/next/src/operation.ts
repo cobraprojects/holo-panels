@@ -22,6 +22,7 @@ import {
   decodeTransportServerRequest,
   executePanelRoute,
   panelErrorNotificationEffect,
+  takePanelNotificationEffects,
 } from '@holo-js/panels-react/server'
 import type {
   CreatePanelOperationRouteOptions,
@@ -271,7 +272,7 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
             } : {}),
           },
         })
-        const succeeded = success(requestId, result)
+        const succeeded = success(requestId, { ...result, effects: [...(result.effects ?? []), ...takePanelNotificationEffects()] })
         await flashRedirectToasts(auth.guard(panel.guard), parameters.panelId, succeeded.effects)
         return succeeded.response
       })

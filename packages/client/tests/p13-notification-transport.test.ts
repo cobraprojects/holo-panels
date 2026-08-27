@@ -5,6 +5,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import {
   createPanelNotificationTransport,
+  ClientNotificationInboxStore,
   createTransportRecorder,
   PanelsTransport,
 } from '../src'
@@ -49,6 +50,37 @@ function payloads(requests: readonly { readonly body: string }[]): unknown[] {
 }
 
 describe('panel notification transport', () => {
+  it('does not expose executable actions with incomplete modal manifests', async () => {
+    const presentation = { ...panelNotification('notice').title('Publishing failed').presentation(), actions: [{ actionManifest: { confirmation: null, disabled: false, id: 'retry', kind: 'custom', label: 'Retry', modal: {}, mount: 'notification', type: 'custom', visible: true }, execution: { actionId: 'retry', resourceId: 'posts' }, id: 'retry', kind: 'execute', label: 'Retry', url: null }] }
+    const { notifications } = createClient([success({ items: [{ createdAt: '2026-07-28T00:00:00.000Z', id: 'saved-1', presentation, read: false, type: 'notification' }], page: 1, pageSize: 20, total: 1, unread: 1 })])
+    const inbox = new ClientNotificationInboxStore({ transport: notifications })
+    await inbox.start()
+    expect(inbox.actionHost('saved-1')).toBeNull()
+    inbox.dispose()
+  })
+
+  it('confirms a notification action before sending its input through the shared action store', async () => {
+    const manifest = { badge: null, color: null, confirmation: 'Retry publishing?', disabled: false, icon: null, id: 'retry', kind: 'custom', label: 'Retry', modal: null, mount: 'notification', size: 'medium', tooltip: null, type: 'custom', visible: true }
+    const presentation = { ...panelNotification('notice').title('Publishing failed').presentation(), actions: [{ actionManifest: manifest, execution: { actionId: 'retry', resourceId: 'posts' }, id: 'retry', kind: 'execute', label: 'Retry', url: null }] }
+    const { notifications, recorder } = createClient([
+      success({ items: [{ createdAt: '2026-07-28T00:00:00.000Z', id: 'saved-1', presentation, read: false, type: 'notification' }], page: 1, pageSize: 20, total: 1, unread: 1 }),
+      success({ items: [], result: { retried: true }, status: 'succeeded' }),
+    ])
+    const inbox = new ClientNotificationInboxStore({ transport: notifications })
+    await inbox.start()
+    const host = inbox.actionHost('saved-1')!
+    host.store.mount(host.actions[0]!)
+    expect(host.store.activeFrame?.phase).toBe('confirming')
+    expect(recorder.requests).toHaveLength(1)
+    host.store.confirm()
+    host.store.setInput({ reason: 'Try again' })
+    await host.store.submit()
+    expect(host.store.activeFrame?.phase).toBe('succeeded')
+    expect(payloads(recorder.requests)[1]).toEqual({ action: 'execute', actionId: 'retry', idempotencyKey: expect.any(String), input: { reason: 'Try again' }, notificationId: 'saved-1' })
+    inbox.stop()
+    expect(host.store.activeFrame).toBeNull()
+  })
+
   it('sends only allow-listed pagination and mutation payloads', async () => {
     const presentation = panelNotification('order.ready').title('Order ready').presentation()
     const page = {

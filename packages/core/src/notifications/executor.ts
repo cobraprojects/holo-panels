@@ -8,15 +8,28 @@ import type {
 } from './contracts'
 import { holoNotificationStore } from './holo-store'
 import { PanelNotificationAccessError, PanelNotificationInbox } from './inbox'
+import type { ActionExecutionResult, ActionTransaction } from '../actions/contracts'
+import type { JsonObject } from '../protocol/json'
+import type { GeneratedResourceOperationInput } from '../resources/generated-pages'
+import { toJsonValue } from '../protocol/serialization'
+import { executeNotificationAction, resolveNotificationActionPresentation } from './action-execution'
+import { notificationExecution } from './presentation'
+import { actionCacheIdentity } from '../actions/identity'
+import { isAuthorizationError } from '@holo-js/authorization'
+import { ActionExecutionError } from '../actions/engine'
+import { NotificationActionRegistrationError } from './action-reference'
 
 export interface ExecutePanelDatabaseNotificationOperationOptions<TActor> {
   readonly panel: CompiledPanelDefinition<TActor>
   readonly payload: unknown
   readonly scope: PanelAuthenticatedScope<TActor>
   readonly store?: PanelNotificationStore
+  readonly registry?: Readonly<Record<string, () => Promise<object>>>
+  readonly context?: GeneratedResourceOperationInput['context']
+  readonly transaction?: ActionTransaction
 }
 
-export type PanelDatabaseNotificationOperationResult = PanelDatabaseNotificationPage | Readonly<{ affected: number }>
+export type PanelDatabaseNotificationOperationResult = PanelDatabaseNotificationPage | Readonly<{ affected: number }> | ActionExecutionResult<number | string, unknown>
 
 interface ListRequest {
   readonly action: 'list'
@@ -29,8 +42,20 @@ interface MutationRequest {
   readonly ids: readonly string[]
 }
 
-type NotificationRequest = ListRequest | MutationRequest
+interface ExecuteRequest {
+  readonly action: 'execute'
+  readonly actionId: string
+  readonly idempotencyKey: string
+  readonly input: JsonObject
+  readonly notificationId: string
+}
+
+type NotificationRequest = ListRequest | MutationRequest | ExecuteRequest
 const NOTIFICATION_ID = /^[A-Za-z0-9._:-]{1,200}$/u
+
+interface TenantScopedQuery<TQuery> {
+  where(column: string, operator: '=', value: number | string): TQuery & TenantScopedQuery<TQuery>
+}
 
 export class PanelNotificationRequestError extends Error {
   constructor(message: string) {
@@ -45,6 +70,15 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 function parseRequest(payload: unknown): NotificationRequest {
   if (!isRecord(payload)) throw new PanelNotificationRequestError('Panel notification requests require an object payload')
+  if (payload.action === 'execute') {
+    if (typeof payload.notificationId !== 'string' || !NOTIFICATION_ID.test(payload.notificationId)
+      || typeof payload.actionId !== 'string' || !NOTIFICATION_ID.test(payload.actionId)
+      || typeof payload.idempotencyKey !== 'string' || !payload.idempotencyKey.trim() || payload.idempotencyKey.length > 200
+      || !isRecord(payload.input)) throw new PanelNotificationRequestError('Notification execution requires notification and action IDs, input, and an idempotency key')
+    const input = toJsonValue(payload.input)
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new PanelNotificationRequestError('Notification actions require JSON input')
+    return { action: 'execute', actionId: payload.actionId, idempotencyKey: payload.idempotencyKey, input, notificationId: payload.notificationId }
+  }
   if (payload.action === 'list') {
     if (!Number.isSafeInteger(payload.page) || (payload.page as number) < 1) {
       throw new PanelNotificationRequestError('Notification page must be a positive integer')
@@ -99,14 +133,15 @@ export async function executePanelDatabaseNotificationOperation<TActor>(
   options: ExecutePanelDatabaseNotificationOperationOptions<TActor>,
 ): Promise<PanelDatabaseNotificationOperationResult> {
   const request = parseRequest(options.payload)
+  const operation = request.action === 'execute' ? 'list' : request.action
   const inboxOptions = options.panel.server.notifications?.inbox
   if (!inboxOptions || options.panel.manifest.databaseNotifications === null) {
-    throw new PanelNotificationAccessError(request.action)
+    throw new PanelNotificationAccessError(operation)
   }
-  if (!await inboxOptions.authorize(request.action, options.scope)) throw new PanelNotificationAccessError(request.action)
+  if (!await inboxOptions.authorize(operation, options.scope)) throw new PanelNotificationAccessError(operation)
   const resolved = await inboxOptions.resolve(options.scope)
-  if (!isRecord(resolved)) throw new PanelNotificationAccessError(request.action)
-  const recipient = validateRecipient(resolved.recipient, request.action)
+  if (!isRecord(resolved)) throw new PanelNotificationAccessError(operation)
+  const recipient = validateRecipient(resolved.recipient, operation)
   if (
     resolved.tenantId !== null
     && (
@@ -115,7 +150,7 @@ export async function executePanelDatabaseNotificationOperation<TActor>(
       || typeof resolved.tenantId === 'number' && !Number.isFinite(resolved.tenantId)
     )
   ) {
-    throw new PanelNotificationAccessError(request.action)
+    throw new PanelNotificationAccessError(operation)
   }
   const scope = notificationScope(options.panel, { recipient, tenantId: resolved.tenantId })
   const inbox = new PanelNotificationInbox({
@@ -123,7 +158,52 @@ export async function executePanelDatabaseNotificationOperation<TActor>(
     recipients: { resolve: () => recipient },
     store: options.store ?? holoNotificationStore(),
   })
-  if (request.action === 'list') return await inbox.list(scope, request.page, request.pageSize)
+  const actionContext = async (): Promise<GeneratedResourceOperationInput['context']> => {
+    const actor = options.scope.actor
+    if (!actor || typeof actor !== 'object' || options.scope.panelId !== options.panel.manifest.id || options.scope.guard !== options.panel.guard) throw new PanelNotificationAccessError('list')
+    const tenancy = await options.panel.server.tenancy?.activeContext(options.scope)
+    if (tenancy && String(tenancy.tenantId) !== String(resolved.tenantId)) throw new PanelNotificationAccessError('list')
+    return {
+      ...options.context,
+      actor,
+      signal: options.scope.signal,
+      tenant: tenancy?.tenant ?? options.context?.tenant ?? resolved.tenantId,
+      ...(tenancy ? {
+        scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>),
+        tenantBindings: tenancy.tenantBindings,
+      } : {}),
+    }
+  }
+  if (request.action === 'list') {
+    const page = await inbox.list(scope, request.page, request.pageSize)
+    if (!options.registry) return page
+    const context = await actionContext()
+    const items = await Promise.all(page.items.map(async item => {
+      const actions = await Promise.all(item.presentation.actions.map(async value => {
+        const action = notificationExecution(value)
+        if (!action) return value
+        try {
+          return await resolveNotificationActionPresentation({ action, context, panel: options.panel as CompiledPanelDefinition<object>, registry: options.registry! })
+        } catch (error: unknown) {
+          if (error instanceof NotificationActionRegistrationError || error instanceof ActionExecutionError && error.code === 'denied' || isAuthorizationError(error)) return null
+          throw error
+        }
+      }))
+      return { ...item, presentation: { ...item.presentation, actions: actions.filter(value => value !== null) } }
+    }))
+    return { ...page, items }
+  }
+  if (request.action === 'execute') {
+    if (!options.registry) throw new PanelNotificationAccessError('list')
+    const context = await actionContext()
+    if (options.scope.signal.aborted) throw options.scope.signal.reason
+    const item = await inbox.find(scope, request.notificationId)
+    const action = item?.presentation.actions.map(notificationExecution).find(candidate => candidate?.id === request.actionId)
+    if (!item || !action) throw new PanelNotificationAccessError('list')
+    const actor = actionCacheIdentity(context.actor)
+    const tenant = JSON.stringify([scope.panelId, scope.guard, options.scope.provider, scope.tenantId, recipient, item.id])
+    return executeNotificationAction({ action, context, panel: options.panel as CompiledPanelDefinition<object>, registry: options.registry, transaction: options.transaction }, request.input, request.idempotencyKey, actor === null ? null : { actor, tenant })
+  }
   const affected = request.action === 'delete'
     ? await inbox.delete(scope, request.ids)
     : request.action === 'mark-read'

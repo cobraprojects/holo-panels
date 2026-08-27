@@ -2,6 +2,9 @@ export { databaseNotificationPayload, panelNotification, PanelNotification } fro
 export { executePanelDatabaseNotificationOperation, PanelNotificationRequestError } from './executor'
 export { isPanelDatabaseNotificationPayload, PanelNotificationAccessError, PanelNotificationInbox } from './inbox'
 export { holoNotificationStore } from './holo-store'
+export { notificationExecution, notificationPresentation } from './presentation'
+export { dispatchPanelNotification } from './dispatch'
+export { bindResourceActionOwner, notificationActionReference, resolveResourceNotificationAction, type NotificationActionReference } from './action-reference'
 export type {
   PanelDatabaseNotificationItem,
   PanelDatabaseNotificationPage,

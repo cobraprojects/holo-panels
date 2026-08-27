@@ -431,11 +431,12 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
       polling: notificationConfiguration.polling,
       ...(realtime ? { realtime } : {}),
       transport: createPanelNotificationTransport(browserPanelsTransport(), {
+        applyEffects: response => effects.apply(response),
         endpoint: `/holo/panels/${state.panelId}/notification`,
         panelId: state.panelId,
       }),
     })
-  }, [notificationConfiguration, notificationRealtime, state.notifications?.realtimeChannel, state.panelId])
+  }, [effects, notificationConfiguration, notificationRealtime, state.notifications?.realtimeChannel, state.panelId])
   const notificationTrigger = notificationStore && notificationConfiguration
     ? <NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={browserNavigate} panelId={state.panelId} placement={notificationConfiguration.placement} registry={registry} store={notificationStore} />
     : null

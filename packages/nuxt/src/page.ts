@@ -1333,6 +1333,7 @@ export const PanelPage = defineComponent({
           polling: configuration.polling,
           ...(realtime ? { realtime } : {}),
           transport: createPanelNotificationTransport(transport, {
+            applyEffects: response => effects.apply(response),
             endpoint: `/holo/panels/${encodeURIComponent(panelId)}/notification`,
             panelId,
           }),

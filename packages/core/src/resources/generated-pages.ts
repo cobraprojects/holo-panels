@@ -1705,6 +1705,10 @@ export async function resolveGeneratedResourceWidget(resource: object, widgetId:
   return matches[0] ?? null
 }
 
+export async function authorizeGeneratedResourceNotification(resource: object, context: GeneratedResourceOperationInput['context'], strictAuthorization: boolean): Promise<void> {
+  await new ResourceExecutor(resourceDefinition(resource), { strictAuthorization }).authorizeViewAny(context)
+}
+
 export async function executeGeneratedResourceOperation(
   resource: object,
   input: GeneratedResourceOperationInput,

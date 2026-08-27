@@ -253,7 +253,7 @@ describe('Filament 5-shaped public API', () => {
 
     expect(action.manifest('row')).toMatchObject({ id: 'publish', scope: 'row' })
     expect(sent).toEqual([expect.objectContaining({
-      actions: [expect.objectContaining({ id: 'publish', scope: 'notification' })],
+      actions: [expect.objectContaining({ execution: { actionId: 'publish', resourceId: 'posts' }, id: 'publish', scope: 'notification' })],
       id: 'published',
       status: 'success',
       title: 'Published',

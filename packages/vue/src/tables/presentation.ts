@@ -244,14 +244,11 @@ export const VueTablePresentation = defineComponent({
         ? presentation.groups.flatMap(group => presentationRows(presentation, group.records, group))
         : presentationRows(presentation, presentation.records)
       return h('div', {
-        'aria-label': presentation.ariaLabel,
-        class: ['hp-table-responsive hp:w-full hp:max-w-full hp:overflow-x-auto hp:rounded-lg hp:border hp:bg-card', presentation.containerClass],
+        class: ['hp-table-responsive hp:w-full hp:max-w-full hp:rounded-lg hp:border hp:bg-card', presentation.containerClass],
         'data-panels-component': 'data-table',
         'data-slot': 'table-container',
-        role: 'region',
-        tabindex: 0,
       }, [
-        h(Table, null, () => [
+        h(Table, { containerProps: { 'aria-label': presentation.ariaLabel, role: 'region', tabindex: 0 } }, () => [
           h(TableCaption, { class: 'hp-visually-hidden' }, () => presentation.caption),
           h(TableHeader, {}, () => h(TableRow, {}, () => [
             presentation.leading ? h(TableHead, { scope: 'col' }, () => presentation.leading?.header ?? presentation.leading?.label) : null,

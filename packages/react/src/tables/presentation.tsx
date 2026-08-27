@@ -108,14 +108,11 @@ export function TablePresentation<TRecord extends object>({
       </Fragment>)
     : records.map(row)
   return <div
-    aria-label={regionLabel}
-    className={classNames('hp-table-responsive hp:w-full hp:max-w-full hp:overflow-x-auto hp:rounded-lg hp:border hp:bg-card', containerClassName)}
+    className={classNames('hp-table-responsive hp:w-full hp:max-w-full hp:rounded-lg hp:border hp:bg-card', containerClassName)}
     data-panels-component="data-table"
     data-slot="table-container"
-    role="region"
-    tabIndex={0}
   >
-    <Table>
+    <Table containerProps={{ 'aria-label': regionLabel, role: 'region', tabIndex: 0 }}>
       <TableCaption className="hp:sr-only">{caption}</TableCaption>
       <TableHeader><TableRow>
         {leading ? <TableHead scope="col">{leading.header}</TableHead> : null}

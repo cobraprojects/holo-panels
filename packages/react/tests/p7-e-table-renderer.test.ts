@@ -214,8 +214,7 @@ describe('P7-E React table renderer', () => {
     const region = container.querySelector('[role="region"]')
 
     expect(container.querySelector('[data-panels-component="table"]')).not.toBeNull()
-    expect(region?.getAttribute('data-panels-component')).toBe('data-table')
-    expect(region?.classList.contains('hp-table-responsive')).toBe(true)
+    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-table-responsive')).toBe(true)
     expect(container.querySelector('table caption')?.textContent).toBe('Posts')
     expect(region?.getAttribute('aria-label')).toBe('Posts data')
     expect(region?.getAttribute('tabindex')).toBe('0')

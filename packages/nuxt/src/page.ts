@@ -315,6 +315,16 @@ function clientAction(value: unknown): ClientActionManifest | null {
   }
 }
 
+function resourceFilterOptions(manifest: unknown): VueTableFilter['options'] {
+  if (!isObject(manifest) || !isObject(manifest.properties) || !Array.isArray(manifest.properties.options)) return undefined
+  return manifest.properties.options.flatMap(option => {
+    if (!isObject(option) || typeof option.label !== 'string') return []
+    const value = option.value
+    if (value !== null && typeof value !== 'boolean' && typeof value !== 'number' && typeof value !== 'string') return []
+    return [{ disabled: option.disabled === true, label: option.label, value }]
+  })
+}
+
 function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
   const generated = page.manifest.body?.component === 'resource-page' && isObject(page.manifest.body.properties.resource)
     ? page.manifest.body.properties.resource
@@ -339,7 +349,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
           return { ...field, ...(options.length > 0 || (sourceKind && sourceKind !== 'static') ? { optionSource: { options, server: !!sourceKind && sourceKind !== 'static' } } : {}), ...(reactive ? { reactive } : {}), ...(typeof properties.defaultValue !== 'undefined' ? { defaultValue: properties.defaultValue } : {}) }
         }) : [],
         formActions: generatedForm.actions,
-        filters: Array.isArray(generatedTable.filters) ? generatedTable.filters.map(manifest => ({ manifest })) : [],
+        filters: Array.isArray(generatedTable.filters) ? generatedTable.filters.map(manifest => ({ manifest, options: resourceFilterOptions(manifest) })) : [],
         filterMode: generatedTable.filterMode === 'deferred' ? 'deferred' : 'live',
         kind: 'resource',
         recordTitle: generated.recordTitle,

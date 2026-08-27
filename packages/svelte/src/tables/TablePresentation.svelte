@@ -84,7 +84,7 @@
   } = $props()
 
   const columnCount = $derived(columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0))
-  const responsiveClass = $derived(['hp-table-responsive hp:w-full hp:max-w-full hp:overflow-x-auto hp:rounded-lg hp:border hp:bg-card', containerClass].filter(Boolean).join(' '))
+  const responsiveClass = $derived(['hp-table-responsive hp:w-full hp:max-w-full hp:rounded-lg hp:border hp:bg-card', containerClass].filter(Boolean).join(' '))
 
   function columnWidth(width: TablePresentationColumn['width']): string | undefined {
     if (width === null || typeof width === 'undefined') return undefined
@@ -92,16 +92,12 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  aria-label={`${caption} data`}
   class={responsiveClass}
   data-panels-component="data-table"
   data-slot="table-container"
-  role="region"
-  tabindex="0"
 >
-  <Table>
+  <Table containerProps={{ 'aria-label': `${caption} data`, role: 'region', tabindex: 0 }}>
     <TableCaption class="hp:sr-only">{caption}</TableCaption>
     <TableHeader>
       <TableRow>

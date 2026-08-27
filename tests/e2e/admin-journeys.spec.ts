@@ -602,12 +602,43 @@ test.describe('authenticated admin journeys', () => {
     await expect(table).toHaveAttribute('data-state', 'ready')
     await expect(table.getByRole('combobox', { name: 'Results per page' })).toHaveValue('10')
     const search = table.getByRole('searchbox', { name: 'Search', exact: true })
-    await search.fill('ticket-14-no-matching-records')
+    await table.getByRole('button', { name: 'Filters', exact: true }).click()
+    await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption('Guides')
+    await page.getByRole('button', { name: 'Apply filters', exact: true }).click()
+    await page.keyboard.press('Escape')
+    await expect(table).toHaveAttribute('data-state', 'ready')
+    await expect(table.getByRole('cell', { name: 'Building with Holo Panels', exact: true })).toBeVisible()
+    await expect(table.getByRole('cell', { name: 'Acme release', exact: true })).toHaveCount(0)
+    await expect(title).toHaveAttribute('aria-sort', 'ascending')
+    await table.getByRole('button', { name: 'Columns', exact: true }).click()
+    await page.getByRole('checkbox', { name: /^slug$/iu }).or(page.getByRole('menuitemcheckbox', { name: /^slug$/iu })).click()
+    await page.keyboard.press('Escape')
+    await expect(table).toHaveAttribute('data-state', 'ready')
+    await expect(table.getByRole('columnheader', { name: /^slug$/iu })).toHaveCount(0)
+    let releaseTableResponse = (): void => undefined
+    const pendingTableResponse = new Promise<void>(resolve => { releaseTableResponse = resolve })
+    await page.route('**/holo/panels/admin/table-data', async route => {
+      await pendingTableResponse
+      await route.continue()
+    })
+    try {
+      await search.fill('ticket-14-no-matching-records')
+      await expect(table).toHaveAttribute('data-state', 'loading')
+      await expect(table.getByRole('status', { name: 'Loading records' })).toBeVisible()
+      await expect(title).toBeVisible()
+      await expect(table.getByText('No records', { exact: true })).toHaveCount(0)
+    } finally {
+      releaseTableResponse()
+    }
     await expect(table).toHaveAttribute('data-state', 'empty')
+    await page.unroute('**/holo/panels/admin/table-data')
     await expect(title).toBeVisible()
     await expect(table.getByRole('table')).toContainText('No records found.')
     await search.clear()
     await expect(table).toHaveAttribute('data-state', 'ready')
+    await expect(table.getByRole('cell', { name: 'Acme release', exact: true })).toHaveCount(0)
+    await expect(title).toHaveAttribute('aria-sort', 'ascending')
+    await expect(table.getByRole('combobox', { name: 'Results per page' })).toHaveValue('10')
 
     await page.getByRole('button', { name: 'Account menu' }).click()
     await page.getByRole('menuitem', { name: /Dark(?: theme)?/u }).click()
@@ -620,13 +651,20 @@ test.describe('authenticated admin journeys', () => {
         viewportWidth: document.documentElement.clientWidth,
         surfaceWidth: surface.getBoundingClientRect().width,
         tableWidth: element.getBoundingClientRect().width,
-        overflowX: getComputedStyle(surface).overflowX,
+        overflowX: getComputedStyle(element.querySelector('[role="region"]') ?? surface).overflowX,
       }
     })
     expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth)
     expect(overflow.surfaceWidth).toBeLessThanOrEqual(overflow.tableWidth)
     expect(overflow.tableWidth).toBeLessThanOrEqual(390)
     expect(overflow.overflowX).toBe('auto')
+    const scrollRegion = table.getByRole('region', { name: 'Posts data', exact: true })
+    const firstHeader = table.getByRole('columnheader').first()
+    const initialHeaderLeft = await firstHeader.evaluate(element => element.getBoundingClientRect().left)
+    await scrollRegion.focus()
+    await expect(scrollRegion).toBeFocused()
+    await scrollRegion.press('ArrowRight')
+    await expect.poll(async () => await firstHeader.evaluate(element => element.getBoundingClientRect().left)).toBeLessThan(initialHeaderLeft)
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('table-mobile-dark.png') })
   })
 

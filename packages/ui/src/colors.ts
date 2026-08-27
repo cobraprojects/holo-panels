@@ -1,3 +1,5 @@
+import { lightPanelTheme } from './tokens'
+
 export const panelSemanticColorNames = [
   'primary',
   'success',
@@ -38,4 +40,12 @@ export function panelColorAppearance(value: string | null | undefined): PanelCol
   return semanticColorNames.has(normalized)
     ? { attribute: normalized, custom: undefined }
     : { attribute: color, custom: color }
+}
+
+export function panelColorValue(value: string | null | undefined): string | undefined {
+  const appearance = panelColorAppearance(value)
+  const semantic = panelSemanticColorNames.find(name => name === appearance.attribute)
+  if (semantic) return `var(--holo-color-${semantic}, ${lightPanelTheme.tokens[`color-${semantic}`]})`
+  if (appearance.attribute === 'gray') return 'var(--holo-color-content-muted, #52525b)'
+  return appearance.custom
 }

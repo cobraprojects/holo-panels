@@ -40,7 +40,8 @@ function safeClientPresentation(presentation: Readonly<PanelNotificationPresenta
       continue
     }
   }
-  return builder.presentation()
+  const iconColor = typeof presentation.iconColor === 'string' && presentation.iconColor.length <= 100 ? presentation.iconColor.trim() : null
+  return { ...builder.presentation(), ...(iconColor ? { iconColor } : {}) }
 }
 
 export class ClientToastStore {

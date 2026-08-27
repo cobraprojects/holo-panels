@@ -80,6 +80,7 @@ export function validatedToastPresentation(value: unknown): Readonly<PanelNotifi
     color: presentation.color,
     duration: presentation.duration,
     icon: presentation.icon,
+    ...(presentation.iconColor ? { iconColor: presentation.iconColor } : {}),
     id: presentation.id,
     persistent: presentation.persistent,
     status: presentation.status,

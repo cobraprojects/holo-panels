@@ -242,6 +242,35 @@ test.describe('authenticated admin journeys', () => {
     await expect(inbox.getByRole('alert')).toHaveCount(0)
   })
 
+  test('renders notification status, custom colors, and icon colors in the inbox', async ({ page }) => {
+    await login(page)
+    await page.route('**/holo/panels/admin/notification', async route => {
+      const request = JSON.parse(new URLSearchParams(route.request().postData() ?? '').get('request') ?? '{}')
+      const items = [
+        { color: null, iconColor: null, id: 'success', status: 'success' },
+        { color: null, iconColor: null, id: 'danger', status: 'danger' },
+        { color: '#16a34a', iconColor: '#b42318', id: 'custom', status: 'info' },
+      ].map(appearance => ({
+        createdAt: '2026-08-27T00:00:00.000Z', id: appearance.id, read: false, type: 'standard',
+        presentation: { actions: [], body: null, closeable: true, duration: null, icon: 'check', persistent: true, title: `${appearance.id} notification`, ...appearance },
+      }))
+      await route.fulfill({ json: { data: { items, page: request.payload.page, pageSize: request.payload.pageSize, total: 3, unread: 3 }, effects: [], id: request.id, ok: true, protocolVersion: '1.0' } })
+    })
+    await page.getByRole('button', { name: /^Notifications/ }).click()
+    const inbox = page.getByLabel('Notification inbox', { exact: true })
+    const success = inbox.locator('[data-notification="success"]')
+    const danger = inbox.locator('[data-notification="danger"]')
+    const custom = inbox.locator('[data-notification="custom"]')
+    await expect(custom).toBeVisible()
+    expect(await success.evaluate(element => getComputedStyle(element).borderInlineStartColor)).not.toBe(await danger.evaluate(element => getComputedStyle(element).borderInlineStartColor))
+    await expect(custom).toHaveCSS('border-inline-start-color', 'rgb(22, 163, 74)')
+    await expect(custom.locator('[data-slot="notification-icon"]')).toHaveCSS('color', 'rgb(180, 35, 24)')
+    await expect(custom.locator('[data-slot="notification-icon"] svg')).toBeVisible()
+    await custom.evaluate(element => { element.setAttribute('dir', 'rtl') })
+    await expect(custom).toHaveCSS('direction', 'rtl')
+    await expect(custom).toHaveCSS('border-right-width', '3px')
+  })
+
   test('recovers an open login form after its CSRF cookie becomes stale', async ({ page }) => {
     await page.goto('/admin/login', { waitUntil: 'networkidle' })
     await page.evaluate(() => {

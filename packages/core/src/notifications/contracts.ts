@@ -17,13 +17,14 @@ export type PanelNotificationExecutionAction = PanelNotificationAction & {
   readonly token?: string
 }
 
-export interface PanelNotificationPresentation extends JsonObject {
+export type PanelNotificationPresentation = JsonObject & {
   actions: JsonValue[]
   body: string | null
   closeable: boolean
   color: string | null
   duration: number | null
   icon: string | null
+  iconColor?: string | null
   id: string
   persistent: boolean
   status: PanelNotificationStatus

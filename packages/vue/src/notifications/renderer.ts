@@ -28,6 +28,7 @@ import {
 import { safeExternalUrl, type ClientToast } from '@holo-js/panels-client'
 import { VueActionRenderer } from '../actions'
 import { toast as sonnerToast } from 'vue-sonner'
+import { panelColorValue } from '@holo-js/panels-ui'
 import { defineComponent, Fragment, h, onMounted, onUnmounted, shallowRef, toRaw, type PropType, type VNode, type VNodeChild } from 'vue'
 import type {
   VueCustomNotificationProps,
@@ -112,9 +113,10 @@ const VueToastContent = defineComponent({
         'data-persistent': props.toast.persistent || undefined,
         'data-slot': 'notification-toast',
         'data-status': props.toast.status,
+        style: { borderInlineStartColor: panelColorValue(props.toast.color ?? props.toast.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' },
       }, () => [
         h(CardHeader, { class: 'hp:gap-1 hp:pr-10' }, () => [
-          h(CardTitle, { class: 'hp:flex hp:items-center hp:gap-2 hp:text-sm' }, () => [props.toast.icon ? PanelsIcon(props.toast.icon) : null, props.toast.title]),
+          h(CardTitle, { class: 'hp:flex hp:items-center hp:gap-2 hp:text-sm' }, () => [props.toast.icon ? h('span', { 'data-slot': 'notification-icon', style: { color: panelColorValue(props.toast.iconColor ?? props.toast.color ?? props.toast.status) } }, [PanelsIcon(props.toast.icon)]) : null, props.toast.title]),
           props.toast.body ? h(CardDescription, {}, () => props.toast.body) : null,
         ]),
         actions.length > 0 ? h(CardContent, { class: 'hp:flex hp:flex-wrap hp:gap-2' }, () => actions.map(renderAction)) : null,
@@ -214,7 +216,7 @@ function deleteNotificationAction(label: string, operation: () => Promise<unknow
 function defaultNotification(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>): VNode {
   return h(Card, { 'aria-labelledby': `${item.id}-notification-title`, class: 'hp-notification-item-content' }, () => [
     h(CardHeader, {}, () => [
-      h(CardTitle, { id: `${item.id}-notification-title` }, () => [item.presentation.icon ? PanelsIcon(item.presentation.icon) : null, item.presentation.title]),
+      h(CardTitle, { id: `${item.id}-notification-title` }, () => [item.presentation.icon ? h('span', { 'data-slot': 'notification-icon', style: { color: panelColorValue(item.presentation.iconColor ?? item.presentation.color ?? item.presentation.status) } }, [PanelsIcon(item.presentation.icon)]) : null, item.presentation.title]),
       item.presentation.body ? h(CardDescription, {}, () => item.presentation.body) : null,
       h(CardDescription, {}, () => h('time', { class: 'hp-notification-item-time', datetime: item.createdAt }, item.createdAt)),
     ]),
@@ -250,7 +252,7 @@ export const VueNotificationInbox = defineComponent({
           ? props.registry.resolve(rendererName, props.panelId, `notification "${item.id}"`)
           : null
         const content = Custom ? h(Custom, { controls, notification: item } satisfies VueCustomNotificationProps) : defaultNotification(item, controls, props)
-        return h('li', { class: 'hp-notification-item', 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, 'data-slot': 'notification-item', key: item.id }, [content])
+        return h('li', { class: 'hp-notification-item hp:ps-3', 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, 'data-slot': 'notification-item', key: item.id, style: { borderInlineStartColor: panelColorValue(item.presentation.color ?? item.presentation.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' } }, [content])
       })
       return h(Card, { 'aria-busy': state.value.loading, 'aria-label': 'Notification inbox', class: ['hp-notification-inbox hp:w-full', props.placement === 'page' ? null : 'hp:rounded-none hp:border-0 hp:shadow-none'], 'data-placement': props.placement }, () => [
         h(CardHeader, { class: 'hp-notification-inbox-header' }, () => [

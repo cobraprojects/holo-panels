@@ -6,7 +6,7 @@ import type {
 } from '@holo-js/panels-core'
 import type { ClientActionRequest } from '../actions/contracts'
 
-export interface ClientToast extends PanelNotificationPresentation {
+export type ClientToast = PanelNotificationPresentation & {
   readonly announced: boolean
   readonly createdAt: number
   readonly trusted: boolean

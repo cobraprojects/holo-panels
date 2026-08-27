@@ -14,7 +14,7 @@ import type {
   PanelNotificationStoreQuery,
 } from './contracts'
 import { PanelNotification } from './notification'
-import { notificationExecution } from './presentation'
+import { notificationExecution, notificationIconColor } from './presentation'
 
 const NOTIFICATION_TYPE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u
 
@@ -84,7 +84,8 @@ function parsedPresentation(value: unknown): PanelNotificationPresentation | nul
       if (actions.some(action => action.id === value.id)) return null
       actions.push(builder.presentation().actions.at(-1) as PanelNotificationAction)
     }
-    const result = { ...builder.presentation(), actions }
+    const iconColor = notificationIconColor(presentation.iconColor)
+    const result = { ...builder.presentation(), actions, ...(iconColor ? { iconColor } : {}) }
     return JSON.stringify(result).length <= 16_384 ? result : null
   } catch {
     return null

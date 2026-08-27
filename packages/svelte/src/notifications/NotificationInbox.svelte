@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, type Component } from 'svelte'
+  import { panelColorValue } from '@holo-js/panels-ui'
+  import Icon from '../components/Icon.svelte'
   import ChevronLeft from 'lucide-svelte/icons/chevron-left'
   import ChevronRight from 'lucide-svelte/icons/chevron-right'
   import Check from 'lucide-svelte/icons/check'
@@ -58,12 +60,13 @@
         {@const itemControls = controls(item.id)}
         {@const actionHost = store.actionHost(item.id)}
         {@const Custom = custom(item.type, item.id)}
-        <li class="hp-notification-item hp:py-4 hp:first:pt-0 hp:last:pb-0" data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} data-slot="notification-item">
+        <li class="hp-notification-item hp:py-4 hp:ps-3 hp:first:pt-0 hp:last:pb-0" data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} data-slot="notification-item" style:border-inline-start-color={panelColorValue(item.presentation.color ?? item.presentation.status)} style:border-inline-start-style="solid" style:border-inline-start-width="3px">
           {#if Custom}
             <Custom controls={itemControls} notification={item} />
           {:else}
             <article aria-labelledby={`${item.id}-notification-title`} class="hp:space-y-3" data-slot="notification-item-content">
               <div class="hp:flex hp:items-start hp:gap-3">
+                {#if item.presentation.icon}<span class="hp:mt-0.5" data-slot="notification-icon" style:color={panelColorValue(item.presentation.iconColor ?? item.presentation.color ?? item.presentation.status)}><Icon name={item.presentation.icon} /></span>{/if}
                 <div class="hp:min-w-0 hp:flex-1 hp:space-y-1">
                   <h3 class="hp:text-sm hp:font-medium" id={`${item.id}-notification-title`}>{item.presentation.title}</h3>
                   {#if item.presentation.body}<p class="hp:text-sm hp:text-muted-foreground">{item.presentation.body}</p>{/if}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { safeExternalUrl, type ClientToast, type ClientToastStore } from '@holo-js/panels-client'
 import { toast as sonnerToast } from 'sonner'
+import { panelColorValue } from '@holo-js/panels-ui'
 import { PanelsIcon } from '../internal-ui'
 import { ReactActionRenderer } from '../actions'
 import {
@@ -95,9 +96,9 @@ function ToastContent({ navigate, panelId, registry, store, toast }: {
 }): ReactNode {
   const actions = toast.actions.map(actionValue).filter(action => action !== null)
   const host = store.actionHost(toast.id)
-  return <Card className="hp-notification-toast hp:relative hp:w-full hp:border-0 hp:shadow-none" data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} data-slot="notification-toast">
+  return <Card className="hp-notification-toast hp:relative hp:w-full hp:border-0 hp:shadow-none" data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} data-slot="notification-toast" style={{ borderInlineStartColor: panelColorValue(toast.color ?? toast.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' }}>
     <CardHeader className="hp:gap-1 hp:pr-10">
-      <CardTitle className="hp:flex hp:items-center hp:gap-2 hp:text-sm">{toast.icon ? <PanelsIcon name={toast.icon} /> : null}{toast.title}</CardTitle>
+      <CardTitle className="hp:flex hp:items-center hp:gap-2 hp:text-sm">{toast.icon ? <span data-slot="notification-icon" style={{ color: panelColorValue(toast.iconColor ?? toast.color ?? toast.status) }}><PanelsIcon name={toast.icon} /></span> : null}{toast.title}</CardTitle>
       {toast.body ? <CardDescription>{toast.body}</CardDescription> : null}
     </CardHeader>
     {actions.length > 0 ? <CardContent className="hp:flex hp:flex-wrap hp:gap-2">{actions.map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</CardContent> : null}
@@ -210,10 +211,10 @@ export function ReactNotificationInbox({
       const Custom = registry?.has(rendererName, panelId)
         ? registry.resolve<ReactCustomNotificationProps>(rendererName, panelId, `notification "${item.id}"`)
         : null
-      return <li className="hp-notification-item hp:py-4 hp:first:pt-0 hp:last:pb-0" data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} data-slot="notification-item" key={item.id}>
+      return <li className="hp-notification-item hp:py-4 hp:ps-3 hp:first:pt-0 hp:last:pb-0" data-color={item.presentation.color ?? undefined} data-notification={item.id} data-read={item.read} data-slot="notification-item" key={item.id} style={{ borderInlineStartColor: panelColorValue(item.presentation.color ?? item.presentation.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' }}>
         {Custom ? <Custom controls={controls} notification={item} /> : <article aria-labelledby={`${item.id}-notification-title`} className="hp:space-y-3" data-slot="notification-item-content">
           <div className="hp:flex hp:items-start hp:gap-3">
-            {item.presentation.icon ? <span className="hp:mt-0.5 hp:text-muted-foreground"><PanelsIcon name={item.presentation.icon} /></span> : null}
+            {item.presentation.icon ? <span className="hp:mt-0.5" data-slot="notification-icon" style={{ color: panelColorValue(item.presentation.iconColor ?? item.presentation.color ?? item.presentation.status) }}><PanelsIcon name={item.presentation.icon} /></span> : null}
             <div className="hp:min-w-0 hp:flex-1 hp:space-y-1">
               <h3 className="hp:text-sm hp:font-medium" data-slot="notification-item-title" id={`${item.id}-notification-title`}>{item.presentation.title}</h3>
               {item.presentation.body ? <p className="hp:text-sm hp:text-muted-foreground" data-slot="notification-item-body">{item.presentation.body}</p> : null}

@@ -5,6 +5,12 @@ import { deepFreeze } from '../builders/deep-freeze'
 
 const ID = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
 
+export function notificationIconColor(value: unknown): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string' || !value.trim() || value.length > 100) throw new Error('Notification icon colors require between 1 and 100 characters')
+  return value.trim()
+}
+
 export function notificationExecution(value: unknown): PanelNotificationExecutionAction | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const action = value as Readonly<Record<string, unknown>>
@@ -27,6 +33,7 @@ export function notificationPresentation(payload: {
   readonly color: string | null
   readonly duration: number | null
   readonly icon: string | null
+  readonly iconColor?: string | null
   readonly id: string
   readonly status: PanelNotificationStatus
   readonly title: string
@@ -47,7 +54,8 @@ export function notificationPresentation(payload: {
     builder.action(action.id, action.label, 'navigate', action.url)
     return builder.presentation().actions.at(-1)!
   })
-  const result = { ...builder.presentation(), actions }
+  const iconColor = notificationIconColor(payload.iconColor)
+  const result = { ...builder.presentation(), actions, ...(iconColor ? { iconColor } : {}) }
   if (JSON.stringify(result).length > 16_384) throw new Error('Notification presentations cannot exceed 16 KiB')
   deepFreeze(result)
   return result

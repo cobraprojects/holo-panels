@@ -94,7 +94,7 @@ describe('P13 React notification renderers', () => {
 
   it('renders and operates an accessible persistent toast queue with safe navigation', async () => {
     const store = new ClientToastStore()
-    store.push(presentation)
+    store.push({ ...presentation, color: '#16a34a', iconColor: '#b42318' })
     store.push({ ...presentation, actions: [{ id: 'unsafe', kind: 'navigate', label: 'Unsafe', url: 'javascript:alert(1)' }], id: 'notice-2', persistent: false, title: 'Unsafe link' })
     const markup = renderToStaticMarkup(<ReactToastViewport placement="bottom" store={store} />)
     expect(markup).toContain('aria-live="polite"')
@@ -107,7 +107,9 @@ describe('P13 React notification renderers', () => {
     await act(async () => root.render(<ReactToastViewport store={store} />))
     await vi.waitFor(() => expect(document.querySelector('[data-slot="notification-toast"]')).not.toBeNull())
     expect(document.querySelector('[data-persistent="true"]')).not.toBeNull()
-    expect(document.querySelector('[data-color="brand-accent"]')).not.toBeNull()
+    const colored = document.querySelector<HTMLElement>('.hp-notification-toast[data-color="#16a34a"]')!
+    expect(getComputedStyle(colored).borderInlineStartColor).toBe('#16a34a')
+    expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
     expect(document.querySelector('a[href="/reports"]')).not.toBeNull()
     expect(document.body.innerHTML).not.toContain('javascript:')
     await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close Report ready"]')?.click())

@@ -161,13 +161,14 @@ describe('resource-owned notification actions', () => {
     const scope = { actor, guard: 'web', panelId: 'admin', provider: 'users', signal: new AbortController().signal }
     const Original = resource()
     const effects = await executePanelPipeline(panel, scope, 'action', async () => {
-      await Notification.make().title('Publishing failed').actions([Original.retry]).sendToDatabase(actor)
-      await Notification.make().title('Notification sent').success().send()
+      await Notification.make().title('Publishing failed').icon('alert').color('warning').iconColor('#b42318').actions([Original.retry]).sendToDatabase(actor)
+      await Notification.make().title('Notification sent').success().icon('check').iconColor('#067647').send()
       return takePanelNotificationEffects()
     })
-    expect(effects).toMatchObject([{ kind: 'toast', presentation: { status: 'success', title: 'Notification sent' } }])
+    const response = decodeResponseEnvelope(JSON.parse(JSON.stringify({ data: null, effects, id: 'appearance', ok: true, protocolVersion: '1.0' })))
+    expect(response.effects).toMatchObject([{ kind: 'toast', presentation: { iconColor: '#067647', status: 'success', title: 'Notification sent' } }])
     const page = await executePanelDatabaseNotificationOperation({ panel, payload: { action: 'list', page: 1, pageSize: 20 }, registry: { 'admin:resource:notification-posts': async () => resource() }, scope })
-    expect(page).toMatchObject({ items: [{ presentation: { actions: [{ actionManifest: { id: 'retry', mount: 'notification' } }], title: 'Publishing failed' } }] })
+    expect(page).toMatchObject({ items: [{ presentation: { actions: [{ actionManifest: { id: 'retry', mount: 'notification' } }], color: 'warning', icon: 'alert', iconColor: '#b42318', title: 'Publishing failed' } }] })
     expect(takePanelNotificationEffects()).toEqual([])
     await expect(Notification.make().title('Outside request').send()).rejects.toThrow('active server panel request')
   })

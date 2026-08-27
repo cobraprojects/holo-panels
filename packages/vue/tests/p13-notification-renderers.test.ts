@@ -102,7 +102,7 @@ describe('P13 Vue notification renderers', () => {
 
   it('renders and operates the accessible toast queue with persistence and safe actions', async () => {
     const store = new ClientToastStore()
-    store.push(presentation)
+    store.push({ ...presentation, color: '#16a34a', iconColor: '#b42318' })
     store.push({ ...presentation, actions: [{ id: 'unsafe', kind: 'navigate', label: 'Unsafe', url: 'javascript:alert(1)' }], id: 'notice-2', persistent: false, title: 'Unsafe link' })
     const markup = await renderToString(createSSRApp(() => h(VueToastViewport, { placement: 'bottom', store })))
     expect(markup).toContain('aria-live="polite"')
@@ -111,11 +111,16 @@ describe('P13 Vue notification renderers', () => {
     expect(markup).not.toContain('javascript:')
 
     const container = document.createElement('div')
+    document.body.append(container)
     const app = createApp(() => h(VueToastViewport, { store }))
     apps.push(app)
     app.mount(container)
     await vi.waitFor(() => expect(Array.from(container.querySelectorAll('[data-sonner-toast]')).some(toast => toast.textContent?.includes('Report ready'))).toBe(true))
     const reportToast = Array.from(container.querySelectorAll('[data-sonner-toast]')).find(toast => toast.textContent?.includes('Report ready'))
+    if (!reportToast) throw new Error('Expected the report notification')
+    const colored = reportToast.querySelector<HTMLElement>('.hp-notification-toast')!
+    expect(getComputedStyle(colored).borderInlineStartColor).toBe('#16a34a')
+    expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
     reportToast?.querySelector<HTMLButtonElement>('[aria-label="Close Report ready"]')?.click()
     await vi.waitFor(() => expect(store.state.items.some(item => item.id === 'notice-1')).toBe(false))
   })

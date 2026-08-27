@@ -59,6 +59,21 @@ afterEach(async () => {
 })
 
 describe('P13 Svelte notification renderers', () => {
+  it('renders custom notification and icon colors through Sonner', async () => {
+    const store = new ClientToastStore()
+    store.push({ ...presentation, color: '#16a34a', iconColor: '#b42318' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(ClientFixture, { props: { toasts: { store } }, target: container })
+    mounted.push({ component, container })
+    flushClient()
+    await vi.waitFor(() => expect(container.querySelector('.hp-notification-toast')).not.toBeNull())
+    const colored = container.querySelector<HTMLElement>('.hp-notification-toast')!
+    expect(getComputedStyle(colored).borderInlineStartColor).toBe('#16a34a')
+    expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
+    store.dispose()
+  })
+
   it('distinguishes loading and failed inbox requests from an empty inbox', async () => {
     let fail: (error: Error) => void = () => undefined
     let recovered = false

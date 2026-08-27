@@ -3,7 +3,7 @@ import { definePolicy } from '@holo-js/authorization'
 import { configureNotificationsRuntime, resetNotificationsRuntime, type NotificationRecord, type NotificationStore } from '@holo-js/notifications'
 import { afterEach, describe, expect, it } from 'vitest'
 import { configureSecurityRuntime, resetSecurityRuntime } from '@holo-js/security'
-import { Notification, Resource, definePanel } from '../src'
+import { ClientToastStore, Notification, Resource, definePanel } from '../src'
 import { databaseNotificationPayload, decodeResponseEnvelope, notificationPresentation, type PanelNotificationStore } from '@holo-js/panels-core'
 import { executePanelDatabaseNotificationOperation, executePanelPipeline, takePanelNotificationEffects } from '@holo-js/panels-core/server'
 
@@ -26,6 +26,71 @@ function resource(allowed = true, execute = () => ({ attempt: 1, retried: true }
 }
 
 describe('resource-owned notification actions', () => {
+  it('confirms nested toast actions, reauthorizes their parent, and submits only once', async () => {
+    configureSecurityRuntime({ config: {}, csrfSigningKey: 'nested-notification-action-test-key' })
+    let allowed = true
+    let attempts = 0
+    class PostResource extends Resource {
+      protected static override model = Post
+      static override isScopedToTenant = false
+      static retry = this.action(({ Action }) => Action.make('retry').authorize(() => allowed).registerModalActions([
+        Action.make('retry-later').requiresConfirmation('Schedule another attempt?').action(() => ({ attempt: ++attempts })),
+      ]))
+    }
+    const panel = definePanel('admin').compile()
+    const scope = { actor: { id: 1 }, guard: 'web', panelId: 'admin', provider: 'users', signal: new AbortController().signal }
+    const effects = await executePanelPipeline(panel, scope, 'action', async () => {
+      await Notification.make('nested-toast').title('Publishing failed').persistent().actions([PostResource.retry]).send()
+      return takePanelNotificationEffects()
+    })
+    const response = decodeResponseEnvelope(JSON.parse(JSON.stringify({ data: null, effects, id: 'nested-toast', ok: true, protocolVersion: '1.0' })))
+    const effect = response.effects[0]
+    if (effect?.kind !== 'toast' || !('presentation' in effect)) throw new Error('Expected a toast')
+    const registry = { 'admin:resource:notification-posts': async () => PostResource }
+    const store = new ClientToastStore()
+    store.connectActions({ executeToastAction: async (token, request) => {
+      const result = await executePanelDatabaseNotificationOperation({
+        panel,
+        payload: { action: 'execute-toast', actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, token },
+        registry,
+        scope,
+        transaction: { run: operation => operation() },
+      })
+      if (!('status' in result)) throw new Error('Expected an action result')
+      return result
+    } })
+    try {
+      store.push(effect.presentation)
+      const host = store.actionHost('nested-toast')
+      const parent = host?.actions[0]
+      const child = parent?.modal?.actions?.[0]
+      if (!host || !parent || !child) throw new Error('Expected nested toast actions')
+      host.store.mount(parent)
+      host.store.mount(child)
+      expect(() => host.store.submit()).toThrow('must be confirmed')
+      expect(attempts).toBe(0)
+      host.store.confirm()
+      allowed = false
+      await expect(host.store.submit()).rejects.toThrow('not authorized')
+      expect(host.store.activeFrame?.manifest.id).toBe('retry')
+      expect(host.store.activeFrame?.error).toBeNull()
+      expect(attempts).toBe(0)
+      allowed = true
+      host.store.mount(child)
+      host.store.confirm()
+      const first = host.store.submit()
+      expect(host.store.submit()).toBe(first)
+      await expect(first).resolves.toMatchObject({ result: { attempt: 1 }, status: 'succeeded' })
+      host.store.close()
+      expect(host.store.activeFrame?.manifest.id).toBe('retry')
+      store.dismiss('nested-toast')
+      expect(host.store.activeFrame).toBeNull()
+      expect(store.state.items).toEqual([])
+    } finally {
+      store.dispose()
+    }
+  })
+
   it('sends executable toasts without an inbox and reauthorizes signed actions against the current resource', async () => {
     configureSecurityRuntime({ config: {}, csrfSigningKey: 'notification-action-test-key' })
     let allowed = true

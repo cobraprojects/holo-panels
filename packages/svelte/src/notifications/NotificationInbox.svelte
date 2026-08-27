@@ -52,7 +52,7 @@
   <CardContent class="hp:space-y-4 {placement === 'page' ? '' : 'hp:max-h-[min(36rem,calc(100vh-8rem))] hp:overflow-y-auto'}">
     {#if $inboxState.error}<Alert variant="destructive" data-slot="notification-error"><AlertDescription>{$inboxState.error}</AlertDescription></Alert>{/if}
     {#if $inboxState.loading}<p aria-live="polite" class="hp:text-sm hp:text-muted-foreground" data-slot="notification-loading" role="status">Loading notifications</p>{/if}
-    {#if !$inboxState.loading && $inboxState.items.length === 0}<Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>You are all caught up.</EmptyDescription></EmptyHeader></Empty>{/if}
+    {#if !$inboxState.loading && !$inboxState.error && $inboxState.items.length === 0}<Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>You are all caught up.</EmptyDescription></EmptyHeader></Empty>{/if}
     {#if $inboxState.items.length > 0}<ol class="hp-notification-list hp:divide-y" data-slot="notification-list">
       {#each $inboxState.items as item (item.id)}
         {@const itemControls = controls(item.id)}

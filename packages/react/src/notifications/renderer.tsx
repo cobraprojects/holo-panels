@@ -199,7 +199,7 @@ export function ReactNotificationInbox({
   const content = <CardContent className="hp:space-y-4">
     {state.error ? <p className="hp:rounded-md hp:border hp:border-destructive/50 hp:p-3 hp:text-sm hp:text-destructive" data-slot="notification-error" role="alert">{state.error}</p> : null}
     {state.loading ? <p aria-live="polite" className="hp:text-sm hp:text-muted-foreground" data-slot="notification-loading" role="status">Loading notifications</p> : null}
-    {!state.loading && state.items.length === 0 ? <Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>You are all caught up.</EmptyDescription></EmptyHeader></Empty> : null}
+    {!state.loading && !state.error && state.items.length === 0 ? <Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>You are all caught up.</EmptyDescription></EmptyHeader></Empty> : null}
     {state.items.length > 0 ? <ol className="hp-notification-list hp:divide-y" data-slot="notification-list">{state.items.map(item => {
       const controls: ReactNotificationControls = {
         delete: () => store.delete([item.id]),

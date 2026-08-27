@@ -59,6 +59,35 @@ afterEach(async () => {
 })
 
 describe('P13 Svelte notification renderers', () => {
+  it('distinguishes loading and failed inbox requests from an empty inbox', async () => {
+    let fail: (error: Error) => void = () => undefined
+    let recovered = false
+    const store = new ClientNotificationInboxStore({ polling: false, transport: {
+      delete: async () => 0,
+      list: (page, pageSize) => recovered
+        ? Promise.resolve({ items: [], page, pageSize, total: 0, unread: 0 })
+        : new Promise((_resolve, reject) => { fail = reject }),
+      markRead: async () => 0,
+      markUnread: async () => 0,
+    } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(ClientFixture, { props: { inbox: { store } }, target: container })
+    mounted.push({ component, container })
+    flushClient()
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('Loading notifications')
+    expect(container.textContent).not.toContain('No notifications')
+    fail(new Error('SQLSTATE password=secret /srv/private.ts:42'))
+    await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toBe('Notifications failed to load'))
+    expect(container.textContent).not.toContain('No notifications')
+    expect(container.textContent).not.toMatch(/SQLSTATE|secret|private\.ts/)
+    recovered = true
+    await store.refresh()
+    flushClient()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.textContent).toContain('No notifications')
+  })
+
   it('executes a toast action once after shared confirmation without an inbox', async () => {
     const executeToastAction = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
     const store = new ClientToastStore()

@@ -211,6 +211,37 @@ test('protects the admin shell with the configured Holo Auth guard', async ({ re
 test.describe('authenticated admin journeys', () => {
   test.describe.configure({ mode: 'serial' })
 
+  test('opens the notification inbox by keyboard and separates loading, error, and empty states', async ({ page }) => {
+    await login(page)
+    let releaseFailure: () => void = () => undefined
+    const pending = new Promise<void>(resolve => { releaseFailure = resolve })
+    await page.route('**/holo/panels/admin/notification', async route => {
+      await pending
+      await route.fulfill({ status: 500, contentType: 'text/plain', body: 'SQLSTATE password=secret at /srv/private.ts:42' })
+    })
+    const trigger = page.getByRole('button', { name: /^Notifications/ })
+    await trigger.focus()
+    await trigger.press('Enter')
+    const inbox = page.getByLabel('Notification inbox', { exact: true })
+    await expect(inbox).toBeVisible()
+    await expect(inbox.getByRole('status')).toHaveText('Loading notifications')
+    await expect(inbox.getByText('No notifications', { exact: true })).toHaveCount(0)
+    releaseFailure()
+    await expect(inbox.getByRole('alert')).toHaveText('Notifications failed to load')
+    await expect(inbox.getByText('No notifications', { exact: true })).toHaveCount(0)
+    await expect(inbox).not.toContainText(/SQLSTATE|password|private\.ts/)
+    await page.keyboard.press('Escape')
+    await expect(inbox).not.toBeVisible()
+    await expect(trigger).toBeFocused()
+    await page.unroute('**/holo/panels/admin/notification')
+    await page.reload({ waitUntil: 'networkidle' })
+    await waitForPanelReady(page)
+    await trigger.focus()
+    await trigger.press('Enter')
+    await expect(inbox.getByText('No notifications', { exact: true })).toBeVisible()
+    await expect(inbox.getByRole('alert')).toHaveCount(0)
+  })
+
   test('recovers an open login form after its CSRF cookie becomes stale', async ({ page }) => {
     await page.goto('/admin/login', { waitUntil: 'networkidle' })
     await page.evaluate(() => {

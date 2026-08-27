@@ -23,7 +23,6 @@ import {
   EmptyHeader,
   EmptyTitle,
   PanelsIcon,
-  Skeleton,
   Toaster,
 } from '../internal-ui'
 import { safeExternalUrl, type ClientToast } from '@holo-js/panels-client'
@@ -259,9 +258,9 @@ export const VueNotificationInbox = defineComponent({
           h(Button, { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), size: 'sm', type: 'button', variant: 'outline' }, () => [PanelsIcon('check-check'), 'Mark all read']),
         ]),
         h(CardContent, { class: props.placement === 'page' ? null : 'hp:max-h-[min(36rem,calc(100vh-8rem))] hp:overflow-y-auto' }, () => [
-          state.value.error ? h(Alert, { variant: 'destructive' }, () => h(AlertDescription, {}, () => state.value.error)) : null,
-          state.value.loading ? h(Skeleton, { class: 'hp:h-24 hp:w-full' }) : null,
-          !state.value.loading && items.length === 0 ? h(Empty, {}, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No notifications'), h(EmptyDescription, {}, () => props.emptyMessage)])) : null,
+          state.value.error ? h(Alert, { 'data-slot': 'notification-error', variant: 'destructive' }, () => h(AlertDescription, {}, () => state.value.error)) : null,
+          state.value.loading ? h('p', { 'aria-live': 'polite', class: 'hp:text-sm hp:text-muted-foreground', 'data-slot': 'notification-loading', role: 'status' }, 'Loading notifications') : null,
+          !state.value.loading && !state.value.error && items.length === 0 ? h(Empty, { 'data-slot': 'notification-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => props.emptyMessage), h(EmptyDescription, {}, () => 'You are all caught up.')])) : null,
           items.length > 0 ? h('ol', { class: 'hp:grid hp:gap-3', 'data-slot': 'notification-list' }, items) : null,
         ]),
         pages > 1 ? h(CardFooter, { class: 'hp-notification-pagination' }, () => [

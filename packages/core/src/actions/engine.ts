@@ -248,7 +248,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       if (!allowed.length) continue
       try {
         lastResult = await this.executeWithContext(definition, request.input, context, true)
-        items.push(...allowed.map(item => ({ recordId: item.id, ...(typeof lastResult === 'undefined' ? {} : { result: lastResult }), status: 'succeeded' as const })))
+        items.push(...allowed.map((item, index) => ({ recordId: item.id, ...(index === 0 && typeof lastResult !== 'undefined' ? { result: lastResult } : {}), status: 'succeeded' as const })))
       } catch {
         items.push(...allowed.map(item => ({ recordId: item.id, status: 'failed' as const })))
       }

@@ -222,11 +222,18 @@ export class ResourceExecutor<
   async selectTableRecords(state: TableQueryState, excludedRecordIds: readonly ResourceIdentifier[], context: ResourceExecutionContext<TActor, TTenant>): Promise<readonly ResourceIdentifier[]> {
     const executor = await this.tableExecutor(context)
     const records = await executor.executeSelection(state, { mode: 'all-matching', excludedRecordIds }, context, true)
-    return records.map(record => {
+    const identifiers = records.map(record => {
       const id: unknown = Reflect.get(record.toJSON(), this.#definition.routeKey)
       if (typeof id !== 'number' && typeof id !== 'string') throw new Error('Selected resource records require stable route identifiers')
       return id
     })
+    const authorized: ResourceIdentifier[] = []
+    for (let offset = 0; offset < identifiers.length; offset += 250) {
+      const batch = identifiers.slice(offset, offset + 250)
+      const resolved = await this.resolveActionRecords(batch, context)
+      authorized.push(...batch.filter(id => resolved.has(id)))
+    }
+    return authorized
   }
 
   private async tableExecutor(context: ResourceExecutionContext<TActor, TTenant>) {

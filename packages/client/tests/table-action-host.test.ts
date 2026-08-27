@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createTableActionHost } from '../src/actions/table'
+import { createTableActionHost, resolveTableActionManifest } from '../src/actions/table'
 
 it('clears bulk selection only after successful completion when configured', async () => {
   const clearSelection = vi.fn()
@@ -35,4 +35,8 @@ it('keeps resolved row presentation and sends modal input through the shared lif
   await host.store.submit()
   expect(requests).toEqual([{ actionId: 'publish', idempotencyKey: expect.any(String), input: { title: 'Ready' }, mount: 'record', recordId: 7 }])
   expect(host.store.activeFrame?.phase).toBe('succeeded')
+  const rowManifest = host.actions[0]!
+  const data = { tableActions: [{ ...rowManifest, modal: null, mount: 'bulk' as const }] }
+  expect(resolveTableActionManifest(data, 'publish', 7)).toBeNull()
+  expect(resolveTableActionManifest(data, 'publish')?.mount).toBe('bulk')
 })

@@ -714,7 +714,7 @@ test.describe('authenticated admin journeys', () => {
       const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
       await page.getByRole('button', { name: 'Confirm', exact: true }).click()
       const response = await responsePromise
-      expect(await response.json()).toMatchObject({ ok: true, data: { status: 'succeeded', items: expect.arrayContaining([{ recordId: created[11], status: 'succeeded', result: { published: expect.arrayContaining([created[11]]) } }]) } })
+      expect(await response.json()).toMatchObject({ ok: true, data: { status: 'succeeded', items: expect.arrayContaining([{ recordId: created[11], status: 'succeeded' }, expect.objectContaining({ result: { published: expect.arrayContaining([created[11]]) } })]) } })
       const body = await response.json() as { data: { items: readonly { recordId: string }[] } }
       expect(body.data.items).toHaveLength(11)
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })).toBeVisible()

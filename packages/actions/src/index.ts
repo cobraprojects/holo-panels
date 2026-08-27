@@ -548,8 +548,8 @@ export class BulkAction<
   #deselectAfterCompletion = false
   #fetchRecords = true
 
-  override action<TNextResult>(handler: ActionHandler<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TData, TNextResult>): BulkAction<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory> {
-    return super.action(handler) as BulkAction<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory>
+  override action<TNextResult>(handler: ActionHandler<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TData, TNextResult>): BulkAction<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory> & Omit<this, keyof BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>> {
+    return super.action(handler) as BulkAction<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory> & Omit<this, keyof BulkAction<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory>>
   }
 
   chunkSelectedRecords(size: number): this {

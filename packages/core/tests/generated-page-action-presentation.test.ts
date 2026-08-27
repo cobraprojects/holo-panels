@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DB, column, configureDB, createAdapter, createConnectionManager, createDialect, createSchemaService, defineGeneratedTable, defineModel, registerDatabaseDriverFactory, resetDB } from '@holo-js/db'
 import { sqliteDatabaseDriverFactory } from '@holo-js/db-sqlite'
+import { definePolicy } from '@holo-js/authorization'
 import { definePanel } from '../src/panels'
 import type { ActionPresentationContext } from '../src/actions'
 import { resolvePageData } from '../src/pages'
@@ -18,6 +19,8 @@ describe('generated page action presentation', () => {
       await model.create({ id: 'first', category: 'Guides', tenantId: 'one' })
       await model.create({ id: 'second', category: 'News', tenantId: 'one' })
       await model.create({ id: 'foreign', category: 'Guides', tenantId: 'two' })
+      await model.create({ id: 'hidden', category: 'Guides', tenantId: 'one' })
+      definePolicy('selection-posts', model, { class: { viewAny: () => true }, record: { view: (_context, record) => record.id !== 'hidden' } })
       const handle = vi.fn(async () => undefined)
       const resource = { actions: [{ authorize: () => true, bulk: { fetchRecords: false }, handle, id: 'queue', kind: 'custom', label: 'Queue', mount: 'bulk', source: 'table', transactional: false }], baseQuery: (query: ReturnType<typeof model.query>) => query.where('tenantId', '=', 'one'), id: 'posts', kind: 'resource', model, routeKey: 'id', shared: true, singular: null, table: { columns: [{ path: 'category' }], serverColumns: [{ manifest: { path: 'category' } }] } }
       const selection = { mode: 'all-matching', excludedRecordIds: [], query: { panelId: 'admin', tableId: 'posts', filters: { category: 'Guides' } } }
@@ -27,6 +30,8 @@ describe('generated page action presentation', () => {
       const action = await executeGeneratedResourceOperation(resource, { context: { actor: {}, signal: new AbortController().signal, tenant: null }, operation: 'action', panelId: 'admin', payload: { actionId: 'queue', mount: 'bulk', recordIds: ['second', 'foreign', 'first'], resourceId: 'posts', source: 'table' } })
       expect(action.data.items).toMatchObject([{ recordId: 'second', status: 'succeeded' }, { recordId: 'foreign', status: 'denied' }, { recordId: 'first', status: 'succeeded' }])
       expect(handle).toHaveBeenCalledWith({}, expect.objectContaining({ record: null, selectedRecordIds: ['second', 'first'], selectedRecords: [] }))
+      const all = await executeGeneratedResourceOperation(resource, { context: { actor: {}, signal: new AbortController().signal, tenant: null }, operation: 'action', panelId: 'admin', payload: { actionId: 'queue', mount: 'bulk', resourceId: 'posts', source: 'table', selection: { mode: 'all-matching', query: {}, excludedRecordIds: [] } } })
+      expect(all.data.items).toEqual([{ recordId: 'first', status: 'succeeded' }, { recordId: 'second', status: 'succeeded' }])
     } finally {
       await manager.disconnectAll()
       resetDB()

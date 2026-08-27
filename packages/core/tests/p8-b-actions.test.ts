@@ -82,6 +82,14 @@ describe('P8-B action execution', () => {
     expect(handle).toHaveBeenCalledExactlyOnceWith({ title: 'Publish' }, expect.objectContaining({ record: null, selectedRecordIds: [1], selectedRecords: [] }))
     expect(result.items.map(item => item.status)).toEqual(['succeeded', 'denied', 'denied'])
   })
+  it('serializes a custom bulk callback result once instead of once per record', async () => {
+    const ids = Array.from({ length: 2000 }, (_, index) => index + 1)
+    const executor = new ActionEngine<RecordValue, number, string, string, Services>({ records: { resolve: async id => ({ id, tenantId: 'tenant-a', version: 'v1' }), version: record => record.version }, transaction: { run: operation => operation() } })
+    const result = await executor.execute({ id: 'publish', label: 'Publish', authorize: () => true, bulk: { fetchRecords: false }, kind: 'custom', mount: 'bulk', handle: async (_input, context) => ({ processed: context.selectedRecordIds }) }, { idempotencyKey: 'compact-result', input: { title: 'Publish' }, mount: 'bulk', recordIds: ids }, scope())
+    expect(result.items.filter(item => item.result !== undefined)).toHaveLength(1)
+    expect(JSON.stringify(result).length).toBeLessThan(200_000)
+    expect(result.effects).toMatchObject([{ kind: 'toast', presentation: { status: 'success' } }])
+  })
   it('resolves and executes bounded bulk chunks without loading later records early', async () => {
     const events: string[] = []
     const executor = new ActionEngine<RecordValue, number, string, string, Services>({

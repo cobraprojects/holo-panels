@@ -35,6 +35,7 @@ interface TableActionHostOptions<TRecordId extends TableRecordId> {
 
 export function resolveTableActionManifest(data: JsonObject, id: string, recordId?: TableRecordId): Readonly<ActionManifest> | null {
   const row = recordId === undefined || !Array.isArray(data.rowActions) ? undefined : data.rowActions.find(value => value && typeof value === 'object' && !Array.isArray(value) && String(value.recordId) === String(recordId))
+  if (recordId !== undefined && row === undefined) return null
   const entries = row && typeof row === 'object' && !Array.isArray(row) ? row.actions : data.tableActions
   const find = (values: typeof entries): Readonly<ActionManifest> | null => {
     if (!Array.isArray(values)) return null

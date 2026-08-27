@@ -142,22 +142,21 @@ Entry resolution supports direct record paths, relation paths, formatted scalar/
 
 ## Actions
 
+`this.action(({ Action }) => Action.make('publish'))` creates a resource action with its record, input, actor, tenant, services, and modal field types inferred from the resource model. `PostResource.actions(({ CreateAction }) => [CreateAction.make()])` creates page actions. The component object passed to `configureTable` exposes the same constructors for `recordActions`, `headerActions`, `toolbarActions`, and `emptyStateActions`. The same action instance can be injected into pages, tables, notifications, and action modals. Create, view, edit, delete, restore, force-delete, replicate, import, export, bulk actions, and action groups use that contract. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
+
+Server execution validates the mounted action, bounds bulk record IDs, reauthorizes, validates modal data, checks record versions, uses configured transactions, and returns a bounded effect set. A hidden or disabled action is not an authorization decision.
+
+React, Vue, and Svelte render grouped triggers and complete modal or slide-over presentations, including headings, descriptions, widths, ordered slots, nested actions, focus behavior, and Escape handling. Rate limiting runs after authorization and before transactions and action lifecycle execution. A source-inferred custom action packaging example is available in [`examples/plugins`](../examples/plugins/custom-action.ts).
+
 ### Bulk selection and execution
 
 Table selections persist across pages and filter views. Selecting all matching records captures the current query; exclusions remove records from that selection, and administrators can add records from another view. The server resolves the captured query inside the resource and tenant scopes. Selections are limited to 10,000 records per execution.
 
 Use `selectCurrentPageOnly()`, `selectGroupsOnly()`, or `maxSelectableRecords(n)` on the table to restrict selection. Generated resource operations enforce these restrictions on the server as well as in the table controls.
 
-Custom bulk callbacks run once per selection, or once per chunk when `chunkSelectedRecords(n)` is configured. Chunk sizes must be between 1 and 1,000. Each callback receives only records that passed authorization and version checks. `deselectRecordsAfterCompletion()` clears selection after complete success; partial failures preserve it for correction or retry.
+Custom bulk callbacks run once per selection, or once per chunk when `chunkSelectedRecords(n)` is configured. Chunk sizes must be between 1 and 1,000. Each callback receives only records that passed authorization and version checks. The execution response includes each chunk's callback result on its first successful item, with per-record statuses for every item. This avoids repeating large results for every selected ID. `deselectRecordsAfterCompletion()` clears selection after complete success; partial failures preserve it for correction or retry.
 
 `fetchSelectedRecords(false)` passes authorized identifiers through `context.selectedRecordIds`, with an empty `selectedRecords` array and a null `record`. The callback can use those IDs with existing Holo services. Authorization lookups use batches of at most 250 records, which are discarded instead of retaining the whole selection. Holo record policies still require model instances, so this option reduces retained memory but does not eliminate policy-related model loading. Built-in record operations retain their model validation and lifecycle behavior and use bounded batches in this mode. Application callbacks must preserve tenant scopes, domain validation, and mutation policies when executing their own queries.
-
-
-`this.action(({ Action }) => Action.make('publish'))` creates a resource action with its record, input, actor, tenant, services, and modal field types inferred from the resource model. `PostResource.actions(({ CreateAction }) => [CreateAction.make()])` creates page actions. The component object passed to `configureTable` exposes the same constructors for `recordActions`, `headerActions`, `toolbarActions`, and `emptyStateActions`. The same action instance can be injected into pages, tables, notifications, and action modals. Create, view, edit, delete, restore, force-delete, replicate, import, export, bulk actions, and action groups use that contract. `ClientActionStore` handles mounting, form collection, confirmation, submission phases, failure, and success in the browser.
-
-Server execution validates the mounted action, bounds bulk record IDs, reauthorizes, validates modal data, checks record versions, uses configured transactions, and returns a bounded effect set. A hidden or disabled action is not an authorization decision.
-
-React, Vue, and Svelte render grouped triggers and complete modal or slide-over presentations, including headings, descriptions, widths, ordered slots, nested actions, focus behavior, and Escape handling. Rate limiting runs after authorization and before transactions and action lifecycle execution. A source-inferred custom action packaging example is available in [`examples/plugins`](../examples/plugins/custom-action.ts).
 
 ## Relation managers
 

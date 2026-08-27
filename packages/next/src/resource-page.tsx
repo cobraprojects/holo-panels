@@ -475,7 +475,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
   const [actionData, setActionData] = useState(data)
   const actions = useMemo(() => tableActions(table, resource, actionData), [resource, table, actionData])
   const filters = useMemo(() => tableFilters(table), [table])
-  const actionDefinitions = useMemo(() => new Map(executableTableActions(objects(table.actions)).map(action => [text(action.id), action])), [table])
+  const actionDefinitions = useMemo(() => new Map(executableTableActions(objects(table.actions)).map(action => [`${action.scope}:${text(action.id)}`, action])), [table])
   const [groups, setGroups] = useState(() => tableGroups(data.groups))
   const [summaries, setSummaries] = useState(() => tableSummaries(data.summaries))
   const resourceId = text(resource.id)
@@ -527,7 +527,8 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
     actionTransport={{
       async execute(request, signal) {
         const resolved = resolveTableActionManifest(actionData, request.actionId, request.recordId)
-        const manifest = resolved ? { ...resolved, removesRecord: resolved.kind === 'delete' || resolved.kind === 'force-delete', scope: resolved.mount === 'bulk' ? 'bulk' : resolved.mount === 'page' ? 'header' : 'row' } : actionDefinitions.get(request.actionId)
+        const actionScope = request.mount === 'bulk' ? 'bulk' : request.mount === 'page' ? 'header' : 'row'
+        const manifest = resolved ? { ...resolved, removesRecord: resolved.kind === 'delete' || resolved.kind === 'force-delete', scope: resolved.mount === 'bulk' ? 'bulk' : resolved.mount === 'page' ? 'header' : 'row' } : actionDefinitions.get(`${actionScope}:${request.actionId}`)
         if (!manifest) throw new Error('The requested action is not available.')
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds

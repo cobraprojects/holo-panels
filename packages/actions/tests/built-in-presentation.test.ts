@@ -2,6 +2,7 @@ import { ActionEngine, compileActionManifest, resolveActionState } from '@holo-j
 import { describe, expect, it, vi } from 'vitest'
 import {
   Action,
+  BulkAction,
   AssociateAction,
   AttachAction,
   CreateAction,
@@ -25,6 +26,14 @@ import {
 } from '../src'
 
 describe('built-in action presentation', () => {
+  it('preserves custom bulk-action methods after configuring a callback', () => {
+    class AuditedBulkAction extends BulkAction<{ readonly id: number }> {
+      audit(): this { return this }
+    }
+    const original = new AuditedBulkAction('audit')
+    const configured = original.action(() => 'queued').audit().chunkSelectedRecords(2)
+    expect(configured).toBe(original)
+  })
   it('compiles pivot editing with a stable action identifier', async () => {
     const action = EditPivotAction.make().compile()
     const manifest = await compileActionManifest(action, 'Edit pivot', { actor: {}, mount: 'record', record: {}, services: {}, signal: new AbortController().signal, tenant: null })
@@ -153,7 +162,7 @@ describe('built-in action presentation', () => {
     })
     const result = await engine.execute(action.compile(), { idempotencyKey: 'queue-many', input: {}, mount: 'bulk', recordIds: [3, 5, 8] }, { actor: {}, services: {}, signal: new AbortController().signal, tenant: null })
     expect(selections).toEqual([[3, 5], [8]])
-    expect(result.items.every(item => item.result === 'queued')).toBe(true)
+    expect(result.items).toEqual([{ recordId: 3, result: 'queued', status: 'succeeded' }, { recordId: 5, status: 'succeeded' }, { recordId: 8, result: 'queued', status: 'succeeded' }])
     expect(action.manifest()).toMatchObject({ deselectAfterCompletion: true, scope: 'bulk' })
   })
 

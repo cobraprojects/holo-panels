@@ -230,23 +230,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
   }
 
   selectRecord(recordId: TRecordId, selected = true, groupKey?: string): void {
-    if (selected && !this.#selectGroupScope(groupKey)) return
-    if (selected && !this.canSelectRecord(recordId)) return
-    if (this.#state.selection.mode === 'all-matching') {
-      const excluded = new Set(this.#state.selection.excludedRecordIds)
-      const included = new Set(this.#state.selection.selectedRecordIds)
-      if (this.#matchesSelection(recordId)) {
-        if (selected) excluded.delete(recordId)
-        else excluded.add(recordId)
-      } else if (selected) included.add(recordId)
-      else included.delete(recordId)
-      this.#setSelection({ mode: 'all-matching', selectedRecordIds: uniqueSorted([...included]), excludedRecordIds: uniqueSorted([...excluded]) })
-      return
-    }
-    const selectedIds = new Set(this.#state.selection.selectedRecordIds)
-    if (selected) selectedIds.add(recordId)
-    else selectedIds.delete(recordId)
-    this.#setSelection({ mode: 'explicit', selectedRecordIds: uniqueSorted([...selectedIds]), excludedRecordIds: [] })
+    this.selectPage([recordId], selected, groupKey)
   }
 
   selectPage(recordIds: readonly TRecordId[], selected = true, groupKey?: string): void {
@@ -254,12 +238,19 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     if (this.#state.selection.mode === 'all-matching') {
       const excluded = new Set(this.#state.selection.excludedRecordIds)
       const included = new Set(this.#state.selection.selectedRecordIds)
+      let count = this.selectedCount
       for (const recordId of recordIds) {
-        if (this.#matchesSelection(recordId)) {
+        const matches = this.#matchesSelection(recordId)
+        const wasSelected = included.has(recordId) || matches && !excluded.has(recordId)
+        if (selected === wasSelected) continue
+        if (selected && this.selectionSettings.maximum !== null && count >= this.selectionSettings.maximum) continue
+        count += selected ? 1 : -1
+        if (matches) {
+          included.delete(recordId)
           if (selected) excluded.delete(recordId)
           else excluded.add(recordId)
         } else if (!selected) included.delete(recordId)
-        else if (this.selectionSettings.maximum === null || this.#matchingTotal - excluded.size + included.size < this.selectionSettings.maximum) included.add(recordId)
+        else included.add(recordId)
       }
       this.#setSelection({ mode: 'all-matching', selectedRecordIds: uniqueSorted([...included]), excludedRecordIds: uniqueSorted([...excluded]) })
       return

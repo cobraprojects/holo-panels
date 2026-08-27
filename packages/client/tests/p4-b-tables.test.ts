@@ -157,6 +157,10 @@ describe('P4-B table query state', () => {
     store.selectPage(['3', '4'])
     expect(store.selectionPayload()).toMatchObject({ recordIds: ['3'], excludedRecordIds: ['1'] })
     expect(store.selectedCount).toBe(2)
+    store.setSearch('')
+    store.selectPage(['1', '2'])
+    expect(store.selectedCount).toBe(2)
+    expect(store.isSelected('1')).toBe(false)
   })
 
   it('does not let stale responses or stale errors replace newer state', () => {

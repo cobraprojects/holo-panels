@@ -96,8 +96,10 @@ export interface TableAcceptanceJourneyReport {
   readonly collapsedGroupRows: number
   readonly columnVisibility: readonly string[]
   readonly filter: unknown
+  readonly emptyMarkup: string
   readonly framework: TableAcceptanceRenderReport['framework']
   readonly inlineEditRequests: readonly TableAcceptanceInlineEditRequest[]
+  readonly loadingMarkup: string
   readonly markupAfterSelection: string
   readonly page: number
   readonly render: TableAcceptanceRenderReport

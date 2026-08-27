@@ -1914,6 +1914,8 @@ Evidence: the Svelte renderer exercises the complete shared table state and inte
 
 - [x] **P7 phase gate:** identical table acceptance journeys pass for all frameworks with search, relationship filter, sort, pagination, column toggle, selection, bulk action, inline edit, group, and summary.
 
+Ticket #14 revalidated on 2026-08-27: all three renderers use compact, bordered shadcn tables with subdued headers, badges, row menus, and shared loading, empty, and error bodies. Nuxt applies its server-loaded records after initializing the query, so filtered pages start ready. Language-service diagnostics, Vue/Svelte diagnostics, workspace typecheck, ESLint, all 1,155 workspace tests, architecture and dependency checks, package builds, conditional exports, packed installation lifecycles for all three frameworks, and 21-package publish validation passed. The built examples passed all 90 browser journeys; six focused table and query-hydration checks also passed after the final toolbar styling change. Desktop-light and mobile-dark screenshots were inspected for each example. Full lint required an 8 GB Node heap; the configured lint rules were unchanged.
+
 Evidence: one identical DOM-driven journey mounted the exported React, Vue, and Svelte table renderers through their example fixtures and observed search, deferred relationship filtering, sorting, pagination, column visibility, page/all-matching selection, bulk action payloads, allow-listed versioned inline edits, group collapse, group/table summaries, accessible semantics, and stable SSR. All example typechecks and the full workspace validation, builds, architecture checks, packed lifecycle, and package smoke suite passed on 2026-07-27.
 
 ## 40. Phase P8: infolists and actions

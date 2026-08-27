@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertTitle, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress, Skeleton } from '../internal-ui'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress } from '../internal-ui'
 import { ClientTransferStore, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
 import { TablesRenderHook } from '@holo-js/panels-core'
 import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, MoreHorizontal, Search } from 'lucide-vue-next'
@@ -280,11 +280,11 @@ const TableActionGroupButton = defineComponent({
       }
     }
     return (): VNode => {
-      const label = props.group.label ?? (props.group.scope === 'bulk' ? 'Bulk actions' : 'Actions')
+      const label = props.group.label ?? (props.group.scope === 'bulk' ? 'Bulk actions' : props.group.scope === 'row' ? 'Row actions' : 'Actions')
       const confirmation = confirming.value
       return h(Fragment, [
         h(DropdownMenu, {}, () => [
-          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': label, class: 'hp-action-group-trigger hp-action-trigger', 'data-action-group': props.group.id, type: 'button', variant: 'outline' }, () => [props.group.icon ? PanelsIcon(props.group.icon) : props.group.scope === 'row' ? h(MoreHorizontal, { 'aria-hidden': 'true' }) : null, h('span', label), props.group.scope === 'row' ? null : h(ChevronDown, { 'aria-hidden': 'true' })])),
+          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': label, class: 'hp-action-group-trigger hp-action-trigger', 'data-action-group': props.group.id, size: props.group.scope === 'row' ? 'icon' : 'default', type: 'button', variant: props.group.scope === 'row' ? 'ghost' : 'outline' }, () => [props.group.icon ? PanelsIcon(props.group.icon) : props.group.scope === 'row' ? h(MoreHorizontal, { 'aria-hidden': 'true' }) : null, h('span', { class: props.group.scope === 'row' ? 'hp:sr-only' : undefined }, label), props.group.scope === 'row' ? null : h(ChevronDown, { 'aria-hidden': 'true' })])),
           h(DropdownMenuContent, { align: 'end' }, () => props.group.actions.map(action => h(DropdownMenuItem, {
             'data-action': action.id,
             'data-color': action.color ?? undefined,
@@ -592,6 +592,7 @@ function tableFilters(
     'aria-expanded': String(open.value),
     'aria-haspopup': 'dialog',
     type: 'button',
+    variant: 'outline',
   }, [h(ListFilter, { 'aria-hidden': 'true' }), 'Filters'])
   if (placement === 'dropdown') return h(Popover, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => [h(PopoverTrigger, { asChild: true }, () => trigger), h(PopoverContent, { 'data-holo-panel': '' }, () => content)])
   return [trigger, h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => h(DialogContent, { 'data-holo-panel': '' }, () => [h(DialogHeader, {}, () => [h(DialogTitle, {}, () => 'Filters'), h(DialogDescription, {}, () => 'Narrow the records shown in this table.')]), content]))]
@@ -632,6 +633,9 @@ export const VueTableRenderer = defineComponent({
       const headerActions = table.actions?.filter(action => action.scope === 'header') ?? []
       const bulkActions = table.actions?.filter(action => action.scope === 'bulk') ?? []
       const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
+      const rowActionGroups = rowActions.filter(isActionGroup)
+      const ungroupedRowActions = rowActions.filter((action): action is VueTableAction => !isActionGroup(action))
+      const defaultRowActionGroup: VueTableActionGroup = { actions: ungroupedRowActions, id: 'row-actions', kind: 'action-group', scope: 'row' }
       const selectable = bulkActions.length > 0 || (table.transfers?.some(transfer => transfer.kind === 'export') ?? false)
       const hasSelection = selectable && (snapshot.selection.mode === 'all-matching' || snapshot.selection.selectedRecordIds.length > 0)
       const currentColumns = snapshot.visibleColumns.length > 0
@@ -646,6 +650,9 @@ export const VueTableRenderer = defineComponent({
       const tablePresentation: VueTablePresentationProps<RuntimeRecord> = {
         ariaLabel: `${table.caption} data`,
         caption: table.caption,
+        emptyMessage: table.emptyMessage,
+        error: snapshot.error?.message,
+        loading: snapshot.loading,
         columns: columns.map(column => {
           const active = snapshot.sort.find(item => item.column === column.manifest.path)
           const label = column.manifest.label ?? column.manifest.path
@@ -708,17 +715,20 @@ export const VueTableRenderer = defineComponent({
           header: 'Actions',
           label: 'Actions',
           render(record: RuntimeRecord): VNodeChild {
-            return rowActions.map(action => tableActionNode(action, table, record))
+            return h('div', { class: 'hp:flex hp:items-center hp:justify-end hp:gap-1' }, [
+              ungroupedRowActions.length > 0 ? h(TableActionGroupButton, { group: defaultRowActionGroup, record, table }) : null,
+              h(Fragment, rowActionGroups.map(group => h(TableActionGroupButton, { group, key: group.id, record, table }))),
+            ])
           },
         } } : {}),
       }
       const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen)
       const children: VNodeChild[] = [
         renderHook(TablesRenderHook.HEADER_BEFORE),
-        h('h2', { id: captionId }, table.caption),
+        h('h2', { class: 'hp:text-xl hp:font-semibold', id: captionId }, table.caption),
         renderHook(TablesRenderHook.HEADER_AFTER),
         renderHook(TablesRenderHook.TOOLBAR_BEFORE),
-        h('div', { class: 'hp-table-toolbar' }, [
+        h('div', { class: 'hp-table-toolbar hp:flex hp:flex-wrap hp:items-center hp:gap-2' }, [
           renderHook(TablesRenderHook.TOOLBAR_START),
           renderHook(TablesRenderHook.TOOLBAR_SEARCH_BEFORE),
           h('label', { class: 'hp:min-w-48 hp:flex-1' }, [h('span', { class: 'hp-visually-hidden' }, 'Search'), h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => h(Search, { 'aria-hidden': 'true' })), h(InputGroupInput, {
@@ -753,7 +763,7 @@ export const VueTableRenderer = defineComponent({
           renderHook(TablesRenderHook.TOOLBAR_END),
         ]),
         renderHook(TablesRenderHook.TOOLBAR_AFTER),
-        hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions' }, [
+        hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3' }, [
           h('span', snapshot.selection.mode === 'all-matching'
             ? `All ${snapshot.total} matching records selected`
             : `${snapshot.selection.selectedRecordIds.length} records selected`),
@@ -765,17 +775,12 @@ export const VueTableRenderer = defineComponent({
         snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
           ? h(Button, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
           : null,
-        snapshot.error ? h(Alert, { class: 'hp-table-error', 'data-slot': 'table-error', variant: 'destructive' }, () => [h(AlertTitle, {}, () => 'Unable to load table'), h(AlertDescription, {}, () => snapshot.error?.message)]) : null,
-        snapshot.loading ? h('div', { 'aria-label': 'Loading records', 'aria-live': 'polite', class: 'hp-table-loading hp:space-y-2', 'data-slot': 'table-loading', role: 'status' }, [h(Skeleton, { class: 'hp:h-10 hp:w-full' }), h(Skeleton, { class: 'hp:h-10 hp:w-full' }), h(Skeleton, { class: 'hp:h-10 hp:w-full' })]) : null,
-        !snapshot.loading && !snapshot.error && snapshot.records.length === 0
-          ? h(Empty, { class: 'hp-table-empty', 'data-slot': 'table-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No records'), h(EmptyDescription, {}, () => table.emptyMessage ?? 'No records found.')]))
-          : null,
-        snapshot.records.length > 0 ? h(VueTablePresentation, { presentation: tablePresentation }) : null,
-        h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination', 'data-slot': 'table-pagination' }, [
+        h(VueTablePresentation, { presentation: tablePresentation }),
+        h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground', 'data-slot': 'table-pagination' }, [
           h('span', { 'aria-live': 'polite', class: 'hp-table-pagination-info' }, [
             'Showing ', h('strong', String(paginationFrom)), ' to ', h('strong', String(paginationTo)), ' of ', h('strong', String(snapshot.total)), ' results',
           ]),
-          typeof table.store.setPerPage === 'function' ? h('label', { class: 'hp-table-pagination-per-page' }, [
+          typeof table.store.setPerPage === 'function' ? h('label', { class: 'hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2' }, [
             h(NativeSelect, {
               'aria-label': 'Results per page',
               disabled: snapshot.loading,
@@ -787,11 +792,13 @@ export const VueTableRenderer = defineComponent({
             }, () => perPageOptions(snapshot.perPage).map(value => h('option', { key: value, value: String(value) }, String(value)))),
             h('span', 'per page'),
           ]) : null,
-          h('span', { class: 'hp-table-pagination-pages' }, [
+          h('span', { class: 'hp-table-pagination-pages hp:flex hp:items-center hp:gap-1' }, [
             h(Button, {
               'aria-label': 'Previous page',
               disabled: snapshot.page <= 1 || snapshot.loading,
+              size: 'icon',
               type: 'button',
+              variant: 'outline',
               onClick: () => {
                 table.store.setPage(snapshot.page - 1)
                 notifyQueryChange(table.onQueryChange)
@@ -806,6 +813,7 @@ export const VueTableRenderer = defineComponent({
                   disabled: snapshot.loading,
                   key: item,
                   type: 'button',
+                  variant: item === snapshot.page ? 'secondary' : 'ghost',
                   onClick: () => {
                     table.store.setPage(item)
                     notifyQueryChange(table.onQueryChange)
@@ -814,7 +822,9 @@ export const VueTableRenderer = defineComponent({
             h(Button, {
               'aria-label': 'Next page',
               disabled: snapshot.page >= pageCount || snapshot.loading,
+              size: 'icon',
               type: 'button',
+              variant: 'outline',
               onClick: () => {
                 table.store.setPage(snapshot.page + 1)
                 notifyQueryChange(table.onQueryChange)
@@ -826,7 +836,7 @@ export const VueTableRenderer = defineComponent({
       return h('section', {
         'aria-busy': snapshot.loading,
         'aria-labelledby': captionId,
-        class: 'hp-table-view',
+        class: 'hp-table-view hp:min-w-0 hp:w-full hp:max-w-full hp:space-y-4',
         'data-panels-component': 'table',
         'data-state': snapshot.error ? 'error' : snapshot.loading ? 'loading' : snapshot.records.length === 0 ? 'empty' : 'ready',
       }, children)

@@ -213,6 +213,25 @@ describe('P7-E React table renderer', () => {
     expect(container.querySelector('nav[aria-label="Table pagination"]')).not.toBeNull()
   })
 
+  it('executes a record action from a compact row menu', async () => {
+    const execute = vi.fn(async () => undefined)
+    const container = mount({
+      ...baseProps(createStore()),
+      actions: [{ icon: 'view', id: 'posts.inspect', label: 'Inspect', scope: 'row' }],
+      actionTransport: { execute },
+    })
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+    expect(trigger).not.toBeNull()
+    expect(container.querySelector('[data-action="posts.inspect"]')).toBeNull()
+    act(() => {
+      trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      trigger?.click()
+    })
+    await vi.waitFor(() => expect(document.querySelector('[role="menuitem"][data-action="posts.inspect"]')).not.toBeNull())
+    await act(async () => document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.inspect"]')?.click())
+    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.inspect', recordId: 1 }, expect.any(AbortSignal))
+  })
+
   it('renders deterministic accessible pagination and locks its controls while loading', () => {
     const store = createStore({ total: 250 })
     const container = mount(baseProps(store))
@@ -429,8 +448,13 @@ describe('P7-E React table renderer', () => {
       actionTransport: { execute },
     })
 
-    const trigger = container.querySelector<HTMLButtonElement>('[data-action="posts.delete"]')
-    expect(trigger?.className).toContain('hp:bg-destructive')
+    act(() => {
+      const menu = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+      menu?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      menu?.click()
+    })
+    const trigger = document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.delete"]')
+    expect(trigger?.getAttribute('data-variant')).toBe('destructive')
     expect(trigger?.querySelector('[data-icon="delete"]')).not.toBeNull()
     act(() => trigger?.click())
     expect(execute).not.toHaveBeenCalled()

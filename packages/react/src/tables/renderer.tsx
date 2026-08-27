@@ -24,9 +24,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  Alert,
-  AlertDescription,
-  AlertTitle,
   Checkbox,
   Dialog,
   DialogContent,
@@ -38,10 +35,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -49,7 +42,6 @@ import {
   PopoverContent,
   PopoverTrigger,
   Progress,
-  Skeleton,
   Switch,
 } from '../ui'
 import { ReactPanelsRenderHook } from '../render-hooks'
@@ -220,7 +212,7 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
     <FilterCollectionSlot placement="after" props={props} />
   </form>
   if (placement === 'inline') return content
-  const trigger = <Button aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} type="button"><ListFilter aria-hidden="true" />Filters</Button>
+  const trigger = <Button aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} type="button" variant="outline"><ListFilter aria-hidden="true" />Filters</Button>
   if (placement === 'dropdown') return <Popover onOpenChange={setOpen} open={open}><PopoverTrigger asChild>{trigger}</PopoverTrigger><PopoverContent align="end" className="hp:w-96">{content}</PopoverContent></Popover>
   return <Fragment>{trigger}<Dialog onOpenChange={setOpen} open={open}><DialogContent aria-labelledby={modalTitleId}><DialogHeader><DialogTitle id={modalTitleId}>Filters</DialogTitle><DialogDescription>Refine the records shown in this table.</DialogDescription></DialogHeader>{content}</DialogContent></Dialog></Fragment>
 }
@@ -279,7 +271,7 @@ function ColumnManager<TRecord extends object, TRecordId extends TableRecordId>(
     ? new Set(state.visibleColumns)
     : new Set(props.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path))
   return <Popover onOpenChange={setOpen} open={open}>
-    <PopoverTrigger asChild><Button aria-expanded={open} aria-haspopup="menu" className="hp-column-manager" type="button"><Columns3 aria-hidden="true" />Columns</Button></PopoverTrigger>
+    <PopoverTrigger asChild><Button aria-expanded={open} aria-haspopup="menu" className="hp-column-manager" type="button" variant="outline"><Columns3 aria-hidden="true" />Columns</Button></PopoverTrigger>
     <PopoverContent align="end" aria-label="Visible columns" className="hp:w-64">{props.columns.filter(column => column.manifest.toggleable).map(column => {
       const id = `hp-column-${column.manifest.path.replace(/[^a-z0-9_-]/giu, '-')}`
       return <div className="hp:flex hp:items-center hp:gap-2 hp:py-1.5 hp:text-sm" key={column.manifest.path}>
@@ -347,9 +339,9 @@ function ActionGroupButton<TRecord extends object, TRecordId extends TableRecord
   readonly record?: Readonly<TRecord>
 }): ReactNode {
   const [open, setOpen] = useState(false)
-  const label = group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : 'Actions')
+  const label = group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : group.scope === 'row' ? 'Row actions' : 'Actions')
   return <DropdownMenu onOpenChange={setOpen} open={open}>
-    <DropdownMenuTrigger asChild><Button aria-label={label} className="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} type="button" variant="outline">{group.icon ? <PanelsIcon name={group.icon} /> : group.scope === 'row' ? <MoreHorizontal aria-hidden="true" /> : null}<span>{label}</span>{group.scope === 'row' ? null : <ChevronDown aria-hidden="true" />}</Button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><Button aria-label={label} className="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} size={group.scope === 'row' ? 'icon' : 'default'} type="button" variant={group.scope === 'row' ? 'ghost' : 'outline'}>{group.icon ? <PanelsIcon name={group.icon} /> : group.scope === 'row' ? <MoreHorizontal aria-hidden="true" /> : null}<span className={group.scope === 'row' ? 'hp:sr-only' : undefined}>{label}</span>{group.scope === 'row' ? null : <ChevronDown aria-hidden="true" />}</Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end">{group.actions.map(action => <ActionButton action={action} key={action.id} menuItem onComplete={() => setOpen(false)} props={props} record={record} />)}</DropdownMenuContent>
   </DropdownMenu>
 }
@@ -530,6 +522,9 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
   const selectable = bulkActions.length > 0 || (props.transfers?.some(transfer => transfer.kind === 'export') ?? false)
   const hasSelection = selectable && (state.selection.mode === 'all-matching' || state.selection.selectedRecordIds.length > 0)
   const rowActions = props.actions?.filter(action => action.scope === 'row') ?? []
+  const rowActionGroups = rowActions.filter(isActionGroup)
+  const ungroupedRowActions = rowActions.filter((action): action is ReactTableAction => !isActionGroup(action))
+  const defaultRowActionGroup: ReactTableActionGroup = { actions: ungroupedRowActions, id: 'row-actions', kind: 'action-group', scope: 'row' }
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
     () => new Set(props.groups?.filter(group => group.collapsed).map(group => group.key)),
   )
@@ -569,7 +564,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     ? {
         header: 'Actions',
         label: 'Actions',
-        render: record => <div className="hp:flex hp:items-center hp:justify-end hp:gap-1">{rowActions.map(action => actionItem(action, props, record))}</div>,
+        render: record => <div className="hp:flex hp:items-center hp:justify-end hp:gap-1">{ungroupedRowActions.length > 0 ? <ActionGroupButton group={defaultRowActionGroup} props={props} record={record} /> : null}{rowActionGroups.map(group => <ActionGroupButton group={group} key={group.id} props={props} record={record} />)}</div>,
       }
     : undefined
   const presentationGroups: readonly TablePresentationGroup<TRecord>[] | undefined = props.groups?.map(group => ({
@@ -582,7 +577,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
       return next
     }),
   }))
-  return <section aria-busy={state.loading} aria-labelledby={captionId} className="hp-table-view hp:space-y-4" data-panels-component="table" data-state={state.error ? 'error' : state.loading ? 'loading' : state.records.length === 0 ? 'empty' : 'ready'}>
+  return <section aria-busy={state.loading} aria-labelledby={captionId} className="hp-table-view hp:min-w-0 hp:w-full hp:max-w-full hp:space-y-4" data-panels-component="table" data-state={state.error ? 'error' : state.loading ? 'loading' : state.records.length === 0 ? 'empty' : 'ready'}>
     <ReactPanelsRenderHook hook={TablesRenderHook.HEADER_BEFORE} />
     <h2 className="hp:text-xl hp:font-semibold" id={captionId}>{props.caption}</h2>
     <ReactPanelsRenderHook hook={TablesRenderHook.HEADER_AFTER} />
@@ -614,20 +609,20 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     {state.selection.mode === 'explicit' && selectedOnPage && state.total > recordIds.length
       ? <Button onClick={() => props.store.selectAllMatching()} type="button">Select all {state.total} matching records</Button>
       : null}
-    {state.error ? <Alert className="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{state.error.message}</AlertDescription></Alert> : null}
-    {state.loading ? <div aria-label="Loading records" aria-live="polite" className="hp-table-loading hp:space-y-2" data-slot="table-loading" role="status"><Skeleton className="hp:h-10 hp:w-full" /><Skeleton className="hp:h-10 hp:w-full" /><Skeleton className="hp:h-10 hp:w-full" /></div> : null}
-    {!state.loading && !state.error && state.records.length === 0 ? <Empty className="hp-table-empty" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{props.emptyMessage ?? 'No records found.'}</EmptyDescription></EmptyHeader></Empty> : null}
-    {state.records.length > 0 ? <TablePresentation
+    <TablePresentation
       caption={props.caption}
       columns={presentationColumns}
+      emptyMessage={props.emptyMessage}
+      error={state.error?.message}
       getRowKey={record => props.getRecordId(record)}
       groups={presentationGroups}
       leading={leading}
+      loading={state.loading}
       records={state.records}
       summaries={props.summaries}
       trailing={trailing}
-    /> : null}
-    <nav aria-label="Table pagination" className="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4" data-slot="table-pagination">
+    />
+    <nav aria-label="Table pagination" className="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
       <span aria-live="polite" className="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{state.total}</strong> results</span>
       <label className="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
         <NativeSelect aria-label="Results per page" disabled={state.loading} onChange={(event: ChangeEvent<HTMLSelectElement>) => {
@@ -656,7 +651,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
                 notifyQueryChange(props.onQueryChange)
               }}
               type="button"
-              variant={item === state.page ? 'default' : 'outline'}
+              variant={item === state.page ? 'secondary' : 'ghost'}
             >{item}</Button>)}
         <Button aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
           props.store.setPage(state.page + 1)

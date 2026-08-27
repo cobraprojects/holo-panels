@@ -75,6 +75,7 @@ export async function runTableAcceptanceJourney(fixture: TableAcceptanceFixture)
   const driver = await fixture.mount(table)
   try {
     await driver.input('.hp-table-toolbar input[type="search"]', 'nile')
+    const loadingMarkup = driver.markup()
     await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records, total: 6 }) })
     await driver.select('.hp-table-filters select', '20')
     await driver.click('.hp-table-filters button[type="submit"]')
@@ -83,6 +84,7 @@ export async function runTableAcceptanceJourney(fixture: TableAcceptanceFixture)
     await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records, total: 6 }) })
     await driver.click('.hp-column-manager')
     await driver.toggleColumn('Status')
+    await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records, total: 6 }) })
     await driver.click('[aria-label="Select page"]')
     await driver.clickText('Select all 6 matching records')
     const markupAfterSelection = driver.markup()
@@ -96,13 +98,16 @@ export async function runTableAcceptanceJourney(fixture: TableAcceptanceFixture)
     const collapsedGroupRows = (driver.markup().match(/data-label="Title"/gu) ?? []).length
     await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records, total: 6 }) })
     await driver.click('button[aria-label="Next page"]')
+    await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records: [], total: 0 }) })
     return {
       actionRequests,
       collapsedGroupRows,
       columnVisibility: table.store.snapshot.visibleColumns,
       filter: table.store.snapshot.filters.applied.author_id,
+      emptyMarkup: driver.markup(),
       framework: fixture.framework,
       inlineEditRequests,
+      loadingMarkup,
       markupAfterSelection,
       page: table.store.snapshot.page,
       render,

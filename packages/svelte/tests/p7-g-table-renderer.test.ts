@@ -370,6 +370,27 @@ describe('P7-G Svelte table renderer', () => {
     }), expect.any(AbortSignal))
   })
 
+  it('keeps explicit row groups separate from the default row menu', async () => {
+    const execute = vi.fn(async () => undefined)
+    const container = mountTable({
+      ...baseTable(createStore()),
+      actions: [
+        { id: 'posts.inspect', label: 'Inspect', scope: 'row' },
+        { actions: [{ id: 'posts.archive', label: 'Archive', scope: 'row' }], id: 'row-actions', kind: 'action-group', label: 'Archive tools', scope: 'row' },
+      ],
+      actionTransport: { execute },
+    })
+
+    expect(container.querySelector('[aria-label="Row actions"]')).not.toBeNull()
+    container.querySelector<HTMLButtonElement>('[aria-label="Archive tools"]')?.click()
+    flushClient()
+    expect(document.querySelector('[role="menuitem"][data-action="posts.inspect"]')).toBeNull()
+    document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.archive"]')?.click()
+    await Promise.resolve()
+    flushClient()
+    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.archive', recordId: 1 }, expect.any(AbortSignal))
+  })
+
   it('requires the panel confirmation UI before destructive actions execute', async () => {
     const execute = vi.fn(async () => undefined)
     const container = mountTable({
@@ -378,7 +399,9 @@ describe('P7-G Svelte table renderer', () => {
       actionTransport: { execute },
     })
 
-    const trigger = container.querySelector<HTMLButtonElement>('[data-action="posts.delete"]')
+    container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')?.click()
+    flushClient()
+    const trigger = document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.delete"]')
     expect(trigger?.getAttribute('data-variant')).toBe('destructive')
     trigger?.click()
     flushClient()

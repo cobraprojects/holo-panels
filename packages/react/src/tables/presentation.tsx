@@ -2,7 +2,7 @@ import { Fragment, useState, type AriaAttributes, type CSSProperties, type Key, 
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import { ChevronDown } from 'lucide-react'
 import { Button, PanelsIcon } from '../internal-ui'
-import { Badge, Checkbox, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../ui'
+import { Alert, AlertDescription, AlertTitle, Badge, Checkbox, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Skeleton, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../ui'
 import type { ComponentRegistry } from '../registry'
 import type { ReactCustomColumnProps, ReactTableColumn, ReactTableColumnPath, ReactTableColumnValue } from './types'
 
@@ -45,9 +45,12 @@ export interface TablePresentationProps<TRecord extends object> {
   readonly caption: string
   readonly columns: readonly TablePresentationColumn<TRecord>[]
   readonly containerClassName?: string
+  readonly emptyMessage?: string
+  readonly error?: string | null
   readonly getRowKey: (record: Readonly<TRecord>) => Key
   readonly groups?: readonly TablePresentationGroup<TRecord>[]
   readonly leading?: TablePresentationPlacement<TRecord>
+  readonly loading?: boolean
   readonly records?: readonly TRecord[]
   readonly regionLabel?: string
   readonly summaries?: readonly TablePresentationSummary[]
@@ -62,15 +65,25 @@ export function TablePresentation<TRecord extends object>({
   caption,
   columns,
   containerClassName,
+  emptyMessage = 'No records found.',
+  error,
   getRowKey,
   groups,
   leading,
+  loading = false,
   records = [],
   regionLabel = `${caption} data`,
   summaries = [],
   trailing,
 }: TablePresentationProps<TRecord>): ReactNode {
   const columnCount = columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0)
+  const state = error
+    ? <Alert className="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+    : loading
+      ? <div aria-label="Loading records" aria-live="polite" className="hp-table-loading hp:space-y-2 hp:py-2" data-slot="table-loading" role="status"><Skeleton className="hp:h-8 hp:w-full" /><Skeleton className="hp:h-8 hp:w-full" /><Skeleton className="hp:h-8 hp:w-full" /></div>
+      : records.length === 0
+        ? <Empty className="hp-table-empty hp:min-h-40" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{emptyMessage}</EmptyDescription></EmptyHeader></Empty>
+        : null
   const row = (record: TRecord): ReactNode => {
     return <TableRow key={getRowKey(record)}>
       {leading ? <TableCell className={leading.cellClassName} data-label={leading.label}>{leading.render(record)}</TableCell> : null}
@@ -96,7 +109,7 @@ export function TablePresentation<TRecord extends object>({
     : records.map(row)
   return <div
     aria-label={regionLabel}
-    className={classNames('hp-table-responsive hp:w-full hp:overflow-x-auto hp:rounded-md hp:border', containerClassName)}
+    className={classNames('hp-table-responsive hp:w-full hp:max-w-full hp:overflow-x-auto hp:rounded-lg hp:border hp:bg-card', containerClassName)}
     data-panels-component="data-table"
     data-slot="table-container"
     role="region"
@@ -109,8 +122,8 @@ export function TablePresentation<TRecord extends object>({
         {columns.map(column => <TableHead aria-sort={column.ariaSort} key={column.key} scope="col" style={{ textAlign: column.alignment }}>{column.header}</TableHead>)}
         {trailing ? <TableHead scope="col">{trailing.header}</TableHead> : null}
       </TableRow></TableHeader>
-      <TableBody>{body}</TableBody>
-      {summaries.length > 0 ? <TableFooter>{summaries.map(summary => <TableRow className="hp-table-total-summary" key={summary.id}><TableHead colSpan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableHead></TableRow>)}</TableFooter> : null}
+      <TableBody>{state ? <TableRow><TableCell colSpan={Math.max(1, columnCount)}>{state}</TableCell></TableRow> : body}</TableBody>
+      {!state && summaries.length > 0 ? <TableFooter>{summaries.map(summary => <TableRow className="hp-table-total-summary" key={summary.id}><TableHead colSpan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableHead></TableRow>)}</TableFooter> : null}
     </Table>
   </div>
 }
@@ -309,6 +322,6 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     }
   }
   return <span className="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{actionable}{column.manifest.copyable && !column.manifest.inlineEditor
-    ? <Button aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} className="hp-table-copy" onClick={() => void copy()} type="button"><PanelsIcon name="copy" /></Button>
+    ? <Button aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} className="hp-table-copy" onClick={() => void copy()} size="icon" type="button" variant="ghost"><PanelsIcon name="copy" /></Button>
     : null}<span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>{actionError ? <span role="alert">{actionError}</span> : null}</span>
 }

@@ -41,6 +41,7 @@
 	this={href ? "a" : "span"}
 	bind:this={ref}
 	data-slot="badge"
+	data-variant={variant}
 	{href}
 	class={cn(badgeVariants({ variant }), className)}
 	{...restProps}

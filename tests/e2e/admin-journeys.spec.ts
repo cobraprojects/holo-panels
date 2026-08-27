@@ -183,7 +183,8 @@ async function deleteRow(page: Page, rowText: string | RegExp): Promise<void> {
   await expect(row).toBeVisible()
   const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
   const dialogPromise = page.waitForEvent('dialog', { timeout: 500 }).then(dialog => dialog.accept()).catch(() => undefined)
-  await row.getByRole('button', { name: /^Delete$/iu }).click()
+  await row.getByRole('button', { name: 'Row actions', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Delete$/iu }).click()
   await dialogPromise
   const confirm = page.getByRole('button', { name: 'Confirm', exact: true })
   const confirmationVisible = await expect(confirm).toBeVisible({ timeout: 1_000 }).then(() => true).catch(() => false)
@@ -492,6 +493,83 @@ test.describe('authenticated admin journeys', () => {
     })
   })
 
+  test('keeps resource tables compact, sortable, and contained at desktop and mobile widths', async ({ page }, testInfo) => {
+    await login(page)
+    await gotoPanelPage(page, '/admin/posts')
+    const table = page.locator('[data-panels-component="table"]')
+    const title = table.getByRole('columnheader').filter({ has: page.getByRole('button', { name: /^title$/iu }) })
+    await expect(table).toHaveAttribute('data-state', 'ready')
+    const geometry = await table.evaluate(element => {
+      const surface = element.querySelector('[data-panels-component="data-table"]')
+      const header = element.querySelector('thead th')
+      const row = element.querySelector('tbody tr')
+      const toolbar = element.querySelector('.hp-table-toolbar')
+      const footer = element.querySelector('.hp-table-pagination')
+      if (!surface || !header || !row || !toolbar || !footer) throw new Error('The resource table is incomplete')
+      return {
+        border: getComputedStyle(surface).borderTopWidth,
+        headerHeight: header.getBoundingClientRect().height,
+        headerSize: Number.parseFloat(getComputedStyle(header).fontSize),
+        rowHeight: row.getBoundingClientRect().height,
+        toolbarDisplay: getComputedStyle(toolbar).display,
+        toolbarWrap: getComputedStyle(toolbar).flexWrap,
+        footerDisplay: getComputedStyle(footer).display,
+        footerWrap: getComputedStyle(footer).flexWrap,
+      }
+    })
+    expect(geometry.border).toBe('1px')
+    expect(geometry.headerHeight).toBeLessThanOrEqual(40)
+    expect(geometry.headerSize).toBeLessThanOrEqual(14)
+    expect(geometry.rowHeight).toBeLessThanOrEqual(56)
+    expect(geometry.toolbarDisplay).toBe('flex')
+    expect(geometry.toolbarWrap).toBe('wrap')
+    expect(geometry.footerDisplay).toBe('flex')
+    expect(geometry.footerWrap).toBe('wrap')
+    await expect(table.getByRole('button', { name: 'Filters', exact: true })).toHaveCSS('background-color', await table.getByRole('button', { name: 'Columns', exact: true }).evaluate(element => getComputedStyle(element).backgroundColor))
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('table-desktop-light.png') })
+    await table.getByRole('button', { name: 'Row actions', exact: true }).first().click()
+    await expect(page.getByRole('menuitem', { name: 'View', exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await title.getByRole('button').click()
+    await expect(title).toHaveAttribute('aria-sort', 'ascending')
+    await expect(table).toHaveAttribute('data-state', 'ready')
+    await page.getByRole('heading', { level: 1 }).hover()
+    await expect(title.getByRole('button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await table.getByRole('combobox', { name: 'Results per page' }).selectOption('10')
+    await expect(table).toHaveAttribute('data-state', 'ready')
+    await expect(table.getByRole('combobox', { name: 'Results per page' })).toHaveValue('10')
+    const search = table.getByRole('searchbox', { name: 'Search', exact: true })
+    await search.fill('ticket-14-no-matching-records')
+    await expect(table).toHaveAttribute('data-state', 'empty')
+    await expect(title).toBeVisible()
+    await expect(table.getByRole('table')).toContainText('No records found.')
+    await search.clear()
+    await expect(table).toHaveAttribute('data-state', 'ready')
+
+    await page.getByRole('button', { name: 'Account menu' }).click()
+    await page.getByRole('menuitem', { name: /Dark(?: theme)?/u }).click()
+    await page.setViewportSize({ height: 844, width: 390 })
+    const overflow = await table.evaluate(element => {
+      const surface = element.querySelector('[data-panels-component="data-table"]')
+      if (!surface) throw new Error('The table surface is unavailable')
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        surfaceWidth: surface.getBoundingClientRect().width,
+        tableWidth: element.getBoundingClientRect().width,
+        overflowX: getComputedStyle(surface).overflowX,
+      }
+    })
+    expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth)
+    expect(overflow.surfaceWidth).toBeLessThanOrEqual(overflow.tableWidth)
+    expect(overflow.tableWidth).toBeLessThanOrEqual(390)
+    expect(overflow.overflowX).toBe('auto')
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('table-mobile-dark.png') })
+  })
+
   test('executes grouped bulk actions through the table and reports failures with Sonner', async ({ page }) => {
     await login(page)
     await gotoPanelPage(page, '/admin/posts')
@@ -611,7 +689,8 @@ test.describe('authenticated admin journeys', () => {
     await expect(page.getByRole('row').filter({ hasText: 'Acme draft' })).toBeVisible()
     await expectSameDocument(page, sentinel)
 
-    await page.getByRole('button', { name: 'Edit' }).or(page.getByRole('link', { name: 'Edit' })).first().click()
+    await page.getByRole('button', { name: 'Row actions', exact: true }).first().click()
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Edit Post' })).toBeVisible()
     await expectSameDocument(page, sentinel)
   })
@@ -620,7 +699,8 @@ test.describe('authenticated admin journeys', () => {
     const disposedSessionErrors = collectDisposedSessionErrors(page)
     await login(page)
     await gotoPanelPage(page, '/admin/posts')
-    await page.getByRole('button', { name: 'Edit' }).or(page.getByRole('link', { name: 'Edit' })).first().click()
+    await page.getByRole('button', { name: 'Row actions', exact: true }).first().click()
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Edit Post' })).toBeVisible()
 
     let releaseSubmission = (): void => undefined
@@ -755,14 +835,8 @@ test.describe('authenticated admin journeys', () => {
     await gotoPanelPage(page, '/admin/posts')
     const createdRow = page.getByRole('row').filter({ hasText: title }).first()
     await expect(createdRow).toBeVisible()
-    const editLink = createdRow.getByRole('link', { name: /Edit/iu }).first()
-    if (await editLink.count()) {
-      await editLink.click()
-    } else {
-      const recordEditLink = page.getByRole('link', { name: `Edit ${slug}`, exact: true })
-      if (await recordEditLink.count()) await recordEditLink.click()
-      else await createdRow.getByRole('button', { name: /^Edit$/iu }).click()
-    }
+    await createdRow.getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
     await expect(page).toHaveURL(/\/admin\/posts\/[^/]+\/edit$/u)
     await waitForPanelReady(page)
     await page.getByRole('textbox', { name: /^Title/iu }).fill(editedTitle)

@@ -849,7 +849,17 @@ describe('Next panel adapter', () => {
       expect(container.textContent).not.toContain('First post')
     })
     vi.stubGlobal('confirm', vi.fn(() => true))
-    await click('Delete')
+    await act(async () => {
+      const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+      expect(trigger).not.toBeNull()
+      trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      trigger?.click()
+    })
+    await act(async () => {
+      const action = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === 'Delete')
+      expect(action).toBeDefined()
+      action?.click()
+    })
     await click('Confirm')
     await vi.waitFor(() => expect(container.textContent).not.toContain('City guide'))
     const createProperties = structuredClone(properties(1))

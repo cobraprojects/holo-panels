@@ -1,5 +1,6 @@
 <script lang="ts" generics="TRecord extends object">
   import Copy from 'lucide-svelte/icons/copy'
+  import { Badge } from '../ui/badge'
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
@@ -70,14 +71,14 @@
   {:else if (column.manifest.type === 'checkbox' || column.manifest.type === 'toggle') && !column.manifest.inlineEditor}
     <Checkbox aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled />
   {:else if badge}
-    <span class="hp-table-badge"><span style={contentStyle}>{formatted}</span></span>
+    <Badge class="hp-table-badge" variant="secondary"><span style={contentStyle}>{formatted}</span></Badge>
   {:else}
     <span style={contentStyle}>{formatted}</span>
   {/if}
 {/snippet}
 
 {#if column.manifest.copyable && !column.manifest.inlineEditor}
-  <span class="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}<Button class="hp-table-copy" type="button" aria-label="Copy {column.manifest.label ?? column.manifest.path}" onclick={() => void copy()}><Copy aria-hidden="true" data-icon="copy" data-slot="icon" /></Button><span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span></span>
+  <span class="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}<Button class="hp-table-copy" size="icon" variant="ghost" type="button" aria-label="Copy {column.manifest.label ?? column.manifest.path}" onclick={() => void copy()}><Copy aria-hidden="true" data-icon="copy" data-slot="icon" /></Button><span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span></span>
 {:else}
   <span title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}</span>
 {/if}

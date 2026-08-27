@@ -37,6 +37,9 @@
 <script lang="ts" generics="TRecord extends object">
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
   import { Button } from '../ui/button'
+  import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
+  import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '../ui/empty'
+  import { Skeleton } from '../ui/skeleton'
   import {
     Table,
     TableBody,
@@ -53,10 +56,13 @@
     cell,
     columns,
     containerClass,
+    emptyMessage = 'No records found.',
+    error,
     getRecordId,
     groups,
     header,
     leading,
+    loading = false,
     records,
     summaries,
     trailing,
@@ -65,17 +71,20 @@
     readonly cell: Snippet<[Readonly<TRecord>, TablePresentationColumn]>
     readonly columns: readonly TablePresentationColumn[]
     readonly containerClass?: string
+    readonly emptyMessage?: string
+    readonly error?: string | null
     readonly getRecordId: (record: Readonly<TRecord>) => number | string
     readonly groups?: readonly TablePresentationGroup<TRecord>[]
     readonly header?: Snippet<[TablePresentationColumn]>
     readonly leading?: TablePresentationPlacement<TRecord>
+    readonly loading?: boolean
     readonly records: readonly TRecord[]
     readonly summaries?: readonly TablePresentationSummary[]
     readonly trailing?: TablePresentationPlacement<TRecord>
   } = $props()
 
   const columnCount = $derived(columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0))
-  const responsiveClass = $derived(['hp-table-responsive', containerClass].filter(Boolean).join(' '))
+  const responsiveClass = $derived(['hp-table-responsive hp:w-full hp:max-w-full hp:overflow-x-auto hp:rounded-lg hp:border hp:bg-card', containerClass].filter(Boolean).join(' '))
 
   function columnWidth(width: TablePresentationColumn['width']): string | undefined {
     if (width === null || typeof width === 'undefined') return undefined
@@ -104,7 +113,13 @@
       </TableRow>
     </TableHeader>
     <TableBody>
-      {#if groups && groups.length > 0}
+      {#if error}
+        <TableRow><TableCell colspan={Math.max(1, columnCount)}><Alert class="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></TableCell></TableRow>
+      {:else if loading}
+        <TableRow><TableCell colspan={Math.max(1, columnCount)}><div aria-label="Loading records" aria-live="polite" class="hp-table-loading hp:space-y-2 hp:py-2" data-slot="table-loading" role="status"><Skeleton class="hp:h-8 hp:w-full" /><Skeleton class="hp:h-8 hp:w-full" /><Skeleton class="hp:h-8 hp:w-full" /></div></TableCell></TableRow>
+      {:else if records.length === 0}
+        <TableRow><TableCell colspan={Math.max(1, columnCount)}><Empty class="hp-table-empty hp:min-h-40" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{emptyMessage}</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>
+      {:else if groups && groups.length > 0}
         {#each groups as group (group.key)}
           <TableRow class="hp-table-group">
             <TableCell colspan={columnCount}>
@@ -139,7 +154,7 @@
         {/each}
       {/if}
     </TableBody>
-    {#if (summaries?.length ?? 0) > 0}
+    {#if !error && !loading && records.length > 0 && (summaries?.length ?? 0) > 0}
       <TableFooter>{#each summaries ?? [] as summary (summary.id)}<TableRow class="hp-table-total-summary"><TableCell colspan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableCell></TableRow>{/each}</TableFooter>
     {/if}
   </Table>

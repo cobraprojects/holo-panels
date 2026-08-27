@@ -821,6 +821,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
     const value = page.data[filter.manifest.id]
     if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' || value === null) store.setFilter(filter.manifest.id, value)
   }
+  store.applyData({ queryVersion: store.snapshot.queryVersion, records, total: store.snapshot.total })
   const refresh = (): void => {
     const query = store.query
     void runtime.transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {

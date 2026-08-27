@@ -3,9 +3,6 @@
   import { Checkbox } from '../ui/checkbox'
   import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
   import { NativeSelect } from '../ui/native-select'
-  import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
-  import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '../ui/empty'
-  import { Skeleton } from '../ui/skeleton'
   import type { JsonValue, TableRecordId } from '@holo-js/panels-client'
   import { TablesRenderHook } from '@holo-js/panels-core'
   import * as Dialog from '../ui/dialog'
@@ -31,6 +28,7 @@
   import Search from 'lucide-svelte/icons/search'
   import type {
     SvelteTableColumn,
+    SvelteTableAction,
     SvelteTableActionGroup,
     SvelteTableActionItem,
     SvelteTableFilter,
@@ -63,6 +61,9 @@
   const headerActions = $derived(table.actions?.filter(action => action.scope === 'header') ?? [])
   const bulkActions = $derived(table.actions?.filter(action => action.scope === 'bulk') ?? [])
   const rowActions = $derived(table.actions?.filter(action => action.scope === 'row') ?? [])
+  const rowActionGroups = $derived(rowActions.filter(isActionGroup))
+  const ungroupedRowActions = $derived(rowActions.filter((action): action is SvelteTableAction => !isActionGroup(action)))
+  const defaultRowActionGroup: SvelteTableActionGroup = $derived({ actions: ungroupedRowActions, id: 'row-actions', kind: 'action-group', scope: 'row' })
   const selectable = $derived(bulkActions.length > 0 || (table.transfers?.some(transfer => transfer.kind === 'export') ?? false))
   const filterPresentation = $derived(table.filterPresentation)
   const filterPlacement = $derived(filterPresentation?.placement ?? 'inline')
@@ -178,15 +179,15 @@
 <section
   aria-busy={$snapshotStore.loading}
   aria-labelledby={captionId}
-  class="hp-table-view"
+  class="hp-table-view hp:min-w-0 hp:w-full hp:max-w-full hp:space-y-4"
   data-panels-component="table"
   data-state={$snapshotStore.error ? 'error' : $snapshotStore.loading ? 'loading' : $snapshotStore.records.length === 0 ? 'empty' : 'ready'}
 >
   <RenderHook hook={TablesRenderHook.HEADER_BEFORE} />
-  <h2 id={captionId}>{table.caption}</h2>
+  <h2 class="hp:text-xl hp:font-semibold" id={captionId}>{table.caption}</h2>
   <RenderHook hook={TablesRenderHook.HEADER_AFTER} />
   <RenderHook hook={TablesRenderHook.TOOLBAR_BEFORE} />
-  <div class="hp-table-toolbar">
+  <div class="hp-table-toolbar hp:flex hp:flex-wrap hp:items-center hp:gap-2">
     <RenderHook hook={TablesRenderHook.TOOLBAR_START} />
     <RenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_BEFORE} />
     <label class="hp:min-w-48 hp:flex-1"><span class="hp-visually-hidden">Search</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput placeholder="Search records…" type="search" value={$snapshotStore.search} oninput={search} /></InputGroup></label>
@@ -233,7 +234,7 @@
   <RenderHook hook={TablesRenderHook.TOOLBAR_AFTER} />
 
   {#if hasSelection}
-    <div aria-live="polite" class="hp-table-bulk-actions">
+    <div aria-live="polite" class="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
       <span>{$snapshotStore.selection.mode === 'all-matching' ? `All ${$snapshotStore.total} matching records selected` : `${$snapshotStore.selection.selectedRecordIds.length} records selected`}</span>
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
       {#each bulkActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionButton {action} {table} />{/if}{/each}
@@ -245,15 +246,6 @@
     <Button type="button" onclick={() => table.store.selectAllMatching()}>Select all {$snapshotStore.total} matching records</Button>
   {/if}
 
-  {#if $snapshotStore.error}
-    <Alert class="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{$snapshotStore.error.message}</AlertDescription></Alert>
-  {/if}
-  {#if $snapshotStore.loading}<div aria-label="Loading records" aria-live="polite" class="hp-table-loading hp:space-y-2" data-slot="table-loading" role="status"><Skeleton class="hp:h-10 hp:w-full" /><Skeleton class="hp:h-10 hp:w-full" /><Skeleton class="hp:h-10 hp:w-full" /></div>{/if}
-  {#if !$snapshotStore.loading && !$snapshotStore.error && $snapshotStore.records.length === 0}
-    <Empty class="hp-table-empty" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{table.emptyMessage ?? 'No records found.'}</EmptyDescription></EmptyHeader></Empty>
-  {/if}
-
-  {#if $snapshotStore.records.length > 0}
     {#snippet tableHeader(presentationColumn: TablePresentationColumn)}
       {@const column = columns.find(candidate => candidate.manifest.path === presentationColumn.key)}
       {@const direction = $snapshotStore.sort.find(item => item.column === presentationColumn.key)?.direction}
@@ -278,26 +270,28 @@
       {#if column}<InlineCell {column} {record} {table} />{/if}
     {/snippet}
     {#snippet trailingCell(record: Readonly<TRecord>)}
-      {#each rowActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {record} {table} />{:else}<ActionButton {action} {record} {table} />{/if}{/each}
+      <div class="hp:flex hp:items-center hp:justify-end hp:gap-1">{#if ungroupedRowActions.length > 0}<ActionGroupButton group={defaultRowActionGroup} {record} {table} />{/if}{#each rowActionGroups as group (group.id)}<ActionGroupButton {group} {record} {table} />{/each}</div>
     {/snippet}
     <TablePresentation
       caption={table.caption}
       cell={tableCell}
       columns={presentationColumns}
+      emptyMessage={table.emptyMessage}
+      error={$snapshotStore.error?.message}
       getRecordId={table.getRecordId}
       groups={presentationGroups}
       header={tableHeader}
       leading={selectable ? { cell: leadingCell, header: leadingHeader, label: 'Select' } : undefined}
+      loading={$snapshotStore.loading}
       records={$snapshotStore.records}
       summaries={table.summaries}
       trailing={rowActions.length > 0 ? { cell: trailingCell, label: 'Actions' } : undefined}
     />
-  {/if}
 
-  <nav aria-label="Table pagination" class="hp-table-pagination" data-slot="table-pagination">
+  <nav aria-label="Table pagination" class="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
     <span aria-live="polite" class="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{$snapshotStore.total}</strong> results</span>
     {#if typeof table.store.setPerPage === 'function'}
-      <label class="hp-table-pagination-per-page">
+      <label class="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
         <NativeSelect aria-label="Results per page" disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
           {#each perPageOptions($snapshotStore.perPage) as value (value)}
             <option value={String(value)}>{value}</option>
@@ -306,16 +300,16 @@
         <span>per page</span>
       </label>
     {/if}
-    <div class="hp-table-pagination-pages">
-      <Button type="button" aria-label="Previous page" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" /></Button>
+    <div class="hp-table-pagination-pages hp:flex hp:items-center hp:gap-1">
+      <Button type="button" aria-label="Previous page" size="icon" variant="outline" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" /></Button>
       {#each pageNumbers as entry, i (typeof entry === 'number' ? entry : `ellipsis-${i}`)}
         {#if entry === 'ellipsis'}
           <span aria-hidden="true" class="hp-table-pagination-ellipsis">…</span>
         {:else}
-          <Button type="button" aria-label="Page {entry}" aria-current={entry === $snapshotStore.page ? 'page' : undefined} data-active={entry === $snapshotStore.page ? 'true' : undefined} disabled={$snapshotStore.loading} onclick={() => changePage(entry)}>{entry}</Button>
+          <Button type="button" aria-label="Page {entry}" aria-current={entry === $snapshotStore.page ? 'page' : undefined} data-active={entry === $snapshotStore.page ? 'true' : undefined} variant={entry === $snapshotStore.page ? 'secondary' : 'ghost'} disabled={$snapshotStore.loading} onclick={() => changePage(entry)}>{entry}</Button>
         {/if}
       {/each}
-      <Button type="button" aria-label="Next page" disabled={$snapshotStore.page >= pages || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page + 1)}><ChevronRight aria-hidden="true" /></Button>
+      <Button type="button" aria-label="Next page" size="icon" variant="outline" disabled={$snapshotStore.page >= pages || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page + 1)}><ChevronRight aria-hidden="true" /></Button>
     </div>
   </nav>
 </section>

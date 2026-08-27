@@ -89,6 +89,20 @@ describe('P7 table phase-gate acceptance', () => {
       expect(report.render.markup, name).toContain('aria-live="polite"')
       expect(report.render.markup, name).toContain('data-slot="table-pagination"')
       expect(report.render.markup, name).toContain('hp-table-pagination-info')
+      const rendered = browser.document.createElement('div')
+      rendered.innerHTML = report.render.markup
+      expect(rendered.querySelector('[data-slot="badge"]')?.getAttribute('data-variant'), name).toBe('secondary')
+      expect(rendered.querySelector('[aria-label="Row actions"]')?.classList.contains('hp-action-trigger'), name).toBe(true)
+      expect(rendered.querySelector('th[aria-sort] button')?.getAttribute('data-variant'), name).toBe('ghost')
+      expect(rendered.querySelector('.hp-table-pagination-pages button')?.getAttribute('data-variant'), name).toBe('outline')
+      rendered.innerHTML = report.loadingMarkup
+      expect(rendered.querySelector('table thead th[scope="col"]'), name).not.toBeNull()
+      expect(rendered.querySelector('table tbody [data-slot="table-loading"]'), name).not.toBeNull()
+      expect(rendered.querySelector('td[data-label="Title"]'), name).toBeNull()
+      rendered.innerHTML = report.emptyMarkup
+      expect(rendered.querySelector('table thead th[scope="col"]'), name).not.toBeNull()
+      expect(rendered.querySelector('table tbody [data-slot="table-empty"]'), name).not.toBeNull()
+      expect(rendered.querySelector('[data-slot="table-loading"]'), name).toBeNull()
       expect(report.render.markup, name).toContain('Omar')
       expect(report.render.markup, name).toContain('Draft count')
       expect(report.render.markup, name).toContain('Total posts')

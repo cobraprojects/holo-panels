@@ -341,7 +341,9 @@ describe('P7-F Vue table renderer', () => {
     })
 
     Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Export')?.click()
-    Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Inspect')?.click()
+    container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')?.click()
+    await flush()
+    document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.inspect"]')?.click()
     await flush()
     expect(execute).toHaveBeenCalledWith({ actionId: 'posts.export' }, expect.any(AbortSignal))
     expect(execute).toHaveBeenCalledWith({ actionId: 'posts.inspect', recordId: 1 }, expect.any(AbortSignal))
@@ -375,7 +377,9 @@ describe('P7-F Vue table renderer', () => {
       actionTransport: { execute },
     })
 
-    const trigger = container.querySelector<HTMLButtonElement>('[data-action="posts.delete"]')
+    container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')?.click()
+    await flush()
+    const trigger = document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.delete"]')
     expect(trigger?.getAttribute('data-variant')).toBe('destructive')
     trigger?.click()
     await flush()

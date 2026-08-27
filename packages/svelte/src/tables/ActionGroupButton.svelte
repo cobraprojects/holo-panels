@@ -14,7 +14,7 @@
     readonly record?: Readonly<TRecord>
     readonly table: SvelteTableRendererProps<TRecord, TRecordId>
   } = $props()
-  const label = $derived(group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : 'Actions'))
+  const label = $derived(group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : group.scope === 'row' ? 'Row actions' : 'Actions'))
   let confirmation = $state<SvelteTableAction | null>(null)
   let pendingActionId = $state<string | null>(null)
 
@@ -35,10 +35,19 @@
 
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
-    {#snippet child({ props })}<Button {...props} aria-label={label} class="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} type="button" variant="outline">{#if group.icon}<Icon name={group.icon} />{:else if group.scope === 'row'}<Ellipsis aria-hidden="true" />{/if}<span>{label}</span>{#if group.scope !== 'row'}<ChevronDown aria-hidden="true" />{/if}</Button>{/snippet}
+    {#snippet child({ props })}<Button {...props} aria-label={label} class="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} size={group.scope === 'row' ? 'icon' : 'default'} type="button" variant={group.scope === 'row' ? 'ghost' : 'outline'}>{#if group.icon}<Icon name={group.icon} />{:else if group.scope === 'row'}<Ellipsis aria-hidden="true" />{/if}<span class={group.scope === 'row' ? 'hp:sr-only' : undefined}>{label}</span>{#if group.scope !== 'row'}<ChevronDown aria-hidden="true" />{/if}</Button>{/snippet}
   </DropdownMenu.Trigger>
   <DropdownMenu.Content align="end" data-holo-panel>
-    {#each group.actions as action (action.id)}<DropdownMenu.Item data-action={action.id} data-color={action.color ?? undefined} disabled={pendingActionId !== null} variant={action.color === 'danger' ? 'destructive' : 'default'} onSelect={() => activate(action)}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{pendingActionId === action.id ? 'Working…' : action.label}</span></DropdownMenu.Item>{/each}
+    {#each group.actions as action (action.id)}
+      {@const href = record ? table.getRecordActionUrl?.(action, record) : null}
+      {#if href}
+        <DropdownMenu.Item data-action={action.id} data-color={action.color ?? undefined} variant={action.color === 'danger' ? 'destructive' : 'default'}>
+          {#snippet child({ props })}<a {...props} {href}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{action.label}</span></a>{/snippet}
+        </DropdownMenu.Item>
+      {:else}
+        <DropdownMenu.Item data-action={action.id} data-color={action.color ?? undefined} disabled={pendingActionId !== null} variant={action.color === 'danger' ? 'destructive' : 'default'} onSelect={() => activate(action)}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{pendingActionId === action.id ? 'Working…' : action.label}</span></DropdownMenu.Item>
+      {/if}
+    {/each}
   </DropdownMenu.Content>
 </DropdownMenu.Root>
 

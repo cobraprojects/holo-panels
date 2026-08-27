@@ -1,4 +1,4 @@
-import { Badge, Button, Checkbox, PanelsIcon, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../internal-ui'
+import { Alert, AlertDescription, AlertTitle, Badge, Button, Checkbox, Empty, EmptyDescription, EmptyHeader, EmptyTitle, PanelsIcon, Skeleton, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../internal-ui'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import type { FormPath, FormValueAtPath } from '@holo-js/panels-client'
 import { defineComponent, h, ref, type PropType, type VNode, type VNodeChild } from 'vue'
@@ -161,12 +161,22 @@ export interface VueTablePresentationProps<TRecord extends object = object> {
   readonly caption: string
   readonly columns: readonly VueTablePresentationColumn<TRecord>[]
   readonly containerClass?: string
+  readonly emptyMessage?: string
+  readonly error?: string | null
   readonly groups?: readonly VueTablePresentationGroup<TRecord>[]
   readonly leading?: VueTablePresentationPlacement<TRecord>
+  readonly loading?: boolean
   readonly records: readonly Readonly<TRecord>[]
   readonly summaries?: readonly VueTablePresentationSummary[]
   readonly trailing?: VueTablePresentationPlacement<TRecord>
   rowKey(record: Readonly<TRecord>): number | string
+}
+
+function tableState(presentation: VueTablePresentationProps): VNode | null {
+  if (presentation.error) return h(Alert, { class: 'hp-table-error', 'data-slot': 'table-error', variant: 'destructive' }, () => [h(AlertTitle, {}, () => 'Unable to load table'), h(AlertDescription, {}, () => presentation.error)])
+  if (presentation.loading) return h('div', { 'aria-label': 'Loading records', 'aria-live': 'polite', class: 'hp-table-loading hp:space-y-2 hp:py-2', 'data-slot': 'table-loading', role: 'status' }, [h(Skeleton, { class: 'hp:h-8 hp:w-full' }), h(Skeleton, { class: 'hp:h-8 hp:w-full' }), h(Skeleton, { class: 'hp:h-8 hp:w-full' })])
+  if (presentation.records.length === 0) return h(Empty, { class: 'hp-table-empty hp:min-h-40', 'data-slot': 'table-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No records'), h(EmptyDescription, {}, () => presentation.emptyMessage ?? 'No records found.')]))
+  return null
 }
 
 function tableSummaryRows(columnCount: number, summaries: readonly VueTablePresentationSummary[]): VNode | null {
@@ -229,12 +239,13 @@ export const VueTablePresentation = defineComponent({
     return (): VNode => {
       const presentation = componentProps.presentation
       const columnCount = presentation.columns.length + (presentation.leading ? 1 : 0) + (presentation.trailing ? 1 : 0)
+      const state = tableState(presentation)
       const rows = presentation.groups && presentation.groups.length > 0
         ? presentation.groups.flatMap(group => presentationRows(presentation, group.records, group))
         : presentationRows(presentation, presentation.records)
       return h('div', {
         'aria-label': presentation.ariaLabel,
-        class: ['hp-table-responsive', presentation.containerClass],
+        class: ['hp-table-responsive hp:w-full hp:max-w-full hp:overflow-x-auto hp:rounded-lg hp:border hp:bg-card', presentation.containerClass],
         'data-panels-component': 'data-table',
         'data-slot': 'table-container',
         role: 'region',
@@ -247,8 +258,8 @@ export const VueTablePresentation = defineComponent({
             ...presentation.columns.map(column => h(TableHead, { 'aria-sort': column.ariaSort, key: column.key, scope: 'col', style: { textAlign: column.alignment } }, () => column.header)),
             presentation.trailing ? h(TableHead, { scope: 'col' }, () => presentation.trailing?.header ?? presentation.trailing?.label) : null,
           ])),
-          h(TableBody, {}, () => rows),
-          tableSummaryRows(columnCount, presentation.summaries ?? []),
+          h(TableBody, {}, () => state ? h(TableRow, {}, () => h(TableCell, { colspan: Math.max(1, columnCount) }, () => state)) : rows),
+          state ? null : tableSummaryRows(columnCount, presentation.summaries ?? []),
         ]),
       ])
     }

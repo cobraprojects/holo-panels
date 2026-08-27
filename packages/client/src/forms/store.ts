@@ -1,3 +1,7 @@
+import { FormClientState } from '@holo-js/forms/internal/client'
+import type { ValidationErrorBag } from '@holo-js/forms/schema'
+import { validateFormFields, type FormValidationField } from '@holo-js/panels-core'
+import { formValidationErrors } from './validation'
 import { SchemaFocusIndex } from '../schema/focus'
 import {
   cloneFormValue,
@@ -130,6 +134,9 @@ function remapArrayRecord<TValue>(
 }
 
 export class FormStore<TValues extends object> {
+  readonly #form: FormClientState<TValues>
+  readonly #fields: readonly FormValidationField[]
+  #correctionSequence = 0
   #state: FormState<TValues>
   readonly #listeners = new Set<FormStateListener<TValues>>()
   readonly #dependencies = new Map<string, FormDependency<TValues>>()
@@ -140,6 +147,9 @@ export class FormStore<TValues extends object> {
 
   constructor(initialValues: TValues, options: FormStoreOptions<TValues> = {}) {
     const values = freezeValue(cloneFormValue(initialValues))
+    this.#form = new FormClientState(values)
+    this.#form.replace(values, values, {}, new Set())
+    this.#fields = options.fields ?? []
     this.#focusIndex = new SchemaFocusIndex(options.schema)
     for (const dependency of options.dependencies ?? []) this.addDependency(dependency)
     this.#state = Object.freeze({
@@ -160,6 +170,10 @@ export class FormStore<TValues extends object> {
 
   get state(): FormState<TValues> {
     return this.#state
+  }
+
+  get errorBag(): ValidationErrorBag<TValues> {
+    return this.#form.errors
   }
 
   get<TPath extends FormPath<TValues>>(path: TPath): FormValueAtPath<TValues, TPath> {
@@ -205,10 +219,13 @@ export class FormStore<TValues extends object> {
     const working = this.createWorkingState()
     this.applyOperations(working, operations)
     this.recomputeDependencies(working)
-    return this.commit(working)
+    const result = this.commit(working)
+    if (working.changedPaths.size > 0) this.revalidateInvalidFields()
+    return result
   }
 
   reset(): FormState<TValues> {
+    this.#correctionSequence++
     const working = this.createWorkingState()
     const changedPaths = collectDirtyPaths(working.values, working.initialValues)
     working.values = working.initialValues
@@ -264,6 +281,7 @@ export class FormStore<TValues extends object> {
       if (!Number.isSafeInteger(version) || version <= 0) throw new Error(`Invalid server patch version: ${version}`)
       if (version <= this.#serverPatchVersion) return false
     }
+    this.#correctionSequence++
     this.applyResponse(patch, version)
     if (typeof version === 'number') this.#serverPatchVersion = version
     return true
@@ -277,9 +295,45 @@ export class FormStore<TValues extends object> {
 
   async submit(
     submit: (context: FormRequestContext<TValues>) => Promise<FormSubmitResponse>,
+    options: { readonly validate?: boolean } = {},
   ): Promise<FormRequestResult> {
     this.cancelRequests('validate')
-    return this.runRequest('submit', submit)
+    this.#correctionSequence++
+    const result = await this.runRequest('submit', async context => {
+      const errors = options.validate === false ? {} : await validateFormFields(this.validationFields(), context.values)
+      if (Object.keys(errors).length) return { errors, focusFirstError: true }
+      if (context.signal.aborted) return {}
+      try {
+        return { errors: {}, ...await submit(context) }
+      } catch (cause) {
+        const errors = formValidationErrors(cause)
+        if (errors) return { errors, focusFirstError: true }
+        throw cause
+      }
+    })
+    return result.status === 'applied' && Object.keys(this.#state.errors).length > 0
+      ? { ...result, status: 'invalid' }
+      : result
+  }
+
+  private validationFields(): readonly FormValidationField[] {
+    return this.#fields.map(field => ({
+      ...field,
+      visible: this.#state.visibility[field.path] ?? field.visible,
+      disabled: this.#state.disabled[field.path] ?? field.disabled,
+      readOnly: this.#state.readOnly[field.path] ?? field.readOnly,
+    }))
+  }
+
+  private revalidateInvalidFields(): void {
+    const fields = this.validationFields().filter(field => Object.hasOwn(this.#state.errors, field.path))
+    if (!fields.length) return
+    const sequence = ++this.#correctionSequence
+    const values = this.#state.values
+    void validateFormFields(fields, values).then(errors => {
+      if (sequence !== this.#correctionSequence || values !== this.#state.values || this.#state.submitting) return
+      this.batch(fields.map(field => ({ kind: 'errors', path: field.path, errors: errors[field.path] ?? [] })))
+    })
   }
 
   cancelRequests(kind?: RequestKind): void {
@@ -310,10 +364,10 @@ export class FormStore<TValues extends object> {
 
   private createWorkingState(): WorkingState<TValues> {
     return {
-      values: this.#state.values,
-      initialValues: this.#state.initialValues,
-      touchedPaths: new Set(this.#state.touchedPaths),
-      errors: { ...this.#state.errors },
+      values: this.#form.values,
+      initialValues: this.#form.initialValues,
+      touchedPaths: new Set(this.#form.touched),
+      errors: { ...this.#form.errors.flatten() },
       visibility: { ...this.#state.visibility },
       disabled: { ...this.#state.disabled },
       readOnly: { ...this.#state.readOnly },
@@ -333,9 +387,6 @@ export class FormStore<TValues extends object> {
           working.values = next
           working.changedPaths.add(operation.path)
           working.changed = true
-          const errors = removePathAndDescendants(working.errors, operation.path)
-          if (errors !== working.errors) working.errors = errors
-          if (working.focus && pathsOverlap(working.focus.path, operation.path)) working.focus = undefined
         }
         if (operation.touch) this.applyTouch(working, operation.path, true)
       } else if (operation.kind === 'touch') {
@@ -346,6 +397,7 @@ export class FormStore<TValues extends object> {
         if (messages.length === 0) {
           if (previous) {
             delete working.errors[operation.path]
+            if (working.focus?.path === operation.path) working.focus = undefined
             working.changed = true
           }
         } else if (!previous || previous.length !== messages.length || previous.some((message, index) => message !== messages[index])) {
@@ -446,7 +498,8 @@ export class FormStore<TValues extends object> {
   private commit(working: WorkingState<TValues>): FormState<TValues> {
     if (!working.changed) return this.#state
     const values = freezeValue(working.values)
-    const dirtyPaths = Object.freeze([...collectDirtyPaths(values, working.initialValues)].sort())
+    this.#form.replace(values, working.initialValues, working.errors, working.touchedPaths)
+    const dirtyPaths = Object.freeze([...this.#form.dirtyPaths].sort())
     const touchedPaths = Object.freeze([...working.touchedPaths].sort())
     return this.publish({
       ...this.#state,
@@ -454,7 +507,7 @@ export class FormStore<TValues extends object> {
       initialValues: working.initialValues,
       dirtyPaths,
       touchedPaths,
-      errors: frozenRecord(working.errors),
+      errors: frozenRecord(this.#form.errors.flatten()),
       visibility: frozenRecord(working.visibility),
       disabled: frozenRecord(working.disabled),
       readOnly: frozenRecord(working.readOnly),
@@ -471,7 +524,7 @@ export class FormStore<TValues extends object> {
     return this.#state
   }
 
-  private applyResponse(patch: FormServerPatch, requestVersion?: number, requestKind?: RequestKind): void {
+  private applyResponse(patch: FormServerPatch, requestVersion?: number, requestKind?: RequestKind, submittedValues?: TValues): void {
     const working = this.createWorkingState()
     this.applyOperations(working, patch.operations ?? [])
     if (patch.errors) {
@@ -485,7 +538,7 @@ export class FormStore<TValues extends object> {
     }
     this.recomputeDependencies(working)
     if (patch.commitValues) {
-      working.initialValues = working.values
+      working.initialValues = submittedValues && this.#state.values !== submittedValues ? submittedValues : working.values
       working.changed = true
     }
     if (patch.focusFirstError) {
@@ -497,13 +550,14 @@ export class FormStore<TValues extends object> {
     const submitting = requestKind === 'submit' ? false : previous.submitting
     if (!working.changed && validating === previous.validating && submitting === previous.submitting) return
     const values = freezeValue(working.values)
+    this.#form.replace(values, working.initialValues, working.errors, working.touchedPaths)
     this.publish({
       ...previous,
       values,
       initialValues: working.initialValues,
-      dirtyPaths: Object.freeze([...collectDirtyPaths(values, working.initialValues)].sort()),
+      dirtyPaths: Object.freeze([...this.#form.dirtyPaths].sort()),
       touchedPaths: Object.freeze([...working.touchedPaths].sort()),
-      errors: frozenRecord(working.errors),
+      errors: frozenRecord(this.#form.errors.flatten()),
       visibility: frozenRecord(working.visibility),
       disabled: frozenRecord(working.disabled),
       readOnly: frozenRecord(working.readOnly),
@@ -525,9 +579,10 @@ export class FormStore<TValues extends object> {
       version: ++this.#requestSequence,
     }
     this.#requests.set(kind, active)
+    const finishSubmission = kind === 'submit' ? this.#form.startSubmission(active.controller.signal) : () => undefined
     this.publish({
       ...this.#state,
-      ...(kind === 'validate' ? { validating: true } : { submitting: true }),
+      ...(kind === 'validate' ? { validating: true } : { submitting: this.#form.submitting }),
       version: this.#state.version + 1,
     })
     const requestValues = this.#state.values
@@ -550,7 +605,7 @@ export class FormStore<TValues extends object> {
         this.clearRequestFlag(kind)
         return { status: 'aborted', version: active.version }
       }
-      this.applyResponse(response, active.version, kind)
+      this.applyResponse(response, active.version, kind, kind === 'submit' ? requestValues : undefined)
       return { status: 'applied', version: active.version }
     } catch (error) {
       if (this.#requests.get(kind) !== active) return { status: 'stale', version: active.version }
@@ -560,6 +615,8 @@ export class FormStore<TValues extends object> {
         return { status: 'aborted', version: active.version }
       }
       throw error
+    } finally {
+      finishSubmission()
     }
   }
 

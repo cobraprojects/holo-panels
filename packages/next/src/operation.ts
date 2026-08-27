@@ -133,6 +133,7 @@ function failure(id: string, error: unknown, explicitStatus?: number, panel?: Co
 function statusFor(error: unknown): number | undefined {
   if (error instanceof ActionExecutionError) return error.status
   const name = error instanceof Error ? error.name : ''
+  if (name === 'ValidationException') return 422
   if (error instanceof NextPanelHttpError) return error.status
   if (error instanceof PanelNotificationRequestError) return 400
   if (error instanceof PanelNotificationAccessError) return 403

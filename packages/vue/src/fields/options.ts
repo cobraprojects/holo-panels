@@ -1,4 +1,5 @@
-import { Button, Checkbox, Input, NativeSelect, RadioGroup, RadioGroupItem } from '../internal-ui'
+import { Button, Checkbox, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, RadioGroup, RadioGroupItem } from '../internal-ui'
+import { Search } from 'lucide-vue-next'
 import { computed, defineComponent, h, onMounted, ref, type PropType, type VNode } from 'vue'
 import { usePanelsStore } from '../stores'
 import { fieldFrame, property, requireStore, updateField } from './shared'
@@ -110,13 +111,13 @@ export const VueOptionField = defineComponent({
     }
     function renderSearchAndPaging(): VNode[] {
       return [
-        property(props.context, 'searchable', false) ? h(Input, {
+        property(props.context, 'searchable', false) ? h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => h(Search, { 'aria-hidden': 'true' })), h(InputGroupInput, {
           'aria-label': `Search ${props.context.definition.label ?? 'options'}`,
           disabled: props.context.disabled || state.value.disabled,
           type: 'search',
           modelValue: state.value.search,
           onInput: (event: Event) => void store.load((event.currentTarget as HTMLInputElement).value, 1),
-        }) : null,
+        })]) : null,
         property(props.context, 'paginated', true) && (state.value.page > 1 || state.value.hasMore) ? h('nav', { 'aria-label': `${props.context.definition.label ?? 'Option'} pages` }, [
           h(Button, { type: 'button', disabled: state.value.page <= 1 || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page - 1) }, 'Previous'),
           h('span', { 'aria-live': 'polite' }, `Page ${state.value.page}`),

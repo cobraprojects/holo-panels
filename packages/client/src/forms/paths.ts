@@ -1,3 +1,5 @@
+export { collectFormDirtyPaths as collectDirtyPaths } from '@holo-js/forms/internal/client'
+
 const pathSegmentPattern = /^(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+)$/
 const unsafeSegments = new Set(['__proto__', 'constructor', 'prototype'])
 
@@ -72,31 +74,6 @@ export function updateArrayPath<TValues>(
 
 export function pathsOverlap(left: string, right: string): boolean {
   return left === right || left.startsWith(`${right}.`) || right.startsWith(`${left}.`)
-}
-
-function valuesEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true
-  if (Array.isArray(left) && Array.isArray(right)) {
-    return left.length === right.length && left.every((item, index) => valuesEqual(item, right[index]))
-  }
-  if (isObject(left) && isObject(right)) {
-    const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort()
-    return keys.every(key => valuesEqual(left[key], right[key]))
-  }
-  return false
-}
-
-export function collectDirtyPaths(current: unknown, initial: unknown, parent = ''): readonly string[] {
-  if (valuesEqual(current, initial)) return []
-  if (Array.isArray(current) && Array.isArray(initial)) {
-    const length = Math.max(current.length, initial.length)
-    return Array.from({ length }, (_, index) => collectDirtyPaths(current[index], initial[index], parent ? `${parent}.${index}` : String(index))).flat()
-  }
-  if (isObject(current) && isObject(initial)) {
-    const keys = [...new Set([...Object.keys(current), ...Object.keys(initial)])].sort()
-    return keys.flatMap(key => collectDirtyPaths(current[key], initial[key], parent ? `${parent}.${key}` : key))
-  }
-  return parent ? [parent] : []
 }
 
 export function cloneFormValue<TValue>(value: TValue): TValue {

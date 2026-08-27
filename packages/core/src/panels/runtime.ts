@@ -40,6 +40,7 @@ export function panelErrorNotificationEffect<TActor>(
   panel: CompiledPanelDefinition<TActor>,
   statusCode: number,
 ): Readonly<ToastEffect> | null {
+  if (statusCode === 422) return null
   const configuration = panel.manifest.errorNotifications
   if (!configuration?.enabled) return null
   if (configuration.disabledStatusCodes.includes(statusCode) || configuration.hiddenStatusCodes.includes(statusCode)) return null

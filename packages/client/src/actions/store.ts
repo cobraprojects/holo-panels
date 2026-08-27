@@ -1,5 +1,6 @@
 import type { ActionExecutionResult, ActionManifest, JsonObject } from '@holo-js/panels-core'
 import type { FormStore } from '../forms/store'
+import { formValidationFailure } from '../forms/validation'
 import { actionFormSchema, createActionForm, createActionOptions, type ActionFormField } from './form'
 import type { OptionStore } from '../options/store'
 import type {
@@ -74,7 +75,8 @@ export class ClientActionStore<TResult = unknown> {
     if (form) this.#forms.set(manifest.id, {
       store: form,
       unsubscribe: form.subscribe(state => {
-        if (this.activeFrame?.manifest.id === manifest.id) this.setInput({ ...state.values })
+        const frame = this.activeFrame
+        if (frame?.manifest.id === manifest.id) this.replace(frame, { input: { ...state.values } })
       }),
     })
     const phase = manifest.confirmation ? 'confirming' : manifest.modal?.schema ? 'collecting' : 'ready'
@@ -97,6 +99,11 @@ export class ClientActionStore<TResult = unknown> {
   setInput(input: JsonObject): void {
     const frame = this.requiredFrame()
     if (frame.phase === 'submitting') return
+    const form = this.activeForm
+    if (form) {
+      form.batch(Object.entries(input).map(([path, value]) => ({ kind: 'set', path, value, touch: true })))
+      return
+    }
     this.replace(frame, { input })
   }
 
@@ -130,13 +137,24 @@ export class ClientActionStore<TResult = unknown> {
     this.replace(frame, { error: null, phase: 'submitting', requestVersion })
     let request: Promise<ActionExecutionResult<number | string, TResult>>
     try {
-      request = this.#transport.execute({
-      actionId: frame.manifest.id,
-      idempotencyKey: this.#createIdempotencyKey(),
-      input: frame.input,
-      mount: frame.manifest.mount,
-      ...(recordIds ? { recordIds } : {}),
+      const execute = () => this.#transport.execute({
+        actionId: frame.manifest.id,
+        idempotencyKey: this.#createIdempotencyKey(),
+        input: frame.input,
+        mount: frame.manifest.mount,
+        ...(recordIds ? { recordIds } : {}),
       }, controller.signal)
+      const form = this.#forms.get(frame.manifest.id)?.store
+      request = form ? (async () => {
+        let result: ActionExecutionResult<number | string, TResult> | undefined
+        const outcome = await form.submit(async () => {
+          result = await execute()
+          return { commitValues: result.status === 'succeeded' }
+        })
+        if (outcome.status === 'invalid') throw formValidationFailure(form.state.errors)
+        if (!result || outcome.status !== 'applied') throw new DOMException('The form submission was cancelled', 'AbortError')
+        return result
+      })() : execute()
     } catch (cause) {
       request = Promise.reject(cause)
     }

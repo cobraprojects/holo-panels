@@ -30,10 +30,10 @@
 		bind:this={ref}
 		data-slot="native-select"
 		data-size={size}
-		class="hp:h-8 hp:w-full hp:min-w-0 hp:appearance-none hp:rounded-lg hp:border hp:border-input hp:bg-transparent hp:py-1 hp:pr-8 hp:pl-2.5 hp:text-sm hp:transition-colors hp:select-none hp:selection:bg-primary hp:selection:text-primary-foreground hp:placeholder:text-muted-foreground hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:data-[size=sm]:h-7 hp:data-[size=sm]:rounded-[min(var(--radius-md),10px)] hp:data-[size=sm]:py-0.5 hp:dark:bg-input/30 hp:dark:hover:bg-input/50 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:outline-none hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed"
+		class="hp:h-9 hp:w-full hp:min-w-0 hp:appearance-none hp:rounded-md hp:border hp:border-input hp:bg-transparent hp:py-1 hp:pe-9 hp:ps-3 hp:text-sm hp:transition-colors hp:select-none hp:selection:bg-primary hp:selection:text-primary-foreground hp:placeholder:text-muted-foreground hp:focus-visible:border-ring hp:focus-visible:ring-3 hp:focus-visible:ring-ring/50 hp:aria-invalid:border-destructive hp:aria-invalid:ring-3 hp:aria-invalid:ring-destructive/20 hp:data-[size=sm]:h-8 hp:data-[size=sm]:rounded-[min(var(--radius-md),10px)] hp:data-[size=sm]:py-0.5 hp:dark:bg-input/30 hp:dark:hover:bg-input/50 hp:dark:aria-invalid:border-destructive/50 hp:dark:aria-invalid:ring-destructive/40 hp:outline-none hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed"
 		{...restProps}
 	>
 		{@render children?.()}
 	</select>
-	<ChevronDownIcon class="hp:top-1/2 hp:right-2.5 hp:size-4 hp:-translate-y-1/2 hp:text-muted-foreground hp:pointer-events-none hp:absolute hp:select-none" aria-hidden data-slot="native-select-icon" />
+	<ChevronDownIcon class="hp:top-1/2 hp:end-3.5 hp:size-4 hp:-translate-y-1/2 hp:text-muted-foreground hp:pointer-events-none hp:absolute hp:select-none" aria-hidden data-slot="native-select-icon" />
 </div>

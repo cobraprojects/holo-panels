@@ -1,4 +1,5 @@
 export { FormStore } from './store'
+export { formValidationErrors, formValidationFailure } from './validation'
 export {
   cloneFormValue,
   collectDirtyPaths,

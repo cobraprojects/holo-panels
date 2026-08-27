@@ -171,6 +171,8 @@ describe('P8-B React action renderer', () => {
     expect(Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Confirm')?.querySelector('[data-icon="check"]')).not.toBeNull()
     act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Confirm')?.click())
     await vi.waitFor(() => expect(document.querySelector('[data-schema-id="publish-reason"]')).not.toBeNull())
+    act(() => store.activeForm?.applyServerPatch({ errors: { _root: ['Review the entire form'] } }))
+    expect(document.querySelector('form [data-form-errors]')?.textContent).toContain('Review the entire form')
     act(() => store.setInput({ reason: 'Ready' }))
     await act(async () => document.querySelector<HTMLFormElement>('form')?.requestSubmit())
     expect(store.activeFrame).toBeNull()

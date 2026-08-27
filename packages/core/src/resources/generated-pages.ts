@@ -1,4 +1,6 @@
 import type { JsonObject, JsonValue } from '../protocol/json'
+import { ValidationException } from '@holo-js/forms/schema'
+import { validateFormFields } from '../fields/validation'
 import { toJsonValue } from '../protocol/serialization'
 import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/db'
 import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
@@ -879,6 +881,7 @@ function resourceFormFields(definition: RuntimeDefinition) {
       : undefined
     const properties = {
       ...resourceFieldProperties(field, compiledFields),
+      ...(objectMember(field, 'clientHints') ? { validationHints: objectMember(field, 'clientHints') } : {}),
       ...(Array.isArray(manifestOptions) ? { options: manifestOptions } : {}),
     }
     const specialization = Reflect.get(properties, 'specialization')
@@ -892,6 +895,7 @@ function resourceFormFields(definition: RuntimeDefinition) {
       properties,
       readOnly: Reflect.get(field, 'readOnly') === true,
       required: Reflect.get(field, 'required') === true,
+      rules: Array.isArray(Reflect.get(field, 'rules')) ? Reflect.get(field, 'rules') as readonly string[] : [],
       type: specialization === 'slug' ? 'slug' : String(Reflect.get(field, 'type') ?? 'text'),
       visible: Reflect.get(field, 'visible') !== false,
     }
@@ -1209,25 +1213,20 @@ function mutationValues(payload: JsonObject): Readonly<Record<string, JsonValue>
   return Object.freeze(Object.fromEntries(Object.entries(payload).filter(([key]) => !reserved.has(key))))
 }
 
-function validateRequiredValues(definition: RuntimeDefinition, values: Readonly<Record<string, JsonValue>>, creating: boolean): void {
+async function validateRequiredValues(definition: RuntimeDefinition, values: Readonly<Record<string, JsonValue>>, creating: boolean): Promise<void> {
+  const errors = await validateFormFields(resourceFormFields(definition).filter(field => creating || valueAtPath(values, field.path) !== undefined), values)
+  if (Object.keys(errors).length) throw new ValidationException({ ...errors })
   for (const field of arrayMember(definition.form, 'fields')) {
     const path = Reflect.get(field, 'path')
     if (typeof path !== 'string') continue
     const value = valueAtPath(values, path)
-    if (Reflect.get(field, 'required') === true && (creating || typeof value !== 'undefined') && (value === null || typeof value === 'undefined' || value === '')) {
-      const error = new Error(`Resource input attribute "${path}" is required.`)
-      error.name = 'ResourceInputError'
-      throw error
-    }
     if (typeof value === 'undefined') continue
     const source = objectMember(objectMember(field, 'server'), 'options')
     const choices = source && 'manifestOptions' in source && typeof source.manifestOptions === 'function'
       ? Reflect.apply(source.manifestOptions, source, [])
       : []
     if (Array.isArray(choices) && choices.length > 0 && !choices.some(option => option && typeof option === 'object' && Reflect.get(option, 'value') === value)) {
-      const error = new Error(`Resource input attribute "${path}" contains an unavailable option.`)
-      error.name = 'ResourceInputError'
-      throw error
+      throw new ValidationException({ [path]: ['The selected option is unavailable.'] })
     }
   }
 }
@@ -1503,7 +1502,7 @@ function executableResourceAction(
     handle: async (submitted: JsonObject) => {
       const identifier = recordIdentifier(input.payload)
       const values = normalizeValues(definition, submitted)
-      validateRequiredValues(definition, values, identifier === null)
+      await validateRequiredValues(definition, values, identifier === null)
       await validateOptionValues(definition, values, input)
       const finalized = await finalizedUploadValues(definition, values, input)
       const result = identifier === null ? await executor.create(finalized, input.context) : await executor.update(identifier, finalized, input.context)
@@ -1516,7 +1515,7 @@ function executableResourceAction(
     handle: async (submitted: JsonObject, context: Parameters<typeof action.handle>[1]) => {
       const values = normalizeValues(definition, submitted)
       if (action.kind === 'create' || action.kind === 'edit') {
-        validateRequiredValues(definition, values, action.kind === 'create')
+        await validateRequiredValues(definition, values, action.kind === 'create')
         await validateOptionValues(definition, values, input)
       }
       if (action.kind === 'create') {
@@ -1761,6 +1760,15 @@ async function performRelationOperation(
   const automaticPivot = automaticPivotFields(manager.relation, input.context)
   const pivotFields = manager.runtime?.writablePivotFields ?? automaticPivot.writable
   const pivot = relationInput(input.payload, 'pivot', pivotFields)
+  const fields = operation === 'create' || operation === 'edit'
+    ? relationFields(manager.relation, manager.runtime?.writableInputFields ?? relationWritableFields(manager.relation))
+    : operation === 'attach' || operation === 'editPivot' ? relationPivotFields(manager.relation, pivotFields) : []
+  const fieldValues = operation === 'create' || operation === 'edit' ? values : pivot
+  const prefix = operation === 'create' || operation === 'edit' ? 'values' : 'pivot'
+  const errors = await validateFormFields(fields.flatMap(field => typeof field.id === 'string' && typeof field.type === 'string' && (operation === 'create' || fieldValues[field.id] !== undefined)
+    ? [{ path: field.id, required: field.required === true, type: field.type, properties: field.type === 'number' ? { inputMode: 'number' } : {} }]
+    : []), fieldValues)
+  if (Object.keys(errors).length) throw new ValidationException(Object.fromEntries(Object.entries(errors).map(([path, messages]) => [`${prefix}.${path}`, messages])))
   let record: RuntimeRecord | null = null
   if (manager.runtime) {
     const relationExecutor = new RelationManagerExecutor(manager.runtime)

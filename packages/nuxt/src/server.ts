@@ -130,9 +130,10 @@ function requestId(event: H3Event): string {
   return supplied && /^[A-Za-z0-9._:-]{1,128}$/u.test(supplied) ? supplied : crypto.randomUUID()
 }
 
-function errorDetails(cause: unknown): { readonly category: ErrorCategory, readonly code: string, readonly message: string, readonly retryable: boolean, readonly status: number } {
+function errorDetails(cause: unknown): { readonly category: ErrorCategory, readonly code: string, readonly details?: JsonObject, readonly message: string, readonly retryable: boolean, readonly status: number } {
   if (cause instanceof ActionExecutionError) return { ...normalizeTransportError(cause, cause.status), status: cause.status }
   const name = cause instanceof Error ? cause.name : ''
+  if (name === 'ValidationException') return { ...normalizeTransportError(cause, 422), status: 422 }
   if (cause instanceof TransportDecodingError) return { category: 'protocol', code: 'invalid_request', message: cause.message, retryable: false, status: 400 }
   if (cause && typeof cause === 'object' && 'statusCode' in cause && typeof cause.statusCode === 'number') {
     const status = cause.statusCode
@@ -183,7 +184,7 @@ function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefiniti
   return {
     response: Object.freeze({
       effects: [...effects],
-      error: Object.freeze({ category: error.category, code: error.code, message: error.message, retryable: error.retryable }),
+      error: Object.freeze({ category: error.category, code: error.code, ...(error.details ? { details: error.details } : {}), message: error.message, retryable: error.retryable }),
       id,
       ok: false,
       protocolVersion: PROTOCOL_VERSION,

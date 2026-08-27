@@ -15,6 +15,9 @@
     EntryRenderer,
     FieldRenderer,
     FormStore,
+    formValidationErrors,
+    formValidationFailure,
+    PanelsTransportError,
     OptionStore,
     PanelsTransport,
     PanelsPageActions,
@@ -86,6 +89,7 @@
     return values
   })
   const form = $derived.by(() => new FormStore<Record<string, unknown>>(initialValues, {
+    fields: resource?.fields ?? [],
     dependencies: (resource?.dependencies ?? []).map(dependency => ({
       id: dependency.id,
       paths: [dependency.source],
@@ -207,6 +211,7 @@
           throw cause
         }
         if (!response.ok || response.data.status === 'partial') {
+          if (!response.ok && response.error.category === 'validation') throw new PanelsTransportError(response.error)
           publishPanelActionFailure(data.panel.manifest.id, response.effects)
           throw new Error(response.ok ? 'The action could not be completed for every record.' : response.error.message)
         }
@@ -215,7 +220,6 @@
     },
     })
   }
-  let submitError = $state<string | null>(null)
 
   $effect(() => {
     loadedRelations = relationManagers(data.page.data.relations)
@@ -496,7 +500,6 @@
 
   async function submit(actionId: string, idempotencyKey: string, values: JsonObject, signal: AbortSignal) {
     if (!resource) throw new Error('The resource form is unavailable.')
-    submitError = null
     try {
       let intent: JsonValue | undefined
       const outcome = await form.submit(async context => {
@@ -515,7 +518,10 @@
           signal: requestSignal(requestController.signal, AbortSignal.any([context.signal, signal])),
         })
         await effects.apply(response)
-        if (!response.ok) throw new Error(response.error.message)
+        if (!response.ok) {
+          if (response.error.category !== 'validation') publishPanelActionFailure(data.panel.manifest.id, response.effects)
+          throw new PanelsTransportError(response.error)
+        }
         if (response.data.status === 'partial') throw new Error('The record could not be saved.')
         intent = response.data.formIntent
         const savedRecord = jsonRecord(response.data.record)
@@ -535,13 +541,14 @@
           }
         }
         return { commitValues: intent !== 'cancel' && intent !== 'create-another' }
-      })
+      }, { validate: !resource.cancelFormActions.includes(actionId) })
+      if (outcome.status === 'invalid') throw formValidationFailure(form.state.errors)
       if (intent === 'cancel' || intent === 'create-another') form.reset()
       if (intent === 'cancel') await goto(resource.basePath)
       if (outcome.status !== 'applied') throw new Error('The form submission was cancelled.')
       return { effects: [], items: [], status: 'succeeded' as const }
     } catch (cause) {
-      submitError = cause instanceof Error ? cause.message : 'Unable to save record'
+      if (!formValidationErrors(cause) && !(cause instanceof PanelsTransportError) && !signal.aborted) publishPanelActionFailure(data.panel.manifest.id)
       throw cause
     }
   }
@@ -562,7 +569,7 @@
       signal: requestSignal(requestController.signal, signal),
     })
     await effects.apply(response)
-    if (!response.ok) throw new Error(response.error.message)
+    if (!response.ok) throw new PanelsTransportError(response.error)
     if (response.data.status === 'partial') throw new Error('The relation operation could not be completed.')
     loadedRelations = relationManagers(response.data.relations)
   }
@@ -681,7 +688,7 @@
       {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} panelId={data.panel.manifest.id} recordIds={pageType === 'create' ? [] : [currentRouteIdentifier]} {registry} store={actionStore} />{/if}
     </PanelsPageActions>
   {/if}
-  <form class="hp-resource-form hp:grid hp:gap-6" onsubmit={(event) => {
+  <form class="hp-resource-form hp:grid hp:gap-6" novalidate onsubmit={(event) => {
     event.preventDefault()
     event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
   }}>
@@ -689,8 +696,8 @@
       <CardContent class="hp:grid hp:gap-6 hp:pt-6">{#each resource.fields as definition (definition.path)}<FieldRenderer {definition} {form} collectionStore={collectionStores.get(definition.path)} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} uploadStore={uploadStores.get(definition.path)} />{/each}</CardContent>
       <CardFooter class="hp:justify-end">{#if resource.formActions[0]}<SvelteActionRenderer action={resource.formActions[0]} actions={resource.formActions} input={formInput} panelId={data.panel.manifest.id} {registry} store={formActionStore} />{/if}</CardFooter>
     </Card>
+    {#if $formState.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}
   </form>
-  {#if submitError}<div role="alert">{submitError}</div>{/if}
   {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId: data.panel.manifest.id, registry }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
 {:else if pageType === 'view' && record}
   <article class="hp-resource-view"><div class="hp-infolist">

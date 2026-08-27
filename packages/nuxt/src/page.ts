@@ -13,6 +13,9 @@ import {
   ClientNotificationInboxStore,
   ClientToastStore,
   FormStore,
+  formValidationErrors,
+  formValidationFailure,
+  PanelsTransportError,
   GlobalSearchStore,
   installPanelSpaNavigation,
   navigatePanelUrl,
@@ -200,6 +203,7 @@ interface ResourceRenderSchema {
   readonly entries: readonly JsonObject[]
   readonly fields: readonly ResourceField[]
   readonly formActions: readonly ClientActionManifest[]
+  readonly cancelFormActions: readonly string[]
   readonly filters: readonly VueTableFilter[]
   readonly filterMode: 'deferred' | 'live'
   readonly recordTitle: string
@@ -384,6 +388,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
     })),
     filters: schema.filters as unknown as readonly VueTableFilter[],
     formActions: (Array.isArray(schema.formActions) ? schema.formActions : []).flatMap(item => clientAction(item) ?? []),
+    cancelFormActions: (Array.isArray(schema.formActions) ? schema.formActions : []).flatMap(item => isObject(item) && item.formIntent === 'cancel' && typeof item.id === 'string' ? [item.id] : []),
     filterMode: schema.filterMode === 'deferred' ? 'deferred' : 'live',
     selection: isObject(schema.selection) ? mutationPayload(schema.selection) : {},
     recordTitle: schema.recordTitle,
@@ -487,7 +492,7 @@ function entryStore(definition: JsonObject, record: ResourceRecord): VueEntrySto
     label: typeof definition.label === 'string' ? definition.label : null,
     pending: false,
     placeholder: typeof definition.placeholder === 'string' ? definition.placeholder : null,
-    properties: isObject(definition.properties) ? definition.properties : {},
+    properties: { ...(isObject(definition.properties) ? definition.properties : {}), validationRules: Array.isArray(definition.rules) ? definition.rules : [] },
     state,
     tooltip: null,
     type: typeof definition.type === 'string' ? definition.type : 'text',
@@ -545,7 +550,7 @@ async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'ac
     payload,
     signal: requestSignal(runtime.signal, signal),
   }).catch((cause: unknown) => {
-    if (operation === 'action') publishPanelActionFailure(panelId)
+    if (!formValidationErrors(cause) && !signal?.aborted) publishPanelActionFailure(panelId)
     throw cause
   })
   try {
@@ -555,8 +560,8 @@ async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'ac
     throw cause
   }
   if (!response.ok) {
-    if (operation === 'action') publishPanelActionFailure(panelId, response.effects)
-    throw new Error(response.error.message)
+    if (response.error.category !== 'validation') publishPanelActionFailure(panelId, response.effects)
+    throw new PanelsTransportError(response.error)
   }
   if (isObject(response.data) && response.data.status === 'partial') {
     publishPanelActionFailure(panelId, response.effects)
@@ -667,6 +672,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   const values = initialValues(schema, record)
   const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new FormStore(values, {
+    fields: schema.fields,
     dependencies: schema.fields.flatMap(field => field.reactive
       ? [{
           id: `${schema.resourceId}:${field.path}`,
@@ -737,9 +743,10 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     })
     return [[field.path, upload] as const]
   }))
-  const formState = shallowReactive({ values: store.state.values })
+  const formState = shallowReactive({ values: store.state.values, errors: store.state.errors })
   store.subscribe((next, previous) => {
     formState.values = next.values
+    formState.errors = next.errors
     for (const field of schema.fields) {
       const dependency = field.optionSource?.dependency
       const options = optionStores.get(field.path)
@@ -782,7 +789,8 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
         }
       }
       return { commitValues: intent !== 'cancel' && intent !== 'create-another' }
-        })
+        }, { validate: !schema.cancelFormActions.includes(actionRequest.actionId) })
+        if (outcome.status === 'invalid') throw formValidationFailure(store.state.errors)
         if (outcome.status !== 'applied') throw new Error('The form submission was cancelled.')
         if (intent === 'cancel' || intent === 'create-another') store.reset()
         if (intent === 'cancel') await runtime.navigate(schema.basePath)
@@ -814,7 +822,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
       recordActions[0] ? h(VueActionRenderer, { action: recordActions[0], actions: recordActions, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], registry, store: actionStore }) : null,
     ]),
-    h('form', { class: 'hp-resource-form hp:grid hp:gap-6', 'data-resource-crud': page.manifest.pageType, onSubmit: (event: Event) => {
+    h('form', { class: 'hp-resource-form hp:grid hp:gap-6', novalidate: true, 'data-resource-crud': page.manifest.pageType, onSubmit: (event: Event) => {
       event.preventDefault()
       if (event.currentTarget instanceof HTMLFormElement) event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
     } }, [
@@ -822,6 +830,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
         h(CardContent, { class: 'hp:grid hp:gap-6 hp:pt-6' }, () => schema.fields.map(definition => h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path }))),
         h(CardFooter, { class: 'hp:justify-end' }, () => schema.formActions[0] ? h(VueActionRenderer, { action: schema.formActions[0], actions: schema.formActions, input: mutationPayload(formState.values), panelId, registry, store: formActionStore }) : null),
       ]),
+      formState.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, formState.errors._root.map(message => h('li', message))) : null,
     ]),
     relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])

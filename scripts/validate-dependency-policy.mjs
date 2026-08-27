@@ -45,7 +45,7 @@ const expectedRuntime = new Map([
   }],
   ['@holo-js/panels-client', {
     dependencies: ['@holo-js/panels-core'],
-    peers: ['@holo-js/flux', '@holo-js/security'],
+    peers: ['@holo-js/flux', '@holo-js/forms', '@holo-js/security'],
     optional: ['@holo-js/flux'],
   }],
   ['@holo-js/panels-core', {

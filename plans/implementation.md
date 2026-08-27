@@ -1611,6 +1611,12 @@ Owned paths: `packages/client/src/schema`, `packages/client/src/forms`, and test
 
 Tasks:
 
+- [x] #16 Holo-JS prerequisite: share the existing Holo Forms client state through its internal client entry point and support collection validation without item constraints. Implemented in Holo-JS commit `f8877ac093672514be59d2cf7fe4431352eaadfe`, covering `packages/forms` and `packages/validation`. Evidence on 2026-08-27: 148 Forms, Validation, and Nuxt form tests passed, typecheck and ESLint passed, and five changed files had zero language-server diagnostics. Standards and spec reviews found no unresolved issues.
+- [x] #16 review corrections: preserve bound Holo validation hints for custom and choice fields, support collection validation without item constraints, and distinguish upload descriptors from native files. Existing suites now cover these cases and rich-text constraints. Both independent review axes report zero unresolved findings.
+- [x] #16 integration: resource, action-modal, and relation forms use Holo state, validate on submit, revalidate invalid fields during correction, preserve field and form-wide errors, and use Panel notifications for other outcomes. Final evidence on 2026-08-27: 1,245 workspace tests, 15 browser checks across Next/Nuxt/SvelteKit, all package and example typechecks, diagnostics, lint, architecture checks, builds, and packed installation checks passed. Browser checks cover control geometry and focus, notifications, interrupted submissions, and resource/relation journeys. See [#16](https://github.com/cobraprojects/holo-panels/issues/16).
+
+Publish the Forms and Validation changes from Holo-JS commit `f8877ac093672514be59d2cf7fe4431352eaadfe` before releasing the dependent Panels packages. Packed checks use that local host implementation, not a published registry release.
+
 - [x] Track values, initial values, dirty paths, touched paths, errors, visibility, disabled, read-only, and pending state.
 - [x] Apply atomic updates and batch dependency recomputation.
 - [x] Implement reset, reset-field, set, get, validate-request, submit, and server-patch transitions.

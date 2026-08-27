@@ -18,6 +18,6 @@
   <SchemaNode {component} {context} {renderNode} />
 {/snippet}
 
-<div class="hp-schema" data-schema-id={schema.id} data-state-path={schema.statePath}>
+<div class="hp-schema hp:grid hp:gap-6" data-schema-id={schema.id} data-state-path={schema.statePath}>
   <SchemaChildren components={schema.components} {context} {renderNode} />
 </div>

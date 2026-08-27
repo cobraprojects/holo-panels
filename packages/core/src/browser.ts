@@ -128,3 +128,4 @@ export {
 } from './schemas/traversal'
 export { createAccessibleChartModel } from './widgets/resolution'
 export { builtInActionPresentation, type BuiltInActionPresentation } from './actions/presentation'
+export { validateFormFields, type FormValidationField } from './fields/validation'

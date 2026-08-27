@@ -55,6 +55,8 @@ export {
   createBrowserUploadAdapter,
   createUploadStore,
   FormStore,
+  formValidationErrors,
+  formValidationFailure,
   GlobalSearchStore,
   installPanelSpaNavigation,
   navigatePanelUrl,
@@ -112,3 +114,4 @@ export type {
   TableStateOptions,
   UploadPolicy,
 } from '@holo-js/panels-client'
+export { PanelsTransportError } from '@holo-js/panels-core'

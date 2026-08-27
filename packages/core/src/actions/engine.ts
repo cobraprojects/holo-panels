@@ -1,4 +1,6 @@
 import type { JsonObject } from '../protocol/json'
+import { isValidationException, ValidationException } from '@holo-js/forms/schema'
+import { formValidationFields, validateFormFields } from '../fields/validation'
 import { toJsonValue } from '../protocol/serialization'
 import { resolveActionState } from './action'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
@@ -186,6 +188,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       const effects = await this.successEffects(definition, [{ context, result }])
       return Object.freeze({ effects, items: Object.freeze([]), ...(typeof result === 'undefined' ? {} : { result }), status: 'succeeded' })
     } catch (cause: unknown) {
+      if (isValidationException(cause)) throw cause
       const effects = await this.failureEffects(definition, [context])
       if (cause instanceof ActionExecutionError) throw new ActionExecutionError(cause.code, cause.message, effects)
       throw new ActionExecutionError('failed', 'The action could not be completed', effects)
@@ -303,6 +306,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       const item: ActionItemResult<TRecordId, TResult> = Object.freeze({ recordId, ...(typeof result === 'undefined' ? {} : { result }), status: 'succeeded' })
       return Object.freeze({ context, item })
     } catch (cause: unknown) {
+      if (request.mount !== 'bulk' && isValidationException(cause)) throw cause
       if (cause instanceof ActionExecutionError && cause.code === 'denied') {
         return Object.freeze({ context, item: Object.freeze({ recordId, status: 'denied' }) })
       }
@@ -330,6 +334,8 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     await this.enforceRateLimit(definition, context)
     const mutated = definition.mutateInput ? await definition.mutateInput(structuredClone(input), context) : structuredClone(input)
     const operation = async (): Promise<TResult> => {
+      const errors = await validateFormFields(formValidationFields(definition.modal?.schema), mutated)
+      if (Object.keys(errors).length) throw new ValidationException({ ...errors })
       await definition.lifecycle?.before?.(mutated, context)
       const result = await definition.handle(mutated, context)
       await definition.lifecycle?.after?.(result, context)

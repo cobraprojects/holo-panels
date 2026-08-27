@@ -2,6 +2,8 @@
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { Input } from '../ui/input'
+  import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
+  import Search from 'lucide-svelte/icons/search'
   import { NativeSelect as Select } from '../ui/native-select'
   import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
   import type { OptionValue } from '@holo-js/panels-client'
@@ -85,7 +87,7 @@
   <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
     {#snippet children(attributes)}
       {#if Boolean(definition.properties?.searchable)}
-        <Input aria-label="Search {definition.label}" disabled={presentation.disabled || $optionState?.disabled} oninput={search} value={$optionState?.search ?? ''} />
+        <InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput aria-label="Search {definition.label}" type="search" disabled={presentation.disabled || $optionState?.disabled} oninput={search} value={$optionState?.search ?? ''} /></InputGroup>
       {/if}
       {#if kind === 'checkbox-list' || kind === 'toggle-buttons'}
         {#if multiple}<div {...attributes} class="hp:space-y-2" role="group">{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><Checkbox checked={selected(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} onCheckedChange={(checked) => toggle(option.value, checked)} />{option.label}</label>{/each}</div>{:else}<RadioGroup {...attributes} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} onValueChange={(next) => { const option = options.find(candidate => String(candidate.value) === next); if (option) setSelection(option.value) }}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><RadioGroupItem value={String(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} />{option.label}</label>{/each}</RadioGroup>{/if}

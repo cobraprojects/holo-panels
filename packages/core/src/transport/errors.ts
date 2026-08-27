@@ -1,4 +1,5 @@
 import type { ErrorCategory, PanelsError } from '../protocol/envelopes'
+import { isValidationException } from '@holo-js/forms/schema'
 
 const STATUS_CATEGORIES: Readonly<Record<number, ErrorCategory>> = Object.freeze({
   400: 'validation',
@@ -45,6 +46,9 @@ export function normalizeTransportError(error: unknown, explicitStatus?: number)
     code: status ? `http_${status}` : 'transport_failure',
     message: CATEGORY_MESSAGES[category],
     retryable,
+    ...(category === 'validation' && isValidationException(error) ? {
+      details: { errors: Object.fromEntries(Object.entries(error.errors.flatten()).filter(([path]) => path.split('.').every(segment => /^(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+)$/.test(segment) && !['__proto__', 'constructor', 'prototype'].includes(segment))).map(([path, messages]) => [path, [...messages]])) },
+    } : {}),
   })
 }
 

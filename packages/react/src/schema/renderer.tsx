@@ -253,7 +253,7 @@ export function registerReactSchemaRenderer(registry: ComponentRegistry, type: s
 }
 
 export function ReactSchemaRenderer<TValues extends object = Record<string, unknown>>({ panelId, registry, renderContent, schema }: ReactSchemaRendererProps<TValues>): ReactNode {
-  return <div className="hp-schema" data-schema-id={schema.id} data-state-path={schema.statePath}>
+  return <div className="hp-schema hp:grid hp:gap-6" data-schema-id={schema.id} data-state-path={schema.statePath}>
     {schema.components.map(component => <ComponentRenderer component={component} key={component.key} panelId={panelId} registry={registry} renderContent={renderContent} schema={schema} />)}
   </div>
 }

@@ -309,7 +309,7 @@ export const VueSchemaRenderer = defineComponent({
   },
   setup(props) {
     return () => h('div', {
-      class: 'hp-schema',
+      class: 'hp-schema hp:grid hp:gap-6',
       'data-schema-id': props.schema.id,
       'data-state-path': props.schema.statePath,
     }, props.schema.components.map(component => h(VueSchemaNode, {

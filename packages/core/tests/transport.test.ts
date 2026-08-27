@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ValidationException } from '@holo-js/forms/schema'
 import {
   createRequestEnvelope,
   decodeRequestEnvelope,
@@ -11,6 +12,12 @@ import { panelNotification } from '../src/notifications'
 import { ProtocolCompatibilityError } from '../src/protocol/version'
 
 describe('server transport contracts', () => {
+  it('delivers Holo field and form errors without leaking values or unsafe paths', () => {
+    const failure = new ValidationException({ title: ['Already used'], _root: ['Review the form'] })
+    expect(normalizeTransportError(failure)).toMatchObject({ category: 'validation', details: { errors: { title: ['Already used'], _root: ['Review the form'] } } })
+    expect(normalizeTransportError(failure).details?.errors).not.toHaveProperty('constructor.prototype')
+    expect(normalizeTransportError({ status: 422, errors: { password: ['secret'] } }).details).toBeUndefined()
+  })
   it('constructs and decodes frozen versioned requests', () => {
     const request = createRequestEnvelope({
       id: 'request-1',

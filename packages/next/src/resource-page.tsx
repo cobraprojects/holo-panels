@@ -11,6 +11,9 @@ import {
   createUploadStore,
   type ClientEffectSession,
   FormStore,
+  formValidationErrors,
+  formValidationFailure,
+  PanelsTransportError,
   OptionStore,
   PanelsTransport,
   publishPanelActionFailure,
@@ -54,6 +57,7 @@ import { useClientRequestController } from './client-lifecycle'
 export interface NextResourceOperationResult {
   readonly data?: JsonObject
   readonly error?: string
+  readonly failure?: PanelsTransportError
   readonly effects?: readonly Effect[]
   readonly ok: boolean
 }
@@ -311,7 +315,7 @@ function browserTransport(panelId: string, effects?: ClientEffectSession): NextR
       }
       return response.ok
         ? { data: object(response.data), effects: response.effects, ok: true }
-        : { effects: response.effects, error: response.error.message, ok: false }
+        : { effects: response.effects, error: response.error.message, failure: new PanelsTransportError(response.error), ok: false }
     },
   }
 }
@@ -568,7 +572,7 @@ function fieldDefinition(definition: JsonObject): ReactCompiledField<ResourceVal
     label: typeof definition.label === 'string' && definition.label.trim() ? definition.label : humanizePath(path),
     path,
     placeholder: typeof definition.placeholder === 'string' ? definition.placeholder : null,
-    properties: object(definition.properties),
+    properties: { ...object(definition.properties), validationRules: strings(definition.rules) },
     readOnly: boolean(definition.readOnly, false),
     required: boolean(definition.required, false),
     type: text(definition.type),
@@ -760,7 +764,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     }
     return values
   }, [fields, formManifest, record])
-  const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest) }), [formManifest, initialValues])
+  const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest), fields }), [fields, formManifest, initialValues])
   const state = useFormStore<ResourceValues>(form)
   useEffect(() => () => form.cancelRequests(), [form])
   useEffect(() => {
@@ -772,8 +776,6 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     globalThis.addEventListener('beforeunload', preventUnload)
     return () => globalThis.removeEventListener('beforeunload', preventUnload)
   }, [state.dirtyPaths.length, unsavedChangesAlerts])
-  const [saved, setSaved] = useState(false)
-  const labels = object(resource.labels)
   const resourceId = text(resource.id)
   const routeKey = propertyPath(text(resource.routeKey))
   const [relations, setRelations] = useState(() => relationManagers(data.relations))
@@ -798,7 +800,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
       ownerId: record[routeKey] ?? null,
       resourceId,
     }, signal)
-    if (!result.ok || result.data?.status === 'partial') throw new Error(result.error ?? 'The relation operation could not be completed.')
+    if (!result.ok || result.data?.status === 'partial') throw result.failure ?? new Error(result.error ?? 'The relation operation could not be completed.')
     setRelations(relationManagers(result.data?.relations))
   }
   const formActions = useMemo(() => objects(formManifest.actions).map(actionManifest).filter((action): action is ClientActionManifest => action !== null), [formManifest])
@@ -806,21 +808,22 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     createIdempotencyKey: () => globalThis.crypto.randomUUID(),
     transport: {
       async execute(request, signal) {
-        setSaved(false)
         let completed = false
         let reset = false
-        await form.submit(async context => {
-      const intent = objects(formManifest.actions).find(action => action.id === request.actionId)?.formIntent
-      const errors = Object.fromEntries(fields.filter(field => intent !== 'cancel' && field.required && (valueAtPath(request.input, field.path) === '' || valueAtPath(request.input, field.path) === null || typeof valueAtPath(request.input, field.path) === 'undefined')).map(field => [field.path, 'This field is required.']))
-      if (Object.keys(errors).length > 0) return { errors, focusFirstError: true }
-      const result = await operation.execute('form-submit', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, values: request.input, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, AbortSignal.any([context.signal, signal]))
-      if (!result.ok || result.data?.status === 'partial') return { errors: { [fields[0]?.path ?? routeKey]: result.error ?? 'The record could not be saved.' }, focusFirstError: true }
+        const outcome = await form.submit(async context => {
+      const result = await operation.execute('form-submit', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, values: request.input, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, AbortSignal.any([context.signal, signal])).catch((cause: unknown) => {
+        if (!formValidationErrors(cause) && !signal.aborted) publishPanelActionFailure(panelId)
+        throw cause
+      })
+      if (!result.ok || result.data?.status === 'partial') {
+        if (!formValidationErrors(result.failure)) publishPanelActionFailure(panelId, result.effects)
+        throw result.failure ?? new Error('The record could not be saved.')
+      }
       completed = true
       if (result.data?.formIntent === 'cancel') {
         reset = true
         return { commitValues: false }
       }
-      setSaved(true)
       const savedRecord = object(result.data?.record)
       const savedIdentifier = valueAtPath(savedRecord, routeKey)
       const redirect = result.data?.formIntent === 'create-another' ? null : pageOperation === 'create' ? createRedirect : editRedirect
@@ -831,14 +834,15 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
       }
       reset = result.data?.formIntent === 'create-another'
       return { commitValues: !reset }
-        })
+        }, { validate: objects(formManifest.actions).find(action => action.id === request.actionId)?.formIntent !== 'cancel' })
+        if (outcome.status === 'invalid') throw formValidationFailure(form.state.errors)
         if (!completed) throw new Error('The record could not be saved.')
         if (reset) form.reset()
         if (objects(formManifest.actions).find(action => action.id === request.actionId)?.formIntent === 'cancel') navigate(basePath)
         return { effects: [], items: [], status: 'succeeded' as const }
       },
     },
-  }), [basePath, createRedirect, editRedirect, fields, form, formManifest, operation, pageOperation, record, resourceId, routeKey, navigate])
+  }), [basePath, createRedirect, editRedirect, form, formManifest, operation, pageOperation, panelId, record, resourceId, routeKey, navigate])
   useEffect(() => () => {
     while (formActionStore.activeFrame) formActionStore.close()
   }, [formActionStore])
@@ -847,7 +851,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     {pageOperation === 'create' ? <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} registry={registry} resource={resource} source="create" /> : pageOperation === 'edit' && (typeof recordIdentifier === 'number' || typeof recordIdentifier === 'string')
       ? <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={recordIdentifier} registry={registry} resource={resource} source="edit" />
       : null}
-    <form className="hp-resource-form hp:grid hp:gap-6" onSubmit={event => {
+    <form className="hp-resource-form hp:grid hp:gap-6" noValidate onSubmit={event => {
       event.preventDefault()
       event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
     }}>
@@ -855,7 +859,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
         <CardContent className="hp:grid hp:gap-6 hp:pt-6">{fields.map(definition => <ResourceField definition={definition} form={form} key={definition.path} operation={operation} pageOperation={pageOperation} panelId={panelId} recordId={record[routeKey]} registry={registry} resourceId={resourceId} values={state.values} />)}</CardContent>
         <CardFooter className="hp:justify-end">{formActions[0] ? <ReactActionRenderer actions={formActions} input={state.values} manifest={formActions[0]} panelId={panelId} registry={registry} store={formActionStore} /> : null}</CardFooter>
       </Card>
-      {saved ? <p className="hp:text-sm hp:text-muted-foreground" role="status">{text(labels.saved) || 'Saved.'}</p> : null}
+      {state.errors._root?.length ? <ul data-form-errors="" role="alert">{state.errors._root.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
     </form>
     {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
   </>
@@ -945,8 +949,8 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
           throw cause
         }
         if (!result.ok) {
-          publishPanelActionFailure(panelId, result.effects)
-          throw new Error(result.error ?? 'The action could not be completed.')
+          if (!formValidationErrors(result.failure)) publishPanelActionFailure(panelId, result.effects)
+          throw result.failure ?? new Error(result.error ?? 'The action could not be completed.')
         }
         if (result.data?.status === 'partial') {
           publishPanelActionFailure(panelId, result.effects)
@@ -987,8 +991,8 @@ function ResourceEntry({ definition, operation, panelId, record, recordId, regis
           throw cause
         })
         if (!result.ok || result.data?.status === 'partial') {
-          publishPanelActionFailure(panelId, result.effects)
-          throw new Error(result.error ?? 'The entry action could not be completed.')
+          if (!formValidationErrors(result.failure)) publishPanelActionFailure(panelId, result.effects)
+          throw result.failure ?? new Error(result.error ?? 'The entry action could not be completed.')
         }
         return { effects: [], items: [], status: 'succeeded' as const }
       },

@@ -419,6 +419,39 @@ test.describe('authenticated admin journeys', () => {
     await expect(shell).toHaveAttribute('data-theme', 'system')
   })
 
+  test('validates resource forms on submit, corrects invalid fields, and displays server field errors', async ({ page }) => {
+    await login(page)
+    await gotoPanelPage(page, '/admin/posts/create')
+    const form = page.locator('.hp-resource-form')
+    const title = form.locator('[data-field-path="title"]')
+    const city = form.locator('[data-field-path="city"]')
+    await form.getByRole('button', { name: 'Create', exact: true }).click()
+    await expect(title.locator('[role="alert"]')).toBeVisible()
+    await expect(city.locator('[role="alert"]')).toBeVisible()
+    await title.getByRole('textbox').fill('Preserved validation title')
+    await expect(title.locator('[role="alert"]')).toHaveCount(0)
+    await expect(city.locator('[role="alert"]')).toBeVisible()
+    await selectField(page, 'Category', ['Guides'])
+    await city.locator('select').evaluate(select => {
+      const option = select.ownerDocument.createElement('option')
+      option.value = 'not-an-allowed-city'
+      option.textContent = 'Unavailable city'
+      select.append(option)
+    })
+    await city.locator('select').selectOption('not-an-allowed-city')
+    const response = page.waitForResponse(response => response.url().endsWith('/form-submit'))
+    await form.getByRole('button', { name: 'Create', exact: true }).click()
+    expect((await response).status()).toBe(422)
+    await expect(city.locator('[role="alert"]')).toContainText('The selected option is unavailable.')
+    await expect(title.getByRole('textbox')).toHaveValue('Preserved validation title')
+    await expect(page.locator('[data-sonner-toast][data-type="error"]')).toHaveCount(0)
+    await city.locator('select').selectOption('Cairo')
+    await expect(city.locator('[role="alert"]')).toHaveCount(0)
+    const rejected = await panelOperation(page, 'form-submit', { actionId: 'create', resourceId: 'posts', values: { title: '', slug: '', category: '', city: '' } })
+    expect(rejected.status).toBe(422)
+    expect(rejected.body).toMatchObject({ ok: false, error: { category: 'validation', details: { errors: { title: expect.any(Array), city: expect.any(Array) } } } })
+  })
+
   test('composes the isolated dashboard from shadcn-family components', async ({ page }) => {
     await login(page)
     await gotoPanelPage(page, '/admin/posts')
@@ -453,15 +486,19 @@ test.describe('authenticated admin journeys', () => {
       const view = form.ownerDocument.defaultView
       if (!view) throw new Error('The post form window is unavailable')
       return {
+        inputHeight: input.getBoundingClientRect().height,
         inputWidth: input.getBoundingClientRect().width,
         radioBorder: view.getComputedStyle(radio).borderTopWidth,
         selectWidth: select.getBoundingClientRect().width,
+        selectHeight: select.getBoundingClientRect().height,
       }
     })
     expect(Math.abs(formGeometry.inputWidth - formGeometry.selectWidth)).toBeLessThanOrEqual(1)
+    expect(Math.abs(formGeometry.inputHeight - formGeometry.selectHeight)).toBeLessThanOrEqual(1)
     expect(formGeometry.radioBorder).toBe('0px')
 
     const globalSearch = page.locator('.hp-global-search [data-slot="input-group"]')
+    expect(Math.abs((await globalSearch.boundingBox())!.height - formGeometry.inputHeight)).toBeLessThanOrEqual(1)
     await expect(globalSearch).toHaveCount(1)
     const groupedSearchBorders = await globalSearch.evaluate((group) => {
       const input = group.querySelector('[data-slot="input-group-control"]')
@@ -1063,7 +1100,11 @@ test.describe('authenticated admin journeys', () => {
     const comments = page.getByRole('region', { name: 'Comments' })
     await expect(comments).toBeVisible()
     await comments.getByRole('button', { name: 'Create', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click()
+    await expect(page.getByRole('dialog').locator('[data-field-path="values.authorName"] [role="alert"]')).toBeVisible()
     await page.getByRole('dialog').getByRole('textbox', { name: 'Author Name', exact: true }).fill(commentAuthor)
+    await expect(page.getByRole('dialog').locator('[data-field-path="values.authorName"] [role="alert"]')).toHaveCount(0)
+    await expect(page.getByRole('dialog').locator('[data-field-path="values.body"] [role="alert"]')).toBeVisible()
     await page.getByRole('dialog').getByRole('textbox', { name: 'Body', exact: true }).fill(commentBody)
     await page.getByRole('dialog').getByRole('textbox', { name: 'Status', exact: true }).fill('pending')
     const createCommentResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))

@@ -1,6 +1,7 @@
 import { defineSchema, schemaComponentsFor } from '@holo-js/panels-core'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { FormStore } from '../src/forms/store'
+import { formValidationFailure } from '../src/forms/validation'
 import type {
   FormPath,
   FormRequestContext,
@@ -264,7 +265,7 @@ describe('P4-A form state engine', () => {
     expect(store.get('notes')).toBe('version-two')
   })
 
-  it('clears field errors on edits and reset transitions', async () => {
+  it('preserves server errors until validation or reset clears them', async () => {
     const store = new FormStore(initialValues())
     store.applyServerPatch({
       errors: { 'account.name': 'Invalid', notes: 'Too long' },
@@ -273,7 +274,7 @@ describe('P4-A form state engine', () => {
     store.touch('account.name')
 
     store.set('account.name', 'Valid')
-    expect(store.state.errors['account.name']).toBeUndefined()
+    expect(store.state.errors['account.name']).toEqual(['Invalid'])
     expect(store.state.errors.notes).toEqual(['Too long'])
 
     store.reset()
@@ -294,5 +295,96 @@ describe('P4-A form state engine', () => {
     >()
     expectTypeOf<FormValueAtPath<FormValues, 'contacts.0.email'>>().toEqualTypeOf<string>()
     expectTypeOf(new FormStore(initialValues()).state).toEqualTypeOf<FormState<FormValues>>()
+  })
+
+  it('validates on submit and revalidates only invalid fields while they are corrected', async () => {
+    const store = new FormStore({ email: '', title: '' }, { fields: [
+      { path: 'email', type: 'text', required: true, properties: { inputMode: 'email' } },
+      { path: 'title', type: 'text', required: true },
+    ] })
+    const submit = vi.fn(async () => ({ commitValues: true }))
+    store.set('email', 'incorrect')
+    expect(store.state.errors).toEqual({})
+    expect((await store.submit(submit)).status).toBe('invalid')
+    expect(submit).not.toHaveBeenCalled()
+    expect(store.errorBag.get('email').length).toBeGreaterThan(0)
+    store.set('email', 'still-incorrect')
+    await vi.waitFor(() => expect(store.state.errors.email?.length).toBeGreaterThan(0))
+    store.set('email', 'editor@example.com')
+    expect(store.state.errors.title?.length).toBeGreaterThan(0)
+    store.set('title', 'Saved title')
+    await vi.waitFor(() => expect(store.state.errors).toEqual({}))
+    expect((await store.submit(submit)).status).toBe('applied')
+    expect(store.state.dirtyPaths).toEqual([])
+  })
+
+  it('preserves entered values and separates server field errors from form errors and transport failures', async () => {
+    const store = new FormStore({ title: 'Entered value' })
+    const outcome = await store.submit(async () => {
+      throw formValidationFailure({ title: ['Already used'], _root: ['The submission needs review'] })
+    })
+    expect(outcome.status).toBe('invalid')
+    expect(store.state.values.title).toBe('Entered value')
+    expect(store.errorBag.get('title')).toEqual(['Already used'])
+    expect(store.state.errors._root).toEqual(['The submission needs review'])
+    await expect(store.submit(async () => { throw new Error('Network unavailable') })).rejects.toThrow('Network unavailable')
+    expect(store.state.submitting).toBe(false)
+    expect(store.state.values.title).toBe('Entered value')
+    expect((await store.submit(async () => { throw formValidationFailure({}) })).status).toBe('invalid')
+    expect(store.state.errors._root).toEqual(['The submitted data is invalid.'])
+  })
+
+  it('submits collection and typed choice values while retaining bound Holo constraints', async () => {
+    const store = new FormStore({ tags: ['a'], choice: 1, enabled: true as boolean | null }, { fields: [
+      { path: 'tags', type: 'tags', required: true },
+      { path: 'choice', type: 'toggle-buttons', properties: { validationHints: { kind: 'number', required: true, nullable: false, allowedValues: [1, 2] } } },
+      { path: 'enabled', type: 'radio', clientHints: { kind: 'boolean', required: false, nullable: true } },
+    ] })
+    const submit = vi.fn(async () => ({ commitValues: true }))
+    expect((await store.submit(submit)).status).toBe('applied')
+    store.set('enabled', null)
+    expect((await store.submit(submit)).status).toBe('applied')
+    store.set('choice', 3)
+    expect((await store.submit(submit)).status).toBe('invalid')
+    expect(store.state.errors.choice?.length).toBeGreaterThan(0)
+    store.set('choice', 2)
+    await vi.waitFor(() => expect(store.state.errors.choice).toBeUndefined())
+    store.set('tags', [])
+    expect((await store.submit(submit)).status).toBe('invalid')
+    expect(store.state.errors.tags?.length).toBeGreaterThan(0)
+  })
+
+  it('uses current visibility and editability when validating a conditional form', async () => {
+    const store = new FormStore({ title: '', slug: '', notes: '' }, { fields: [
+      { path: 'title', type: 'text', required: true },
+      { path: 'slug', type: 'text', required: true },
+      { path: 'notes', type: 'text', required: true },
+    ] })
+    store.batch([
+      { kind: 'visible', path: 'title', value: false },
+      { kind: 'disabled', path: 'slug', value: true },
+      { kind: 'read-only', path: 'notes', value: true },
+    ])
+    const submit = vi.fn(async () => ({ commitValues: true }))
+    expect((await store.submit(submit)).status).toBe('applied')
+    expect(submit).toHaveBeenCalledOnce()
+    store.batch([{ kind: 'visible', path: 'title', value: true }])
+    expect((await store.submit(submit)).status).toBe('invalid')
+    expect(store.state.errors.title?.length).toBeGreaterThan(0)
+  })
+
+  it('keeps edits made during a save dirty against the values actually submitted', async () => {
+    const store = new FormStore({ title: 'Initial' })
+    store.set('title', 'Submitted')
+    const pending = deferred<{ commitValues: true }>()
+    const submit = vi.fn(async () => pending.promise)
+    const request = store.submit(submit)
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce())
+    store.set('title', 'Edited while saving')
+    pending.resolve({ commitValues: true })
+    await request
+    expect(store.state.values.title).toBe('Edited while saving')
+    expect(store.state.initialValues.title).toBe('Submitted')
+    expect(store.state.dirtyPaths).toEqual(['title'])
   })
 })

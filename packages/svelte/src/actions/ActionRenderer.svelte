@@ -16,6 +16,7 @@
 
   let { action, actions = [action], groups = [], input, panelId, recordIds, registry, store }: SvelteActionRendererProps = $props()
   const actionState = $derived.by(() => toSvelteState(store))
+  const formState = $derived.by(() => $actionState.frames.length && store.activeForm ? toSvelteState(store.activeForm) : undefined)
   const defaultSchemaRegistry = new SvelteComponentRegistry()
   const schemaRegistry = $derived(registry ?? defaultSchemaRegistry)
   async function submit(): Promise<void> {
@@ -103,7 +104,7 @@
       {#if Custom}
         <Custom {frame} setInput={(input: JsonObject) => store.setInput(input)} {submit} />
       {:else}
-        <form class="hp:space-y-4" onsubmit={(event) => { event.preventDefault(); void submit() }}>
+        <form class="hp-panel-form hp:grid hp:gap-6" novalidate onsubmit={(event) => { event.preventDefault(); void submit() }}>
           {#if schema}
             <RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_BEFORE} /><SchemaRenderer panelId={panelId ?? 'default'} registry={schemaRegistry} {schema}>
               {#snippet renderContent({ component })}
@@ -113,6 +114,7 @@
             </SchemaRenderer><RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} />
           {/if}
           <Dialog.Footer><Button onclick={() => store.close()} type="button" variant="outline">{frame.manifest.modal?.cancelActionLabel ?? 'Close'}</Button><Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button></Dialog.Footer>
+          {#if $formState?.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}
         </form>
       {/if}
       {#each frame.manifest.modal?.nestedActions ?? [] as id (id)}

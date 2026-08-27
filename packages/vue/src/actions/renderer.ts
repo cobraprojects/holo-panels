@@ -94,6 +94,8 @@ export const VueActionRenderer = defineComponent({
     function form(frame: ClientActionFrame): VNode {
       const schema = actionFormSchema(frame.manifest.modal?.schema ?? null, frame.manifest.id)
       return h('form', {
+        class: 'hp-panel-form hp:grid hp:gap-6',
+        novalidate: true,
         onSubmit: (event: Event) => {
           event.preventDefault()
           void submit()
@@ -110,6 +112,7 @@ export const VueActionRenderer = defineComponent({
               schema,
             }), renderHook(ActionsRenderHook.MODAL_SCHEMA_AFTER)]
           : null,
+        props.store.activeForm?.state.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, props.store.activeForm.state.errors._root.map(message => h('li', message))) : null,
         h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action')]),
       ])
     }

@@ -1,4 +1,4 @@
-import type { SchemaManifest } from '@holo-js/panels-core'
+import type { FormValidationField, SchemaManifest } from '@holo-js/panels-core'
 
 export type FormPath<TValue> = TValue extends readonly (infer TItem)[]
   ? `${number}` | `${number}.${FormPath<TItem>}`
@@ -92,11 +92,12 @@ export type FormValidationResponse = FormServerPatch
 export type FormSubmitResponse = FormServerPatch
 
 export interface FormRequestResult {
-  readonly status: 'aborted' | 'applied' | 'stale'
+  readonly status: 'aborted' | 'applied' | 'invalid' | 'stale'
   readonly version: number
 }
 
 export interface FormStoreOptions<TValues> {
+  readonly fields?: readonly FormValidationField[]
   readonly schema?: SchemaManifest<TValues>
   readonly dependencies?: readonly FormDependency<TValues>[]
 }

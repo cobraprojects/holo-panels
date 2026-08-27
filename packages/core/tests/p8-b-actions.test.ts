@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ValidationException } from '@holo-js/forms/schema'
 import { compileActionManifest, resolveActionState } from '../src/actions/action'
 import { createBuiltinAction } from '../src/actions/builtins'
 import { ActionEngine } from '../src/actions/engine'
+import { validateFormFields } from '../src/fields/validation'
 import type { ActionContext, ActionDefinition, ActionEngineOptions } from '../src/actions/contracts'
 import type { JsonObject } from '../src/protocol/json'
 import { defineSchema, schemaComponentsFor } from '../src/schemas'
@@ -62,6 +64,16 @@ function editAction(handle = vi.fn(async (input: { title: string }) => input.tit
 }
 
 describe('P8-B action execution', () => {
+  it('validates modal input on the server and preserves Holo validation failures on record actions', async () => {
+    expect(await validateFormFields([{ path: 'title', type: 'text', required: true }], { title: { injected: true } })).toHaveProperty('title')
+    const handle = vi.fn(async () => { throw new ValidationException({ title: ['Already used'], _root: ['Review the record'] }) })
+    const action = { ...editAction(handle), modal: { schema: { fields: [{ path: 'title', type: 'text', required: true }] } } }
+    const executor = engine()
+    await expect(executor.execute(action, { idempotencyKey: 'invalid-required', input: { title: '' }, mount: 'record', recordIds: [1] }, scope())).rejects.toBeInstanceOf(ValidationException)
+    expect(handle).not.toHaveBeenCalled()
+    await expect(executor.execute(action, { idempotencyKey: 'invalid-server', input: { title: 'Existing' }, mount: 'record', recordIds: [1] }, scope())).rejects.toMatchObject({ status: 422 })
+    expect(handle).toHaveBeenCalledOnce()
+  })
   it('fetches selected records in bounded batches and preserves request order', async () => {
     const resolve = vi.fn(async () => null)
     const resolveMany = vi.fn(async (ids: readonly number[]) => new Map([...ids].reverse().map(id => [id, { id, tenantId: 'tenant-a', version: 'v1' }])))

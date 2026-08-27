@@ -12,6 +12,7 @@ import {
   type UploadStorageAdapter,
 } from '../src/fields/upload'
 import { FormSchemaBinding } from '../src/fields/base'
+import { validateFormFields } from '../src/fields/validation'
 import { executeGeneratedUploadOperation } from '../src/resources/generated-pages'
 
 vi.mock('@holo-js/authorization', () => ({
@@ -129,6 +130,9 @@ describe('temporary upload security and Holo integration', () => {
       csrfVerified: true,
     })
     expect(stored).toMatchObject({ id: created.id, state: 'stored' })
+    const definition = uploadFields(schema({ avatar: field.file().required() })).file('avatar', policy).compile()
+    expect(await validateFormFields([definition], { avatar: stored })).toEqual({})
+    expect(await validateFormFields([definition], { avatar: null })).toEqual({ avatar: ['This field is required.'] })
   })
 
   it('executes generated upload requests only for registered resource upload fields', async () => {

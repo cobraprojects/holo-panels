@@ -110,6 +110,7 @@ Do not add storage drivers, queue drivers, database drivers, mail packages, fram
 |---|---|---:|---|
 | `dependencies` | `@holo-js/panels-core` | yes | Shared protocol and public client contracts |
 | `peerDependencies` | `@holo-js/security` | yes | Holo CSRF client integration used by the baseline transport |
+| `peerDependencies` | `@holo-js/forms` | yes | Shared Holo Forms values, dirty state, errors, and submission ownership |
 
 No framework peers and no optional service peers. Realtime transport extensions stay in core service integration or a future approved integration package; the neutral client must not acquire a framework dependency.
 

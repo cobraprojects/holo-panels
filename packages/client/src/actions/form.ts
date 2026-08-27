@@ -13,6 +13,7 @@ export interface ActionFormField {
   readonly properties: JsonObject
   readonly readOnly: boolean
   readonly required: boolean
+  readonly rules: readonly string[]
   readonly type: string
   readonly visible: boolean
 }
@@ -70,9 +71,10 @@ export function actionFormField(component: SchemaComponentManifest): ActionFormF
     label: typeof definition.label === 'string' ? definition.label : definition.path,
     path: definition.path,
     placeholder: typeof definition.placeholder === 'string' ? definition.placeholder : null,
-    properties: object(definition.properties),
+    properties: { ...object(definition.properties), ...(definition.clientHints ? { validationHints: definition.clientHints } : {}) },
     readOnly: definition.readOnly === true,
     required: definition.required === true,
+    rules: Array.isArray(definition.rules) ? definition.rules.filter((rule): rule is string => typeof rule === 'string') : [],
     type: definition.type,
     visible: definition.hidden !== true,
   }
@@ -100,7 +102,11 @@ function initializeFields(nodes: readonly SchemaComponentManifest[], values: Jso
 export function createActionForm(schema: SchemaManifest<JsonObject>, input: Readonly<JsonObject>): FormStore<JsonObject> {
   const values = structuredClone(input)
   initializeFields(schema.components, values)
-  return new FormStore<JsonObject>(values)
+  const fields = (nodes: readonly SchemaComponentManifest[]): readonly ActionFormField[] => nodes.flatMap(node => {
+    const field = actionFormField(node)
+    return [...(field ? [field] : []), ...fields(node.children)]
+  })
+  return new FormStore<JsonObject>(values, { fields: fields(schema.components), schema })
 }
 
 export function createActionOptions(field: ActionFormField, actionId: string): OptionStore<number | string> | undefined {

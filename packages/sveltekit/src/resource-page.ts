@@ -36,6 +36,7 @@ export interface ResourcePageMetadata {
   readonly entries: readonly JsonObject[]
   readonly fields: readonly SvelteFieldDefinition[]
   readonly formActions: readonly ClientActionManifest[]
+  readonly cancelFormActions: readonly string[]
   readonly filterMode: 'deferred' | 'live'
   readonly filters: readonly SvelteTableFilter[]
   readonly id: string
@@ -147,7 +148,7 @@ function fieldDefinition(value: JsonValue): SvelteFieldDefinition | null {
     label,
     path,
     ...(typeof field.placeholder === 'string' ? { placeholder: field.placeholder } : {}),
-    ...(objectValue(field.properties) ? { properties: objectValue(field.properties) as JsonObject } : {}),
+    properties: { ...objectValue(field.properties), validationRules: Array.isArray(field.rules) ? field.rules : [] },
     ...(typeof field.readOnly === 'boolean' ? { readOnly: field.readOnly } : {}),
     ...(typeof field.required === 'boolean' ? { required: field.required } : {}),
     type,
@@ -421,6 +422,10 @@ export function resourcePageMetadata(value: JsonValue | undefined, pagePath?: st
     entries: Object.freeze(inferredEntries),
     fields: Object.freeze(Array.isArray(resource.fields) ? resource.fields.flatMap(item => fieldDefinition(item) ?? []) : []),
     formActions: Object.freeze(Array.isArray(resource.formActions) ? resource.formActions.flatMap(item => actionManifest(item) ?? []) : []),
+    cancelFormActions: Object.freeze(Array.isArray(resource.formActions) ? resource.formActions.flatMap(item => {
+      const action = objectValue(item)
+      return action?.formIntent === 'cancel' && typeof action.id === 'string' ? [action.id] : []
+    }) : []),
     filterMode: resource.filterMode === 'deferred' ? 'deferred' : 'live',
     selection: objectValue(resource.selection) ?? {},
     filters: Object.freeze(Array.isArray(resource.filters) ? resource.filters.flatMap(item => filterDefinition(item) ?? []) : []),

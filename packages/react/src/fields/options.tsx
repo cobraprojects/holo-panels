@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, Input, NativeSelect } from '../internal-ui'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui'
+import { Search } from 'lucide-react'
 import { FieldFrame, property, requireStore, updateField, useStoreState } from './shared'
 import type { ReactFieldControlProps } from './types'
 
@@ -49,13 +51,13 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
   for (const item of state.selectedOptions) if (!options.some(option => option.value === item.value)) options.push(item)
   const multiple = props.context.definition.type === 'multiselect' || props.context.definition.type === 'checkbox-list'
   const searchAndPaging = <>
-    {property(props.context, 'searchable', false) ? <Input
+    {property(props.context, 'searchable', false) ? <InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput
       aria-label={`Search ${props.context.definition.label ?? 'options'}`}
       disabled={props.context.disabled || state.disabled}
       onChange={event => void optionStore.load(event.currentTarget.value, 1)}
       type="search"
       value={state.search}
-    /> : null}
+    /></InputGroup> : null}
     {property(props.context, 'paginated', true) && (state.page > 1 || state.hasMore) ? <nav aria-label={`${props.context.definition.label ?? 'Option'} pages`}>
       <Button disabled={state.page <= 1 || state.loading} onClick={() => void optionStore.load(state.search, state.page - 1)} type="button">Previous</Button>
       <span aria-live="polite">Page {state.page}</span>
@@ -98,6 +100,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
       />{option.label}</label>)}
       {searchAndPaging}
       {createAndEdit}
+      {props.context.errors.length ? <ul role="alert">{props.context.errors.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
     </fieldset>
   }
   return <div><FieldFrame context={props.context}><NativeSelect

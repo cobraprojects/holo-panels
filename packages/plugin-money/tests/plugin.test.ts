@@ -1,5 +1,5 @@
 import { field, schema } from '@holo-js/forms'
-import { bindFormSchema, columnsFor, type CustomColumn, type ExtensionTypeId } from '@holo-js/panels-core'
+import { bindFormSchema, columnsFor, validateFormFields, type CustomColumn, type ExtensionTypeId } from '@holo-js/panels-core'
 import { describe, expect, it } from 'vitest'
 import { currencyField, moneyColumn, moneyPlugin } from '../src/index'
 
@@ -9,8 +9,8 @@ class Post {
 }
 
 describe('money plugin public contract', () => {
-  it('builds currency fields and money columns with stable extension IDs', () => {
-    const formSchema = schema({ amount: field.number() })
+  it('builds currency fields and money columns with stable extension IDs', async () => {
+    const formSchema = schema({ amount: field.number().min(0) })
     const compiledField = currencyField(bindFormSchema(formSchema).bind('amount'), 'usd').compile()
     const columnBuilder = moneyColumn(columnsFor(Post), 'amount', 'EUR')
     const inferredColumn: CustomColumn<Post, 'amount', ExtensionTypeId<'column'>> = columnBuilder
@@ -19,6 +19,8 @@ describe('money plugin public contract', () => {
     expect(inferredColumn).toBe(columnBuilder)
     expect(compiledField.type).toBe('holo.money:field:currency')
     expect(compiledField.properties).toEqual({ currency: 'USD', minorUnits: 2 })
+    expect(await validateFormFields([compiledField], { amount: 1200 })).toEqual({})
+    expect(await validateFormFields([compiledField], { amount: -1 })).toHaveProperty('amount')
     expect(column.manifest.type).toBe('holo.money:column:money')
     expect(column.manifest.formatters).toContainEqual({ configuration: { currency: 'EUR', locale: null }, kind: 'custom' })
   })

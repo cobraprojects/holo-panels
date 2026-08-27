@@ -3,6 +3,7 @@ import { ClientActionStore } from '../actions/store'
 import { actionManifestCollection, isActionManifest } from '../actions/manifest'
 import { OptionStore } from '../options/store'
 import { publishPanelActionFailure } from '../notifications/feedback'
+import { formValidationErrors } from '../forms/validation'
 import type { ClientRelationActionRequest, ClientRelationManager, ClientRelationOption, ClientRelationRecord } from './contracts'
 
 function object(value: JsonValue | undefined): JsonObject {
@@ -102,7 +103,8 @@ export function createRelationActionHost(options: {
             ...(request.input.values ? { values: object(request.input.values) } : {}),
           }, signal)
           return { effects: [], items: [], status: 'succeeded' as const }
-        } catch {
+        } catch (cause) {
+          if (formValidationErrors(cause)) throw cause
           publishPanelActionFailure(options.panelId ?? 'default')
           throw new Error('The relation action could not be completed.')
         }

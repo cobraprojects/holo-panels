@@ -9,6 +9,7 @@ import {
   resolveFieldDefault,
   resolveFieldPresentationState,
   TextFieldBuilder,
+  validateFormFields,
   type FormFieldPath,
   type FormFieldValue,
 } from '../src/fields'
@@ -75,7 +76,7 @@ describe('P6-A common field contracts', () => {
     expect(() => bindFormSchema({ kind: 'schema' } as never)).toThrow('Holo form schema')
   })
 
-  it('derives convenience hints from Holo rules without changing validation', () => {
+  it('derives convenience hints from Holo rules without changing validation', async () => {
     const title = bindFormSchema(postSchema).bind('title')
     const hints = deriveFieldClientHints(title.schema)
 
@@ -87,6 +88,13 @@ describe('P6-A common field contracts', () => {
       maximum: 120,
     })
     expect(postSchema.fields.title.definition.rules.map(rule => rule.name)).toEqual(['required', 'min', 'max'])
+    const definitions = [fields(postSchema).text('title').compile(), fields(postSchema).text('email').compile()]
+    expect(await validateFormFields(definitions, { title: 'x', email: 'x' })).toMatchObject({ title: expect.any(Array), email: expect.any(Array) })
+    expect(await validateFormFields(definitions, { title: 'Launch', email: 'team@example.com' })).toEqual({})
+    expect(await validateFormFields([
+      { path: 'metadata', type: 'key-value', clientHints: { kind: 'array', required: false, nullable: false, minimum: 2 } },
+      { path: 'body', type: 'rich-editor', clientHints: { kind: 'string', required: false, nullable: false, minimum: 20 } },
+    ], { metadata: 'not-a-list', body: 'x' })).toMatchObject({ metadata: expect.any(Array), body: expect.any(Array) })
   })
 
   it('resolves hydration, presentation, errors, and allowed dehydration', async () => {

@@ -131,7 +131,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
         <ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_AFTER} />
         {Custom
           ? createElement(Custom, { frame, setInput: input => props.store.setInput(input), submit })
-          : <form className="hp:grid hp:gap-4" onSubmit={(event: FormEvent) => {
+          : <form className="hp-panel-form hp:grid hp:gap-6" noValidate onSubmit={(event: FormEvent) => {
               event.preventDefault()
               void submit()
             }}>
@@ -144,6 +144,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
             <DialogFooter>
               <Button className="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} disabled={frame.phase === 'submitting'} type="submit" variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button>
             </DialogFooter>
+            {props.store.activeForm?.state.errors._root?.length ? <ul data-form-errors="" role="alert">{props.store.activeForm.state.errors._root.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
           </form>}
         {frame.manifest.modal?.nestedActions.map(id => {
           const nested = actionManifestCollection(props.actions ?? [props.manifest]).find(action => action.id === id)

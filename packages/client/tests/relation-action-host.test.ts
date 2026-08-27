@@ -1,5 +1,23 @@
 import { expect, it, vi } from 'vitest'
 import { createRelationActionHost } from '../src/relations/actions'
+import { formValidationFailure } from '../src/forms/validation'
+
+it('keeps an invalid relation modal open, corrects its fields, and preserves server form errors', async () => {
+  const execute = vi.fn(async () => { throw formValidationFailure({ _root: ['The relation cannot be saved yet'] }) })
+  const host = createRelationActionHost({ execute, manager: {
+    badge: null, columns: [], fields: [{ id: 'title', label: 'Title', required: true, type: 'text' }], group: null, id: 'comments', label: 'Comments', operations: ['create'], presentation: 'inline', records: [], url: null, visible: true,
+  } })
+  host.store.mount(host.actions[0]!)
+  await expect(host.store.submit()).rejects.toMatchObject({ panelsError: { category: 'validation' } })
+  expect(execute).not.toHaveBeenCalled()
+  expect(host.store.activeForm?.state.errors['values.title']?.length).toBeGreaterThan(0)
+  host.store.activeForm?.batch([{ kind: 'set', path: 'values.title', value: 'New comment', touch: true }])
+  await vi.waitFor(() => expect(host.store.activeForm?.state.errors['values.title']).toBeUndefined())
+  await expect(host.store.submit()).rejects.toMatchObject({ panelsError: { category: 'validation' } })
+  expect(execute).toHaveBeenCalledOnce()
+  expect(host.store.activeForm?.state.values).toEqual({ values: { title: 'New comment' } })
+  expect(host.store.activeForm?.state.errors._root).toEqual(['The relation cannot be saved yet'])
+})
 
 it('uses configured relation action confirmation and forwards the shared execution request', async () => {
   const execute = vi.fn(async () => undefined)

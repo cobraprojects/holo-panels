@@ -54,7 +54,7 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
   }
   if (context.definition.type === 'radio') {
     const options: readonly unknown[] = Array.isArray(context.definition.properties.options) ? context.definition.properties.options : []
-    return <fieldset className="hp-field hp:grid hp:gap-3 hp:border-0 hp:p-0" data-field-path={context.definition.path} data-field-type="radio" disabled={context.disabled || context.readOnly}>
+    return <fieldset aria-describedby={context.errors.length ? `${context.inputId}-errors` : undefined} aria-invalid={context.errors.length > 0 || undefined} className="hp-field hp:grid hp:gap-2 hp:border-0 hp:p-0" data-field-path={context.definition.path} data-field-type="radio" disabled={context.disabled || context.readOnly}>
       {context.definition.label ? <legend className="hp:text-sm hp:font-medium">{context.definition.label}</legend> : null}
       <RadioGroup className="hp:grid hp:gap-3" disabled={context.disabled || context.readOnly} onValueChange={selected => {
         const option = options.find(candidate => typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate) && String(Reflect.get(candidate, 'value')) === selected)
@@ -72,6 +72,7 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
           value={String(value)}
         />{typeof Reflect.get(option, 'label') === 'string' ? String(Reflect.get(option, 'label')) : String(value)}</label>
       })}</RadioGroup>
+      {context.errors.length ? <ul id={`${context.inputId}-errors`} role="alert">{context.errors.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
     </fieldset>
   }
   const dateMode = property(context, 'mode', 'date' as string)

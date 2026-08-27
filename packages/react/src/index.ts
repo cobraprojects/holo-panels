@@ -16,7 +16,7 @@ export * from './widgets'
 export * from './notifications'
 export * from './schema'
 export * from './extensions'
-export { createExtensionTypeId } from '@holo-js/panels-core'
+export { createExtensionTypeId, PanelsTransportError } from '@holo-js/panels-core'
 export { ActionsRenderHook, PanelsRenderHook, TablesRenderHook, WidgetsRenderHook } from '@holo-js/panels-core'
 export { panelConfigurationStyleAttribute, panelConfigurationVariables, panelContentWidthValue, panelThemeStyleAttribute, panelThemeVariables } from '@holo-js/panels-ui'
 export {
@@ -39,6 +39,8 @@ export {
   createBrowserUploadAdapter,
   createUploadStore,
   FormStore,
+  formValidationErrors,
+  formValidationFailure,
   GlobalSearchStore,
   installPanelSpaNavigation,
   navigatePanelUrl,

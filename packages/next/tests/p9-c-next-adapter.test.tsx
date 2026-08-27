@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRequestEnvelope, definePage, definePanel, defineStatsWidget, TRANSPORT_REQUEST_FIELD, type HoloAuth, type JsonObject } from '@holo-js/panels-core'
-import { ClientToastStore, ReactFeedbackProvider, type PanelAvatarComponentProps, type PanelChromeComponentProps, type ReactNotificationInboxTriggerProps } from '@holo-js/panels-react'
+import { ClientEffectSession, ClientToastStore, ReactFeedbackProvider, type PanelAvatarComponentProps, type PanelChromeComponentProps, type ReactNotificationInboxTriggerProps } from '@holo-js/panels-react'
 import { createNextPanelComponentRegistry, NextPanelClient } from '../src/panel-client'
 import { NextPanelResourcePage } from '../src/resource-page'
 import { createPanelOperationRoute } from '../src/operation'
@@ -796,6 +796,7 @@ describe('Next panel adapter', () => {
     const root = createRoot(container as unknown as Element)
     const toastStore = new ClientToastStore()
     const renderResource = async (page: ReactNode): Promise<void> => act(async () => root.render(<ReactFeedbackProvider panelId="admin" store={toastStore}>{page}</ReactFeedbackProvider>))
+    const effects = new ClientEffectSession({ panelId: 'admin', toastStore })
     const input = (selector: string): HTMLInputElement => container.querySelector(selector) as unknown as HTMLInputElement
     const select = (selector: string): HTMLSelectElement => container.querySelector(selector) as unknown as HTMLSelectElement
     const click = async (label: string): Promise<void> => act(async () => {
@@ -868,7 +869,7 @@ describe('Next panel adapter', () => {
     const createForm = createResource.form
     if (!createForm || typeof createForm !== 'object' || Array.isArray(createForm) || !Array.isArray(createForm.fields)) throw new Error('Create page is missing its form definition.')
     createForm.fields = createForm.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, label: null } : field)
-    await renderResource(<NextPanelResourcePage data={{}} panelId="admin" panelPath="/admin" properties={createProperties} unsavedChangesAlerts />)
+    await renderResource(<NextPanelResourcePage data={{}} effects={effects} panelId="admin" panelPath="/admin" properties={createProperties} unsavedChangesAlerts />)
     const renderedLabels = [...container.querySelectorAll('label')].map(label => label.textContent ?? '')
     expect(renderedLabels.some(label => label.startsWith('Title'))).toBe(true)
     expect(renderedLabels.some(label => label.startsWith('Slug'))).toBe(true)
@@ -886,7 +887,8 @@ describe('Next panel adapter', () => {
     expect([...select('[data-field-path="city"] select').options].map(option => option.value)).toContain('Giza')
     await change(select('[data-field-path="city"] select'), 'Giza')
     await click('Create')
-    expect(container.querySelector('[role="status"]')?.textContent).toBe('Post saved.')
+    await vi.waitFor(() => expect(toastStore.state.items.at(-1)).toMatchObject({ title: 'Post saved.', status: 'success' }))
+    expect(container.querySelector('.hp-resource-form [role="status"]')).toBeNull()
     const savedBeforeUnload = new Event('beforeunload', { cancelable: true })
     globalThis.dispatchEvent(savedBeforeUnload)
     expect(savedBeforeUnload.defaultPrevented).toBe(false)
@@ -902,6 +904,7 @@ describe('Next panel adapter', () => {
     await vi.waitFor(() => expect(toastStore.state.items.at(-1)?.body).toBe('The operation could not be completed.'))
     expect(mutations.map(mutation => mutation.intent)).toEqual(['delete', 'create', 'edit'])
     await act(async () => root.unmount())
+    effects.dispose()
   })
 
   it('redirects successful resource creates using the configured Filament destination', async () => {

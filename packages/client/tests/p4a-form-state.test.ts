@@ -169,7 +169,7 @@ describe('P4-A form state engine', () => {
       dependencies: [{
         id: 'title-to-slug',
         paths: ['title'],
-        recompute: context => context.touchedPaths.has('slug')
+        recompute: context => context.editedPaths.has('slug')
           ? []
           : [{ kind: 'set', path: 'slug', value: String(context.get('title')).toLowerCase().replaceAll(' ', '-') }],
       }],
@@ -182,6 +182,29 @@ describe('P4-A form state engine', () => {
     store.set('title', 'Second Title', { touch: true })
 
     expect(store.get('slug')).toBe('editorial-slug')
+  })
+
+  it('keeps hydrated and blurred slugs automatic until a direct edit, including after reset', () => {
+    const store = new FormStore({ slug: 'original-title', title: 'Original title' }, {
+      dependencies: [{
+        id: 'title-to-slug',
+        paths: ['title'],
+        recompute: context => context.editedPaths.has('slug')
+          ? []
+          : [{ kind: 'set', path: 'slug', value: context.get('title').toLowerCase().replaceAll(' ', '-') }],
+      }],
+    })
+
+    store.touch('slug')
+    store.set('title', 'Updated title', { touch: true })
+    expect(store.get('slug')).toBe('updated-title')
+    store.set('slug', 'custom', { touch: true })
+    store.set('slug', 'original-title', { touch: true })
+    store.set('title', 'Another title', { touch: true })
+    expect(store.get('slug')).toBe('original-title')
+    store.reset()
+    store.set('title', 'Reset title', { touch: true })
+    expect(store.get('slug')).toBe('reset-title')
   })
 
   it('applies server validation errors atomically and exposes first-error focus metadata', async () => {

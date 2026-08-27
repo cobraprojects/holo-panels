@@ -139,7 +139,7 @@
           <div class="hp:space-y-4 hp:p-4">{@render actionContent()}</div>
         </Sheet.Content>
       </Sheet.Root>
-    {:else if frame.manifest.modal || frame.phase !== 'submitting'}
+    {:else if frame.manifest.modal || frame.phase === 'ready' || frame.phase === 'collecting'}
       <Dialog.Root open onOpenChange={(open) => { if (!open) store.close() }}>
         <Dialog.Content {...dismiss} class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="modal">
           <Dialog.Header><Dialog.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</Dialog.Title>{#if frame.manifest.modal?.description}<Dialog.Description>{frame.manifest.modal.description}</Dialog.Description>{/if}</Dialog.Header>

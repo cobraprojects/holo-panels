@@ -64,6 +64,7 @@ export class UploadStore {
     this.#maximumConcurrency = maximumConcurrency
     this.#policy = options.policy
     this.#state = Object.freeze({
+      error: null,
       items: Object.freeze((options.existing ?? []).map(existingItem)),
       pending: 0,
       version: 0,
@@ -80,11 +81,16 @@ export class UploadStore {
   }
 
   add(files: readonly ClientUploadFile[]): readonly string[] {
-    if (this.#state.items.length + files.length > this.#policy.maximumFiles) {
-      throw new Error('File count exceeds the configured limit')
+    try {
+      if (this.#state.items.length + files.length > this.#policy.maximumFiles) {
+        throw new Error('File count exceeds the configured limit')
+      }
+      files.forEach(file => validateClientFile(file, this.#policy))
+    } catch (cause) {
+      this.publish(this.#state.items, errorMessage(cause))
+      return []
     }
     const queued = files.map(file => {
-      validateClientFile(file, this.#policy)
       const localId = `pending-${++this.#sequence}`
       return { controller: new AbortController(), file, localId }
     })
@@ -99,7 +105,7 @@ export class UploadStore {
     }))
     this.#queue.push(...queued)
     for (const item of queued) this.#controllers.set(item.localId, item.controller)
-    this.publish([...this.#state.items, ...items])
+    this.publish([...this.#state.items, ...items], null)
     this.drain()
     return Object.freeze(queued.map(item => item.localId))
   }
@@ -111,14 +117,16 @@ export class UploadStore {
     if (queuedIndex >= 0) this.#queue.splice(queuedIndex, 1)
     const item = this.#state.items.find(candidate => candidate.id === id)
     if (!item) return
-    if (item.token && (item.status === 'stored' || item.status === 'uploading')) {
-      const controller = new AbortController()
-      await this.#adapter.delete(this.#context, item.id, item.token, controller.signal)
-    } else if (item.status === 'existing') {
-      const controller = new AbortController()
-      await this.#adapter.deleteExisting(this.#context, item.id, controller.signal)
+    try {
+      if (item.token) {
+        await this.#adapter.delete(this.#context, item.id, item.token, new AbortController().signal)
+      } else if (item.status === 'existing') {
+        await this.#adapter.deleteExisting(this.#context, item.id, new AbortController().signal)
+      }
+      this.publish(this.#state.items.filter(candidate => candidate.id !== id), null)
+    } catch (cause) {
+      this.replace(id, current => ({ ...current, error: errorMessage(cause), status: current.status === 'existing' ? 'existing' : 'failed' }))
     }
-    this.publish(this.#state.items.filter(candidate => candidate.id !== id))
   }
 
   reorder(from: number, to: number): void {
@@ -138,7 +146,17 @@ export class UploadStore {
     for (const controller of this.#controllers.values()) controller.abort()
     this.#controllers.clear()
     this.#queue.splice(0)
-    this.publish(existing.map(existingItem))
+    this.publish(existing.map(existingItem), null)
+  }
+
+  commit(paths: ReadonlyMap<string, string>): void {
+    if (paths.size === 0) return
+    this.publish(this.#state.items.map(item => {
+      const path = paths.get(item.id)
+      return path && item.status === 'stored'
+        ? existingItem({ id: path, mimeType: item.mimeType, name: path.split('/').at(-1) ?? path, size: item.size })
+        : item
+    }))
   }
 
   private drain(): void {
@@ -153,8 +171,9 @@ export class UploadStore {
     }
   }
 
-  private publish(items: readonly ClientUploadItem[]): void {
+  private publish(items: readonly ClientUploadItem[], error: string | null = this.#state.error): void {
     this.#state = Object.freeze({
+      error,
       items: Object.freeze([...items]),
       pending: items.filter(item => item.status === 'pending' || item.status === 'uploading').length,
       version: this.#state.version + 1,
@@ -170,6 +189,10 @@ export class UploadStore {
     let activeId = queued.localId
     try {
       const descriptor = await this.#adapter.create(this.#context, queued.file, queued.controller.signal)
+      if (queued.controller.signal.aborted) {
+        await this.#adapter.delete(this.#context, descriptor.id, descriptor.token, new AbortController().signal)
+        return
+      }
       this.replace(queued.localId, item => ({
         ...item,
         id: descriptor.id,
@@ -181,13 +204,17 @@ export class UploadStore {
       this.#controllers.set(descriptor.id, queued.controller)
       activeId = descriptor.id
       const contents = new Uint8Array(await queued.file.arrayBuffer())
+      if (queued.controller.signal.aborted) return
       const stored = await this.#adapter.write(
         this.#context,
         descriptor,
         contents,
         queued.controller.signal,
-        progress => this.replace(descriptor.id, item => ({ ...item, progress: Math.max(0, Math.min(1, progress)) })),
+        progress => {
+          if (!queued.controller.signal.aborted) this.replace(descriptor.id, item => ({ ...item, progress: Math.max(0, Math.min(1, progress)) }))
+        },
       )
+      if (queued.controller.signal.aborted) return
       this.replace(descriptor.id, item => ({
         ...item,
         ...(stored.previewUrl ? { previewUrl: stored.previewUrl } : {}),
@@ -199,6 +226,8 @@ export class UploadStore {
       if (this.#state.items.some(item => item.id === activeId)) {
         this.replace(activeId, item => ({ ...item, error: errorMessage(error), status: 'failed' }))
       }
+    } finally {
+      this.#controllers.delete(activeId)
     }
   }
 }

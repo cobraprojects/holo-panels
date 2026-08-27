@@ -2,6 +2,7 @@ import { ClientNotificationInboxStore, ClientToastStore } from '@holo-js/panels-
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReactNotificationInbox, ReactToastViewport, registerReactNotificationRenderer, type ReactCustomNotificationProps } from '../src'
 import { createComponentRegistry } from '../src/registry'
@@ -26,6 +27,19 @@ afterEach(() => {
 })
 
 describe('P13 React notification renderers', () => {
+  it('removes owned toast presentations when navigation unmounts their viewport', async () => {
+    const store = new ClientToastStore()
+    store.push({ ...presentation, id: 'departing-page' })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push({ container, root })
+    await act(async () => root.render(<ReactToastViewport store={store} />))
+    expect(toast.getToasts().some(item => item.id === 'departing-page')).toBe(true)
+    await act(async () => root.render(null))
+    expect(toast.getToasts().some(item => item.id === 'departing-page')).toBe(false)
+    expect(store.state.items.some(item => item.id === 'departing-page')).toBe(true)
+  })
+
   it('distinguishes loading and failed inbox requests from an empty inbox', async () => {
     let fail: (error: Error) => void = () => undefined
     let recovered = false

@@ -787,6 +787,7 @@ async function finalizedUploadValues(
   definition: RuntimeDefinition,
   values: JsonObject,
   input: GeneratedResourceOperationInput,
+  record: RuntimeRecord | null = null,
 ): Promise<JsonObject> {
   const result: JsonObject = { ...values }
   for (const field of arrayMember(definition.form, 'fields')) {
@@ -794,17 +795,27 @@ async function finalizedUploadValues(
     const fieldId = Reflect.get(field, 'path')
     if (typeof fieldId !== 'string') continue
     const value = valueAtPath(result, fieldId)
-    const descriptors = Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : []
+    const descriptors = Array.isArray(value) ? value : value ? [value] : []
     if (descriptors.length === 0) continue
+    const existing = record ? valueAtPath(record.toJSON(), fieldId) : undefined
+    const retained = new Set(Array.isArray(existing) ? existing.filter((path): path is string => typeof path === 'string') : typeof existing === 'string' ? [existing] : [])
     const uploadInput: GeneratedUploadOperationInput = {
       context: input.context,
       panelId: input.panelId,
       payload: input.payload,
     }
     const { service } = uploadService(definition, fieldId, uploadInput)
+    const policy = objectMember(objectMember(field, 'properties'), 'uploadPolicy')
+    const maximumFiles = policy ? Reflect.get(policy, 'maximumFiles') : undefined
+    if (typeof maximumFiles === 'number' && descriptors.length > maximumFiles) throw new Error('[Holo Panels] Upload file count exceeds the configured limit.')
     const context = uploadActorContext(definition, fieldId, uploadInput)
     const paths: string[] = []
     for (const descriptor of descriptors) {
+      if (typeof descriptor === 'string') {
+        if (!retained.has(descriptor)) throw new Error('[Holo Panels] Upload paths must belong to the current record.')
+        paths.push(descriptor)
+        continue
+      }
       if (!descriptor || typeof descriptor !== 'object' || Array.isArray(descriptor)) throw new Error('[Holo Panels] Upload form values contain an invalid descriptor.')
       const id = Reflect.get(descriptor, 'id')
       const sessionId = Reflect.get(descriptor, 'sessionId')
@@ -1499,12 +1510,12 @@ function executableResourceAction(
   if (Reflect.get(action, 'formIntent') === 'cancel') return action
   if (String(Reflect.get(action, 'source')).endsWith(':form')) return {
     ...action,
-    handle: async (submitted: JsonObject) => {
+    handle: async (submitted: JsonObject, context: Parameters<typeof action.handle>[1]) => {
       const identifier = recordIdentifier(input.payload)
       const values = normalizeValues(definition, submitted)
       await validateRequiredValues(definition, values, identifier === null)
       await validateOptionValues(definition, values, input)
-      const finalized = await finalizedUploadValues(definition, values, input)
+      const finalized = await finalizedUploadValues(definition, values, input, context.record)
       const result = identifier === null ? await executor.create(finalized, input.context) : await executor.update(identifier, finalized, input.context)
       return jsonObject({ record: serializeResourceRecord(result.record), resourceId: definition.id })
     },
@@ -1526,7 +1537,7 @@ function executableResourceAction(
       const identifier = valueAtPath(context.record.toJSON(), definition.routeKey)
       if (typeof identifier !== 'number' && typeof identifier !== 'string') throw new Error('[Holo Panels] Built-in resource actions require a stable record identifier.')
       if (action.kind === 'delete') await executor.delete(identifier, input.context)
-      else if (action.kind === 'edit') await executor.update(identifier, await finalizedUploadValues(definition, values, input), input.context)
+      else if (action.kind === 'edit') await executor.update(identifier, await finalizedUploadValues(definition, values, input, context.record), input.context)
       else if (action.kind === 'force-delete') await executor.forceDelete(identifier, input.context)
       else if (action.kind === 'restore') await executor.restore(identifier, input.context)
       else if (action.kind === 'replicate') {

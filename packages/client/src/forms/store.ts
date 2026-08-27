@@ -39,6 +39,7 @@ interface WorkingState<TValues> {
   values: TValues
   initialValues: TValues
   touchedPaths: Set<string>
+  editedPaths: Set<string>
   errors: Record<string, readonly string[]>
   visibility: Record<string, boolean>
   disabled: Record<string, boolean>
@@ -134,6 +135,7 @@ function remapArrayRecord<TValue>(
 }
 
 export class FormStore<TValues extends object> {
+  #editedPaths = new Set<string>()
   readonly #form: FormClientState<TValues>
   readonly #fields: readonly FormValidationField[]
   #correctionSequence = 0
@@ -231,6 +233,8 @@ export class FormStore<TValues extends object> {
     working.values = working.initialValues
     working.changedPaths = new Set(changedPaths)
     working.touchedPaths.clear()
+    working.changed ||= working.editedPaths.size > 0
+    working.editedPaths.clear()
     working.errors = {}
     working.focus = undefined
     working.changed = working.changed || changedPaths.length > 0
@@ -252,6 +256,9 @@ export class FormStore<TValues extends object> {
       working.changed = true
     }
     const touched = new Set([...working.touchedPaths].filter(candidate => !pathsOverlap(candidate, path)))
+    const edited = new Set([...working.editedPaths].filter(candidate => !pathsOverlap(candidate, path)))
+    working.changed ||= !sameStringSet(edited, working.editedPaths)
+    working.editedPaths = edited
     if (!sameStringSet(touched, working.touchedPaths)) {
       working.touchedPaths = touched
       working.changed = true
@@ -299,7 +306,17 @@ export class FormStore<TValues extends object> {
   ): Promise<FormRequestResult> {
     this.cancelRequests('validate')
     this.#correctionSequence++
+    let blocked = false
     const result = await this.runRequest('submit', async context => {
+      if (options.validate !== false) {
+        const pendingErrors = Object.fromEntries(Object.entries(this.#state.pending)
+          .filter(([, pending]) => pending)
+          .map(([path]) => [path, this.#state.errors[path]?.length ? this.#state.errors[path] : ['Wait for this field to finish before saving.']]))
+        if (Object.keys(pendingErrors).length) {
+          blocked = true
+          return { errors: { ...this.#state.errors, ...pendingErrors }, focusFirstError: true }
+        }
+      }
       const errors = options.validate === false ? {} : await validateFormFields(this.validationFields(), context.values)
       if (Object.keys(errors).length) return { errors, focusFirstError: true }
       if (context.signal.aborted) return {}
@@ -311,7 +328,7 @@ export class FormStore<TValues extends object> {
         throw cause
       }
     })
-    return result.status === 'applied' && Object.keys(this.#state.errors).length > 0
+    return result.status === 'applied' && (blocked || Object.keys(this.#state.errors).length > 0)
       ? { ...result, status: 'invalid' }
       : result
   }
@@ -326,7 +343,7 @@ export class FormStore<TValues extends object> {
   }
 
   private revalidateInvalidFields(): void {
-    const fields = this.validationFields().filter(field => Object.hasOwn(this.#state.errors, field.path))
+    const fields = this.validationFields().filter(field => !this.#state.pending[field.path] && Object.hasOwn(this.#state.errors, field.path))
     if (!fields.length) return
     const sequence = ++this.#correctionSequence
     const values = this.#state.values
@@ -367,6 +384,7 @@ export class FormStore<TValues extends object> {
       values: this.#form.values,
       initialValues: this.#form.initialValues,
       touchedPaths: new Set(this.#form.touched),
+      editedPaths: new Set(this.#editedPaths),
       errors: { ...this.#form.errors.flatten() },
       visibility: { ...this.#state.visibility },
       disabled: { ...this.#state.disabled },
@@ -388,7 +406,11 @@ export class FormStore<TValues extends object> {
           working.changedPaths.add(operation.path)
           working.changed = true
         }
-        if (operation.touch) this.applyTouch(working, operation.path, true)
+        if (operation.touch) {
+          this.applyTouch(working, operation.path, true)
+          working.changed ||= !working.editedPaths.has(operation.path)
+          working.editedPaths.add(operation.path)
+        }
       } else if (operation.kind === 'touch') {
         this.applyTouch(working, operation.path, operation.touched ?? true)
       } else if (operation.kind === 'errors') {
@@ -456,6 +478,10 @@ export class FormStore<TValues extends object> {
       return remapped ? [remapped] : []
     }))
     working.errors = remapArrayRecord(working.errors, operation.path, operation)
+    working.editedPaths = new Set([...working.editedPaths].flatMap(candidate => {
+      const remapped = remapArrayPath(candidate, operation.path, operation)
+      return remapped ? [remapped] : []
+    }))
     working.visibility = remapArrayRecord(working.visibility, operation.path, operation)
     working.disabled = remapArrayRecord(working.disabled, operation.path, operation)
     working.readOnly = remapArrayRecord(working.readOnly, operation.path, operation)
@@ -487,6 +513,7 @@ export class FormStore<TValues extends object> {
         found = true
         const operations = dependency.recompute({
           changedPaths: working.changedPaths,
+          editedPaths: working.editedPaths,
           get: path => getPathValue(working.values, path) as FormValueAtPath<TValues, typeof path>,
           touchedPaths: working.touchedPaths,
         })
@@ -497,6 +524,7 @@ export class FormStore<TValues extends object> {
 
   private commit(working: WorkingState<TValues>): FormState<TValues> {
     if (!working.changed) return this.#state
+    this.#editedPaths = working.editedPaths
     const values = freezeValue(working.values)
     this.#form.replace(values, working.initialValues, working.errors, working.touchedPaths)
     const dirtyPaths = Object.freeze([...this.#form.dirtyPaths].sort())
@@ -538,7 +566,15 @@ export class FormStore<TValues extends object> {
     }
     this.recomputeDependencies(working)
     if (patch.commitValues) {
-      working.initialValues = submittedValues && this.#state.values !== submittedValues ? submittedValues : working.values
+      if (submittedValues && this.#state.values !== submittedValues || patch.committedOperations) {
+        const committed = this.createWorkingState()
+        committed.values = submittedValues ?? working.values
+        this.applyOperations(committed, patch.committedOperations ?? patch.operations ?? [])
+        this.recomputeDependencies(committed)
+        working.initialValues = freezeValue(committed.values)
+      } else {
+        working.initialValues = working.values
+      }
       working.changed = true
     }
     if (patch.focusFirstError) {
@@ -549,6 +585,7 @@ export class FormStore<TValues extends object> {
     const validating = requestKind === 'validate' ? false : previous.validating
     const submitting = requestKind === 'submit' ? false : previous.submitting
     if (!working.changed && validating === previous.validating && submitting === previous.submitting) return
+    this.#editedPaths = working.editedPaths
     const values = freezeValue(working.values)
     this.#form.replace(values, working.initialValues, working.errors, working.touchedPaths)
     this.publish({

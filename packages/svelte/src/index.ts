@@ -50,6 +50,8 @@ export {
   isActionManifest,
   CollectionStore,
   createBrowserUploadAdapter,
+  bindUploadStore,
+  uploadFormPatch,
   createUploadStore,
   FormStore,
   formValidationErrors,

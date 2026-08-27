@@ -189,6 +189,20 @@ describe('P8-B Svelte action renderer', () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Restore')
   })
 
+  it('does not open a transient dialog when a non-modal action finishes', async () => {
+    const store = createStore()
+    const action = { ...manifest, confirmation: null, modal: null }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(P8BActionFixture, { props: { action: { action, store } }, target: container })
+    mounted.push({ component, container })
+    store.mount(action)
+    await store.submit()
+    flushClient()
+    expect(store.activeFrame?.phase).toBe('succeeded')
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
   it('hydrates server-rendered action markup without mismatch diagnostics', () => {
     const store = createStore()
     const action = { action: manifest, store }

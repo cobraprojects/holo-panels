@@ -8,6 +8,8 @@ import {
   createWidgetActionStore,
   CollectionStore,
   createBrowserUploadAdapter,
+  bindUploadStore,
+  uploadFormPatch,
   createUploadStore,
   ClientEffectSession,
   ClientNotificationInboxStore,
@@ -677,7 +679,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       ? [{
           id: `${schema.resourceId}:${field.path}`,
           paths: [field.reactive.source],
-          recompute: (context: { readonly changedPaths: ReadonlySet<string>, readonly touchedPaths: ReadonlySet<string>, get(path: string): unknown }) => context.changedPaths.has(field.reactive?.source ?? '') && !context.touchedPaths.has(field.path)
+          recompute: (context: { readonly changedPaths: ReadonlySet<string>, readonly editedPaths: ReadonlySet<string>, get(path: string): unknown }) => context.changedPaths.has(field.reactive?.source ?? '') && !context.editedPaths.has(field.path)
             ? [{ kind: 'set' as const, path: field.path, value: slug(context.get(field.reactive?.source ?? '')) }]
             : [],
         }]
@@ -737,10 +739,8 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       context: { actorId: 'current', fieldId: field.path, panelId, resourceId: schema.resourceId },
       policy: uploadPolicy,
     })
-    upload.subscribe(snapshot => {
-      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.sessionId && item.token ? [{ id: item.id, sessionId: item.sessionId, token: item.token }] : [])
-      store.batch([{ kind: 'set', path: field.path, touch: true, value: uploadPolicy.maximumFiles === 1 ? stored[0] ?? '' : stored }])
-    })
+    const unsubscribe = bindUploadStore(store, field.path, upload, uploadPolicy.maximumFiles !== 1)
+    onUnmounted(unsubscribe)
     return [[field.path, upload] as const]
   }))
   const formState = shallowReactive({ values: store.state.values, errors: store.state.errors })
@@ -788,7 +788,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
           }
         }
       }
-      return { commitValues: intent !== 'cancel' && intent !== 'create-another' }
+      return { commitValues: intent !== 'cancel' && intent !== 'create-another', ...uploadFormPatch(store, request.values, isObject(result) && isObject(result.record) ? result.record : {}, schema.fields) }
         }, { validate: !schema.cancelFormActions.includes(actionRequest.actionId) })
         if (outcome.status === 'invalid') throw formValidationFailure(store.state.errors)
         if (outcome.status !== 'applied') throw new Error('The form submission was cancelled.')

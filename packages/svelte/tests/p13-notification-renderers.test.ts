@@ -7,6 +7,7 @@ import type { Component, flushSync, mount, unmount } from 'svelte'
 import type { render } from 'svelte/server'
 import { createServer, type ViteDevServer } from 'vite'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { toast } from 'svelte-sonner'
 import { registerSvelteNotificationRenderer, SvelteNotificationInbox, SvelteToastViewport, type SvelteCustomNotificationProps, type SvelteNotificationInboxProps, type SvelteToastViewportProps } from '../src'
 import { SvelteComponentRegistry } from '../src/registry'
 import ClientFixture from './P13NotificationFixture.svelte'
@@ -59,6 +60,22 @@ afterEach(async () => {
 })
 
 describe('P13 Svelte notification renderers', () => {
+  it('removes owned toast presentations when navigation unmounts their viewport', async () => {
+    const store = new ClientToastStore()
+    store.push({ ...presentation, id: 'departing-page' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(ClientFixture, { props: { toasts: { store } }, target: container })
+    mounted.push({ component, container })
+    flushClient()
+    expect(toast.getActiveToasts().some(item => item.id === 'departing-page')).toBe(true)
+    await unmountClient(component)
+    mounted.pop()
+    container.remove()
+    expect(toast.getActiveToasts().some(item => item.id === 'departing-page')).toBe(false)
+    expect(store.state.items.some(item => item.id === 'departing-page')).toBe(true)
+  })
+
   it('renders custom notification and icon colors through Sonner', async () => {
     const store = new ClientToastStore()
     store.push({ ...presentation, color: '#16a34a', iconColor: '#b42318' })

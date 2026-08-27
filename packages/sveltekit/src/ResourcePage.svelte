@@ -11,6 +11,8 @@
     ClientEffectSession,
     CollectionStore,
     createBrowserUploadAdapter,
+    bindUploadStore,
+    uploadFormPatch,
     createUploadStore,
     EntryRenderer,
     FieldRenderer,
@@ -94,7 +96,7 @@
       id: dependency.id,
       paths: [dependency.source],
       recompute: context => {
-        if (!context.changedPaths.has(dependency.source) || context.touchedPaths.has(dependency.target)) return []
+        if (!context.changedPaths.has(dependency.source) || context.editedPaths.has(dependency.target)) return []
         return [{
           kind: 'set' as const,
           path: dependency.target,
@@ -239,11 +241,10 @@
   })
 
   $effect(() => {
-    const unsubscribers = [...uploadStores.entries()].map(([path, upload]) => upload.subscribe(snapshot => {
-      const stored = snapshot.items.flatMap(item => item.status === 'stored' && item.sessionId && item.token ? [{ id: item.id, sessionId: item.sessionId, token: item.token }] : [])
+    const unsubscribers = [...uploadStores.entries()].map(([path, upload]) => {
       const policy = resource?.fields.find(field => field.path === path)?.properties?.uploadPolicy
-      form.set(path, uploadPolicy(policy)?.maximumFiles === 1 ? stored[0] ?? '' : stored)
-    }))
+      return bindUploadStore(form, path, upload, uploadPolicy(policy)?.maximumFiles !== 1)
+    })
     return () => {
       unsubscribers.forEach(unsubscribe => unsubscribe())
       for (const upload of uploadStores.values()) upload.reset()
@@ -540,7 +541,7 @@
             if (nextRoute) globalThis.history.replaceState(null, '', nextRoute)
           }
         }
-        return { commitValues: intent !== 'cancel' && intent !== 'create-another' }
+        return { commitValues: intent !== 'cancel' && intent !== 'create-another', ...uploadFormPatch(form, context.values, savedRecord ?? {}, resource.fields) }
       }, { validate: !resource.cancelFormActions.includes(actionId) })
       if (outcome.status === 'invalid') throw formValidationFailure(form.state.errors)
       if (intent === 'cancel' || intent === 'create-another') form.reset()

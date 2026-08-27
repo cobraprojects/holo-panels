@@ -6,7 +6,7 @@
   import { toSvelteState } from '../stores'
   import type { SvelteFieldRendererProps } from './contracts'
   import FieldFrame from './FieldFrame.svelte'
-  import { fieldInputId, fieldPresentation, writeFieldValue } from './helpers'
+  import { fieldInputId, fieldPresentation } from './helpers'
 
   let { definition, form, uploadStore }: SvelteFieldRendererProps = $props()
   const formState = $derived.by(() => toSvelteState(form))
@@ -14,36 +14,12 @@
   const presentation = $derived(fieldPresentation(definition, $formState))
   const inputId = $derived(fieldInputId(definition.path))
 
-  function descriptors(): readonly Record<string, unknown>[] {
-    return ($uploadState?.items ?? []).map(item => ({
-      id: item.id,
-      mimeType: item.mimeType,
-      name: item.name,
-      size: item.size,
-      status: item.status,
-      ...(item.token ? { token: item.token } : {}),
-    }))
-  }
-
-  function sync(): void {
-    writeFieldValue(form, definition.path, descriptors())
-  }
-
   function choose(event: Event): void {
-    const files = Array.from((event.currentTarget as HTMLInputElement).files ?? []) as ClientUploadFile[]
+    const input = event.currentTarget as HTMLInputElement
+    const files = Array.from(input.files ?? []) as ClientUploadFile[]
     if (files.length === 0 || !uploadStore) return
     uploadStore.add(files)
-    sync()
-  }
-
-  async function remove(id: string): Promise<void> {
-    await uploadStore?.remove(id)
-    sync()
-  }
-
-  function move(from: number, to: number): void {
-    uploadStore?.reorder(from, to)
-    sync()
+    input.value = ''
   }
 </script>
 
@@ -59,9 +35,9 @@
             <Progress max={1} value={item.progress} aria-label="Upload progress for {item.name}" />
             <span>{item.status}</span>
             {#if item.error}<span role="alert">{item.error}</span>{/if}
-            <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => move(index, index - 1)}>Move up</Button>
-            <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === ($uploadState?.items.length ?? 0) - 1} onclick={() => move(index, index + 1)}>Move down</Button>
-            <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => void remove(item.id)}>Remove</Button>
+            <Button type="button" aria-label="Move {item.name} up" disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => uploadStore?.reorder(index, index - 1)}>Move up</Button>
+            <Button type="button" aria-label="Move {item.name} down" disabled={presentation.disabled || presentation.readOnly || index === ($uploadState?.items.length ?? 0) - 1} onclick={() => uploadStore?.reorder(index, index + 1)}>Move down</Button>
+            <Button type="button" aria-label="{item.status === 'pending' || item.status === 'uploading' ? 'Cancel' : 'Remove'} {item.name}" disabled={presentation.disabled || presentation.readOnly} onclick={() => void uploadStore?.remove(item.id)}>{item.status === 'pending' || item.status === 'uploading' ? 'Cancel' : 'Remove'}</Button>
           </article>
         {/each}
       </div>

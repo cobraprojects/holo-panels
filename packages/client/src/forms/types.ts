@@ -63,6 +63,7 @@ export type FormOperation =
 
 export interface FormDependencyContext<TValues> {
   readonly changedPaths: ReadonlySet<string>
+  readonly editedPaths: ReadonlySet<string>
   readonly touchedPaths: ReadonlySet<string>
   get<TPath extends FormPath<TValues>>(path: TPath): FormValueAtPath<TValues, TPath>
 }
@@ -82,6 +83,7 @@ export interface FormRequestContext<TValues> {
 
 export interface FormServerPatch {
   readonly operations?: readonly FormOperation[]
+  readonly committedOperations?: readonly FormOperation[]
   readonly errors?: Readonly<Record<string, string | readonly string[]>>
   readonly focusFirstError?: boolean
   readonly commitValues?: boolean

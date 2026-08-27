@@ -8,6 +8,8 @@ import {
   relationActionPresentation,
   CollectionStore,
   createBrowserUploadAdapter,
+  bindUploadStore,
+  uploadFormPatch,
   createUploadStore,
   type ClientEffectSession,
   FormStore,
@@ -589,11 +591,11 @@ function dependencyDefinitions(form: JsonObject) {
     return [{
       id,
       paths,
-      recompute: (context: { readonly get: (path: string) => JsonValue, readonly touchedPaths: ReadonlySet<string> }) => patches.flatMap((patch) => {
+      recompute: (context: { readonly get: (path: string) => JsonValue, readonly editedPaths: ReadonlySet<string> }) => patches.flatMap((patch) => {
         const path = text(patch.path)
         const resolver = object(patch.resolver)
         const resolve = clientResolvers.get(text(resolver.name))
-        if (!path || !resolve || context.touchedPaths.has(path)) return []
+        if (!path || !resolve || context.editedPaths.has(path)) return []
         const values = Object.fromEntries(paths.map(source => [source, context.get(source)]))
         return [{ kind: 'set' as const, path, value: resolve({ input: object(resolver.input), values }) }]
       }),
@@ -651,10 +653,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
     policy: uploadPolicy,
   }) : undefined, [definition.path, ownerSignal, pageOperation, panelId, recordId, resourceId, uploadPolicy])
   useEffect(() => {
-    const unsubscribe = uploadStore?.subscribe((snapshot) => {
-      const stored = snapshot.items.filter(item => item.status === 'stored' && item.sessionId && item.token).map(item => ({ id: item.id, sessionId: item.sessionId!, token: item.token! }))
-      form.set(definition.path, (uploadPolicy?.maximumFiles === 1 ? stored[0] ?? '' : stored) as JsonValue)
-    })
+    const unsubscribe = uploadStore ? bindUploadStore(form, definition.path, uploadStore, uploadPolicy?.maximumFiles !== 1) : undefined
     return () => {
       unsubscribe?.()
       uploadStore?.reset()
@@ -833,7 +832,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
         navigate(target)
       }
       reset = result.data?.formIntent === 'create-another'
-      return { commitValues: !reset }
+      return { commitValues: !reset, ...uploadFormPatch(form, context.values, savedRecord, fields) }
         }, { validate: objects(formManifest.actions).find(action => action.id === request.actionId)?.formIntent !== 'cancel' })
         if (outcome.status === 'invalid') throw formValidationFailure(form.state.errors)
         if (!completed) throw new Error('The record could not be saved.')

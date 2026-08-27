@@ -1805,8 +1805,11 @@ Tasks:
 - [x] Support image previews, reorder, remove, existing media hydration, conversions, and private preview URLs.
 - [x] Clean abandoned temporary uploads through a documented policy/job.
 - [x] Add path traversal, spoofed MIME, oversized payload, unauthorized delete, and concurrent upload tests.
+- [x] #17 regression repair: restore immediate slug generation without overwriting manual edits, bind upload state to resource forms, reconcile finalized files with concurrent edits and resets, and cancel upload work and remove orphan toasts without disposing the active effect session.
 
 Evidence: strict core/client typechecks, ESLint fix, declaration builds, and 10 focused tests passed for CSRF-gated endpoint handshakes, public Holo Storage/Media integration, upload field binding, previews/reorder/remove/existing hydration/conversion URLs, cleanup jobs, traversal, MIME spoofing, payload limits, unauthorized/cross-tenant deletion, and concurrent count enforcement on 2026-07-27.
+
+#17 evidence on 2026-08-27: 1,261 workspace tests and six browser journeys passed across Next, Nuxt, and SvelteKit. The journeys cover create/edit slug behavior, upload validation, progress, cancellation, pointer and keyboard removal, replacement, repeat saves, and navigation during upload. All package and example typechecks, changed-file diagnostics, ESLint, architecture checks, builds, packed-package smoke tests, and packed installation checks passed. Standards and spec reviews have no unresolved findings. See [#17](https://github.com/cobraprojects/holo-panels/issues/17).
 
 ### P6-E: React field renderers
 

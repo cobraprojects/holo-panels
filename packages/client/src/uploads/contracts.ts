@@ -62,6 +62,7 @@ export interface UploadStoreOptions {
 }
 
 export interface UploadStoreState {
+  readonly error: string | null
   readonly items: readonly ClientUploadItem[]
   readonly pending: number
   readonly version: number

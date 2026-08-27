@@ -30,10 +30,42 @@ function descriptor(value: unknown, tokenRequired: boolean): TemporaryUploadDesc
   return item as unknown as TemporaryUploadDescriptor | StoredUploadDescriptor
 }
 
+async function sendUploadBody(endpoint: string, body: FormData, signal: AbortSignal, onProgress?: (progress: number) => void): Promise<unknown> {
+  signal.throwIfAborted()
+  if (!onProgress || typeof XMLHttpRequest === 'undefined') {
+    const response = await fetch(endpoint, { body, credentials: 'same-origin', method: 'POST', signal })
+    return await response.json() as unknown
+  }
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    const abort = (): void => request.abort()
+    const cleanup = (): void => signal.removeEventListener('abort', abort)
+    request.open('POST', endpoint)
+    request.responseType = 'json'
+    request.upload.onprogress = event => {
+      if (event.lengthComputable && event.total > 0) onProgress(Math.min(0.99, event.loaded / event.total))
+    }
+    request.onload = () => {
+      cleanup()
+      resolve(request.response as unknown)
+    }
+    request.onerror = () => {
+      cleanup()
+      reject(new Error('The upload could not reach the server.'))
+    }
+    request.onabort = () => {
+      cleanup()
+      reject(new DOMException('The upload was cancelled.', 'AbortError'))
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    request.send(body)
+  })
+}
+
 export function createBrowserUploadAdapter(options: BrowserUploadAdapterOptions): UploadClientAdapter {
   const csrf = options.csrfProvider ?? new HoloSecurityCsrfProvider()
   const sessionId = globalThis.crypto.randomUUID()
-  const send = async (payload: JsonObject, signal: AbortSignal, contents?: Uint8Array): Promise<unknown> => {
+  const send = async (payload: JsonObject, signal: AbortSignal, contents?: Uint8Array, onProgress?: (progress: number) => void): Promise<unknown> => {
     const id = globalThis.crypto.randomUUID()
     const security = csrf.getField()
     if (!security) throw new Error('The CSRF token is unavailable.')
@@ -49,8 +81,7 @@ export function createBrowserUploadAdapter(options: BrowserUploadAdapterOptions)
     body.set(TRANSPORT_REQUEST_FIELD, JSON.stringify(envelope))
     body.set(security.name, security.value)
     if (contents) body.set('contents', new Blob([new Uint8Array(contents).buffer]))
-    const response = await fetch(options.endpoint, { body, credentials: 'same-origin', method: 'POST', signal })
-    const decoded = decodeResponseEnvelope(await response.json() as unknown, id)
+    const decoded = decodeResponseEnvelope(await sendUploadBody(options.endpoint, body, signal, onProgress), id)
     if (!decoded.ok) throw new Error(decoded.error.message)
     return decoded.data
   }
@@ -61,15 +92,13 @@ export function createBrowserUploadAdapter(options: BrowserUploadAdapterOptions)
     async delete(_context: UploadActorContext, id: string, token: string, signal: AbortSignal): Promise<void> {
       await send({ action: 'delete', id, token }, signal)
     },
-    async deleteExisting(): Promise<void> {
-      throw new Error('Existing stored files must be removed by saving the resource form.')
-    },
+    async deleteExisting(): Promise<void> {},
     async resolve(_context: UploadActorContext, id: string, token: string, signal: AbortSignal): Promise<StoredUploadDescriptor> {
       return descriptor(await send({ action: 'resolve', id, token }, signal), false) as StoredUploadDescriptor
     },
     async write(_context: UploadActorContext, upload: TemporaryUploadDescriptor, contents: Uint8Array, signal: AbortSignal, onProgress: (progress: number) => void): Promise<StoredUploadDescriptor> {
       onProgress(0)
-      const stored = descriptor(await send({ action: 'write', id: upload.id, token: upload.token }, signal, contents), false) as StoredUploadDescriptor
+      const stored = descriptor(await send({ action: 'write', id: upload.id, token: upload.token }, signal, contents, onProgress), false) as StoredUploadDescriptor
       onProgress(1)
       return stored
     },

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { toast } from 'svelte-sonner'
   import { Toaster } from '../ui/sonner'
   import { toSvelteState } from '../stores'
@@ -9,6 +10,11 @@
   const toastState = $derived.by(() => toSvelteState(store))
 
   let rendered = new Map<string, string>()
+
+  onDestroy(() => {
+    for (const id of rendered.keys()) toast.dismiss(id)
+    rendered.clear()
+  })
 
   $effect(() => {
     const activeIds = new Set($toastState.items.map(item => item.id))

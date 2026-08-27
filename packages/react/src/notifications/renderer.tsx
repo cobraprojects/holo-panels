@@ -120,6 +120,14 @@ export function ReactToastViewport({ navigate, panelId, placement = 'top', regis
   const rendered = useRef(new Map<string, string>())
 
   useEffect(() => {
+    const owned = rendered.current
+    return () => {
+      for (const id of owned.keys()) sonnerToast.dismiss(id)
+      owned.clear()
+    }
+  }, [store])
+
+  useEffect(() => {
     const activeIds = new Set(state.items.map(item => item.id))
     for (const id of rendered.current.keys()) {
       if (activeIds.has(id)) continue

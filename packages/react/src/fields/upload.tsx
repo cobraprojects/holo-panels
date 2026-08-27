@@ -33,7 +33,7 @@ export function ReactUploadField<TValues extends object>(props: ReactFieldContro
         {item.error ? <span role="alert">{item.error}</span> : null}
         <Button aria-label={`Move ${item.name} up`} disabled={disabled || index === 0} onClick={() => store.reorder(index, index - 1)} type="button">↑</Button>
         <Button aria-label={`Move ${item.name} down`} disabled={disabled || index === state.items.length - 1} onClick={() => store.reorder(index, index + 1)} type="button">↓</Button>
-        <Button aria-label={`Remove ${item.name}`} disabled={disabled} onClick={() => void store.remove(item.id)} type="button">Remove</Button>
+        <Button aria-label={`${item.status === 'pending' || item.status === 'uploading' ? 'Cancel' : 'Remove'} ${item.name}`} disabled={disabled} onClick={() => void store.remove(item.id)} type="button">{item.status === 'pending' || item.status === 'uploading' ? 'Cancel' : 'Remove'}</Button>
       </li>)}
     </ul>
     {props.context.errors.length > 0 ? <ul role="alert">{props.context.errors.map(error => <li key={error}>{error}</li>)}</ul> : null}

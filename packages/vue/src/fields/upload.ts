@@ -56,7 +56,7 @@ export const VueUploadField = defineComponent({
           item.error ? h('span', { role: 'alert' }, item.error) : null,
           h(Button, { type: 'button', 'aria-label': `Move ${item.name} up`, disabled: disabled || index === 0, onClick: () => store.reorder(index, index - 1) }, '↑'),
           h(Button, { type: 'button', 'aria-label': `Move ${item.name} down`, disabled: disabled || index === state.value.items.length - 1, onClick: () => store.reorder(index, index + 1) }, '↓'),
-          h(Button, { type: 'button', 'aria-label': `Remove ${item.name}`, disabled, onClick: () => void store.remove(item.id) }, 'Remove'),
+          h(Button, { type: 'button', 'aria-label': `${item.status === 'pending' || item.status === 'uploading' ? 'Cancel' : 'Remove'} ${item.name}`, disabled, onClick: () => void store.remove(item.id) }, item.status === 'pending' || item.status === 'uploading' ? 'Cancel' : 'Remove'),
         ]))),
         field.context.errors.length > 0 ? h('ul', { id: errorId, role: 'alert' }, field.context.errors.map(error => h('li', { key: error }, error))) : null,
       ])

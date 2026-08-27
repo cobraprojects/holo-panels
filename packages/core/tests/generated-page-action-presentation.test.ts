@@ -8,6 +8,34 @@ import { resolvePageData } from '../src/pages'
 import { createGeneratedResourcePage, executeGeneratedResourceOperation, generatedResourcePageManifests } from '../src/resources/generated-pages'
 
 describe('generated page action presentation', () => {
+  it('allows only retained record upload paths and rejects client-selected storage paths', async () => {
+    registerDatabaseDriverFactory(sqliteDatabaseDriverFactory)
+    const manager = createConnectionManager({ defaultConnection: 'default', connections: { default: { adapter: createAdapter('sqlite', { database: ':memory:' }), dialect: createDialect('sqlite') } } })
+    configureDB(manager)
+    await manager.initializeAll()
+    try {
+      await createSchemaService(DB.connection()).createTable('upload_records', table => { table.string('id').primaryKey(); table.string('avatar'); table.string('tenantId') })
+      const model = defineModel(defineGeneratedTable('upload_records', { id: column.string().primaryKey(), avatar: column.string(), tenantId: column.string() }), { timestamps: false, guarded: [] })
+      await model.create({ id: 'owned', avatar: 'private/original.png', tenantId: 'one' })
+      definePolicy('upload-records', model, { class: { viewAny: () => true }, record: { view: () => true, update: () => true } })
+      const policy = { acceptedExtensions: ['png'], acceptedMimeTypes: ['image/png'], directory: 'private', disk: 'local', expiresInSeconds: 300, maximumFiles: 1, maximumSize: 1024, private: true }
+      const resource = {
+        capabilities: { delete: true },
+        actions: [{ authorize: () => true, handle: () => undefined, id: 'save', kind: 'edit', mount: 'record', source: 'edit:form', transactional: false }],
+        baseQuery: (query: ReturnType<typeof model.query>) => query.where('tenantId', '=', 'one'),
+        form: { fields: [{ path: 'avatar', properties: { uploadPolicy: policy }, type: 'panels:field:upload' }] },
+        id: 'users', kind: 'resource', lifecycle: {}, model, nested: null, routeKey: 'id', shared: true, singular: null, writableAttributes: ['avatar'],
+      }
+      const submit = (avatar: string) => executeGeneratedResourceOperation(resource, { context: { actor: { id: 'actor' }, signal: new AbortController().signal, tenant: null }, operation: 'form-submit', panelId: 'admin', payload: { actionId: 'save', recordId: 'owned', resourceId: 'users', values: { avatar } } })
+      const retained = await submit('private/original.png')
+      expect(retained.data, JSON.stringify(retained)).toMatchObject({ record: { avatar: 'private/original.png' } })
+      expect((await submit('../another-tenant/secret.png')).data).toMatchObject({ status: 'partial' })
+      expect((await submit('')).data).toMatchObject({ record: { avatar: '' } })
+    } finally {
+      await manager.disconnectAll()
+      resetDB()
+    }
+  })
   it('resolves captured selection membership through a real scoped Holo query', async () => {
     registerDatabaseDriverFactory(sqliteDatabaseDriverFactory)
     const manager = createConnectionManager({ defaultConnection: 'default', connections: { default: { adapter: createAdapter('sqlite', { database: ':memory:' }), dialect: createDialect('sqlite') } } })

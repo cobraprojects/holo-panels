@@ -1,9 +1,11 @@
 import { act, createElement } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
-import { ClientActionStore, type ClientActionManifest } from '@holo-js/panels-client'
+import { ClientActionStore, ClientToastStore, type ClientActionManifest } from '@holo-js/panels-client'
+import { panelNotification } from '@holo-js/panels-core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReactActionRenderer } from '../src/actions/renderer'
+import { ReactFeedbackProvider } from '../src/notifications/feedback'
 import { createComponentRegistry } from '../src/registry'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -19,13 +21,23 @@ const manifest: ClientActionManifest = {
   label: 'Publish',
   mount: 'record',
   modal: {
+    alignment: 'center',
+    autofocus: true,
+    cancelActionLabel: null,
+    closeByClickingAway: true,
+    closeByEscaping: true,
     content: null,
     description: null,
     footer: null,
     heading: null,
+    icon: null,
+    iconColor: null,
     nestedActions: [],
     schema: { components: [], id: 'publish-reason', kind: 'schema' },
     slideOver: false,
+    stickyFooter: false,
+    stickyHeader: false,
+    submitActionLabel: null,
     width: 'medium',
   },
   size: 'medium',
@@ -52,6 +64,44 @@ afterEach(() => {
 })
 
 describe('P8-B React action renderer', () => {
+  it('does not duplicate transport-owned action feedback across renderers sharing a store', async () => {
+    const notificationStore = new ClientToastStore()
+    const presentation = panelNotification('posts.publish.custom')
+      .title('Published with review')
+      .body('The configured notification is preserved.')
+      .status('success')
+      .persistent()
+      .presentation()
+    const store = new ClientActionStore<string>({
+      createIdempotencyKey: () => 'request-feedback-0001',
+      transport: {
+        execute: vi.fn(async () => {
+          notificationStore.push(presentation)
+          return { effects: [], items: [], result: 'published', status: 'succeeded' as const }
+        }),
+      },
+    })
+    const action = { ...manifest, confirmation: null, modal: null }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    act(() => root.render(createElement(ReactFeedbackProvider, {
+      panelId: 'admin',
+      store: notificationStore,
+      children: createElement('div', null,
+        createElement(ReactActionRenderer, { manifest: action, store }),
+        createElement(ReactActionRenderer, { manifest: action, store }),
+      ),
+    })))
+
+    act(() => store.mount(action))
+    await act(async () => { await store.submit([7]) })
+
+    expect(notificationStore.state.items).toHaveLength(1)
+    expect(notificationStore.state.items[0]).toMatchObject(presentation)
+  })
+
   it('renders grouped triggers and complete slide-over presentation with nested actions and slots', async () => {
     const store = createStore()
     const nested = { ...manifest, confirmation: null, id: 'posts.schedule', label: 'Schedule', modal: null }

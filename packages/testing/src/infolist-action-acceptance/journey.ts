@@ -1,4 +1,5 @@
 import { ClientActionStore, ClientToastStore, EntryStateStore, type ClientActionManifest, type JsonValue } from '@holo-js/panels-client'
+import { panelNotification } from '@holo-js/panels-core'
 import type {
   InfolistActionAcceptanceFixture,
   InfolistActionAcceptanceJourneyReport,
@@ -53,6 +54,7 @@ export async function runInfolistActionAcceptanceJourney(
 ): Promise<InfolistActionAcceptanceJourneyReport> {
   const requests: InfolistActionAcceptanceJourneyReport['requests'][number][] = []
   const entryActions: string[] = []
+  const notificationStore = new ClientToastStore()
   let resolvePublish: (() => void) | undefined
   const publishFinished = new Promise<void>(resolve => { resolvePublish = resolve })
   let sequence = 0
@@ -64,13 +66,23 @@ export async function runInfolistActionAcceptanceJourney(
       id: 'posts.publish',
       label: 'Publish post',
       modal: {
+        alignment: 'center',
+        autofocus: true,
+        cancelActionLabel: null,
+        closeByClickingAway: true,
+        closeByEscaping: true,
         content: null,
         description: null,
         footer: null,
         heading: null,
+        icon: null,
+        iconColor: null,
         nestedActions: [],
         schema: { components: [], id: 'publish-reason', kind: 'schema' },
         slideOver: false,
+        stickyFooter: false,
+        stickyHeader: false,
+        submitActionLabel: null,
         width: 'medium',
       },
     }),
@@ -80,8 +92,20 @@ export async function runInfolistActionAcceptanceJourney(
     transport: {
       async execute(request) {
         requests.push({ actionId: request.actionId, input: request.input, mount: request.mount, ...(request.recordIds ? { recordIds: request.recordIds } : {}) })
-        if (request.actionId === actions.denied.id) throw new Error('Action denied by policy')
+        if (request.actionId === actions.denied.id) {
+          notificationStore.push(panelNotification('posts.denied.failed')
+            .title('Action failed')
+            .body('The operation could not be completed.')
+            .status('danger')
+            .presentation())
+          throw new Error('The action could not be completed')
+        }
         await publishFinished
+        notificationStore.push(panelNotification('posts.publish.succeeded')
+          .title('Action completed')
+          .body('The operation completed successfully.')
+          .status('success')
+          .presentation())
         return { effects: [], items: [], result: 'published', status: 'succeeded' }
       },
     },
@@ -96,7 +120,7 @@ export async function runInfolistActionAcceptanceJourney(
       entryStore('topics', 'repeatable', 'Topics', ['travel', 'history']),
     ],
     entryAction: id => { entryActions.push(id) },
-    notificationStore: new ClientToastStore(),
+    notificationStore,
   }
   const render = await fixture.render(model)
   const driver = await fixture.mount(model)
@@ -110,6 +134,7 @@ export async function runInfolistActionAcceptanceJourney(
     resolvePublish?.()
     await driver.sync(async () => { await actionStore.submit([42]) })
     const successMarkup = driver.markup()
+    const successToast = model.notificationStore.state.items.at(-1)
     await driver.clickText('Close')
     await driver.sync(() => actionStore.mount(actions.publish))
     await driver.sync(() => actionStore.mount(actions.nested))
@@ -137,6 +162,7 @@ export async function runInfolistActionAcceptanceJourney(
       render,
       requests,
       submittingMarkup,
+      successNotification: successToast ? { body: successToast.body, title: successToast.title } : null,
       successMarkup,
     }
   } finally {

@@ -17,6 +17,7 @@ import {
   PanelsTransport,
   PanelShellStore,
   panelConfigurationVariables,
+  publishPanelActionFailure,
   PROTOCOL_VERSION,
   TableStateStore,
   VueActionRenderer,
@@ -518,9 +519,20 @@ async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'ac
     panelId,
     payload,
     signal: requestSignal(runtime.signal, signal),
+  }).catch((cause: unknown) => {
+    if (operation === 'action') publishPanelActionFailure(panelId)
+    throw cause
   })
-  await runtime.effects.apply(response)
-  if (!response.ok) throw new Error(response.error.message)
+  try {
+    await runtime.effects.apply(response)
+  } catch (cause: unknown) {
+    if (operation === 'action') publishPanelActionFailure(panelId, response.effects)
+    throw cause
+  }
+  if (!response.ok) {
+    if (operation === 'action') publishPanelActionFailure(panelId, response.effects)
+    throw new Error(response.error.message)
+  }
   return response.data
 }
 
@@ -641,8 +653,14 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
       async execute(request, signal) {
-        if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Resource record is unavailable')
-        if (!recordActions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
+        if (typeof routeValue !== 'string' && typeof routeValue !== 'number') {
+          publishPanelActionFailure(panelId)
+          throw new Error('Resource record is unavailable')
+        }
+        if (!recordActions.some(action => action.id === request.actionId)) {
+          publishPanelActionFailure(panelId)
+          throw new Error('Resource action is unavailable')
+        }
         await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId, source: 'edit' }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
@@ -874,8 +892,14 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
       async execute(request, signal) {
-        if (routeValue === null) throw new Error('Resource record is unavailable')
-        if (!actions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
+        if (routeValue === null) {
+          publishPanelActionFailure(panelId)
+          throw new Error('Resource record is unavailable')
+        }
+        if (!actions.some(action => action.id === request.actionId)) {
+          publishPanelActionFailure(panelId)
+          throw new Error('Resource action is unavailable')
+        }
         await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId, source: 'view' }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },

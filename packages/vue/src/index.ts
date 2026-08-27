@@ -64,6 +64,7 @@ export {
   createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
+  publishPanelActionFailure,
   publishPanelError,
   registerPanelNotificationStore,
   toJsonValue,

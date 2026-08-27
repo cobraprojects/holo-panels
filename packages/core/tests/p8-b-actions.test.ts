@@ -79,7 +79,11 @@ describe('P8-B action execution', () => {
       recordIds: [1],
     }, scope())
 
-    expect(result).toEqual({ effects: [], items: [{ recordId: 1, status: 'succeeded' }], status: 'succeeded' })
+    expect(result).toEqual({
+      effects: [{ kind: 'toast', presentation: expect.objectContaining({ id: 'posts.delete.succeeded', status: 'success' }) }],
+      items: [{ recordId: 1, status: 'succeeded' }],
+      status: 'succeeded',
+    })
   })
 
   it('compiles canonical built-in presentation defaults into action manifests', async () => {
@@ -152,7 +156,10 @@ describe('P8-B action execution', () => {
     }
     const request = { idempotencyKey: 'request-00000005', input: { title: 'Saved' }, mount: 'page' as const }
 
-    await expect(executor.execute(action, request, scope())).rejects.toThrow('temporary failure')
+    await expect(executor.execute(action, request, scope())).rejects.toMatchObject({
+      effects: [{ kind: 'toast', presentation: expect.objectContaining({ id: 'posts.edit.failed', status: 'danger' }) }],
+      message: 'The action could not be completed',
+    })
     await expect(executor.execute(action, request, scope())).resolves.toMatchObject({ result: 'saved', status: 'succeeded' })
     expect(handle).toHaveBeenCalledTimes(2)
   })

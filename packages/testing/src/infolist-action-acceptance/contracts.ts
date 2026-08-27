@@ -48,5 +48,6 @@ export interface InfolistActionAcceptanceJourneyReport {
     readonly recordIds?: readonly (number | string)[]
   }[]
   readonly submittingMarkup: string
+  readonly successNotification: { readonly body: string | null, readonly title: string } | null
   readonly successMarkup: string
 }

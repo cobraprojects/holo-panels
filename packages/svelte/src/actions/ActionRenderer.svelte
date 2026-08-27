@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Button } from '../ui/button'
   import Icon from '../components/Icon.svelte'
-  import { publishPanelError, type JsonObject } from '@holo-js/panels-client'
-  import { ActionsRenderHook, type ActionModalWidth } from '@holo-js/panels-core'
+  import { type JsonObject } from '@holo-js/panels-client'
+  import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference, type SchemaManifest } from '@holo-js/panels-core'
   import * as AlertDialog from '../ui/alert-dialog'
   import * as Dialog from '../ui/dialog'
   import * as DropdownMenu from '../ui/dropdown-menu'
@@ -17,15 +17,6 @@
   const actionState = $derived.by(() => toSvelteState(store))
   const defaultSchemaRegistry = new SvelteComponentRegistry()
   const schemaRegistry = $derived(registry ?? defaultSchemaRegistry)
-  let lastError = $state<string | null>(null)
-
-  $effect(() => {
-    const current = $actionState.frames.at(-1)?.error ?? null
-    if (!current || current === lastError) return
-    lastError = current
-    publishPanelError(panelId ?? 'default', 'Action failed')
-  })
-
   async function submit(): Promise<void> {
     try {
       await store.submit(recordIds)
@@ -51,6 +42,22 @@
     if (width === 'screen') return 'hp:h-[calc(100vh-2rem)] hp:w-[calc(100vw-2rem)] hp:max-w-none'
     return 'hp:w-full hp:sm:max-w-lg'
   }
+
+  function modalSlotReference(value: JsonObject | RenderSlotReference | null): RenderSlotReference | null {
+    if (!value || typeof value.component !== 'string') return null
+    const properties = value.properties
+    if (properties === undefined) return { component: value.component }
+    if (!properties || Array.isArray(properties) || typeof properties !== 'object') return null
+    return { component: value.component, properties }
+  }
+
+  function isModalSchema(value: JsonObject): value is JsonObject & SchemaManifest<JsonObject> {
+    return value.kind === 'schema' && typeof value.id === 'string' && Array.isArray(value.components)
+  }
+
+  function modalSchema(value: JsonObject | null): SchemaManifest<JsonObject> | null {
+    return value && isModalSchema(value) ? value : null
+  }
 </script>
 
 <div class="hp-action" data-action-mount={action.mount}>
@@ -75,19 +82,22 @@
   {#each $actionState.frames.slice(-1) as frame, index (`${frame.manifest.id}-${index}`)}
     {@const titleId = `hp-action-${frame.manifest.id.replace(/[^a-z0-9_-]/giu, '-')}-title-${index}`}
     {@const typeId = customTypeId(frame.manifest.id)}
+    {@const schema = modalSchema(frame.manifest.modal?.schema ?? null)}
+    {@const contentReference = modalSlotReference(frame.manifest.modal?.content ?? null)}
+    {@const footerReference = modalSlotReference(frame.manifest.modal?.footer ?? null)}
     {@const Custom = registry?.hasRenderer(typeId, panelId) ? registry.resolve<SvelteActionCustomProps>(typeId, panelId, 'action modal') : undefined}
-    {@const Content = frame.manifest.modal?.content && registry ? registry.resolve<SvelteActionSlotProps>(frame.manifest.modal.content.component, panelId, 'action modal content') : undefined}
-    {@const Footer = frame.manifest.modal?.footer && registry ? registry.resolve<SvelteActionSlotProps>(frame.manifest.modal.footer.component, panelId, 'action modal footer') : undefined}
+    {@const Content = contentReference && registry ? registry.resolve<SvelteActionSlotProps>(contentReference.component, panelId, 'action modal content') : undefined}
+    {@const Footer = footerReference && registry ? registry.resolve<SvelteActionSlotProps>(footerReference.component, panelId, 'action modal footer') : undefined}
     {#snippet actionContent()}
       <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_BEFORE} />
-      {#if Content}<Content {...frame.manifest.modal?.content?.properties} {frame} />{/if}
+      {#if Content}<Content {...contentReference?.properties ?? {}} {frame} />{/if}
       <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_AFTER} />
       {#if Custom}
         <Custom {frame} setInput={(input: JsonObject) => store.setInput(input)} {submit} />
       {:else}
         <form class="hp:space-y-4" onsubmit={(event) => { event.preventDefault(); void submit() }}>
-          {#if frame.manifest.modal?.schema}
-            <RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_BEFORE} /><SchemaRenderer panelId={panelId ?? 'default'} registry={schemaRegistry} schema={frame.manifest.modal.schema} /><RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} />
+          {#if schema}
+            <RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_BEFORE} /><SchemaRenderer panelId={panelId ?? 'default'} registry={schemaRegistry} {schema} /><RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} />
           {/if}
           <Dialog.Footer><Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</span></Button></Dialog.Footer>
         </form>
@@ -96,9 +106,8 @@
         {@const nested = findAction(id)}
         {#if nested && nested.visible !== false}<Button class="hp-action-trigger" data-action-id={nested.id} data-color={nested.color ?? undefined} variant={nested.color === 'danger' ? 'destructive' : 'outline'} disabled={nested.disabled} onclick={() => store.mount(nested)} type="button">{#if nested.icon}<Icon name={nested.icon} />{/if}<span>{nested.label}</span></Button>{/if}
       {/each}
-      {#if frame.phase === 'succeeded'}<div aria-live="polite" role="status">Action completed</div>{/if}
       <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_BEFORE} />
-      {#if Footer}<Footer {...frame.manifest.modal?.footer?.properties} {frame} />{/if}
+      {#if Footer}<Footer {...footerReference?.properties ?? {}} {frame} />{/if}
       <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_AFTER} />
     {/snippet}
     {#if frame.phase === 'confirming'}

@@ -1,6 +1,6 @@
-import { createElement, useEffect, useRef, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
-import type { ClientActionFrame } from '@holo-js/panels-client'
-import { ActionsRenderHook, type ActionModalWidth } from '@holo-js/panels-core'
+import { createElement, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
+import type { ClientActionFrame, JsonObject } from '@holo-js/panels-client'
+import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference, type SchemaManifest } from '@holo-js/panels-core'
 import { PanelsIcon } from '../internal-ui'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog'
 import { Button } from '../ui/button'
@@ -10,7 +10,6 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { createComponentRegistry } from '../registry'
 import { ReactSchemaRenderer } from '../schema'
 import { ReactPanelsRenderHook } from '../render-hooks'
-import { useReactFeedback } from '../notifications/feedback'
 import type { ReactActionCustomProps, ReactActionRendererProps, ReactActionSlotProps } from './types'
 
 const emptyRegistry = createComponentRegistry()
@@ -21,6 +20,22 @@ function modalWidthClass(width: ActionModalWidth): string {
   if (width === 'extra-large') return 'hp:w-full hp:sm:max-w-4xl'
   if (width === 'screen') return 'hp:w-[calc(100vw-2rem)] hp:max-w-none'
   return 'hp:w-full hp:sm:max-w-lg'
+}
+
+function modalSlotReference(value: JsonObject | RenderSlotReference | null): RenderSlotReference | null {
+  if (!value || typeof value.component !== 'string') return null
+  const properties = value.properties
+  if (properties === undefined) return { component: value.component }
+  if (!properties || Array.isArray(properties) || typeof properties !== 'object') return null
+  return { component: value.component, properties }
+}
+
+function isModalSchema(value: JsonObject): value is JsonObject & SchemaManifest<JsonObject> {
+  return value.kind === 'schema' && typeof value.id === 'string' && Array.isArray(value.components)
+}
+
+function modalSchema(value: JsonObject | null): SchemaManifest<JsonObject> | null {
+  return value && isModalSchema(value) ? value : null
 }
 
 function ActionTrigger<TResult>({ action, props }: { readonly action: ReactActionRendererProps<TResult>['manifest'], readonly props: ReactActionRendererProps<TResult> }): ReactNode {
@@ -56,25 +71,18 @@ function ActionTriggers<TResult>(props: ReactActionRendererProps<TResult>): Reac
 
 function ModalSlot<TResult>({ frame, placement, props }: { readonly frame: ClientActionFrame<TResult>, readonly placement: 'content' | 'footer', readonly props: ReactActionRendererProps<TResult> }): ReactNode {
   const reference = frame.manifest.modal?.[placement]
-  if (!reference) return null
-  const Renderer = props.registry?.resolve<ReactActionSlotProps<TResult>>(reference.component, props.panelId, `action modal ${placement}`)
-  return Renderer ? createElement(Renderer, { ...reference.properties, frame }) : null
+  const slot = modalSlotReference(reference ?? null)
+  if (!slot) return null
+  const Renderer = props.registry?.resolve<ReactActionSlotProps<TResult>>(slot.component, props.panelId, `action modal ${placement}`)
+  return Renderer ? createElement(Renderer, { ...(slot.properties ?? {}), frame }) : null
 }
 
 export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendererProps<TResult>): ReactNode {
-  const feedback = useReactFeedback()
   const state = useSyncExternalStore(
     listener => props.store.subscribe(listener),
     () => props.store.state,
     () => props.store.state,
   )
-  const lastError = useRef<string | null>(null)
-  const currentError = state.frames.at(-1)?.error ?? null
-  useEffect(() => {
-    if (!currentError || currentError === lastError.current) return
-    lastError.current = currentError
-    feedback.error('Action failed', currentError)
-  }, [currentError, feedback])
   const submit = async (): Promise<void> => {
     try {
       await props.store.submit(props.recordIds)
@@ -87,6 +95,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
     {state.frames.slice(-1).map((frame, index) => {
       const titleId = `hp-action-${frame.manifest.id.replace(/[^a-z0-9_-]/giu, '-')}-title-${index}`
       const customName = `action.${frame.manifest.id}`
+      const schema = modalSchema(frame.manifest.modal?.schema ?? null)
       const Custom = props.registry?.has(customName, props.panelId)
         ? props.registry.resolve<ReactActionCustomProps<TResult>>(customName, props.panelId, 'action modal')
         : null
@@ -114,8 +123,8 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
               event.preventDefault()
               void submit()
             }}>
-            {frame.manifest.modal?.schema
-              ? <><ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_SCHEMA_BEFORE} /><ReactSchemaRenderer panelId={props.panelId ?? 'default'} registry={props.registry ?? emptyRegistry} schema={frame.manifest.modal.schema} /><ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} /></>
+            {schema
+              ? <><ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_SCHEMA_BEFORE} /><ReactSchemaRenderer panelId={props.panelId ?? 'default'} registry={props.registry ?? emptyRegistry} schema={schema} /><ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} /></>
               : null}
             <DialogFooter>
               <Button className="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} disabled={frame.phase === 'submitting'} type="submit" variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}<span>{frame.phase === 'submitting' ? 'Working…' : 'Run action'}</span></Button>
@@ -125,7 +134,6 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
           const nested = props.actions?.find(action => action.id === id)
           return nested ? <ActionTrigger action={nested} key={id} props={props} /> : null
         })}
-        {frame.phase === 'succeeded' ? <div aria-live="polite" role="status">Action completed</div> : null}
         <ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_BEFORE} />
         <ModalSlot frame={frame} placement="footer" props={props} />
         <ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_AFTER} />

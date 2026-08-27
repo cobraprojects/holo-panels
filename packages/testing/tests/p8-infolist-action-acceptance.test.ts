@@ -36,7 +36,7 @@ describe('P8 infolist and action phase-gate acceptance', () => {
       expect(report.submittingMarkup, name).toContain('Working…')
       expect(report.requests, name).toHaveLength(2)
       expect(report.requests[0], name).toEqual({ actionId: 'posts.publish', input: { reason: 'Reviewed' }, mount: 'record', recordIds: [42] })
-      expect(report.successMarkup, name).toContain('Action completed')
+      expect(report.successNotification, name).toEqual({ body: 'The operation completed successfully.', title: 'Action completed' })
       expect(report.activeDialogCount, name).toBe(1)
       expect(report.remainingDialogCount, name).toBe(1)
       expect(report.deniedMarkup, name).not.toContain('Action denied by policy')

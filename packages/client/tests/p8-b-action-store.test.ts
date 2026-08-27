@@ -28,13 +28,23 @@ describe('P8-B client action state', () => {
     store.mount(manifest('parent', {
       confirmation: 'Continue?',
       modal: {
+        alignment: 'center',
+        autofocus: true,
+        cancelActionLabel: null,
+        closeByClickingAway: true,
+        closeByEscaping: true,
         content: null,
         description: null,
         footer: null,
         heading: null,
+        icon: null,
+        iconColor: null,
         nestedActions: [],
         schema: { components: [], id: 'reason', kind: 'schema' },
         slideOver: false,
+        stickyFooter: false,
+        stickyHeader: false,
+        submitActionLabel: null,
         width: 'medium',
       },
     }))

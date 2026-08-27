@@ -9,6 +9,7 @@ import {
   FormStore,
   OptionStore,
   PanelsTransport,
+  publishPanelActionFailure,
   PanelsPageActions,
   PanelsRenderHook,
   ReactActionRenderer,
@@ -23,6 +24,7 @@ import {
   useFormStore,
   type ClientActionManifest,
   type ComponentRegistry,
+  type Effect,
   type JsonObject,
   type JsonValue,
   type PanelShellBootstrap,
@@ -47,6 +49,7 @@ import { useClientRequestController } from './client-lifecycle'
 export interface NextResourceOperationResult {
   readonly data?: JsonObject
   readonly error?: string
+  readonly effects?: readonly Effect[]
   readonly ok: boolean
 }
 
@@ -55,6 +58,13 @@ export interface NextResourceOperationTransport {
 }
 
 type ResourceOperation = Parameters<NextResourceOperationTransport['execute']>[0]
+
+class NextResourceEffectError extends Error {
+  constructor(readonly effects: readonly Effect[]) {
+    super('Panel response effects could not be applied')
+    this.name = 'NextResourceEffectError'
+  }
+}
 
 const ClientRequestSignalContext = createContext<AbortSignal | null>(null)
 
@@ -288,8 +298,14 @@ function browserTransport(panelId: string, effects?: ClientEffectSession): NextR
         payload,
         signal,
       })
-      await effects?.apply(response)
-      return response.ok ? { data: object(response.data), ok: true } : { error: response.error.message, ok: false }
+      try {
+        await effects?.apply(response)
+      } catch {
+        throw new NextResourceEffectError(response.effects)
+      }
+      return response.ok
+        ? { data: object(response.data), effects: response.effects, ok: true }
+        : { effects: response.effects, error: response.error.message, ok: false }
     },
   }
 }
@@ -873,19 +889,34 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
     transport: {
       async execute(request, signal) {
         const kind = actionKinds.get(request.actionId)
-        if (!kind) throw new Error('The requested action is not available.')
-        const result = await operation.execute('action', {
-          actionId: request.actionId,
-          idempotencyKey: request.idempotencyKey,
-          input: request.input,
-          intent: kind,
-          mount: request.mount,
-          recordIds: [recordId],
-          resourceId,
-          source,
-        }, signal)
-        if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
-        if (result.data?.status === 'partial') throw new Error('The record could not be updated.')
+        if (!kind) {
+          publishPanelActionFailure(panelId)
+          throw new Error('The requested action is not available.')
+        }
+        let result: NextResourceOperationResult
+        try {
+          result = await operation.execute('action', {
+            actionId: request.actionId,
+            idempotencyKey: request.idempotencyKey,
+            input: request.input,
+            intent: kind,
+            mount: request.mount,
+            recordIds: [recordId],
+            resourceId,
+            source,
+          }, signal)
+        } catch (cause: unknown) {
+          publishPanelActionFailure(panelId, cause instanceof NextResourceEffectError ? cause.effects : [])
+          throw cause
+        }
+        if (!result.ok) {
+          publishPanelActionFailure(panelId, result.effects)
+          throw new Error(result.error ?? 'The action could not be completed.')
+        }
+        if (result.data?.status === 'partial') {
+          publishPanelActionFailure(panelId, result.effects)
+          throw new Error('The record could not be updated.')
+        }
         if (kind === 'delete' || kind === 'force-delete') router.push(basePath)
         return { effects: [], items: [{ recordId, status: 'succeeded' as const }], status: 'succeeded' as const }
       },

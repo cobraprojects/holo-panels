@@ -400,7 +400,7 @@ describe('P7-B text formatting and manifest security', () => {
 
     expect(handle).toHaveBeenCalledWith({ title: 'Ready' }, expect.objectContaining({ actor: { id: 'admin' }, mount: 'page' }))
     expect(result.data).toMatchObject({ result: { title: 'Ready' }, status: 'succeeded' })
-    expect(result.effects).toEqual([])
+    expect(result.effects).toEqual([{ kind: 'toast', presentation: expect.objectContaining({ id: 'publish.succeeded', status: 'success' }) }])
   })
 
   it('selects the registered action by both ID and mount', async () => {

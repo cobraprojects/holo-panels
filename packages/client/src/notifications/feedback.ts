@@ -1,4 +1,4 @@
-import { panelNotification } from '@holo-js/panels-core'
+import { panelNotification, type Effect } from '@holo-js/panels-core'
 import type { ClientToastStore } from './toast-store'
 
 const PANEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/u
@@ -27,6 +27,21 @@ export function publishPanelError(
   const store = registrations ? [...registrations.values()].at(-1) : undefined
   if (!store) return false
   publishPanelErrorTo(store, title, body)
+  return true
+}
+
+export function publishPanelActionFailure(panelId: string, effects: readonly Effect[] = []): boolean {
+  const registrations = stores.get(panelId)
+  const store = registrations ? [...registrations.values()].at(-1) : undefined
+  if (!store) return false
+  const deliveredIds = new Set(store.state.items.map(item => item.id))
+  const richNotificationDelivered = effects.some(effect => (
+    effect.kind === 'toast'
+    && 'presentation' in effect
+    && deliveredIds.has(effect.presentation.id)
+  ))
+  if (richNotificationDelivered) return false
+  publishPanelErrorTo(store, 'Action failed')
   return true
 }
 

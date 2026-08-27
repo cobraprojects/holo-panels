@@ -18,6 +18,7 @@
     PanelsPageActions,
     PanelsRenderHook,
     PanelsRenderHookRenderer,
+    publishPanelActionFailure,
     SvelteActionRenderer,
     SvelteRelationManagerRenderer,
     SvelteTableRenderer,
@@ -173,9 +174,20 @@
             source: pageType,
           },
           signal: requestSignal(requestController.signal, signal),
+        }).catch((cause: unknown) => {
+          publishPanelActionFailure(data.panel.manifest.id)
+          throw cause
         })
-        await effects.apply(response)
-        if (!response.ok) throw new Error(response.error.message)
+        try {
+          await effects.apply(response)
+        } catch (cause: unknown) {
+          publishPanelActionFailure(data.panel.manifest.id, response.effects)
+          throw cause
+        }
+        if (!response.ok) {
+          publishPanelActionFailure(data.panel.manifest.id, response.effects)
+          throw new Error(response.error.message)
+        }
         return { effects: [], items: [], result: response.data, status: 'succeeded' }
       },
     },

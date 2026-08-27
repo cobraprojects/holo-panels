@@ -1,6 +1,6 @@
 import { panelNotification, type PanelNotificationPresentation } from '@holo-js/panels-core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { publishPanelError, publishPanelErrorTo, registerPanelNotificationStore } from '../src/notifications/feedback'
+import { publishPanelActionFailure, publishPanelError, publishPanelErrorTo, registerPanelNotificationStore } from '../src/notifications/feedback'
 import { ClientToastStore } from '../src/notifications/toast-store'
 
 const stores: ClientToastStore[] = []
@@ -123,5 +123,24 @@ describe('P13-A client toast state', () => {
         title: 'Publish selected failed',
       }),
     ])
+  })
+
+  it('publishes an action fallback only when a rich response notification was not delivered', () => {
+    const toasts = store()
+    const unregister = registerPanelNotificationStore('admin', toasts)
+    const presentation = panelNotification('posts.publish.failed').title('Publishing failed').status('danger').presentation()
+    const effects = [{ kind: 'toast' as const, presentation }]
+
+    expect(publishPanelActionFailure('admin', effects)).toBe(true)
+    expect(toasts.state.items.at(-1)).toMatchObject({ body: 'The operation could not be completed.', title: 'Action failed' })
+
+    unregister()
+    const delivered = store()
+    const unregisterDelivered = registerPanelNotificationStore('admin', delivered)
+    delivered.push(presentation)
+    expect(publishPanelActionFailure('admin', effects)).toBe(false)
+    expect(delivered.state.items).toHaveLength(1)
+    expect(delivered.state.items[0]).toMatchObject(presentation)
+    unregisterDelivered()
   })
 })

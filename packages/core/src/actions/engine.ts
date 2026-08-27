@@ -1,5 +1,6 @@
 import type { JsonObject } from '../protocol/json'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
+import { panelNotification } from '../notifications/notification'
 import { validatedToastPresentation, type Effect, type RichToastEffect } from '../protocol/effects'
 import type {
   ActionContext,
@@ -168,7 +169,6 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       const effects = await this.successEffects(definition, [{ context, result }])
       return Object.freeze({ effects, items: Object.freeze([]), ...(typeof result === 'undefined' ? {} : { result }), status: 'succeeded' })
     } catch (cause: unknown) {
-      if (!definition.failureNotification) throw cause
       const effects = await this.failureEffects(definition, [context])
       if (cause instanceof ActionExecutionError) throw new ActionExecutionError(cause.code, cause.message, effects)
       throw new ActionExecutionError('failed', 'The action could not be completed', effects)
@@ -265,7 +265,13 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     executions: readonly { readonly context: ActionContext<TRecord, TActor, TTenant, TServices>, readonly result: TResult }[],
   ): Promise<readonly Effect[]> {
-    if (!definition.successNotification) return Object.freeze([])
+    if (!definition.successNotification) {
+      return this.notificationEffects([panelNotification(`${definition.id}.succeeded`)
+        .title('Action completed')
+        .body('The operation completed successfully.')
+        .status('success')
+        .presentation()])
+    }
     const presentations: Readonly<PanelNotificationPresentation>[] = []
     for (const execution of executions) {
       try {
@@ -284,7 +290,13 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     contexts: readonly ActionContext<TRecord, TActor, TTenant, TServices>[],
   ): Promise<readonly Effect[]> {
-    if (!definition.failureNotification) return Object.freeze([])
+    if (!definition.failureNotification) {
+      return this.notificationEffects([panelNotification(`${definition.id}.failed`)
+        .title('Action failed')
+        .body('The operation could not be completed.')
+        .status('danger')
+        .presentation()])
+    }
     const presentations: Readonly<PanelNotificationPresentation>[] = []
     for (const context of contexts) {
       try {

@@ -1,5 +1,5 @@
 export { ClientNotificationInboxStore } from './inbox-store'
-export { publishPanelError, publishPanelErrorTo, registerPanelNotificationStore } from './feedback'
+export { publishPanelActionFailure, publishPanelError, publishPanelErrorTo, registerPanelNotificationStore } from './feedback'
 export { fluxNotificationRealtime } from './flux'
 export { createPanelNotificationTransport } from './transport'
 export { ClientToastStore } from './toast-store'

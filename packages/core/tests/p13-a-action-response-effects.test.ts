@@ -42,6 +42,38 @@ function action(overrides: Partial<ActionDefinition<RecordValue, { readonly valu
 }
 
 describe('P13-A action response effects', () => {
+  it('emits default Panel notifications when an action does not customize feedback', async () => {
+    const definition = action()
+    const succeeded = await engine().execute(definition, {
+      idempotencyKey: 'request-default-success-0001',
+      input: { value: 'saved' },
+      mount: 'page',
+    }, scope())
+
+    expect(succeeded.effects).toEqual([{ kind: 'toast', presentation: expect.objectContaining({
+      body: 'The operation completed successfully.',
+      id: 'records.save.succeeded',
+      status: 'success',
+      title: 'Action completed',
+    }) }])
+
+    const failed = engine().execute(action({ handle: async () => { throw new Error('database password was rejected') } }), {
+      idempotencyKey: 'request-default-failure-0001',
+      input: { value: 'save' },
+      mount: 'page',
+    }, scope())
+
+    await expect(failed).rejects.toMatchObject({
+      effects: [{ kind: 'toast', presentation: expect.objectContaining({
+        body: 'The operation could not be completed.',
+        id: 'records.save.failed',
+        status: 'danger',
+        title: 'Action failed',
+      }) }],
+      message: 'The action could not be completed',
+    })
+  })
+
   it('emits rich success feedback only after the transaction commits and keeps persistent delivery inside it', async () => {
     const events: string[] = []
     const send = vi.fn(async () => { events.push('persistent') })

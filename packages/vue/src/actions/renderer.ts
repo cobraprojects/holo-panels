@@ -27,9 +27,9 @@ import {
   SheetTitle,
 } from '../internal-ui'
 import { defineComponent, h, onScopeDispose, shallowRef, type PropType, type VNode } from 'vue'
-import { publishPanelError, type ClientActionFrame, type ClientActionState, type JsonObject } from '@holo-js/panels-client'
+import type { ClientActionFrame, ClientActionState, JsonObject } from '@holo-js/panels-client'
 import { ActionsRenderHook } from '@holo-js/panels-core'
-import type { ActionModalWidth } from '@holo-js/panels-core'
+import type { ActionModalWidth, RenderSlotReference, SchemaManifest } from '@holo-js/panels-core'
 import { createComponentRegistry } from '../registry'
 import { VueSchemaRenderer } from '../schemas/renderer'
 import { usePanelsRenderHook } from '../render-hooks'
@@ -43,6 +43,22 @@ function modalWidthClass(width: ActionModalWidth): string {
   if (width === 'extra-large') return 'hp:w-full hp:sm:max-w-4xl'
   if (width === 'screen') return 'hp:h-[calc(100vh-2rem)] hp:w-[calc(100vw-2rem)] hp:max-w-none'
   return 'hp:w-full hp:sm:max-w-lg'
+}
+
+function modalSlotReference(value: JsonObject | RenderSlotReference | null): RenderSlotReference | null {
+  if (!value || typeof value.component !== 'string') return null
+  const properties = value.properties
+  if (properties === undefined) return { component: value.component }
+  if (!properties || Array.isArray(properties) || typeof properties !== 'object') return null
+  return { component: value.component, properties }
+}
+
+function isModalSchema(value: JsonObject): value is JsonObject & SchemaManifest<JsonObject> {
+  return value.kind === 'schema' && typeof value.id === 'string' && Array.isArray(value.components)
+}
+
+function modalSchema(value: JsonObject | null): SchemaManifest<JsonObject> | null {
+  return value && isModalSchema(value) ? value : null
 }
 
 export const VueActionRenderer = defineComponent({
@@ -60,12 +76,8 @@ export const VueActionRenderer = defineComponent({
     const renderHook = usePanelsRenderHook()
     const state = shallowRef<ClientActionState>(props.store.state)
     const openGroups = shallowRef<ReadonlySet<string>>(new Set())
-    let lastError: string | null = null
     const unsubscribe = props.store.subscribe(next => {
       state.value = next
-      const error = next.frames.at(-1)?.error ?? null
-      if (error && error !== lastError) publishPanelError(props.panelId ?? 'default', 'Action failed')
-      lastError = error
     })
     onScopeDispose(unsubscribe)
 
@@ -78,17 +90,18 @@ export const VueActionRenderer = defineComponent({
     }
 
     function form(frame: ClientActionFrame): VNode {
+      const schema = modalSchema(frame.manifest.modal?.schema ?? null)
       return h('form', {
         onSubmit: (event: Event) => {
           event.preventDefault()
           void submit()
         },
       }, [
-        frame.manifest.modal?.schema
+        schema
           ? [renderHook(ActionsRenderHook.MODAL_SCHEMA_BEFORE), h(VueSchemaRenderer, {
               panelId: props.panelId ?? 'default',
               registry: props.registry ?? emptyRegistry,
-              schema: frame.manifest.modal.schema,
+              schema,
             }), renderHook(ActionsRenderHook.MODAL_SCHEMA_AFTER)]
           : null,
         h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : 'Run action')]),
@@ -110,9 +123,10 @@ export const VueActionRenderer = defineComponent({
 
     function modalSlot(frame: ClientActionFrame, placement: 'content' | 'footer'): VNode | null {
       const reference = frame.manifest.modal?.[placement]
-      if (!reference || !props.registry) return null
-      const Renderer = props.registry.resolve(reference.component, props.panelId, `action modal ${placement}`)
-      return h(Renderer, { ...reference.properties, frame } satisfies VueActionSlotProps)
+      const slot = modalSlotReference(reference ?? null)
+      if (!slot || !props.registry) return null
+      const Renderer = props.registry.resolve(slot.component, props.panelId, `action modal ${placement}`)
+      return h(Renderer, { ...(slot.properties ?? {}), frame } satisfies VueActionSlotProps)
     }
 
     return () => {
@@ -189,7 +203,6 @@ export const VueActionRenderer = defineComponent({
               const action = actions.find(candidate => candidate.id === id)
               return action ? [trigger(action)] : []
             }) ?? [],
-            frame.phase === 'succeeded' ? h('div', { 'aria-live': 'polite', role: 'status' }, 'Action completed') : null,
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_BEFORE),
             modalSlot(frame, 'footer'),
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_AFTER),

@@ -15,6 +15,7 @@ export { actionGroup, ActionGroupBuilder } from './groups'
 export { builtInActionPresentation, type BuiltInActionPresentation } from './presentation'
 export type {
   ActionContext,
+  ActionPresentationContext,
   ActionDefinition,
   ActionGroupItem,
   ActionGroupManifest,

@@ -67,6 +67,7 @@ export interface PageServerHandles<TData extends JsonObject, TActor, TTenant, TS
   readonly breadcrumbs?: PageResolvable<PageContext<TActor, TTenant, TServices>, readonly PageBreadcrumb[]>
   readonly heading?: PageResolvable<PageContext<TActor, TTenant, TServices>, string | null>
   readonly load?: (context: PageContext<TActor, TTenant, TServices>) => TData | Promise<TData>
+  readonly manifest?: PageResolvable<PageContext<TActor, TTenant, TServices>, PageManifest>
   readonly schema?: PageResolvable<
     PageContext<TActor, TTenant, TServices>,
     CompiledSchema<Readonly<Record<string, unknown>>, PageContext<TActor, TTenant, TServices>> | null

@@ -1,6 +1,7 @@
 import {
   ActionsRenderHook,
   type ActionContext as CoreActionContext,
+  type ActionPresentationContext as CoreActionPresentationContext,
   type ActionDefinition,
   type ActionKind,
   type ActionModalWidth,
@@ -33,6 +34,16 @@ export interface ActionContext<
 }
 
 type Resolvable<TContext, TValue> = TValue | ((context: TContext) => TValue | Promise<TValue>)
+
+export interface ActionPresentationContext<
+  TRecord extends object = object,
+  TData extends object = object,
+  TActor extends object = object,
+  TTenant = unknown,
+  TServices = object,
+> extends CoreActionPresentationContext<TRecord, TData, TActor, TTenant, TServices> {
+  readonly selectedRecords: readonly TRecord[]
+}
 type ActionHandler<TContext, TData extends object, TResult> = (data: Readonly<TData>, context: TContext) => TResult | Promise<TResult>
 
 export interface ActionContract<TRecord extends object = object> {
@@ -49,9 +60,9 @@ interface ActionModalState<TRecord extends object, TData extends object, TActor 
   closeByClickingAway: boolean
   closeByEscaping: boolean
   content: JsonObject | null
-  description: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
+  description: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
   footer: JsonObject | null
-  heading: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
+  heading: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
   icon: string | null
   iconColor: ActionColor | null
   nestedActions: readonly Action[]
@@ -90,26 +101,26 @@ export class Action<
   readonly kind: ActionKind
   readonly mount: ActionMount
   #authorize: (context: ActionContext<TRecord, TData, TActor, TTenant, TServices>) => boolean | Promise<boolean> = () => true
-  #badge: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
+  #badge: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
   #buttonStyle: ActionButtonStyle = 'button'
-  #color: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, ActionColor | null> = null
+  #color: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, ActionColor | null> = null
   #confirmation: string | null = null
-  #disabled: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = false
+  #disabled: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = false
   #extraAttributes: JsonObject = {}
   #failureNotification: PanelNotificationPresentation | null = null
   #groupedIcon: string | null = null
   #handler: ActionHandler<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TData, TResult>
-  #icon: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
+  #icon: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
   #iconPosition: 'after' | 'before' = 'before'
-  #label: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string>
+  #label: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string>
   #modal: ActionModalState<TRecord, TData, TActor, TTenant, TServices, TSchemaFactory> | null = null
   #requiresConfirmation = false
   #size: ActionSize = 'medium'
   #successNotification: PanelNotificationPresentation | null = null
-  #tooltip: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
-  #url: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
+  #tooltip: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
+  #url: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
   #urlInNewTab = false
-  #visible: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true
+  #visible: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true
   readonly #schemaFactory: TSchemaFactory | undefined
 
   constructor(id: string, kind: ActionKind = 'custom', mount: ActionMount = 'record', schemaFactory?: TSchemaFactory) {
@@ -142,7 +153,7 @@ export class Action<
     return this
   }
 
-  badge(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
+  badge(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
     this.#badge = value
     return this
   }
@@ -167,12 +178,12 @@ export class Action<
     return this
   }
 
-  color(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, ActionColor | null>): this {
+  color(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, ActionColor | null>): this {
     this.#color = value
     return this
   }
 
-  disabled(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true): this {
+  disabled(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true): this {
     this.#disabled = value
     return this
   }
@@ -189,7 +200,7 @@ export class Action<
     return this
   }
 
-  icon(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
+  icon(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
     this.#icon = value
     return this
   }
@@ -204,7 +215,7 @@ export class Action<
     return this
   }
 
-  label(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string>): this {
+  label(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string>): this {
     this.#label = value
     return this
   }
@@ -244,7 +255,7 @@ export class Action<
     return this
   }
 
-  modalDescription(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
+  modalDescription(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
     this.modal().description = value
     return this
   }
@@ -254,7 +265,7 @@ export class Action<
     return this
   }
 
-  modalHeading(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
+  modalHeading(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
     this.modal().heading = value
     return this
   }
@@ -334,12 +345,12 @@ export class Action<
     return this
   }
 
-  tooltip(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
+  tooltip(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>): this {
     this.#tooltip = value
     return this
   }
 
-  url(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, string | null>, shouldOpenInNewTab = false): this {
+  url(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>, shouldOpenInNewTab = false): this {
     this.#url = value
     this.#urlInNewTab = shouldOpenInNewTab
     return this
@@ -350,12 +361,12 @@ export class Action<
     return this
   }
 
-  visible(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true): this {
+  visible(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true): this {
     this.#visible = value
     return this
   }
 
-  hidden(value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true): this {
+  hidden(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true): this {
     this.#visible = typeof value === 'function' ? async context => !await value(context) : !value
     return this
   }
@@ -458,12 +469,14 @@ export class Action<
   }
 
   private coreResolver<TValue>(
-    value: Resolvable<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TValue>,
-  ): ActionResolvable<CoreActionContext<TRecord, TActor, TTenant, TServices>, TValue> {
+    value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, TValue>,
+  ): ActionResolvable<CoreActionPresentationContext<TRecord, TData & JsonObject, TActor, TTenant, TServices>, TValue> {
     if (typeof value !== 'function') return value
-    const resolve = value as (context: ActionContext<TRecord, TData, TActor, TTenant, TServices>) => TValue | Promise<TValue>
-    const data = Object.freeze({}) as Readonly<TData>
-    return context => resolve(this.executionContext(data, context))
+    const resolve = value as (context: ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>) => TValue | Promise<TValue>
+    return context => resolve(Object.freeze({
+      ...context,
+      selectedRecords: context.selectedRecords ?? Object.freeze(context.record ? [context.record] : []),
+    }))
   }
 
   private executionContext(data: Readonly<TData>, context: CoreActionContext<TRecord, TActor, TTenant, TServices>): ActionContext<TRecord, TData, TActor, TTenant, TServices> {

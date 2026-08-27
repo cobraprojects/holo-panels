@@ -19,6 +19,10 @@ export interface ActionContext<TRecord, TActor, TTenant, TServices> {
 
 export type ActionResolvable<TContext, TValue> = TValue | ((context: TContext) => TValue | Promise<TValue>)
 
+export interface ActionPresentationContext<TRecord, TData extends object, TActor, TTenant, TServices> extends ActionContext<TRecord, TActor, TTenant, TServices> {
+  readonly data?: Readonly<Partial<TData>>
+}
+
 export type ActionSuccessNotification<TResult, TContext> = Readonly<PanelNotificationPresentation> | ((result: TResult, context: TContext) => Readonly<PanelNotificationPresentation> | null | Promise<Readonly<PanelNotificationPresentation> | null>)
 export type ActionFailureNotification<TContext> = Readonly<PanelNotificationPresentation> | ((context: TContext) => Readonly<PanelNotificationPresentation> | null | Promise<Readonly<PanelNotificationPresentation> | null>)
 
@@ -79,14 +83,14 @@ export interface ActionRateLimit<TContext> {
   readonly windowMilliseconds: number
 }
 
-export interface ActionPresentationDefinition<TRecord, TActor, TTenant, TServices> {
-  readonly badge?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, string | null>
-  readonly color?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, string | null>
-  readonly icon?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, string | null>
-  readonly modal?: ActionModalOptions<ActionContext<TRecord, TActor, TTenant, TServices>>
+export interface ActionPresentationDefinition<TRecord, TActor, TTenant, TServices, TData extends object = JsonObject> {
+  readonly badge?: ActionResolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
+  readonly color?: ActionResolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
+  readonly icon?: ActionResolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
+  readonly modal?: ActionModalOptions<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>>
   readonly rateLimit?: ActionRateLimit<ActionContext<TRecord, TActor, TTenant, TServices>>
   readonly size?: ActionSize
-  readonly tooltip?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, string | null>
+  readonly tooltip?: ActionResolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
   readonly type?: ExtensionTypeId<'action'>
 }
 
@@ -100,15 +104,15 @@ export interface ActionPresentationManifest {
   readonly type: string
 }
 
-export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> extends ActionPresentationDefinition<TRecord, TActor, TTenant, TServices> {
+export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> extends ActionPresentationDefinition<TRecord, TActor, TTenant, TServices, TInput> {
   readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>, input: Readonly<TInput>) => boolean | Promise<boolean>
   readonly confirmation?: string | null
-  readonly disabled?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, boolean>
+  readonly disabled?: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, boolean>
   readonly failureNotification?: ActionFailureNotification<ActionContext<TRecord, TActor, TTenant, TServices>>
   readonly handle: (input: TInput, context: ActionContext<TRecord, TActor, TTenant, TServices>) => TResult | Promise<TResult>
   readonly id: string
   readonly kind: ActionKind
-  readonly label: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, string>
+  readonly label: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, string>
   readonly lifecycle?: {
     readonly after?: (result: TResult, context: ActionContext<TRecord, TActor, TTenant, TServices>) => void | Promise<void>
     readonly before?: (input: TInput, context: ActionContext<TRecord, TActor, TTenant, TServices>) => void | Promise<void>
@@ -119,7 +123,7 @@ export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, T
   readonly sideEffects?: readonly ((result: TResult, context: ActionContext<TRecord, TActor, TTenant, TServices>) => void | Promise<void>)[]
   readonly successNotification?: ActionSuccessNotification<TResult, ActionContext<TRecord, TActor, TTenant, TServices>>
   readonly transactional?: boolean
-  readonly visible?: ActionResolvable<ActionContext<TRecord, TActor, TTenant, TServices>, boolean>
+  readonly visible?: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, boolean>
 }
 
 export interface ActionManifest extends ActionPresentationManifest {

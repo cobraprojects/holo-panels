@@ -3,7 +3,7 @@ import { toJsonValue } from '../protocol/serialization'
 import { deepFreeze } from '../builders/deep-freeze'
 import { toSchemaManifest } from '../schemas/manifest'
 import type {
-  ActionContext,
+  ActionPresentationContext,
   ActionDefinition,
   ActionManifest,
   ActionResolvedState,
@@ -31,14 +31,14 @@ async function modalSchema<TContext>(value: CompiledSchema<JsonObject, TContext>
   return serialized
 }
 
-export async function resolveActionState<TRecord, TActor, TTenant, TServices>(
-  definition: Pick<ActionDefinition<TRecord, JsonObject, unknown, TActor, TTenant, TServices>, 'disabled' | 'label' | 'visible'>,
-  context: ActionContext<TRecord, TActor, TTenant, TServices>,
+export async function resolveActionState<TRecord, TInput extends JsonObject, TActor, TTenant, TServices>(
+  definition: Pick<ActionDefinition<TRecord, TInput, unknown, TActor, TTenant, TServices>, 'disabled' | 'label' | 'visible'>,
+  context: ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>,
 ): Promise<ActionResolvedState> {
   return Object.freeze({
     disabled: definition.disabled ? await resolve(definition.disabled, context) : false,
     label: await resolve(definition.label, context),
-    visible: definition.visible ? await resolve(definition.visible, context) : true,
+    visible: definition.visible === undefined ? true : await resolve(definition.visible, context),
   })
 }
 
@@ -52,7 +52,7 @@ export function compileActionManifest<
 >(
   definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
   label: string,
-  context: ActionContext<TRecord, TActor, TTenant, TServices>,
+  context: ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>,
   state: Pick<ActionResolvedState, 'disabled' | 'visible'> = { disabled: false, visible: true },
 ): Promise<Readonly<ActionManifest>> {
   return compileManifest(definition, label, context, state)
@@ -61,7 +61,7 @@ export function compileActionManifest<
 async function compileManifest<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices>(
   definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
   label: string,
-  context: ActionContext<TRecord, TActor, TTenant, TServices>,
+  context: ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>,
   state: Pick<ActionResolvedState, 'disabled' | 'visible'>,
 ): Promise<Readonly<ActionManifest>> {
   if (!ACTION_ID.test(definition.id)) throw new Error('Actions require stable dot or dash separated IDs')

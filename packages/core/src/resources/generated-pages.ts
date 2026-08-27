@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
 import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/db'
-import { ActionEngine, builtInActionPresentation, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
+import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
 import type { Effect } from '../protocol/effects'
 import type { CompiledPageDefinition, PageContext, PageManifest, PageType } from '../pages/contracts'
 import { defaultSlugTransform } from '../fields/basic'
@@ -1068,9 +1068,46 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
       breadcrumbs: [{ label: plural, path: manifest.path.split('/:record')[0]! }],
       heading: manifest.pageType === 'list' ? null : `${label(manifest.pageType)} ${label(singularize(plural))}`,
       load,
+      manifest: (context: PageContext<object, unknown, unknown>) => resolveGeneratedPageActions(definition, manifest, context),
       title: plural,
     },
   })
+}
+
+async function resolveGeneratedPageActions(
+  definition: RuntimeDefinition,
+  manifest: PageManifest,
+  context: PageContext<object, unknown, unknown>,
+): Promise<PageManifest> {
+  const properties = manifest.body?.properties
+  const resource = properties && objectMember(properties, 'resource')
+  if (!manifest.body || !resource) return manifest
+  const entries = arrayMember(resource, 'actions').map((entry) => {
+    const candidates = (definition.actions ?? []).filter(action => action.id === Reflect.get(entry, 'id')
+      && action.mount === Reflect.get(entry, 'mount')
+      && (!Reflect.get(action, 'source') || Reflect.get(action, 'source') === manifest.pageType))
+    if (candidates.length > 1) throw new Error('[Holo Panels] The generated page action registration is ambiguous.')
+    return { definition: candidates[0], manifest: entry }
+  })
+  if (!entries.some(entry => entry.definition)) return manifest
+  const executor = new ResourceExecutor(definition, { strictAuthorization: context.strictAuthorization })
+  const recordId = manifest.pageType === 'edit' || manifest.pageType === 'view' ? context.parameters.record : undefined
+  const record = recordId ? await executor.resolveActionRecord(recordId, context) : null
+  const actions = await Promise.all(entries.map(async (entry) => {
+    if (!entry.definition) return entry.manifest
+    const compiled = entry.definition as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>
+    const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+    const state = await resolveActionState(compiled, scope)
+    return { ...entry.manifest, ...await compileActionManifest(compiled, state.label, scope, state) }
+  }))
+  const body = {
+    ...manifest.body,
+    properties: jsonObject({
+      ...properties,
+      resource: { ...resource, actions },
+    }),
+  }
+  return Object.freeze({ ...manifest, body })
 }
 
 function recordIdentifier(payload: JsonObject): number | string | null {

@@ -73,19 +73,20 @@ export async function resolvePageData<TData extends JsonObject, TActor, TTenant,
   context: PageContext<TActor, TTenant, TServices>,
 ): Promise<Readonly<ResolvedPageData<TData>>> {
   if (!await definition.server.authorize(context)) throw new PageAccessError()
-  const [data, title, heading, subheading, breadcrumbs, schema] = await Promise.all([
+  const [data, title, heading, subheading, breadcrumbs, schema, manifest] = await Promise.all([
     definition.server.load?.(context) ?? Promise.resolve({} as TData),
     resolve(definition.server.title, context, definition.manifest.id),
     resolve(definition.server.heading, context, null),
     resolve(definition.server.subheading, context, null),
     resolve(definition.server.breadcrumbs, context, []),
     resolve(definition.server.schema, context, null),
+    resolve(definition.server.manifest, context, definition.manifest),
   ])
   for (const [index, breadcrumb] of breadcrumbs.entries()) {
     if (!breadcrumb.label.trim()) throw new Error(`Page breadcrumb ${index} labels cannot be empty`)
     assertDestination(breadcrumb.path, `Page breadcrumb ${index}`)
   }
-  const resolved = toJsonValue({ breadcrumbs, data, heading, manifest: definition.manifest, schema: schema ? await toSchemaManifest(schema, context) : null, subheading, title })
+  const resolved = toJsonValue({ breadcrumbs, data, heading, manifest, schema: schema ? await toSchemaManifest(schema, context) : null, subheading, title })
   if (resolved === null || Array.isArray(resolved) || typeof resolved !== 'object') throw new TypeError('Resolved page data must be JSON-safe')
   return Object.freeze(resolved as unknown as ResolvedPageData<TData>)
 }

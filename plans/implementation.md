@@ -33,7 +33,7 @@ Master phase checklist:
 - [x] P5: UI tokens and renderer foundations
 - [x] P6: forms
 - [x] P7: tables
-- [x] P8: infolists and actions
+- [ ] P8: infolists and actions
 - [x] P9: resources, pages, CRUD, framework adapters, and panel shell
 - [x] P10: relation managers
 - [x] P11: navigation, clusters, and global search
@@ -1945,7 +1945,7 @@ Owned paths: core/client action engine, built-ins except import/export, modal in
 Tasks:
 
 - [x] Implement action state/resolvers and typed contexts.
-- [x] Implement page, record, bulk, notification, and nested modal action mounting.
+- [ ] Implement page, record, bulk, notification, and nested modal action mounting.
 - [x] Implement confirmation and schema modals.
 - [x] Implement create, edit, view, delete, restore, force-delete, replicate, and custom actions.
 - [x] Implement authorization, transactions, lifecycle, input mutation, idempotency, effects, and notifications.
@@ -1954,7 +1954,11 @@ Tasks:
 
 Evidence: the shared action engine and client store passed authorization, tenant-scoped and request-bound idempotency, record/bulk cardinality, transactional lifecycle/effect/notification, stale, denial, rollback, nested-modal, double-submit, and partial-bulk behavior tests; callback-free size-bounded manifests and accessible React/Vue/Svelte action renderers passed strict checks and builds on 2026-07-27.
 
-- [x] **P8 phase gate:** infolist/action contract fixtures and cross-framework modal/action acceptance pass.
+- [ ] **P8 phase gate:** infolist/action contract fixtures and cross-framework modal/action acceptance pass.
+
+Ticket #12 review on 2026-08-27 reopened this gate. Presentation callbacks now receive optional partial input, while authorization and execution retain complete submitted input. Generated page actions resolve presentation for the requesting actor and preserve static configuration. Host integration is still incomplete: list headers omit custom actions, table callbacks use static fallbacks, form action getters are unused, infolist/widget actions bypass the shared lifecycle, notification custom actions are filtered out, and relation controls ignore configured confirmation overrides. The earlier isolated renderer tests do not prove these generated application paths. Widget and infolist registration syntax needs application-facing API approval before implementation continues.
+
+This increment passed language-service diagnostics, changed-file ESLint, all package builds and typechecks, all 21 package JSON Vitest suites, architecture/dependency/publish checks, and example parity. Focused regressions cover absent and partial input, complete execution input, literal and callback visibility, actor-specific list/create page presentation, same-ID mount isolation, and preserved static presentation fields. Standards re-review found no remaining defects in the increment; the spec review still found five host-integration gaps.
 
 Evidence: one identical acceptance journey mounted the exported React, Vue, and Svelte entry/action renderers through the three example fixtures and observed built-in infolist parity, entry actions, confirmation and schema input, in-flight deduplication, active-only nested dialogs, Escape handling, denial alerts, successful record execution, deterministic SSR, and clean disposal. Full workspace typecheck, ESLint, JSON Vitest suites, architecture/example parity, all package builds, packed lifecycle, 13-package install/import smoke tests, and packed Next/Nuxt/SvelteKit consumer typechecks passed on 2026-07-27.
 

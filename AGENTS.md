@@ -105,7 +105,7 @@ For documentation-only changes, validate wording, links, commands, file referenc
 
 ### Issue tracker
 
-Issues and specs are tracked in GitHub Issues for `cobraprojects/holo-panels`. See `docs/agents/issue-tracker.md`.
+When a task involves a ticket, read and follow [the issue-tracker workflow](docs/agents/issue-tracker.md) alongside the requested skill. Its ticket-completion workflow is mandatory before reporting a ticket finished.
 
 ### Triage labels
 

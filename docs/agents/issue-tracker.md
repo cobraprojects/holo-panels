@@ -2,6 +2,17 @@
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
+## Ticket completion
+
+Follow this workflow when asked to implement, fix, or resolve a ticket, regardless of which skill performs the work. Reading, discussing, triaging, or reviewing a ticket alone does not authorize closure. Respect an explicit request to keep the ticket open.
+
+1. Verify that the requested work and applicable acceptance criteria are complete and that required validation and review pass.
+2. Comment on the issue with the outcome, validation evidence, and commit or pull request references when available. State whether the implementation is local, pushed, or merged.
+3. Close the issue with `gh issue close <number> --reason completed`.
+4. Read it again with `gh issue view <number> --json state,url` and confirm that its state is `CLOSED` before reporting the ticket finished.
+
+If a required step remains incomplete or blocked, report what remains. A local commit alone does not complete this workflow.
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
@@ -42,4 +53,4 @@ The `/wayfinder` skill uses one issue as a map and linked issues as tickets.
 - **Blocking**: Use GitHub's native issue dependencies. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`. Get the numeric database ID with `gh api repos/<owner>/<repo>/issues/<number> --jq .id`. If dependencies are unavailable, put `Blocked by: #<number>` at the top of the child body.
 - **Frontier query**: List the map's open children, remove tickets with open blockers or an assignee, and take the first remaining ticket in map order.
 - **Claim**: Run `gh issue edit <number> --add-assignee @me`. This is the session's first write.
-- **Resolve**: Comment with the answer, close the ticket, then add a context link to the map's Decisions-so-far section.
+- **Resolve**: Follow [Ticket completion](#ticket-completion), then add a context link to the map's Decisions-so-far section.

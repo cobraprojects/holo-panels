@@ -130,13 +130,12 @@ describe('Vue relation selection', () => {
     expect(container.textContent).toContain('No tags found.')
     container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
-    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
+    const select = document.querySelector<HTMLSelectElement>('[data-field-path="relatedId"] select')
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-header"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-footer"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-footer"]')).not.toBeNull()
     if (select) {
       select.value = 'tag-typescript'
       select.dispatchEvent(new Event('change', { bubbles: true }))
@@ -145,8 +144,8 @@ describe('Vue relation selection', () => {
       position.value = '3'
       position.dispatchEvent(new Event('input', { bubbles: true }))
     }
-    document.querySelector<HTMLButtonElement>('.hp-relation-operation-form button[type="submit"]')?.click()
-    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }))
+    document.querySelector<HTMLButtonElement>('[role="dialog"] button[type="submit"]')?.click()
+    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith(expect.objectContaining({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }), expect.any(AbortSignal)))
   })
 
   it('views a related record without sending a mutation', async () => {
@@ -165,8 +164,7 @@ describe('Vue relation selection', () => {
     container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
     await nextTick()
 
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript')
-    expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')?.value).toBe('TypeScript')
     expect(onOperation).not.toHaveBeenCalled()
   })
 

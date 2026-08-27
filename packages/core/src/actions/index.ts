@@ -1,5 +1,5 @@
 export { compileActionManifest, resolveActionState } from './action'
-export { compileRegisteredActions, type ActionRegistration, type RegisteredAction } from './registration'
+export { actionPermissionReferences, compileRegisteredActions, type ActionRegistration, type RegisteredAction } from './registration'
 export {
   ActionBuilder,
   createResourceActionComposer,

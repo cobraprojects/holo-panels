@@ -14,6 +14,7 @@ export interface PanelNotificationAction extends JsonObject {
 export type PanelNotificationExecutionAction = PanelNotificationAction & {
   readonly execution: NotificationActionReference
   readonly actionManifest?: JsonObject
+  readonly token?: string
 }
 
 export interface PanelNotificationPresentation extends JsonObject {

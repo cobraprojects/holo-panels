@@ -62,6 +62,45 @@ function editAction(handle = vi.fn(async (input: { title: string }) => input.tit
 }
 
 describe('P8-B action execution', () => {
+  it('does not rerun a committed handler when navigation presentation fails', async () => {
+    const handle = vi.fn(async () => 'saved')
+    const action = { ...editAction(handle), url: () => { throw new Error('Unavailable navigation') } }
+    const executor = engine()
+    const request = { idempotencyKey: 'failed-navigation', input: { title: 'Saved' }, mount: 'record' as const, recordIds: [1] }
+    const context = scope()
+    expect((await executor.execute(action, request, context)).status).toBe('succeeded')
+    expect((await executor.execute(action, request, context)).status).toBe('succeeded')
+    expect(handle).toHaveBeenCalledOnce()
+  })
+  it('resolves action URLs only after authorization and execution and suppresses replay navigation', async () => {
+    const events: string[] = []
+    const action = { ...editAction(), authorize: () => { events.push('authorize'); return true }, handle: async () => { events.push('handle'); return 'opened' }, url: () => { events.push('url'); return '/reports/1' } }
+    const executor = engine()
+    const request = { idempotencyKey: 'navigate', input: { title: 'Open' }, mount: 'record' as const, recordIds: [1] }
+    const context = scope()
+    expect((await executor.execute(action, request, context)).effects).toContainEqual({ kind: 'redirect', url: '/reports/1' })
+    expect(events).toEqual(['authorize', 'handle', 'url'])
+    expect((await executor.execute(action, request, context)).effects).toEqual([])
+  })
+  it('denies hidden or disabled actions and reauthorizes completed retries', async () => {
+    let allowed = true
+    let visible = true
+    let disabled = false
+    const handle = vi.fn(async () => 'saved')
+    const action = { ...editAction(handle), authorize: () => allowed, visible: () => visible, disabled: () => disabled }
+    const executor = engine()
+    const request = { idempotencyKey: 'recheck-action', input: { title: 'Saved' }, mount: 'record' as const, recordIds: [1] }
+    expect((await executor.execute(action, request, scope())).status).toBe('succeeded')
+    allowed = false
+    await expect(executor.execute(action, request, scope())).rejects.toMatchObject({ code: 'denied', status: 403 })
+    allowed = true
+    visible = false
+    expect((await executor.execute(action, { ...request, idempotencyKey: 'hidden-action' }, scope())).items[0]?.status).toBe('denied')
+    visible = true
+    disabled = true
+    expect((await executor.execute(action, { ...request, idempotencyKey: 'disabled-action' }, scope())).items[0]?.status).toBe('denied')
+    expect(handle).toHaveBeenCalledTimes(1)
+  })
   it('returns JSON-safe success results for actions without a return value', async () => {
     const action: ActionDefinition<RecordValue, JsonObject, void, string, string, Services> = {
       authorize: () => true,

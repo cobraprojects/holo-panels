@@ -1,6 +1,6 @@
 import { ActionExecutionError, createRequestEnvelope, definePanel, defineStatsWidget, PROTOCOL_VERSION, type JsonObject } from '@holo-js/panels-core'
 import { createApp as createH3App, createRouter, defineEventHandler, toWebHandler } from 'h3'
-import { createApp, createSSRApp, defineComponent, h, nextTick, shallowRef, type Component } from 'vue'
+import { createApp, createSSRApp, defineComponent, effectScope, h, nextTick, shallowRef, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { configureNuxtImports, configureNuxtNavigation } from './nuxt-imports'
@@ -247,7 +247,8 @@ describe('P9-D Nuxt adapter', () => {
         return structuredClone(page)
       },
     })
-    const admin = await usePanelPage({ panelId: 'admin' })
+    const scope = effectScope()
+    const admin = await scope.run(() => usePanelPage({ panelId: 'admin' }))!
     const staff = await usePanelPage({ panelId: 'staff', path: '/staff', load: async request => ({ ...page, path: request.path }) })
     expect(admin.page.title).toBe('Posts')
     expect(staff.path).toBe('/staff')
@@ -266,7 +267,20 @@ describe('P9-D Nuxt adapter', () => {
     await nextTick()
     expect(admin.path).toBe('/admin/posts/post-1/edit')
     expect(admin.page.title).toBe('Edit Post')
+    scope.stop()
     await expect(usePanelPage({ panelId: '../admin', path: '/admin', load: async () => page })).rejects.toThrow('stable panel IDs')
+  })
+
+  it('stops page loading when the generated page leaves its Vue scope', async () => {
+    configureNuxtImports({ path: '/admin/posts', fetch: async () => structuredClone(page) })
+    const scope = effectScope()
+    await scope.run(() => usePanelPage({ panelId: 'admin' }))
+    scope.stop()
+    const fetch = vi.fn(async () => structuredClone(page))
+    configureNuxtImports({ path: '/admin/profile', fetch })
+    await nextTick()
+    await Promise.resolve()
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('renders deterministic SSR, hydrates active navigation, and lazily resolves a resource', async () => {
@@ -722,7 +736,7 @@ describe('P9-D Nuxt adapter', () => {
     viewApp.mount(container)
     await nextTick()
     expect(container.querySelector('[data-action-mount="record"]')).not.toBeNull()
-    expect(container.querySelector('a[href="/control/articles/guide/edit"]')?.textContent).toBe('Edit')
+    expect(container.querySelector('[data-action-id="edit-article"]')?.textContent).toBe('Edit')
     expect(container.querySelector('[data-relation-manager="author"]')?.textContent).toContain('Ada')
     expect(container.querySelector('[data-operation="associate"]')).not.toBeNull()
     expect(container.querySelector('[data-panels-panel="backoffice"]')).not.toBeNull()

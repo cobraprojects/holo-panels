@@ -74,19 +74,18 @@ describe('Svelte renderer foundation', () => {
     const component = mountClient(RelationSelectorFixture, { target: container, props: { loadOptions, onOperation } })
     mounted.push({ component, container })
     expect(container.querySelector('[data-slot="relation-manager-header"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="relation-manager-count"]')).not.toBeNull()
+    expect(container.querySelector('.hp-relation-manager-count')).not.toBeNull()
     expect(container.querySelector('[data-slot="relation-toolbar"]')).not.toBeNull()
     expect(container.querySelector('[data-operation="attach"] [data-icon="link"]')).not.toBeNull()
     expect(container.textContent).toContain('No tags found.')
     container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click()
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
-    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
+    const select = document.querySelector<HTMLSelectElement>('[data-field-path="relatedId"] select')
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-header"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-footer"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="dialog-footer"]')).not.toBeNull()
     if (select) {
       select.value = 'tag-typescript'
       select.dispatchEvent(new Event('change', { bubbles: true }))
@@ -95,8 +94,8 @@ describe('Svelte renderer foundation', () => {
       position.value = '3'
       position.dispatchEvent(new Event('input', { bubbles: true }))
     }
-    document.querySelector<HTMLButtonElement>('.hp-relation-operation-form button[type="submit"]')?.click()
-    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }))
+    document.querySelector<HTMLButtonElement>('[role="dialog"] button[type="submit"]')?.click()
+    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith(expect.objectContaining({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }), expect.any(AbortSignal)))
   })
 
   it('views a related record without sending a mutation', async () => {
@@ -113,9 +112,8 @@ describe('Svelte renderer foundation', () => {
     expect(table?.querySelector('td[data-label="Name"]')?.textContent).toContain('TypeScript')
     expect(table?.querySelector('.hp-table-row-actions [data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
     container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
-    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript'))
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')?.value).toBe('TypeScript'))
 
-    expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
     expect(onOperation).not.toHaveBeenCalled()
   })
 

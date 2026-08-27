@@ -1,18 +1,14 @@
-import type { ClientRelationManager, ClientRelationOption, ClientRelationSelection, JsonValue, RelationOperation } from '@holo-js/panels-client'
+import type { ComponentRegistry } from '../registry'
+import type { ClientRelationActionRequest, ClientRelationManager, ClientRelationOption, ClientRelationSelection } from '@holo-js/panels-client'
 
-export interface VueRelationOperationRequest {
-  readonly managerId: string
-  readonly operation: RelationOperation
-  readonly pivot?: Readonly<Record<string, JsonValue>>
-  readonly recordId?: number | string
-  readonly values?: Readonly<Record<string, JsonValue>>
-}
+export type VueRelationOperationRequest = ClientRelationActionRequest
 
 export interface VueRelationManagerRendererProps {
   readonly loadOptions?: (managerId: string, search: string) => Promise<readonly ClientRelationOption[]>
   readonly managers: readonly ClientRelationManager[]
-  readonly onOperation?: (request: VueRelationOperationRequest) => void | Promise<void>
+  readonly onOperation?: (request: VueRelationOperationRequest, signal?: AbortSignal) => void | Promise<void>
   readonly onSelectionChange?: (groupId: string, managerId: string) => void
+  readonly registry?: ComponentRegistry
   readonly panelId?: string
   readonly selection?: ClientRelationSelection
 }

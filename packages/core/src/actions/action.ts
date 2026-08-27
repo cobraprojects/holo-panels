@@ -11,6 +11,7 @@ import type {
 } from './contracts'
 import type { CompiledSchema } from '../schemas/contracts'
 import { builtInActionPresentation } from './presentation'
+import { registeredActionChildren } from './registration'
 
 const ACTION_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u
 
@@ -63,7 +64,9 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   label: string,
   context: ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>,
   state: Pick<ActionResolvedState, 'disabled' | 'visible'>,
+  depth = 0,
 ): Promise<Readonly<ActionManifest>> {
+  if (depth > 10) throw new Error('Nested actions cannot exceed ten levels')
   if (!ACTION_ID.test(definition.id)) throw new Error('Actions require stable dot or dash separated IDs')
   const normalizedLabel = label.trim()
   if (!normalizedLabel) throw new Error('Action labels cannot be empty')
@@ -74,6 +77,10 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   const defaults = builtInActionPresentation(definition.kind)
   const modal = definition.modal
     ? {
+        ...(definition.nestedActions?.length ? { actions: await Promise.all(registeredActionChildren(definition).map(async child => {
+          const resolved = await resolveActionState(child, context)
+          return compileManifest(child, resolved.label, context, resolved, depth + 1)
+        })) } : {}),
         alignment: definition.modal.alignment ?? 'center',
         autofocus: definition.modal.autofocus ?? true,
         cancelActionLabel: definition.modal.cancelActionLabel ?? null,

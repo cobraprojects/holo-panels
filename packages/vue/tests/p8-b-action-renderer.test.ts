@@ -121,8 +121,9 @@ describe('P8-B Vue action renderer', () => {
     store.setInput({ reason: 'Duplicate' })
     document.querySelector<HTMLFormElement>('[data-panels-component="modal"] form')?.requestSubmit()
     await flush()
-    expect(store.activeFrame?.phase).toBe('succeeded')
+    await vi.waitFor(() => expect(store.activeFrame).toBeNull())
 
+    store.mount({ ...manifest, confirmation: null })
     store.mount({ ...manifest, confirmation: null, id: 'posts.notice', label: 'Notice', modal: null, mount: 'notification' })
     await flush()
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)

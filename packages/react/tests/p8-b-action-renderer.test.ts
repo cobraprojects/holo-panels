@@ -64,6 +64,20 @@ afterEach(() => {
 })
 
 describe('P8-B React action renderer', () => {
+  it('collects values from a public action schema before execution', async () => {
+    const execute = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
+    const store = new ClientActionStore({ createIdempotencyKey: () => 'modal-input-0001', transport: { execute } })
+    const action = { ...manifest, confirmation: null, modal: { ...manifest.modal!, schema: { fields: [{ kind: 'field', key: 'reason', path: 'reason', type: 'text', label: 'Reason', defaultValue: 'Scheduled release', properties: {} }] } } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    await act(async () => root.render(createElement(ReactActionRenderer, { manifest: action, recordIds: [7], store })))
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-action-id]')?.click())
+    expect(document.querySelector<HTMLInputElement>('input')?.value).toBe('Scheduled release')
+    await act(async () => document.querySelector<HTMLFormElement>('[role="dialog"] form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ input: { reason: 'Scheduled release' }, recordIds: [7] }), expect.any(AbortSignal))
+  })
   it('does not duplicate transport-owned action feedback across renderers sharing a store', async () => {
     const notificationStore = new ClientToastStore()
     const presentation = panelNotification('posts.publish.custom')
@@ -159,8 +173,9 @@ describe('P8-B React action renderer', () => {
     await vi.waitFor(() => expect(document.querySelector('[data-schema-id="publish-reason"]')).not.toBeNull())
     act(() => store.setInput({ reason: 'Ready' }))
     await act(async () => document.querySelector<HTMLFormElement>('form')?.requestSubmit())
-    expect(store.activeFrame?.phase).toBe('succeeded')
+    expect(store.activeFrame).toBeNull()
 
+    act(() => store.mount({ ...manifest, confirmation: null }))
     act(() => store.mount({ ...manifest, confirmation: null, id: 'posts.notify', label: 'Notify', modal: null, mount: 'notification' }))
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Notify')

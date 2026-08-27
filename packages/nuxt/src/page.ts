@@ -1,5 +1,10 @@
 import {
   ClientActionStore,
+  actionManifestCollection,
+  resolveTableActionManifest,
+  relationActionPayload,
+  relationActionPresentation,
+  type TableActionExecutionRequest,
   createWidgetActionStore,
   CollectionStore,
   createBrowserUploadAdapter,
@@ -10,6 +15,7 @@ import {
   FormStore,
   GlobalSearchStore,
   installPanelSpaNavigation,
+  navigatePanelUrl,
   OptionStore,
   PanelsErrorBoundary,
   PanelsPageActions,
@@ -192,6 +198,7 @@ interface ResourceRenderSchema {
   readonly columns: readonly VueTableColumn<ResourceRecord>[]
   readonly entries: readonly JsonObject[]
   readonly fields: readonly ResourceField[]
+  readonly formActions: readonly ClientActionManifest[]
   readonly filters: readonly VueTableFilter[]
   readonly filterMode: 'deferred' | 'live'
   readonly recordTitle: string
@@ -245,6 +252,7 @@ function relationManagers(value: unknown): VueRelationManagerRendererProps['mana
       return [{ id: record.id, values: toJsonValue(record.values) as JsonObject }]
     }) : []
     return [{
+      ...relationActionPresentation(mutationPayload(manager)),
       badge: typeof manager.badge === 'number' || typeof manager.badge === 'string' ? manager.badge : null,
       columns: Array.isArray(manager.columns) ? manager.columns.flatMap(column => isObject(column) && typeof column.key === 'string' ? [{ key: column.key, label: typeof column.label === 'string' ? column.label : column.key }] : []) : [],
       fields: relationFields(manager.fields),
@@ -272,9 +280,7 @@ function isActionModal(value: unknown): value is NonNullable<ClientActionManifes
   if (!isObject(value)) return false
   const schema = value.schema
   const validSchema = schema === null || isObject(schema)
-    && schema.kind === 'schema'
-    && typeof schema.id === 'string'
-    && Array.isArray(schema.components)
+    && (Array.isArray(schema.fields) || schema.kind === 'schema' && typeof schema.id === 'string' && Array.isArray(schema.components))
   return (value.content === null || isRenderSlot(value.content))
     && (value.description === null || typeof value.description === 'string')
     && (value.footer === null || isRenderSlot(value.footer))
@@ -332,6 +338,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
             : undefined
           return { ...field, ...(options.length > 0 || (sourceKind && sourceKind !== 'static') ? { optionSource: { options, server: !!sourceKind && sourceKind !== 'static' } } : {}), ...(reactive ? { reactive } : {}), ...(typeof properties.defaultValue !== 'undefined' ? { defaultValue: properties.defaultValue } : {}) }
         }) : [],
+        formActions: generatedForm.actions,
         filters: Array.isArray(generatedTable.filters) ? generatedTable.filters.map(manifest => ({ manifest })) : [],
         filterMode: generatedTable.filterMode === 'deferred' ? 'deferred' : 'live',
         kind: 'resource',
@@ -364,6 +371,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
       label: typeof field.label === 'string' && field.label.trim() ? field.label : humanizePath(field.path),
     })),
     filters: schema.filters as unknown as readonly VueTableFilter[],
+    formActions: (Array.isArray(schema.formActions) ? schema.formActions : []).flatMap(item => clientAction(item) ?? []),
     filterMode: schema.filterMode === 'deferred' ? 'deferred' : 'live',
     recordTitle: schema.recordTitle,
     recordActions: (Array.isArray(schema.recordActions) ? schema.recordActions : schema.actions).flatMap(item => clientAction(item) ?? []),
@@ -394,6 +402,7 @@ function resourceTableAction(action: JsonObject, routes: JsonObject): ResourceTa
       icon: typeof action.icon === 'string' ? action.icon : null,
       id,
       kind: 'action-group',
+      emptyStateOnly: action.emptyStateOnly === true,
       label: typeof action.label === 'string' ? action.label : null,
       scope,
     }
@@ -403,6 +412,7 @@ function resourceTableAction(action: JsonObject, routes: JsonObject): ResourceTa
   const path = kind === 'edit' || kind === 'view' ? routes[kind] : null
   return {
     color: typeof action.color === 'string' ? action.color : null,
+    emptyStateOnly: action.emptyStateOnly === true,
     confirmation: typeof action.confirmation === 'string' ? action.confirmation : undefined,
     icon: typeof action.icon === 'string' ? action.icon : null,
     id,
@@ -517,6 +527,7 @@ function panelsTransport(): PanelsTransport {
 async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'action' | 'form-submit', payload: JsonObject, signal?: AbortSignal): Promise<unknown> {
   const response = await runtime.transport.execute({ kind: 'mutation', name: operation, supportsIdempotency: true }, {
     endpoint: `/holo/panels/${encodeURIComponent(panelId)}/${operation}`,
+    ...(typeof payload.idempotencyKey === 'string' ? { idempotencyKey: payload.idempotencyKey } : {}),
     panelId,
     payload,
     signal: requestSignal(runtime.signal, signal),
@@ -533,6 +544,10 @@ async function mutate(runtime: PanelPageRuntime, panelId: string, operation: 'ac
   if (!response.ok) {
     if (operation === 'action') publishPanelActionFailure(panelId, response.effects)
     throw new Error(response.error.message)
+  }
+  if (isObject(response.data) && response.data.status === 'partial') {
+    publishPanelActionFailure(panelId, response.effects)
+    throw new Error('The action could not be completed for every record.')
   }
   return response.data
 }
@@ -635,8 +650,7 @@ function initialValues(schema: ResourceRenderSchema, record: ResourceRecord | nu
 function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentRegistry, schema: ResourceRenderSchema, runtime: PanelPageRuntime, createRedirect: 'edit' | 'index' | 'view', editRedirect: 'index' | 'view' | null, unsavedChangesAlerts: boolean): () => VNode {
   const record = recordFrom(page)
   let routeValue = record ? valueAtPath(record, schema.routeKey) : undefined
-  const viewAction = schema.recordActions.find(action => action.kind === 'view' && action.visible)
-  const recordActions = schema.recordActions.filter(action => action.mount === 'record' && action.visible && !['create', 'edit', 'view'].includes(action.kind))
+  const recordActions = schema.recordActions.filter(action => action.mount === (page.manifest.pageType === 'create' ? 'page' : 'record') && action.visible)
   const values = initialValues(schema, record)
   const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new FormStore(values, {
@@ -654,15 +668,15 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
       async execute(request, signal) {
-        if (typeof routeValue !== 'string' && typeof routeValue !== 'number') {
+        if (request.mount !== 'page' && typeof routeValue !== 'string' && typeof routeValue !== 'number') {
           publishPanelActionFailure(panelId)
           throw new Error('Resource record is unavailable')
         }
-        if (!recordActions.some(action => action.id === request.actionId)) {
+        if (!actionManifestCollection(recordActions).some(action => action.id === request.actionId)) {
           publishPanelActionFailure(panelId)
           throw new Error('Resource action is unavailable')
         }
-        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [routeValue], resourceId: schema.resourceId, source: 'edit' }, signal)
+        await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: request.mount === 'page' ? [] : typeof routeValue === 'number' || typeof routeValue === 'string' ? [routeValue] : [], resourceId: schema.resourceId, source: page.manifest.pageType }, signal)
         return { effects: [], items: [], status: 'succeeded' }
       },
     },
@@ -677,6 +691,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     window.removeEventListener('beforeunload', preventUnload)
     store.cancelRequests()
     while (actionStore.activeFrame) actionStore.close()
+    while (formActionStore.activeFrame) formActionStore.close()
     for (const upload of uploadStores.values()) upload.reset()
   })
   const optionStores = new Map(schema.fields.flatMap(field => {
@@ -709,7 +724,9 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     })
     return [[field.path, upload] as const]
   }))
+  const formState = shallowReactive({ values: store.state.values })
   store.subscribe((next, previous) => {
+    formState.values = next.values
     for (const field of schema.fields) {
       const dependency = field.optionSource?.dependency
       const options = optionStores.get(field.path)
@@ -722,19 +739,26 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       })
     }
   })
-  const submit = async (): Promise<void> => {
-    await store.submit(async request => {
+  const formActionStore = new ClientActionStore({
+    createIdempotencyKey: () => crypto.randomUUID(),
+    transport: {
+      async execute(actionRequest, signal) {
+        let intent: unknown
+        const outcome = await store.submit(async request => {
       const result = await mutate(runtime, panelId, 'form-submit', mutationPayload({
+        actionId: actionRequest.actionId,
+        idempotencyKey: actionRequest.idempotencyKey,
         mutation: page.manifest.pageType === 'create' ? 'create' : 'update',
         ...(typeof routeValue === 'string' || typeof routeValue === 'number' ? { record: routeValue } : {}),
         resourceId: schema.resourceId,
-        ...request.values,
-      }), request.signal)
+        values: actionRequest.input,
+      }), AbortSignal.any([request.signal, signal]))
+      intent = isObject(result) ? result.formIntent : undefined
       if (isObject(result) && isObject(result.record)) {
         const nextRouteValue = valueAtPath(result.record, schema.routeKey)
         if (typeof nextRouteValue === 'string' || typeof nextRouteValue === 'number') {
-          routeValue = nextRouteValue
-          const redirect = page.manifest.pageType === 'create' ? createRedirect : editRedirect
+          if (intent !== 'create-another') routeValue = nextRouteValue
+          const redirect = intent === 'create-another' ? null : page.manifest.pageType === 'create' ? createRedirect : editRedirect
           const encodedRouteValue = encodeURIComponent(String(nextRouteValue))
           if (redirect) {
             const target = redirect === 'index' ? schema.basePath : redirect === 'view' ? `${schema.basePath}/${encodedRouteValue}` : `${schema.basePath}/${encodedRouteValue}/edit`
@@ -744,21 +768,22 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
           }
         }
       }
-      return { commitValues: true }
-    })
-  }
-  const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request) => {
+      return { commitValues: intent !== 'cancel' && intent !== 'create-another' }
+        })
+        if (outcome.status !== 'applied') throw new Error('The form submission was cancelled.')
+        if (intent === 'cancel' || intent === 'create-another') store.reset()
+        if (intent === 'cancel') await runtime.navigate(schema.basePath)
+        return { effects: [], items: [], status: 'succeeded' as const }
+      },
+    },
+  })
+  const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request, signal) => {
     if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Relation operations require a persisted owner record')
     const result = await mutate(runtime, panelId, 'action', mutationPayload({
-      intent: 'relation',
-      managerId: request.managerId,
+      ...relationActionPayload(request),
       ownerId: routeValue,
-      ...(request.pivot ? { pivot: request.pivot } : {}),
-      ...(typeof request.recordId === 'string' || typeof request.recordId === 'number' ? { relatedId: request.recordId } : {}),
-      relationOperation: request.operation,
       resourceId: schema.resourceId,
-      ...(request.values ? { values: request.values } : {}),
-    }))
+    }), signal)
     if (isObject(result)) relations.splice(0, relations.length, ...relationManagers(result.relations))
   }
   const loadRelationOptions: NonNullable<VueRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
@@ -773,17 +798,19 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
   return () => h('div', { class: 'hp-resource-page' }, [
-    page.manifest.pageType === 'edit' ? h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
-      viewAction && schema.routes.view && (typeof routeValue === 'string' || typeof routeValue === 'number') ? h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': viewAction.id, 'data-color': viewAction.color ?? undefined, href: schema.routes.view.replace(':record', encodeURIComponent(String(routeValue))), variant: 'outline' }, () => [viewAction.icon ? PanelsIcon(viewAction.icon) : null, h('span', viewAction.label)]) : null,
-      ...recordActions.map(action => h(VueActionRenderer, { action, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], store: actionStore })),
-    ]) : null,
-    h('form', { class: 'hp-resource-form hp:grid hp:gap-6', 'data-resource-crud': page.manifest.pageType, onSubmit: (event: Event) => { event.preventDefault(); void submit().catch(() => undefined) } }, [
+    h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
+      recordActions[0] ? h(VueActionRenderer, { action: recordActions[0], actions: recordActions, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], registry, store: actionStore }) : null,
+    ]),
+    h('form', { class: 'hp-resource-form hp:grid hp:gap-6', 'data-resource-crud': page.manifest.pageType, onSubmit: (event: Event) => {
+      event.preventDefault()
+      if (event.currentTarget instanceof HTMLFormElement) event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
+    } }, [
       h(Card, {}, () => [
         h(CardContent, { class: 'hp:grid hp:gap-6 hp:pt-6' }, () => schema.fields.map(definition => h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path }))),
-        h(CardFooter, { class: 'hp:justify-end' }, () => h(Button, { class: 'hp-form-actions hp-button hp-button-primary', type: 'submit' }, 'Save')),
+        h(CardFooter, { class: 'hp:justify-end' }, () => schema.formActions[0] ? h(VueActionRenderer, { action: schema.formActions[0], actions: schema.formActions, input: mutationPayload(formState.values), panelId, registry, store: formActionStore }) : null),
       ]),
     ]),
-    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
+    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])
 }
 
@@ -817,6 +844,10 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
   const store = new TableStateStore<ResourceRecord>({ filterMode: schema.filterMode, panelId, records, tableId: schema.resourceId, total: typeof page.data.total === 'number' ? page.data.total : records.length, visibleColumns })
   const groups = shallowReactive([...tableGroups(page.data.groups)])
   const summaries = shallowReactive([...tableSummaries(page.data.summaries)])
+  const actionData = shallowReactive({ ...page.data })
+  const resolveActions = (actions: readonly ResourceTableAction[]): readonly ResourceTableAction[] => actions.map(action => action.kind === 'action-group'
+    ? { ...action, actions: resolveActions(action.actions) as readonly ResourceAction[] }
+    : { ...action, ...(Array.isArray(actionData.tableActions) ? { resolveManifest: (recordId?: string | number) => resolveTableActionManifest(actionData, action.id, recordId) } : {}) })
   if (typeof page.data.search === 'string') store.setSearch(page.data.search)
   for (const filter of schema.filters) {
     const value = page.data[filter.manifest.id]
@@ -839,34 +870,28 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       const nextRecords: ResourceRecord[] = Array.isArray(response.data.records) ? response.data.records.flatMap(item => isObject(item) ? [item] : []) : []
       groups.splice(0, groups.length, ...tableGroups(response.data.groups))
       summaries.splice(0, summaries.length, ...tableSummaries(response.data.summaries))
+      Object.assign(actionData, response.data)
       store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total: typeof response.data.total === 'number' ? response.data.total : nextRecords.length })
       if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}?${store.toQueryString()}`)
     }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
-  const createAction = schema.recordActions.find(action => action.kind === 'create' && action.visible)
-  const createRoute = schema.routes.create
   return h('div', { class: 'hp-resource-page' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
-      createAction && createRoute ? h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': createAction.id, 'data-color': createAction.color ?? undefined, href: createRoute, variant: 'default' }, () => [createAction.icon ? PanelsIcon(createAction.icon) : null, h('span', createAction.label)]) : null,
-      h(VueResourceActions, { actions: schema.recordActions.filter(action => action.mount === 'page' && action.kind !== 'create'), panelId, resourceId: schema.resourceId, runtime, source: 'list' }),
+      h(VueResourceActions, { actions: schema.recordActions.filter(action => action.mount === 'page'), panelId, resourceId: schema.resourceId, runtime, source: 'list' }),
     ]), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE, page.data), h(VueTableRenderer, {
     table: {
       actionTransport: {
-        async execute(request: { readonly actionId: string, readonly recordId?: number | string, readonly selection?: { readonly mode: 'all-matching' } | { readonly mode: 'explicit', readonly recordIds: readonly (number | string)[] } }, signal: AbortSignal) {
-          const action = executableResourceTableActions(schema.actions).find(candidate => candidate.id === request.actionId)
+        async execute(request: TableActionExecutionRequest<number | string>, signal: AbortSignal) {
+          const action = resolveTableActionManifest(actionData, request.actionId, request.recordId) ?? executableResourceTableActions(schema.actions).find(candidate => candidate.id === request.actionId)
           if (!action) throw new Error('Resource action is unavailable')
-          if ((action.kind === 'edit' || action.kind === 'view') && request.recordId !== undefined) {
-            await runtime.navigate(actionLocation(schema, action, request.recordId))
-            return
-          }
           const recordIds = request.selection?.mode === 'explicit'
             ? request.selection.recordIds
             : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: crypto.randomUUID(), mount: action.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId: schema.resourceId, source: 'table' }, signal)
+          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? crypto.randomUUID(), input: request.input ?? {}, mount: request.mount ?? ('mount' in action ? action.mount : action.scope === 'bulk' ? 'bulk' : action.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId: schema.resourceId, source: 'table' }, signal)
           refresh()
         },
       },
-      actions: schema.actions,
+      actions: resolveActions(schema.actions),
       caption: page.title,
       panelId,
       columns: navigableColumns(schema),
@@ -881,6 +906,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       groups,
       getRecordId: (record: ResourceRecord) => recordId(record, schema.routeKey),
       notificationStore: runtime.toastStore,
+      registry: runtime.registry,
       onQueryChange: refresh,
       store,
       summaries,
@@ -904,7 +930,7 @@ const VueResourceActions = defineComponent({
       createIdempotencyKey: () => crypto.randomUUID(),
       transport: {
         async execute(request, signal) {
-          if (!props.actions.some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
+          if (!actionManifestCollection(props.actions).some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
           const result = await mutate(props.runtime, props.panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [...props.recordIds], resourceId: props.resourceId, source: props.source }, signal)
           if (isObject(result) && result.status === 'partial') throw new Error('The action could not be completed for every record.')
           return { effects: [], items: [], status: 'succeeded' }
@@ -920,9 +946,8 @@ const VueResourceActions = defineComponent({
 
 function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: boolean, registry: ComponentRegistry, schema: ResourceRenderSchema, runtime: PanelPageRuntime): VNode {
   const record = recordFrom(page)
-  const editAction = schema.recordActions.find(action => action.kind === 'edit' && action.visible)
   const routeValue = record ? recordId(record, schema.routeKey) : null
-  const actions = schema.recordActions.filter(action => action.mount === 'record' && action.visible && !['create', 'edit', 'view'].includes(action.kind))
+  const actions = schema.recordActions.filter(action => action.mount === 'record' && action.visible)
   const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
@@ -932,7 +957,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
           publishPanelActionFailure(panelId)
           throw new Error('Resource record is unavailable')
         }
-        if (!actions.some(action => action.id === request.actionId)) {
+        if (!actionManifestCollection(actions).some(action => action.id === request.actionId)) {
           publishPanelActionFailure(panelId)
           throw new Error('Resource action is unavailable')
         }
@@ -941,18 +966,9 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       },
     },
   })
-  const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request) => {
+  const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request, signal) => {
     if (routeValue === null) throw new Error('Relation operations require a persisted owner record')
-    const result = await mutate(runtime, panelId, 'action', mutationPayload({
-      intent: 'relation',
-      managerId: request.managerId,
-      ownerId: routeValue,
-      ...(request.pivot ? { pivot: request.pivot } : {}),
-      ...(typeof request.recordId === 'string' || typeof request.recordId === 'number' ? { relatedId: request.recordId } : {}),
-      relationOperation: request.operation,
-      resourceId: schema.resourceId,
-      ...(request.values ? { values: request.values } : {}),
-    }))
+    const result = await mutate(runtime, panelId, 'action', mutationPayload({ ...relationActionPayload(request), ownerId: routeValue, resourceId: schema.resourceId }), signal)
     if (isObject(result)) relations.splice(0, relations.length, ...relationManagers(result.relations))
   }
   const loadRelationOptions: NonNullable<VueRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
@@ -968,8 +984,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
   }
   return h('section', { class: 'hp-resource-view', 'data-resource-crud': 'view' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
-      editAction && schema.routes.edit && routeValue !== null ? h(Button, { as: 'a', class: 'hp-action-trigger', 'data-action-id': editAction.id, 'data-color': editAction.color ?? undefined, href: schema.routes.edit.replace(':record', encodeURIComponent(String(routeValue))), variant: 'outline' }, () => [editAction.icon ? PanelsIcon(editAction.icon) : null, h('span', editAction.label)]) : null,
-      ...actions.map(action => h(VueActionRenderer, { action, panelId, recordIds: routeValue === null ? [] : [routeValue], store })),
+      actions[0] ? h(VueActionRenderer, { action: actions[0], actions, panelId, recordIds: routeValue === null ? [] : [routeValue], registry, store }) : null,
     ]),
     h('div', { class: 'hp-infolist' }, record ? schema.entries.map(entry => h(VueResourceActions, {
       actions: Array.isArray(entry.actionManifests) ? entry.actionManifests.flatMap(value => { const action = clientAction(value); return action ? [action] : [] }) : [],
@@ -981,7 +996,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       runtime,
       source: `infolist:${entry.path}`,
     })) : []),
-    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations, panelId } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
+    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations, panelId } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])
 }
 
@@ -1280,10 +1295,18 @@ export const PanelPage = defineComponent({
       download: async effect => downloadFile(effect.url, effect.filename),
       focus: async effect => focusComponent(effect.componentId),
       invalidateTable: async effect => dispatchPanelEvent('holo-panels:invalidate-table', { panelId, tableId: effect.tableId }),
-      redirect: async effect => browserNavigate(effect.url, effect.replace),
+      redirect: async effect => {
+        if (effect.newTab) { window.open(effect.url, '_blank', 'noopener,noreferrer'); return }
+        await navigatePanelUrl(effect.url, { enabled: props.page.bootstrap.manifest.runtime?.spa !== false, exceptions: props.page.bootstrap.manifest.runtime?.spaUrlExceptions ?? [], navigate: async (url, replace) => { await (replace ? router.replace(url) : router.push(url)) } }, effect.replace)
+      },
       refresh: async effect => dispatchPanelEvent('holo-panels:refresh', { panelId, target: effect.target ?? 'page' }),
     })
     let effectBatch = 0
+    toastStore.connectActions(createPanelNotificationTransport(transport, {
+      applyEffects: response => effects.apply(response),
+      endpoint: `/holo/panels/${encodeURIComponent(panelId)}/notification`,
+      panelId,
+    }))
     watch(() => props.page.effects, (next, previous) => {
       if (next === previous || !next || next.length === 0) return
       effectBatch += 1
@@ -1576,7 +1599,7 @@ export const PanelPage = defineComponent({
           ]),
           renderHook(PanelsRenderHook.CONTENT_AFTER),
           renderHook(PanelsRenderHook.FOOTER),
-          h(VueToastViewport, { navigate: browserNavigate, store: toastStore }),
+          h(VueToastViewport, { navigate: browserNavigate, panelId, registry, store: toastStore }),
           renderHook(PanelsRenderHook.LAYOUT_END),
           renderHook(PanelsRenderHook.BODY_END),
         ])),

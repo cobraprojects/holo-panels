@@ -255,7 +255,7 @@ describe('P9 example phase gate', () => {
     const execute = runtime.execute
     expect(execute).toBeTypeOf('function')
     const scope = { actor: admin, locale: 'en', panelId: 'admin', parameters: {}, provider: 'session', request: new Request('https://panels.test/admin/posts'), services: {}, signal, tenant: 'tenant-a' }
-    const invoke = (payload: JsonObject) => execute?.({ operation: 'form-submit', panelId: 'admin', payload, request: scope.request, scope })
+    const invoke = (payload: JsonObject) => execute?.({ operation: 'form-submit', panelId: 'admin', payload: { actionId: payload.intent === 'update' ? 'edit' : 'create', ...payload }, request: scope.request, scope })
     const created = await invoke({ category: 'News', city: 'Cairo', intent: 'create', resourceId: 'posts', slug: 'created-post', title: 'Created post' })
     expect(created).toMatchObject({ data: { record: { createdAt: '2026-08-05T00:00:00.000Z' } } })
     const list = await resolveNextPanelPage('admin', ['posts'], new Request('https://panels.test/admin/posts'), runtime)
@@ -298,7 +298,7 @@ describe('P9 example phase gate', () => {
     await configureTestDatabase()
     const nuxtPanelAcceptanceFixture = await loadExampleExport<NuxtPanelAcceptanceFixture>('nuxt', 'p9-panel-acceptance-nuxt', 'nuxtPanelAcceptanceFixture')
     const runtime = await nuxtPanelAcceptanceFixture.loadRuntime()
-    const context = (operation: NuxtPanelOperationContext['operation'], actor: object, input: JsonObject) => nuxtContext(operation, actor, input, project)
+    const context = (operation: NuxtPanelOperationContext['operation'], actor: object, input: JsonObject) => nuxtContext(operation, actor, operation === 'form-submit' ? { actionId: input.mutation === 'update' ? 'edit' : 'create', ...input } : input, project)
     const list = await runtime.execute(context('page-data', admin, { path: '/admin/posts?search=first&category=News' }))
     const listPayload = list.data as { readonly page: { readonly data: JsonObject } }
     expect(listPayload.page.data.category).toBe('News')
@@ -365,7 +365,7 @@ describe('P9 example phase gate', () => {
     const operation = registry.operations?.['form-submit']
     const invoke = (actor: SvelteActor, payload: JsonObject): Promise<unknown> => {
       const event = svelteEvent('/holo/panels/admin/form-submit')
-      const input: PanelOperationInput<SvelteActor, string> = { event, holo, operation: 'form-submit', panelId: 'admin', payload, scope: svelteScope(actor), tenant: 'tenant-a' }
+      const input: PanelOperationInput<SvelteActor, string> = { event, holo, operation: 'form-submit', panelId: 'admin', payload: { actionId: payload.intent === 'update' ? 'edit' : 'create', ...payload }, scope: svelteScope(actor), tenant: 'tenant-a' }
       return Promise.resolve(operation?.(input))
     }
     await invoke(svelteAdmin, { intent: 'create', recordId: '', resourceId: 'posts', values: { category: 'News', city: 'Cairo', slug: 'created-post', title: 'Created Post' } })

@@ -22,3 +22,8 @@ export type {
   ClientActionStoreOptions,
   ClientActionTransport,
 } from './contracts'
+export { createTableActionHost } from './table'
+export { resolveTableActionManifest } from './table'
+export { actionManifestCollection, isActionManifest } from './manifest'
+export { actionFormField, actionFormSchema, createActionForm } from './form'
+export type { TableActionDefinition, TableActionExecutionRequest } from './table'

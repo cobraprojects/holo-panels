@@ -141,6 +141,10 @@ export class OptionStore<TValue extends OptionValue> {
     return this.#state
   }
 
+  cancelRequests(): void {
+    this.abortActiveRequest()
+  }
+
   subscribe(listener: OptionStateListener<TValue>): () => void {
     this.#listeners.add(listener)
     return () => this.#listeners.delete(listener)

@@ -136,6 +136,18 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+it('uses the shared action manifest for table visibility and disabled presentation', () => {
+  const manifest = { badge: null, color: 'danger', confirmation: null, disabled: true, icon: 'trash', id: 'archive', kind: 'custom' as const, label: 'Archive selected', modal: null, mount: 'page' as const, size: 'medium' as const, tooltip: null, type: 'custom', visible: true }
+  const container = mount({ ...baseProps(createStore()), actions: [
+    { id: 'archive', label: 'Fallback', scope: 'header', resolveManifest: () => manifest },
+    { id: 'hidden', label: 'Hidden fallback', scope: 'header', resolveManifest: () => ({ ...manifest, id: 'hidden', visible: false }) },
+  ] })
+  const trigger = container.querySelector<HTMLButtonElement>('[data-action-id="archive"]')
+  expect(trigger?.textContent).toContain('Archive selected')
+  expect(trigger?.disabled).toBe(true)
+  expect(container.textContent).not.toContain('Hidden fallback')
+})
+
 describe('P7-E React table renderer', () => {
   it('renders schema-ordered responsive modal filters with public before and after content', async () => {
     const registry = createComponentRegistry()
@@ -229,7 +241,7 @@ describe('P7-E React table renderer', () => {
     })
     await vi.waitFor(() => expect(document.querySelector('[role="menuitem"][data-action="posts.inspect"]')).not.toBeNull())
     await act(async () => document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.inspect"]')?.click())
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.inspect', recordId: 1 }, expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.inspect', recordId: 1, input: {}, mount: 'record', idempotencyKey: expect.any(String) }), expect.any(AbortSignal))
   })
 
   it('renders deterministic accessible pagination and locks its controls while loading', () => {
@@ -464,7 +476,7 @@ describe('P7-E React table renderer', () => {
     expect(confirm?.className).toContain('hp:bg-destructive')
     expect(confirm?.querySelector('[data-icon="delete"]')).not.toBeNull()
     await act(async () => confirm?.click())
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.delete', recordId: 1 }, expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.delete', recordId: 1, input: {}, mount: 'record', idempotencyKey: expect.any(String) }), expect.any(AbortSignal))
     expect(document.querySelector('[role="alertdialog"]')).toBeNull()
   })
 

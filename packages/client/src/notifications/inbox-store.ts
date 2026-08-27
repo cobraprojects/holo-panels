@@ -1,6 +1,6 @@
 import { notificationExecution, type ActionManifest, type JsonValue, type PanelDatabaseNotificationPage, type PanelNotificationAction } from '@holo-js/panels-core'
 import { ClientActionStore } from '../actions/store'
-import { isNotificationActionManifest } from './action-manifest'
+import { isActionManifest } from '../actions/manifest'
 import type {
   ClientNotificationInboxListener,
   ClientNotificationInboxOptions,
@@ -67,7 +67,7 @@ export class ClientNotificationInboxStore {
     const actions = item?.presentation.actions.flatMap(value => {
       const action = notificationExecution(value)
       const manifest = value && typeof value === 'object' && !Array.isArray(value) ? value.actionManifest : undefined
-      return action && isNotificationActionManifest(manifest, action.id) ? [manifest] : []
+      return action && isActionManifest(manifest, action.id) && manifest.mount === 'notification' ? [manifest] : []
     }) ?? []
     if (actions.length === 0) return null
     let store = this.#actions.get(notificationId)

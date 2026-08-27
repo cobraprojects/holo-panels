@@ -1,4 +1,4 @@
-import type { JsonValue, RelationOperation, RelationPresentation } from '@holo-js/panels-core'
+import type { ActionManifest, ActionMount, JsonObject, JsonValue, RelationOperation, RelationPresentation } from '@holo-js/panels-core'
 
 export interface ClientRelationColumn {
   readonly key: string
@@ -23,6 +23,8 @@ export interface ClientRelationOption {
 }
 
 export interface ClientRelationManager {
+  readonly actions?: readonly ActionManifest[]
+  readonly recordActions?: readonly { readonly recordId: number | string, readonly actions: readonly ActionManifest[] }[]
   readonly badge: number | string | null
   readonly columns: readonly ClientRelationColumn[]
   readonly emptyMessage?: string
@@ -36,6 +38,19 @@ export interface ClientRelationManager {
   readonly records: readonly ClientRelationRecord[]
   readonly url: string | null
   readonly visible: boolean
+}
+
+export interface ClientRelationActionRequest {
+  readonly actionId?: string
+  readonly idempotencyKey?: string
+  readonly input?: JsonObject
+  readonly managerId: string
+  readonly mount?: ActionMount
+  readonly operation: RelationOperation | 'custom'
+  readonly pivot?: Readonly<JsonObject>
+  readonly recordId?: number | string
+  readonly recordIds?: readonly (number | string)[]
+  readonly values?: Readonly<JsonObject>
 }
 
 export interface ClientRelationTabGroup {

@@ -21,6 +21,7 @@ export interface ClientToastState {
 export type ClientToastStateListener = (state: ClientToastState, previous: ClientToastState) => void
 
 export interface ClientNotificationTransport {
+  executeToastAction?(token: string, request: ClientActionRequest, signal: AbortSignal): Promise<ActionExecutionResult<number | string, unknown>>
   executeAction?(notificationId: string, request: ClientActionRequest, signal: AbortSignal): Promise<ActionExecutionResult<number | string, unknown>>
   delete(ids: readonly string[], signal: AbortSignal): Promise<number>
   list(page: number, pageSize: number, signal: AbortSignal): Promise<PanelDatabaseNotificationPage>

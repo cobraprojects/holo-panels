@@ -15,6 +15,8 @@ export interface SvelteCustomNotificationProps extends Record<string, unknown> {
 }
 
 export interface SvelteToastViewportProps extends Record<string, unknown> {
+  readonly panelId?: string
+  readonly registry?: SvelteComponentRegistry
   readonly navigate?: (url: string) => void
   readonly placement?: 'bottom' | 'top'
   readonly store: ClientToastStore

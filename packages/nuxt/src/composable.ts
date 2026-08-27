@@ -1,5 +1,5 @@
 import type { NuxtPanelPage, UsePanelPageOptions } from './contracts'
-import { shallowReactive, watch } from 'vue'
+import { getCurrentScope, onScopeDispose, shallowReactive, watch } from 'vue'
 import { assertPanelId, normalizePanelLocation } from './validation'
 
 interface NuxtImports {
@@ -41,6 +41,13 @@ async function loadPage(
 
 export async function usePanelPage(options: UsePanelPageOptions): Promise<NuxtPanelPage> {
   assertPanelId(options.panelId)
+  const scope = getCurrentScope()
+  const controller = new AbortController()
+  let navigationController: AbortController | undefined
+  if (scope) onScopeDispose(() => {
+    controller.abort()
+    navigationController?.abort()
+  })
   if (options.load) {
     const path = normalizePanelLocation(options.path ?? '/')
     return await options.load({ panelId: options.panelId, path, signal: new AbortController().signal })
@@ -48,16 +55,14 @@ export async function usePanelPage(options: UsePanelPageOptions): Promise<NuxtPa
   const imports = await nuxtImports()
   const route = imports.useRoute()
   const path = normalizePanelLocation(options.path ?? route.fullPath)
-  const controller = new AbortController()
   const state = await imports.useAsyncData(`holo-panels:${options.panelId}:${path}`, async () => {
     return await loadPage(imports, options.panelId, path, controller.signal)
   })
   if (state.error.value) throw state.error.value
   if (!state.data.value) throw imports.createError({ statusCode: 503, statusMessage: 'Run holo prepare to generate the Holo Panels server registry.' })
   const currentPage = shallowReactive(state.data.value)
-  if (!options.path) {
-    let navigationController: AbortController | undefined
-    watch(() => route.fullPath, (nextLocation) => {
+  if (!options.path && !controller.signal.aborted) {
+    const observeNavigation = () => watch(() => route.fullPath, (nextLocation) => {
       const nextPath = normalizePanelLocation(nextLocation)
       if (nextPath === currentPage.path) return
       navigationController?.abort()
@@ -69,6 +74,8 @@ export async function usePanelPage(options: UsePanelPageOptions): Promise<NuxtPa
         if (!activeController.signal.aborted) imports.showError(error instanceof Error ? error : new Error('The panel page could not be loaded.'))
       })
     })
+    if (scope) scope.run(observeNavigation)
+    else observeNavigation()
   }
   return currentPage
 }

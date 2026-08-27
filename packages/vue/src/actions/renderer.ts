@@ -26,12 +26,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '../internal-ui'
-import { defineComponent, h, onScopeDispose, shallowRef, type PropType, type VNode } from 'vue'
+import { defineComponent, h, shallowRef, watch, type PropType, type VNode } from 'vue'
 import type { ClientActionFrame, ClientActionState, JsonObject } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection } from '@holo-js/panels-client'
 import { ActionsRenderHook } from '@holo-js/panels-core'
-import type { ActionModalWidth, RenderSlotReference, SchemaManifest } from '@holo-js/panels-core'
+import type { ActionModalWidth, RenderSlotReference } from '@holo-js/panels-core'
 import { createComponentRegistry } from '../registry'
 import { VueSchemaRenderer } from '../schemas/renderer'
+import { VueFieldRenderer } from '../fields/renderer'
 import { usePanelsRenderHook } from '../render-hooks'
 import type { VueActionCustomProps, VueActionRendererProps, VueActionSlotProps } from './types'
 
@@ -53,19 +55,12 @@ function modalSlotReference(value: JsonObject | RenderSlotReference | null): Ren
   return { component: value.component, properties }
 }
 
-function isModalSchema(value: JsonObject): value is JsonObject & SchemaManifest<JsonObject> {
-  return value.kind === 'schema' && typeof value.id === 'string' && Array.isArray(value.components)
-}
-
-function modalSchema(value: JsonObject | null): SchemaManifest<JsonObject> | null {
-  return value && isModalSchema(value) ? value : null
-}
-
 export const VueActionRenderer = defineComponent({
   name: 'VueActionRenderer',
   props: {
     action: { type: Object as PropType<VueActionRendererProps['action']>, required: true },
     actions: Array as PropType<VueActionRendererProps['actions']>,
+    input: Object as PropType<JsonObject>,
     groups: Array as PropType<VueActionRendererProps['groups']>,
     panelId: String,
     recordIds: Array as PropType<readonly (number | string)[]>,
@@ -76,21 +71,28 @@ export const VueActionRenderer = defineComponent({
     const renderHook = usePanelsRenderHook()
     const state = shallowRef<ClientActionState>(props.store.state)
     const openGroups = shallowRef<ReadonlySet<string>>(new Set())
-    const unsubscribe = props.store.subscribe(next => {
-      state.value = next
-    })
-    onScopeDispose(unsubscribe)
+    watch(() => props.store, (store, _previous, cleanup) => {
+      state.value = store.state
+      cleanup(store.subscribe(next => { state.value = next }))
+    }, { immediate: true })
 
     async function submit(): Promise<void> {
       try {
-        await props.store.submit(props.recordIds)
+        const store = props.store
+        const result = await store.submit(props.recordIds)
+        if (store.activeFrame?.result === result) store.close()
       } catch {
         return
       }
     }
 
+    function activate(action: VueActionRendererProps['action']): void {
+      props.store.mount(action, props.input)
+      if (!action.confirmation && !action.modal) void submit()
+    }
+
     function form(frame: ClientActionFrame): VNode {
-      const schema = modalSchema(frame.manifest.modal?.schema ?? null)
+      const schema = actionFormSchema(frame.manifest.modal?.schema ?? null, frame.manifest.id)
       return h('form', {
         onSubmit: (event: Event) => {
           event.preventDefault()
@@ -101,10 +103,14 @@ export const VueActionRenderer = defineComponent({
           ? [renderHook(ActionsRenderHook.MODAL_SCHEMA_BEFORE), h(VueSchemaRenderer, {
               panelId: props.panelId ?? 'default',
               registry: props.registry ?? emptyRegistry,
+              renderContent: ({ component }) => {
+                const definition = actionFormField(component)
+                return definition && props.store.activeForm ? h(VueFieldRenderer, { field: { definition, optionStore: props.store.optionStore(definition), panelId: props.panelId, registry: props.registry ?? emptyRegistry, store: props.store.activeForm } }) : null
+              },
               schema,
             }), renderHook(ActionsRenderHook.MODAL_SCHEMA_AFTER)]
           : null,
-        h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : 'Run action')]),
+        h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action')]),
       ])
     }
 
@@ -113,11 +119,13 @@ export const VueActionRenderer = defineComponent({
       return h(Button, {
         class: 'hp-action-trigger',
         'data-action-id': action.id,
+        'data-action': action.id,
+        'data-operation': action.kind,
         'data-color': action.color ?? undefined,
         disabled: action.disabled === true || state.value.frames.some(frame => frame.manifest.id === action.id),
         type: 'button',
         variant: action.color === 'danger' ? 'destructive' : 'outline',
-        onClick: () => props.store.mount(action),
+        onClick: () => activate(action),
       }, () => [action.icon ? PanelsIcon(action.icon) : null, h('span', action.label)])
     }
 
@@ -130,15 +138,16 @@ export const VueActionRenderer = defineComponent({
     }
 
     return () => {
-      const actions = props.actions ?? [props.action]
+      const actions = actionManifestCollection(props.actions ?? [props.action])
+      const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
       const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
       return h('div', { class: 'hp-action', 'data-action-mount': props.action.mount }, [
       h('div', { class: 'hp-action-collection' }, [
-        ...actions.filter(action => !grouped.has(action.id)).map(trigger),
+        ...actions.filter(action => !grouped.has(action.id) && !nestedIds.has(action.id)).map(trigger),
         ...props.groups?.map(group => {
           const items = group.actions.flatMap(id => {
             const action = actions.find(candidate => candidate.id === id)
-            return !action || action.visible === false ? [] : [{ disabled: action.disabled, id, label: action.label }]
+            return !action || action.visible === false ? [] : [action]
           })
           return h(DropdownMenu, {
           open: openGroups.value.has(group.id),
@@ -149,27 +158,35 @@ export const VueActionRenderer = defineComponent({
             openGroups.value = next
           },
         }, () => [
-          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { variant: 'outline' }, () => [group.icon ? PanelsIcon(group.icon) : null, group.label ?? 'Actions'])),
-          h(DropdownMenuContent, { 'data-holo-panel': '' }, () => items.map(item => h(DropdownMenuItem, { disabled: item.disabled, onSelect: () => { const action = actions.find(candidate => candidate.id === item.id); if (action) props.store.mount(action) } }, () => item.label))),
+          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': group.label ?? 'Actions', class: 'hp-action-group-trigger', 'data-action-group': group.id, variant: 'outline' }, () => [group.icon ? PanelsIcon(group.icon) : null, group.label ?? 'Actions'])),
+          h(DropdownMenuContent, { 'data-holo-panel': '' }, () => items.map(item => h(DropdownMenuItem, { 'data-action': item.id, 'data-action-id': item.id, 'data-color': item.color ?? undefined, disabled: item.disabled || state.value.frames.some(frame => frame.manifest.id === item.id), variant: item.color === 'danger' ? 'destructive' : 'default', onSelect: () => activate(item) }, () => [item.icon ? PanelsIcon(item.icon) : null, item.label]))),
         ])
         }) ?? [],
       ]),
       ...state.value.frames.slice(-1).map((frame, index) => {
+        if (!frame.manifest.modal && frame.phase === 'submitting') return null
+        const dismiss = {
+          onEscapeKeyDown: (event: Event) => { if (frame.manifest.modal?.closeByEscaping === false) event.preventDefault() },
+          onPointerDownOutside: (event: Event) => { if (frame.manifest.modal?.closeByClickingAway === false) event.preventDefault() },
+          onOpenAutoFocus: (event: Event) => { if (frame.manifest.modal?.autofocus === false) event.preventDefault() },
+        }
         const customName = `action.${frame.manifest.id}`
         const Custom = props.registry?.has(customName, props.panelId)
           ? props.registry.resolve(customName, props.panelId, 'action modal')
           : null
         if (frame.phase === 'confirming') return h(AlertDialog, { key: `${frame.manifest.id}-${index}`, open: true }, () => h(AlertDialogContent, {
           'data-holo-panel': '',
-          onEscapeKeyDown: () => props.store.close(),
-          onPointerDownOutside: () => props.store.close(),
+          ...dismiss,
+          onEscapeKeyDown: (event: Event) => { dismiss.onEscapeKeyDown(event); if (!event.defaultPrevented) props.store.close() },
+          onPointerDownOutside: (event: Event) => { dismiss.onPointerDownOutside(event); if (!event.defaultPrevented) props.store.close() },
         }, () => [
           h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => frame.manifest.modal?.heading ?? frame.manifest.label), h(AlertDialogDescription, {}, () => frame.manifest.confirmation ?? 'Are you sure?')]),
-          h(AlertDialogFooter, {}, () => [h(AlertDialogCancel, { onClick: () => props.store.close() }, () => 'Cancel'), h(AlertDialogAction, {
+          h(AlertDialogFooter, {}, () => [h(AlertDialogCancel, { onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? 'Cancel'), h(AlertDialogAction, {
             variant: frame.manifest.color === 'danger' ? 'destructive' : 'default',
             onClick: (event: MouseEvent) => {
               event.preventDefault()
               props.store.confirm()
+              if (!frame.manifest.modal) void submit()
             },
           }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, 'Confirm'])]),
         ]))
@@ -189,6 +206,7 @@ export const VueActionRenderer = defineComponent({
         const Footer = slideOver ? SheetFooter : DialogFooter
         const modalWidth = frame.manifest.modal?.width ?? 'medium'
         return h(Root, { key: `${frame.manifest.id}-${index}`, open: true, 'onUpdate:open': (open: boolean) => { if (!open) props.store.close() } }, () => h(Content, {
+          ...dismiss,
           class: modalWidthClass(modalWidth),
           'data-holo-panel': '',
           'data-modal-width': modalWidth,
@@ -206,7 +224,7 @@ export const VueActionRenderer = defineComponent({
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_BEFORE),
             modalSlot(frame, 'footer'),
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_AFTER),
-            h(Footer, {}, () => h(Button, { type: 'button', variant: 'outline', onClick: () => props.store.close() }, () => 'Close')),
+            h(Footer, {}, () => h(Button, { type: 'button', variant: 'outline', onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? 'Close')),
           ]))
       }),
     ])

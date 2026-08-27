@@ -173,7 +173,7 @@ async function selectField(page: Page, label: string, preferredValues: readonly 
 
 async function submitResourceForm(page: Page): Promise<void> {
   const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/form-submit'))
-  await page.getByRole('button', { name: /^Save\b/iu }).click()
+  await page.locator('.hp-resource-form').getByRole('button', { name: /^(?:Save|Create)\b/iu }).click()
   const response = await responsePromise
   if (!response.ok()) throw new Error(await response.text())
 }
@@ -440,7 +440,7 @@ test.describe('authenticated admin journeys', () => {
     const styles = await page.locator('body').evaluate((body) => {
       const root = body.querySelector('[data-holo-panel]')
       const input = body.querySelector('.hp-resource-form [data-slot="input"]')
-      const button = body.querySelector('[data-holo-panel] button[type="submit"]')
+      const button = body.querySelector('.hp-resource-form [data-action-id]')
       const form = body.querySelector('.hp-resource-form')
       if (!root || !input || !button || !form) throw new Error('The generated panel controls are unavailable')
       const view = body.ownerDocument.defaultView
@@ -476,7 +476,7 @@ test.describe('authenticated admin journeys', () => {
     await expect(page.locator('[data-holo-panel]').first()).toHaveAttribute('data-theme', 'dark')
     const darkGeometry = await page.locator('body').evaluate((body) => {
       const input = body.querySelector<HTMLElement>('.hp-resource-form [data-slot="input"]')
-      const button = body.querySelector<HTMLElement>('[data-holo-panel] button[type="submit"]')
+      const button = body.querySelector<HTMLElement>('.hp-resource-form [data-action-id]')
       if (!input || !button) throw new Error('The dark panel controls are unavailable')
       return {
         buttonRadius: getComputedStyle(button).borderRadius,
@@ -849,7 +849,7 @@ test.describe('authenticated admin journeys', () => {
     await tags.getByRole('button', { name: 'Attach', exact: true }).click()
     const relationOptions = await relationOptionsResponse
     if (!relationOptions.ok()) throw new Error(await relationOptions.text())
-    const relatedTag = page.getByLabel('Related record', { exact: true })
+    const relatedTag = page.getByRole('combobox', { name: 'Related record', exact: true })
     await expect(relatedTag).toBeVisible()
     await expect.poll(async () => relatedTag.locator('option').count()).toBeGreaterThan(1)
     const tagOptions = await relatedTag.locator('option').evaluateAll(options => options.map(option => ({ label: option.textContent?.trim() ?? '', value: option.getAttribute('value') ?? '' })))
@@ -865,20 +865,20 @@ test.describe('authenticated admin journeys', () => {
     await expectSameDocument(page, relationDocument)
     const attachedTagRow = page.getByRole('row').filter({ hasText: selectedTag.label }).first()
     await expect(attachedTagRow).toBeVisible()
-    await attachedTagRow.getByRole('button', { name: 'Edit pivot', exact: true }).click()
+    await attachedTagRow.getByRole('button', { name: 'Edit Pivot', exact: true }).click()
     const pivotPosition = page.getByRole('dialog').getByRole('spinbutton', { name: 'Position', exact: true })
     await expect(pivotPosition).toHaveValue('2')
     await pivotPosition.fill('7')
     const editPivotResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
-    await page.getByRole('button', { name: 'Edit pivot', exact: true }).last().click()
+    await page.getByRole('button', { name: 'Edit Pivot', exact: true }).last().click()
     const editedPivot = await editPivotResponse
     if (!editedPivot.ok()) throw new Error(await editedPivot.text())
     await waitForPanelReady(page)
     await expectSameDocument(page, relationDocument)
     const editedTagRow = page.getByRole('row').filter({ hasText: selectedTag.label }).first()
-    await editedTagRow.getByRole('button', { name: 'Edit pivot', exact: true }).click()
+    await editedTagRow.getByRole('button', { name: 'Edit Pivot', exact: true }).click()
     await expect(page.getByRole('dialog').getByRole('spinbutton', { name: 'Position', exact: true })).toHaveValue('7')
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).last().click()
     let viewMutations = 0
     const countViewMutation = (request: Request): void => {
       if (request.method() === 'POST' && request.url().endsWith('/holo/panels/admin/action')) viewMutations++
@@ -886,13 +886,13 @@ test.describe('authenticated admin journeys', () => {
     page.on('request', countViewMutation)
     await editedTagRow.getByRole('button', { name: 'View', exact: true }).click()
     const viewTagDialog = page.getByRole('dialog')
-    await expect(viewTagDialog).toContainText(selectedTag.label)
+    await expect(viewTagDialog.locator('[data-field-path="values.name"] input')).toHaveValue(selectedTag.label)
     await viewTagDialog.getByRole('button', { name: 'Close', exact: true }).last().click()
     await expect.poll(() => viewMutations).toBe(0)
     page.off('request', countViewMutation)
     await editedTagRow.getByRole('button', { name: 'Detach', exact: true }).click()
     const detachResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
-    await page.getByRole('button', { name: 'Detach', exact: true }).last().click()
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const detached = await detachResponse
     if (!detached.ok()) throw new Error(await detached.text())
     await waitForPanelReady(page)
@@ -905,9 +905,9 @@ test.describe('authenticated admin journeys', () => {
     const comments = page.getByRole('region', { name: 'Comments' })
     await expect(comments).toBeVisible()
     await comments.getByRole('button', { name: 'Create', exact: true }).click()
-    await page.getByLabel('Author Name', { exact: true }).fill(commentAuthor)
-    await page.getByLabel('Body', { exact: true }).fill(commentBody)
-    await page.getByLabel('Status', { exact: true }).fill('pending')
+    await page.getByRole('dialog').getByRole('textbox', { name: 'Author Name', exact: true }).fill(commentAuthor)
+    await page.getByRole('dialog').getByRole('textbox', { name: 'Body', exact: true }).fill(commentBody)
+    await page.getByRole('dialog').getByRole('textbox', { name: 'Status', exact: true }).fill('pending')
     const createCommentResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Create', exact: true }).last().click()
     const createdComment = await createCommentResponse
@@ -931,7 +931,7 @@ test.describe('authenticated admin journeys', () => {
     await expect(commentRow).toContainText(commentBody)
     await commentRow.getByRole('button', { name: 'Dissociate', exact: true }).click()
     const dissociateResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
-    await page.getByRole('button', { name: 'Dissociate', exact: true }).last().click()
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const dissociatedComment = await dissociateResponse
     if (!dissociatedComment.ok()) throw new Error(await dissociatedComment.text())
     await waitForPanelReady(page)
@@ -941,7 +941,7 @@ test.describe('authenticated admin journeys', () => {
     await comments.getByRole('button', { name: 'Associate', exact: true }).click()
     const associateOptions = await associateOptionsResponse
     if (!associateOptions.ok()) throw new Error(await associateOptions.text())
-    const relatedComment = page.getByLabel('Related record', { exact: true })
+    const relatedComment = page.getByRole('combobox', { name: 'Related record', exact: true })
     await expect.poll(async () => relatedComment.locator('option').count()).toBeGreaterThan(1)
     await relatedComment.selectOption(String(commentId))
     const associateResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
@@ -965,7 +965,7 @@ test.describe('authenticated admin journeys', () => {
     await expect(editedCommentRow).toContainText(editedCommentBody)
     await editedCommentRow.getByRole('button', { name: 'Delete', exact: true }).click()
     const deleteCommentResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
-    await page.getByRole('button', { name: 'Delete', exact: true }).last().click()
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const deletedComment = await deleteCommentResponse
     if (!deletedComment.ok()) throw new Error(await deletedComment.text())
     await waitForPanelReady(page)

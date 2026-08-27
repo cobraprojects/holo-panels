@@ -57,7 +57,7 @@ function decodeEffect(value: unknown): Readonly<Effect> {
       return Object.freeze({ kind: value.kind, tableId: requiredString(value.tableId, 'table ID') })
     case 'redirect':
       if (typeof value.replace !== 'undefined' && typeof value.replace !== 'boolean') throw new TransportDecodingError('Invalid redirect replace flag.')
-      return Object.freeze({ kind: value.kind, url: safeUrl(value.url, 'redirect URL'), ...(typeof value.replace === 'boolean' ? { replace: value.replace } : {}) })
+      return Object.freeze({ kind: value.kind, url: safeUrl(value.url, 'redirect URL'), ...(typeof value.newTab === 'boolean' ? { newTab: value.newTab } : {}), ...(typeof value.replace === 'boolean' ? { replace: value.replace } : {}) })
     case 'refresh':
       if (typeof value.target !== 'undefined' && value.target !== 'page' && value.target !== 'schema') throw new TransportDecodingError('Invalid refresh target.')
       return Object.freeze({ kind: value.kind, ...(value.target ? { target: value.target } : {}) })

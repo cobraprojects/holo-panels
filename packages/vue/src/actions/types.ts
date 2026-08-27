@@ -8,6 +8,7 @@ export interface VueActionCustomProps<TResult = unknown> {
 }
 
 export interface VueActionRendererProps<TResult = unknown> {
+  readonly input?: JsonObject
   readonly action: Readonly<ClientActionManifest>
   readonly actions?: readonly Readonly<ClientActionManifest>[]
   readonly groups?: readonly Readonly<ActionGroupManifest>[]

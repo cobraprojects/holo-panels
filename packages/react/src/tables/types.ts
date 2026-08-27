@@ -6,6 +6,8 @@ import type {
   FormValueAtPath,
   TableRecordId,
   TableSelectionPayload,
+  TableActionDefinition,
+  TableActionExecutionRequest,
   TableStateStore,
 } from '@holo-js/panels-client'
 import type { ReactNode } from 'react'
@@ -85,7 +87,7 @@ export interface ReactFilterCollectionSlotProps {
   readonly presentation: FilterCollectionPresentation
 }
 
-export interface ReactTableAction {
+export interface ReactTableAction extends TableActionDefinition {
   readonly color?: string | null
   readonly confirmation?: string
   readonly icon?: string | null
@@ -96,6 +98,7 @@ export interface ReactTableAction {
 }
 
 export interface ReactTableActionGroup {
+  readonly emptyStateOnly?: boolean
   readonly actions: readonly ReactTableAction[]
   readonly color?: string | null
   readonly icon?: string | null
@@ -107,7 +110,7 @@ export interface ReactTableActionGroup {
 
 export type ReactTableActionItem = ReactTableAction | ReactTableActionGroup
 
-export interface ReactTableActionRequest<TRecordId extends TableRecordId> {
+export interface ReactTableActionRequest<TRecordId extends TableRecordId> extends TableActionExecutionRequest<TRecordId> {
   readonly actionId: string
   readonly recordId?: TRecordId
   readonly selection?: TableSelectionPayload<TRecordId>

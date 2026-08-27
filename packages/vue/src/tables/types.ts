@@ -6,6 +6,8 @@ import type {
   FormPath,
   FormValueAtPath,
   TableRecordId,
+  TableActionDefinition,
+  TableActionExecutionRequest,
   TableSelectionPayload,
   TableState,
   TableStateListener,
@@ -87,7 +89,7 @@ export interface VueFilterCollectionSlotProps {
   readonly presentation: FilterCollectionPresentation
 }
 
-export interface VueTableAction {
+export interface VueTableAction extends TableActionDefinition {
   readonly color?: string | null
   readonly confirmation?: string
   readonly icon?: string | null
@@ -97,6 +99,7 @@ export interface VueTableAction {
 }
 
 export interface VueTableActionGroup {
+  readonly emptyStateOnly?: boolean
   readonly actions: readonly VueTableAction[]
   readonly color?: string | null
   readonly icon?: string | null
@@ -108,7 +111,7 @@ export interface VueTableActionGroup {
 
 export type VueTableActionItem = VueTableAction | VueTableActionGroup
 
-export interface VueTableActionRequest<TRecordId extends TableRecordId> {
+export interface VueTableActionRequest<TRecordId extends TableRecordId> extends TableActionExecutionRequest<TRecordId> {
   readonly actionId: string
   readonly recordId?: TRecordId
   readonly selection?: TableSelectionPayload<TRecordId>

@@ -1,4 +1,4 @@
-import { compileRegisteredActions, type ActionRegistration, type RegisteredAction } from '../actions/registration'
+import { actionPermissionReferences, compileRegisteredActions, findRegisteredAction, type ActionRegistration, type RegisteredAction } from '../actions/registration'
 import type { JsonObject } from '../protocol/json'
 
 export interface NotificationActionReference extends JsonObject {
@@ -46,11 +46,22 @@ export function notificationActionReference(action: object): NotificationActionR
   return Object.freeze({ actionId: action.id, resourceId: owner.compile().id })
 }
 
-export function resolveResourceNotificationAction(owner: object, reference: NotificationActionReference): RegisteredAction<object> {
+export function notificationActionOwner(action: object): ResourceActionOwner | null {
+  return notificationActionReference(action) ? owners.get(action) ?? null : null
+}
+
+export function resourceNotificationPermissionReferences(owner: ResourceActionOwner): readonly string[] {
+  return actionPermissionReferences(compileRegisteredActions(declaredActions(owner), 'notification'))
+}
+
+export function resolveResourceNotificationAction(owner: object, reference: NotificationActionReference, actionId = reference.actionId): RegisteredAction<object> {
   if (!('compile' in owner) || typeof owner.compile !== 'function') throw new NotificationActionRegistrationError('The notification resource is not registered')
   const resource = owner as ResourceActionOwner
   if (resource.compile().id !== reference.resourceId) throw new NotificationActionRegistrationError('The notification resource does not match its registration')
   const candidates = declaredActions(resource).filter(action => action.id === reference.actionId)
   if (candidates.length !== 1) throw new NotificationActionRegistrationError('The notification action is no longer registered')
-  return compileRegisteredActions(candidates, 'notification')[0]!
+  const root = compileRegisteredActions(candidates, 'notification')[0]!
+  const action = findRegisteredAction(root, actionId)
+  if (!action) throw new NotificationActionRegistrationError('The notification action is no longer registered')
+  return action
 }

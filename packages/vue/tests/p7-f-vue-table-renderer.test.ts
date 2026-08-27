@@ -345,8 +345,8 @@ describe('P7-F Vue table renderer', () => {
     await flush()
     document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.inspect"]')?.click()
     await flush()
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.export' }, expect.any(AbortSignal))
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.inspect', recordId: 1 }, expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.export', mount: 'page', input: {} }), expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.inspect', recordId: 1, mount: 'record', input: {} }), expect.any(AbortSignal))
 
     container.querySelector<HTMLButtonElement>('[data-slot="checkbox"][aria-label="Select page"]')?.click()
     await nextTick()
@@ -389,7 +389,7 @@ describe('P7-F Vue table renderer', () => {
     const confirm = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === 'Confirm')
     confirm?.click()
     await flush()
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.delete', recordId: 1 }, expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.delete', recordId: 1, mount: 'record', input: {} }), expect.any(AbortSignal))
   })
 
   it('keeps grouped action confirmation mounted after its dropdown closes', async () => {

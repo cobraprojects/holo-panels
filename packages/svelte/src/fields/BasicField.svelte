@@ -63,8 +63,8 @@
     const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement
     const next = target instanceof HTMLInputElement && (target.type === 'checkbox' || target.type === 'radio')
       ? target.checked
-      : target instanceof HTMLInputElement && target.type === 'range'
-        ? target.valueAsNumber
+      : target instanceof HTMLInputElement && (target.type === 'range' || target.type === 'number')
+        ? target.value === '' ? null : target.valueAsNumber
         : target.value
     writeFieldValue(form, definition.path, next)
   }

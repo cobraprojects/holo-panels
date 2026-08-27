@@ -1,5 +1,5 @@
 import { ConstructionBuilder } from '../builders/construction-builder'
-import { compileRegisteredActions, type ActionRegistration } from '../actions/registration'
+import { actionPermissionReferences, compileRegisteredActions, type ActionRegistration } from '../actions/registration'
 import { DISCOVERY_MARKER, type DiscoverableBuilder, type DiscoverableDefinition } from '../discovery/types'
 import { toJsonValue } from '../protocol/serialization'
 import type { JsonValue } from '../protocol/json'
@@ -163,7 +163,7 @@ export class WidgetBuilder<
       id: this.id,
       kind: this.kind,
       permissionKeys: [`widgets.${this.id}.view`],
-      permissionReferences: this.readState().actions.map(action => `actions.${action.id}.view`),
+      permissionReferences: actionPermissionReferences(definition.server.actions ?? []),
     })
   }
 

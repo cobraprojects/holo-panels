@@ -156,12 +156,11 @@ describe('shared React renderer contract', () => {
     expect(container.textContent).toContain('No tags found.')
     await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="attach"]')?.click() })
     await vi.waitFor(() => expect(loadOptions).toHaveBeenCalledWith('tags', ''))
-    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Related record"]')
+    const select = document.querySelector<HTMLSelectElement>('[data-field-path="relatedId"] select')
     const position = document.querySelector<HTMLInputElement>('input[type="number"]')
     expect(select?.textContent).toContain('TypeScript')
     expect(position).not.toBeNull()
     expect(document.querySelector('[data-slot="dialog-header"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="relation-dialog-body"]')).not.toBeNull()
     expect(document.querySelector('[data-slot="dialog-footer"]')).not.toBeNull()
     await act(async () => {
       if (!select) return
@@ -172,8 +171,8 @@ describe('shared React renderer contract', () => {
         position.dispatchEvent(new Event('input', { bubbles: true }))
       }
     })
-    await act(async () => { document.querySelector<HTMLButtonElement>('.hp-relation-operation-form button[type="submit"]')?.click() })
-    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }))
+    await act(async () => { document.querySelector<HTMLButtonElement>('[role="dialog"] button[type="submit"]')?.click() })
+    await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'attach', managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }), expect.any(AbortSignal)))
   })
 
   it('views a related record without sending a mutation', async () => {
@@ -194,8 +193,7 @@ describe('shared React renderer contract', () => {
     expect(container.querySelector('[data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
     await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click() })
 
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('TypeScript')
-    expect(document.querySelector('.hp-relation-operation-form button[type="submit"]')).toBeNull()
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')?.value).toBe('TypeScript')
     expect(onOperation).not.toHaveBeenCalled()
   })
 
@@ -216,10 +214,10 @@ describe('shared React renderer contract', () => {
     await act(async () => trigger?.click())
     const dialog = document.querySelector('[role="alertdialog"]')
     expect(dialog?.textContent).toContain('Are you sure you want to detach this record?')
-    const confirm = dialog?.querySelector<HTMLButtonElement>('button[type="submit"]')
+    const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find(button => button.textContent?.includes('Confirm'))
     expect(confirm?.className).toContain('hp:bg-destructive')
     await act(async () => confirm?.click())
-    expect(onOperation).toHaveBeenCalledWith({ managerId: 'tags', operation: 'detach', recordId: 'tag-typescript' })
+    expect(onOperation).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'detach', managerId: 'tags', operation: 'detach', recordId: 'tag-typescript' }), expect.any(AbortSignal))
   })
 
   it('omits relation action structure when no operations are configured', async () => {

@@ -19,8 +19,8 @@ function modal(value: JsonValue | undefined): boolean {
     && Array.isArray(value.nestedActions) && value.nestedActions.every(id => typeof id === 'string')
 }
 
-export function isNotificationActionManifest(value: JsonValue | undefined, id: string): value is JsonObject & ActionManifest {
-  return object(value) && value.id === id && value.mount === 'notification'
+export function isActionManifest(value: JsonValue | undefined, id: string): value is JsonObject & ActionManifest {
+  return object(value) && value.id === id && typeof value.mount === 'string' && ['page', 'record', 'bulk', 'modal', 'notification'].includes(value.mount)
     && typeof value.label === 'string' && value.label.length > 0 && value.label.length <= 200
     && typeof value.type === 'string'
     && typeof value.kind === 'string' && ['associate', 'attach', 'create', 'custom', 'delete', 'detach', 'dissociate', 'edit', 'editPivot', 'force-delete', 'replicate', 'restore', 'view'].includes(value.kind)
@@ -28,4 +28,9 @@ export function isNotificationActionManifest(value: JsonValue | undefined, id: s
     && typeof value.visible === 'boolean' && typeof value.disabled === 'boolean'
     && nullableStrings(value, ['badge', 'color', 'confirmation', 'icon', 'tooltip'])
     && modal(value.modal)
+}
+
+export function actionManifestCollection(actions: readonly ActionManifest[], depth = 0): readonly ActionManifest[] {
+  if (depth > 10) throw new Error('Nested actions cannot exceed ten levels')
+  return actions.flatMap(action => [action, ...actionManifestCollection(action.modal?.actions ?? [], depth + 1)])
 }

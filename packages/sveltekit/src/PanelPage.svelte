@@ -7,6 +7,7 @@
     ClientToastStore,
     GlobalSearchStore,
     installPanelSpaNavigation,
+    navigatePanelUrl,
     DashboardRenderer,
     PanelsRenderHook,
     PanelsRenderHookRenderer,
@@ -72,10 +73,15 @@
   const toastStore = new ClientToastStore()
   const effects = new ClientEffectSession({
     panelId: initialPanelId,
-    redirect: effect => navigate(effect.url, effect.replace),
+    redirect: effect => { if (effect.newTab) { window.open(effect.url, '_blank', 'noopener,noreferrer'); return } return navigate(effect.url, effect.replace) },
     toastStore,
   })
   let appliedEffects = untrack(() => data.effects)
+  toastStore.connectActions(createPanelNotificationTransport(browserTransport(), {
+    applyEffects: response => effects.apply(response),
+    endpoint: `/holo/panels/${initialPanelId}/notification`,
+    panelId: initialPanelId,
+  }))
   let effectBatch = 0
   void effects.apply({ data: null, effects: [...appliedEffects], id: 'session-effects-0', ok: true, protocolVersion: '1.0' }).catch(() => undefined)
   const notificationStore = $derived.by(() => notificationConfiguration
@@ -284,13 +290,7 @@
 
   async function navigate(url: string, replace = false): Promise<void> {
     await tick()
-    const destination = new URL(url, globalThis.location.href)
-    if (destination.origin !== globalThis.location.origin) {
-      if (replace) globalThis.location.replace(destination.href)
-      else globalThis.location.assign(destination.href)
-      return
-    }
-    await goto(`${destination.pathname}${destination.search}${destination.hash}`, { replaceState: replace })
+    await navigatePanelUrl(url, { enabled: data.panel.manifest.runtime?.spa !== false, exceptions: data.panel.manifest.runtime?.spaUrlExceptions ?? [], navigate: (path, replaceState) => goto(path, { replaceState }) }, replace)
   }
 
   function realtimeConnection(enabled: boolean, channel: string | null): ClientNotificationRealtime | undefined {
@@ -531,7 +531,7 @@
   </SidebarInset>
   <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   <PanelsRenderHookRenderer hook={PanelsRenderHook.FOOTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
-  <SvelteNotificationToastViewport navigate={navigate} store={toastStore} />
+  <SvelteNotificationToastViewport navigate={navigate} panelId={data.panel.manifest.id} {registry} store={toastStore} />
   <PanelsRenderHookRenderer hook={PanelsRenderHook.LAYOUT_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   <PanelsRenderHookRenderer hook={PanelsRenderHook.BODY_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
 </div>

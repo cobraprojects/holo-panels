@@ -8,6 +8,7 @@ export interface SvelteActionCustomProps<TResult = unknown> extends Record<strin
 }
 
 export interface SvelteActionRendererProps<TResult = unknown> {
+  readonly input?: JsonObject
   readonly action: Readonly<ClientActionManifest>
   readonly actions?: readonly Readonly<ClientActionManifest>[]
   readonly groups?: readonly Readonly<ActionGroupManifest>[]

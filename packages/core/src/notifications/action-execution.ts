@@ -1,7 +1,7 @@
 import { DB } from '@holo-js/db'
 import { ActionEngine, ActionEngineState, ActionExecutionError } from '../actions/engine'
 import { compileActionManifest, resolveActionState } from '../actions/action'
-import { authorizePanelActionPermissions } from '../actions/authorization'
+import { actionExecutionPermissions, authorizePanelActionPermissions } from '../actions/authorization'
 import type { ActionExecutionResult, ActionTransaction } from '../actions/contracts'
 import type { JsonObject } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
@@ -12,6 +12,7 @@ import type { PanelNotificationExecutionAction } from './contracts'
 
 export interface NotificationActionExecutionOptions {
   readonly action: PanelNotificationExecutionAction
+  readonly actionId?: string
   readonly context: GeneratedResourceOperationInput['context']
   readonly panel: CompiledPanelDefinition<object>
   readonly registry: Readonly<Record<string, () => Promise<object>>>
@@ -28,7 +29,9 @@ async function authorizedDefinition(options: NotificationActionExecutionOptions)
   const resource = await loader()
   await authorizeGeneratedResourceNotification(resource, options.context, options.panel.manifest.runtime?.strictAuthorization ?? false)
   await authorizePanelActionPermissions(options.panel, { ...options.context, panelId }, [`${reference.resourceId}.viewAny`, `actions.${reference.actionId}.view`])
-  return { definition: resolveResourceNotificationAction(resource, reference), loader }
+  const definition = resolveResourceNotificationAction(resource, reference, options.actionId)
+  await authorizePanelActionPermissions(options.panel, { ...options.context, panelId }, actionExecutionPermissions(definition))
+  return { definition, loader }
 }
 
 export async function resolveNotificationActionPresentation(options: NotificationActionExecutionOptions): Promise<PanelNotificationExecutionAction | null> {

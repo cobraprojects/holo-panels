@@ -40,6 +40,48 @@ declare module '@holo-js/panels-core' {
 
 function typecheckOnly(): boolean { return false }
 
+it('serializes action select options without serializing server option sources', () => {
+  const action = PostResource.action(({ Action, Select }) => Action.make('choose').schema([Select.make('title').options({ draft: 'Draft' })]))
+  const manifest = action.manifest()
+  expect(manifest.modal).toMatchObject({ schema: { fields: [{ path: 'title', properties: { options: { draft: 'Draft' } } }] } })
+  expect(JSON.stringify(manifest)).not.toContain('server')
+})
+
+it('registers table actions at their declared header, row, and bulk mounts', () => {
+  class MountedResource extends Resource {
+    protected static override model = Post
+    static table = this.configureTable((table, { Action }) => table
+      .headerActions([Action.make('header')])
+      .emptyStateActions([Action.make('empty')])
+      .recordActions([Action.make('row')])
+      .toolbarActions([Action.make('bulk')]))
+  }
+  expect(MountedResource.compile().actions).toEqual([
+    expect.objectContaining({ id: 'row', mount: 'record', source: 'table' }),
+    expect.objectContaining({ id: 'header', mount: 'page', source: 'table' }),
+    expect.objectContaining({ id: 'empty', mount: 'page', source: 'table' }),
+    expect.objectContaining({ id: 'bulk', mount: 'bulk', source: 'table' }),
+  ])
+})
+
+it('registers customized form actions and removes the execution path when a getter returns null', () => {
+  class CustomEdit extends EditRecord<PostRecord> {
+    protected override getSaveFormAction() { return PostResource.action(({ EditAction }) => EditAction.make().label('Save draft').requiresConfirmation(false)) }
+  }
+  class RemovedEdit extends EditRecord<PostRecord> {
+    protected override getSaveFormAction() { return null }
+  }
+  class CustomResource extends Resource {
+    protected static override model = Post
+    protected static getPages() { return { edit: CustomEdit.route('/{record}/edit') } }
+  }
+  class RemovedResource extends CustomResource {
+    protected static override getPages() { return { edit: RemovedEdit.route('/{record}/edit') } }
+  }
+  expect(CustomResource.compile().actions).toEqual([expect.objectContaining({ confirmation: null, id: 'edit', label: 'Save draft', mount: 'record', source: 'edit:form' })])
+  expect(RemovedResource.compile().actions).toEqual([])
+})
+
 class ListPosts extends ListRecords {
   static override get resource() { return PostResource }
 

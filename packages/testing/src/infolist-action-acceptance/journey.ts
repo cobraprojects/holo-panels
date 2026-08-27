@@ -135,7 +135,6 @@ export async function runInfolistActionAcceptanceJourney(
     await driver.sync(async () => { await actionStore.submit([42]) })
     const successMarkup = driver.markup()
     const successToast = model.notificationStore.state.items.at(-1)
-    await driver.clickText('Close')
     await driver.sync(() => actionStore.mount(actions.publish))
     await driver.sync(() => actionStore.mount(actions.nested))
     const activeDialogCount = (driver.markup().match(/role="(?:alert)?dialog"/gu) ?? []).length

@@ -126,7 +126,7 @@ describe('P13 Svelte notification inbox trigger', () => {
 
     button?.click()
     flushClient()
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await new Promise((resolve) => setTimeout(resolve, 30))
     outside.focus()
     document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
     flushClient()
@@ -137,7 +137,7 @@ describe('P13 Svelte notification inbox trigger', () => {
 
     button?.click()
     flushClient()
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await new Promise((resolve) => setTimeout(resolve, 30))
     outside.focus()
     outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 100, clientY: 100, pointerType: 'mouse' }))
     outside.click()

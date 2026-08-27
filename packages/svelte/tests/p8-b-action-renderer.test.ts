@@ -173,8 +173,9 @@ describe('P8-B Svelte action renderer', () => {
     document.querySelector<HTMLFormElement>('[data-panels-component="modal"] form')?.requestSubmit()
     await Promise.resolve()
     flushClient()
-    expect(store.activeFrame?.phase).toBe('succeeded')
+    await vi.waitFor(() => expect(store.activeFrame).toBeNull())
 
+    store.mount({ ...manifest, confirmation: null })
     store.mount({ ...manifest, confirmation: null, id: 'posts.notice', label: 'Notice', modal: null, mount: 'notification' })
     flushClient()
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)

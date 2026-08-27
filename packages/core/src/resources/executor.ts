@@ -1,4 +1,5 @@
 import { DB } from '@holo-js/db'
+import type { JsonObject } from '../protocol/json'
 import { TableQueryExecutor, type HoloTableQuery, type TableQueryColumnDefinition, type TableQueryFilterDefinition, type TableQueryState } from '../tables/query'
 import type {
   ResourceAuthorization,
@@ -73,6 +74,7 @@ export interface ResourceTableResult {
   readonly page: number
   readonly perPage: number
   readonly records: readonly Readonly<Record<string, unknown>>[]
+  readonly recordPresentations?: readonly JsonObject[]
   readonly total: number
 }
 
@@ -202,7 +204,33 @@ export class ResourceExecutor<
     })))
   }
 
-  async table(state: TableQueryState, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceTableResult> {
+  async table(state: TableQueryState, context: ResourceExecutionContext<TActor, TTenant>, presentRecord?: (record: TRecord) => Promise<JsonObject>): Promise<ResourceTableResult> {
+    const executor = await this.tableExecutor(context)
+    const result = await executor.execute(state, context)
+    const records = Object.freeze(await Promise.all(result.records.map(async (record) => {
+      await this.#authorization.authorizeRecord(context.actor, 'view', record)
+      return this.serializeRecord(record)
+    })))
+    const recordPresentations = presentRecord ? await Promise.all(result.records.map(presentRecord)) : undefined
+    const page = 'page' in result ? result.page : 1
+    const perPage = 'perPage' in result ? result.perPage : records.length
+    const total = 'total' in result && typeof result.total === 'number' ? result.total : records.length
+    const hasMore = 'hasMore' in result ? result.hasMore : false
+    return Object.freeze({ hasMore, page, perPage, records, ...(recordPresentations ? { recordPresentations: Object.freeze(recordPresentations) } : {}), total })
+  }
+
+  async selectTableRecords(state: TableQueryState, excludedRecordIds: readonly ResourceIdentifier[], context: ResourceExecutionContext<TActor, TTenant>): Promise<readonly ResourceIdentifier[]> {
+    const executor = await this.tableExecutor(context)
+    const records = await executor.executeSelection(state, { mode: 'all-matching', excludedRecordIds }, context)
+    return Promise.all(records.map(async record => {
+      await this.#authorization.authorizeRecord(context.actor, 'view', record)
+      const id: unknown = Reflect.get(record.toJSON(), this.#definition.routeKey)
+      if (typeof id !== 'number' && typeof id !== 'string') throw new Error('Selected resource records require stable route identifiers')
+      return id
+    }))
+  }
+
+  private async tableExecutor(context: ResourceExecutionContext<TActor, TTenant>) {
     await this.#authorization.authorizeClass(context.actor, 'viewAny', this.#definition.model)
     if (context.signal.aborted) throw context.signal.reason
     const scoped = await this.createScopedQuery(context, false)
@@ -235,25 +263,16 @@ export class ResourceExecutor<
         filters[id] = value as TableQueryFilterDefinition
       }
     }
-    const executor = new TableQueryExecutor<RuntimeTableQuery, TRecord, ResourceExecutionContext<TActor, TTenant>>({
+    return new TableQueryExecutor<RuntimeTableQuery, TRecord, ResourceExecutionContext<TActor, TTenant>>({
       applyResourceScope: value => value,
       applyTenantScope: value => value,
       columns: Object.freeze(columns),
       createQuery: () => query,
       eagerLoads: this.tableEagerLoads(),
       filters: Object.freeze(filters),
-      primaryKey: this.#definition.model.definition.primaryKey,
+      maxSelectionRecords: 500,
+      primaryKey: this.#definition.routeKey,
     })
-    const result = await executor.execute(state, context)
-    const records = Object.freeze(await Promise.all(result.records.map(async (record) => {
-      await this.#authorization.authorizeRecord(context.actor, 'view', record)
-      return this.serializeRecord(record)
-    })))
-    const page = 'page' in result ? result.page : 1
-    const perPage = 'perPage' in result ? result.perPage : records.length
-    const total = 'total' in result && typeof result.total === 'number' ? result.total : records.length
-    const hasMore = 'hasMore' in result ? result.hasMore : false
-    return Object.freeze({ hasMore, page, perPage, records, total })
   }
 
   async restore(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceMutationResult<TRecord>> {

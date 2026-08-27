@@ -4,6 +4,20 @@ export interface PanelSpaNavigationOptions {
   readonly prefetching: boolean
 }
 
+export async function navigatePanelUrl(url: string, options: {
+  readonly enabled: boolean
+  readonly exceptions: readonly string[]
+  readonly navigate: (url: string, replace: boolean) => void | Promise<void>
+}, replace = false): Promise<void> {
+  const target = new URL(url, globalThis.location.href)
+  if (options.enabled && target.origin === globalThis.location.origin && !excluded(target, options.exceptions)) {
+    await options.navigate(`${target.pathname}${target.search}${target.hash}`, replace)
+    return
+  }
+  if (replace) globalThis.location.replace(url)
+  else globalThis.location.assign(url)
+}
+
 function wildcardPattern(value: string): RegExp {
   const escaped = value.replace(/[|\\{}()[\]^$+?.]/gu, '\\$&').replace(/\*/gu, '.*')
   return new RegExp(`^${escaped}$`, 'u')

@@ -5,6 +5,8 @@ import type {
   FormPath,
   FormValueAtPath,
   TableRecordId,
+  TableActionDefinition,
+  TableActionExecutionRequest,
   TableSelectionPayload,
   TableState,
   TableStateListener,
@@ -85,7 +87,7 @@ export interface SvelteFilterCollectionSlotProps extends Record<string, unknown>
   readonly presentation: FilterCollectionPresentation
 }
 
-export interface SvelteTableAction {
+export interface SvelteTableAction extends TableActionDefinition {
   readonly color?: string | null
   readonly confirmation?: string
   readonly icon?: string | null
@@ -95,6 +97,7 @@ export interface SvelteTableAction {
 }
 
 export interface SvelteTableActionGroup {
+  readonly emptyStateOnly?: boolean
   readonly actions: readonly SvelteTableAction[]
   readonly color?: string | null
   readonly icon?: string | null
@@ -106,7 +109,7 @@ export interface SvelteTableActionGroup {
 
 export type SvelteTableActionItem = SvelteTableAction | SvelteTableActionGroup
 
-export interface SvelteTableActionRequest<TRecordId extends TableRecordId> {
+export interface SvelteTableActionRequest<TRecordId extends TableRecordId> extends TableActionExecutionRequest<TRecordId> {
   readonly actionId: string
   readonly recordId?: TRecordId
   readonly selection?: TableSelectionPayload<TRecordId>

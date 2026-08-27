@@ -388,7 +388,7 @@ describe('P7-G Svelte table renderer', () => {
     document.querySelector<HTMLElement>('[role="menuitem"][data-action="posts.archive"]')?.click()
     await Promise.resolve()
     flushClient()
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.archive', recordId: 1 }, expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.archive', recordId: 1, mount: 'record', input: {} }), expect.any(AbortSignal))
   })
 
   it('requires the panel confirmation UI before destructive actions execute', async () => {
@@ -412,7 +412,7 @@ describe('P7-G Svelte table renderer', () => {
     confirm?.click()
     await Promise.resolve()
     flushClient()
-    expect(execute).toHaveBeenCalledWith({ actionId: 'posts.delete', recordId: 1 }, expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'posts.delete', recordId: 1, mount: 'record', input: {} }), expect.any(AbortSignal))
   })
 
   it('executes only compiled inline edits and supports Enter and Escape', async () => {

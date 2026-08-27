@@ -148,6 +148,11 @@ export class RelationManagerExecutor<
     return this.resolveAuthorized(id, 'view', context)
   }
 
+  async resolveActionRecord(id: TValue, operation: RelationOperation, context: RelationManagerContext<TOwner, TActor, TTenant>): Promise<TRelated> {
+    await this.assertOwner(operation, context)
+    return this.resolveAuthorized(id, operation, context)
+  }
+
   async create(input: TInput, context: RelationManagerContext<TOwner, TActor, TTenant>): Promise<TRelated> {
     this.assertOperation('create')
     return this.#definition.transaction.run(async () => {

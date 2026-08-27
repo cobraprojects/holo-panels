@@ -1,4 +1,6 @@
 import type { JsonObject } from '../protocol/json'
+import { toJsonValue } from '../protocol/serialization'
+import { resolveActionState } from './action'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
 import { panelNotification } from '../notifications/notification'
 import { validatedToastPresentation, type Effect, type RichToastEffect } from '../protocol/effects'
@@ -60,6 +62,8 @@ function canonicalJson(value: unknown, ancestors = new Set<object>()): string {
 }
 
 export class ActionExecutionError extends Error {
+  readonly status: number
+
   constructor(
     readonly code: 'denied' | 'failed' | 'idempotency-conflict' | 'rate-limited' | 'record-not-found' | 'stale',
     message: string,
@@ -67,6 +71,7 @@ export class ActionExecutionError extends Error {
   ) {
     super(message)
     this.name = 'ActionExecutionError'
+    this.status = { denied: 403, failed: 500, 'idempotency-conflict': 409, 'rate-limited': 429, 'record-not-found': 404, stale: 409 }[code]
   }
 }
 
@@ -87,7 +92,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   execute<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
   ): Promise<ActionExecutionResult<TRecordId, TResult>> {
     const now = Date.now()
     this.pruneExecutions(now)
@@ -109,7 +114,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
         return Promise.reject(new ActionExecutionError('idempotency-conflict', 'The idempotency key was already used for a different action request'))
       }
       if (cached.settled) {
-        return cached.promise.then(result => Object.freeze({ ...result, effects: Object.freeze([]) })) as Promise<ActionExecutionResult<TRecordId, TResult>>
+        return this.authorizeReplay(definition, request, scope).then(() => cached.promise).then(result => Object.freeze({ ...result, effects: Object.freeze([]) })) as Promise<ActionExecutionResult<TRecordId, TResult>>
       }
       return cached.promise as Promise<ActionExecutionResult<TRecordId, TResult>>
     }
@@ -137,7 +142,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   private async run<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
   ): Promise<ActionExecutionResult<TRecordId, TResult>> {
     if (request.mount !== definition.mount) throw new Error('Action requests cannot change their compiled mount')
     const recordIds = request.recordIds ?? []
@@ -187,7 +192,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   private async executeRecord<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     recordId: TRecordId,
     record: TRecord | null,
     selectedRecords: readonly TRecord[],
@@ -210,7 +215,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
 
   private context<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
-    scope: { readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     record: TRecord | null,
     selectedRecords: readonly TRecord[] = Object.freeze([]),
   ): ActionContext<TRecord, TActor, TTenant, TServices> {
@@ -222,7 +227,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     input: TInput,
     context: ActionContext<TRecord, TActor, TTenant, TServices>,
   ): Promise<TResult> {
-    if (!await definition.authorize(context, input)) throw new ActionExecutionError('denied', 'The action is not authorized')
+    await this.authorize(definition, input, context)
     await this.enforceRateLimit(definition, context)
     const mutated = definition.mutateInput ? await definition.mutateInput(structuredClone(input), context) : structuredClone(input)
     const operation = async (): Promise<TResult> => {
@@ -235,6 +240,33 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       return result
     }
     return definition.transactional === false ? operation() : this.options.transaction.run(operation)
+  }
+
+  private async authorize<TInput extends JsonObject, TResult>(
+    definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
+    input: TInput,
+    context: ActionContext<TRecord, TActor, TTenant, TServices>,
+  ): Promise<void> {
+    if (!await definition.authorize(context, input)) throw new ActionExecutionError('denied', 'The action is not authorized')
+    const presentation = await resolveActionState(definition, { ...context, data: input })
+    if (!presentation.visible || presentation.disabled) throw new ActionExecutionError('denied', 'The action is not available')
+  }
+
+  private async authorizeReplay<TInput extends JsonObject, TResult>(
+    definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
+    request: ActionExecutionRequest<TInput, TRecordId>,
+    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+  ): Promise<void> {
+    if (request.mount !== definition.mount) throw new ActionExecutionError('denied', 'The action mount is no longer registered')
+    const ids = request.recordIds ?? []
+    if (ids.length === 0) return this.authorize(definition, request.input, this.context(definition, scope, null))
+    const resolved = await Promise.all(ids.map(id => this.options.records.resolve(id, scope)))
+    const records: TRecord[] = []
+    for (const record of resolved) {
+      if (record === null) throw new ActionExecutionError('denied', 'An action record is no longer available')
+      records.push(record)
+    }
+    for (const record of records) await this.authorize(definition, request.input, this.context(definition, scope, record, records))
   }
 
   private async enforceRateLimit<TInput extends JsonObject, TResult>(
@@ -274,12 +306,25 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     executions: readonly { readonly context: ActionContext<TRecord, TActor, TTenant, TServices>, readonly result: TResult }[],
   ): Promise<readonly Effect[]> {
+    const navigation: Effect[] = []
+    if (definition.mount !== 'bulk') {
+      for (const execution of executions) {
+        try {
+        const url = typeof definition.url === 'function' ? await definition.url(execution.context) : definition.url
+        if (!url) continue
+        toJsonValue({ url })
+        navigation.push({ kind: 'redirect', url, ...(definition.urlInNewTab ? { newTab: true } : {}) })
+        } catch {
+          continue
+        }
+      }
+    }
     if (!definition.successNotification) {
-      return this.notificationEffects([panelNotification(`${definition.id}.succeeded`)
+      return [...this.notificationEffects([panelNotification(`${definition.id}.succeeded`)
         .title('Action completed')
         .body('The operation completed successfully.')
         .status('success')
-        .presentation()])
+        .presentation()]), ...navigation]
     }
     const presentations: Readonly<PanelNotificationPresentation>[] = []
     for (const execution of executions) {
@@ -292,7 +337,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
         continue
       }
     }
-    return this.notificationEffects(presentations)
+    return [...this.notificationEffects(presentations), ...navigation]
   }
 
   private async failureEffects<TInput extends JsonObject, TResult>(

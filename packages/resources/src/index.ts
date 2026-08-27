@@ -1,13 +1,15 @@
 import {
   createActionFactory,
-  type Action,
+  CreateAction,
+  EditAction,
   type ActionFactory,
   type ActionContract,
-  type ActionGroup,
 } from '@holo-js/panels-actions'
 import {
   DISCOVERY_MARKER,
   bindResourceActionOwner,
+  actionPermissionReferences,
+  resourceNotificationPermissionReferences,
   defineExporter as defineCoreExporter,
   defineImporter as defineCoreImporter,
   type DefaultPanelActor,
@@ -33,7 +35,6 @@ import {
   Table,
   type ColumnFactory,
   type FilterFactory,
-  type TableAction,
 } from '@holo-js/panels-tables'
 
 export interface ResourceModelSource<TRecord extends ResourceRecord = ResourceRecord> {
@@ -214,7 +215,7 @@ type RegisteredResourceIdentifier<TResource extends ResourceClass> = RegisteredR
   : TableRecordIdentifier
 
 export interface ResourcePageRegistration<TRecord extends object = object> {
-  readonly actions: Readonly<{ readonly footer: readonly ActionContract<TRecord>[], readonly header: readonly ActionContract<TRecord>[] }>
+  readonly actions: Readonly<{ readonly footer: readonly ActionContract<TRecord>[], readonly form?: readonly ActionContract<TRecord>[], readonly header: readonly ActionContract<TRecord>[] }>
   readonly page: ResourcePageConstructor<TRecord>
   readonly pageType: ResourcePageType
   readonly path: string
@@ -247,20 +248,22 @@ export abstract class ResourcePage<TRecord extends object = object> {
   static readonly pageType: ResourcePageType
   static get resource(): ResourceClass { throw new Error('Resource pages must declare their resource') }
 
-  static route<TRecord extends object>(this: ResourcePageConstructor<TRecord>, path: string): ResourcePageRegistration<TRecord> {
+  static route<TRecord extends object>(this: { new (): ResourcePage<TRecord>, readonly pageType: ResourcePageType }, path: string): ResourcePageRegistration<TRecord> {
     const page = new this()
     return Object.freeze({
       actions: Object.freeze({
         footer: Object.freeze([...page.getFooterActions()]),
+        form: Object.freeze([...page.getFormActions()]),
         header: Object.freeze([...page.getHeaderActions()]),
       }),
-      page: this,
+      page: this as ResourcePageConstructor<TRecord>,
       pageType: this.pageType,
       path,
     })
   }
 
   protected getFooterActions(): readonly ActionContract<TRecord>[] { return [] }
+  protected getFormActions(): readonly ActionContract<TRecord>[] { return [] }
   protected getHeaderActions(): readonly ActionContract<TRecord>[] { return [] }
   protected actions(configure: (action: ActionFactory<TRecord>) => readonly ActionContract<TRecord>[]): readonly ActionContract<TRecord>[] {
     return configure(createActionFactory<TRecord>())
@@ -281,23 +284,33 @@ export abstract class CreateRecord<TRecord extends object = object, TData extend
   static override readonly pageType = 'create' as const
   protected getCreatedNotification(): Notification | null { return null }
   protected getCreatedNotificationTitle(): string | null { return null }
-  protected getCreateFormAction(): Action<TRecord> | null { return null }
-  protected getCreateAnotherFormAction(): Action<TRecord> | null { return null }
+  protected getCreateFormAction(): ActionContract<TRecord> | null { return CreateAction.make<TRecord>() }
+  protected getCreateAnotherFormAction(): ActionContract<TRecord> | null { return null }
   protected getRedirectUrl(): string | null { return null }
   protected handleRecordCreation(_data: TData): TRecord | Promise<TRecord> { throw new Error('Resource creation is handled by the Holo Panels resource executor') }
   protected mutateFormDataBeforeCreate(data: TData): TData | Promise<TData> { return data }
+  protected override getFormActions(): readonly ActionContract<TRecord>[] {
+    return [...formAction(this.getCreateFormAction(), 'submit'), ...formAction(this.getCreateAnotherFormAction(), 'create-another')]
+  }
 }
 
 export abstract class EditRecord<TRecord extends object = object, TData extends object = TRecord> extends ResourcePage<TRecord> {
   static override readonly pageType = 'edit' as const
-  protected getCancelFormAction(): Action<TRecord> | null { return null }
+  protected getCancelFormAction(): ActionContract<TRecord> | null { return null }
   protected getRedirectUrl(): string | null { return null }
-  protected getSaveFormAction(): Action<TRecord> | null { return null }
+  protected getSaveFormAction(): ActionContract<TRecord> | null { return EditAction.make<TRecord>().label('Save') }
   protected getSavedNotification(): Notification | null { return null }
   protected getSavedNotificationTitle(): string | null { return null }
   protected handleRecordUpdate(record: TRecord, _data: TData): TRecord | Promise<TRecord> { return record }
   protected mutateFormDataBeforeFill(data: TData): TData | Promise<TData> { return data }
   protected mutateFormDataBeforeSave(data: TData): TData | Promise<TData> { return data }
+  protected override getFormActions(): readonly ActionContract<TRecord>[] {
+    return [...formAction(this.getSaveFormAction(), 'submit'), ...formAction(this.getCancelFormAction(), 'cancel')]
+  }
+}
+
+function formAction<TRecord extends object>(action: ActionContract<TRecord> | null, intent: 'cancel' | 'create-another' | 'submit'): readonly ActionContract<TRecord>[] {
+  return action ? [{ id: action.id, resourceRecordType: action.resourceRecordType, compile: () => ({ ...action.compile(), formIntent: intent }), manifest: scope => ({ ...action.manifest(scope), formIntent: intent }) }] : []
 }
 
 export abstract class ViewRecord<TRecord extends object = object> extends ResourcePage<TRecord> {
@@ -370,14 +383,13 @@ function pageRegistrations(target: object): readonly ResourcePageRegistration[] 
   return Object.values(value).filter((page): page is ResourcePageRegistration => Boolean(page && typeof page === 'object' && 'pageType' in page && 'path' in page))
 }
 
-function flattenedActions<TRecord extends object>(actions: readonly TableAction<TRecord>[]): readonly ActionContract<TRecord>[] {
-  return actions.flatMap(action => 'actions' in action ? (action as ActionGroup<ActionContract<TRecord>>).actions : [action])
-}
-
 function pageActionDefinitions(pages: readonly ResourcePageRegistration[]): readonly object[] {
   return pages.flatMap((page) => {
     const mount = page.pageType === 'edit' || page.pageType === 'view' ? 'record' : 'page'
-    return [...page.actions.header, ...page.actions.footer].map(action => Object.freeze({ ...action.compile(), mount, source: page.pageType }))
+    return [
+      ...[...page.actions.header, ...page.actions.footer].map(action => Object.freeze({ ...action.compile(), mount, source: page.pageType })),
+      ...(page.actions.form ?? []).map(action => Object.freeze({ ...action.compile(), mount, source: `${page.pageType}:form` })),
+    ]
   })
 }
 
@@ -496,7 +508,8 @@ export abstract class Resource {
       ...(this.navigationSort !== null ? { sort: this.navigationSort } : {}),
     })
     builder = builder.form(form).infolist(infolist).table(table).pages(...pages).relations(...relations).widgets(...widgets)
-    builder = builder.actions(() => flattenedActions(table.getActions()))
+    const tableActions = table.compile().serverActions
+    builder = builder.actions(() => Array.isArray(tableActions) ? tableActions.map(action => ({ compile: () => action })) : [])
     const baseQuery = Reflect.get(this, 'modifyBaseQuery')
     if (typeof baseQuery === 'function') builder = builder.baseQuery((query, context) => Reflect.apply(baseQuery, this, [query, context]) as ResourceQuery<unknown, ResourceRecord>)
     const tenantQuery = Reflect.get(this, 'scopeQueryToTenant')
@@ -523,7 +536,7 @@ export abstract class Resource {
         ...(Array.isArray(actions) ? actions.map(action => Object.freeze({ ...action, source: Reflect.get(action, 'source') ?? 'table' })) : []),
         ...pageActions,
       ]),
-      permissionReferences: Object.freeze([...new Set([...(Array.isArray(compiled.permissionReferences) ? compiled.permissionReferences.filter((key): key is string => typeof key === 'string') : []), ...pageActions.map(action => `actions.${Reflect.get(action, 'id')}.view`)])]),
+      permissionReferences: Object.freeze([...new Set([...(Array.isArray(compiled.permissionReferences) ? compiled.permissionReferences.filter((key): key is string => typeof key === 'string') : []), ...actionPermissionReferences(pageActions), ...resourceNotificationPermissionReferences(this)])]),
     })
   }
 
@@ -617,8 +630,10 @@ export abstract class RelationManager {
 
   static compile(): object {
     const { form, infolist, table } = configuredCompositions(this)
+    const manager = Reflect.construct(this, []) as RelationManager
+    const headerActions = [...manager.getHeaderActions(), ...manager.getTableHeaderActions()].map(action => ({ ...action.compile(), mount: 'page' }))
     return Object.freeze({
-      actions: Object.freeze(flattenedActions(table.getActions()).map(action => action.compile())),
+      actions: [...(table.compile().serverActions as readonly object[]), ...headerActions],
       discoveryMarker: DISCOVERY_MARKER,
       form,
       id: this.relationship,

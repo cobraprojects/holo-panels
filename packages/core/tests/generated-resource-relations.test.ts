@@ -93,8 +93,8 @@ class CommentsRelationManager {
   static compile(): object {
     return Object.freeze({
       actions: Object.freeze([
-        Object.freeze({ id: 'edit', kind: 'edit', visible: true }),
-        Object.freeze({ id: 'delete', kind: 'delete', visible: true }),
+        Object.freeze({ id: 'edit', kind: 'edit', transactional: false, visible: true }),
+        Object.freeze({ id: 'delete', kind: 'delete', transactional: false, visible: true }),
       ]),
       id: 'comments',
       kind: 'relation-manager',
@@ -111,6 +111,28 @@ class CommentsRelationManager {
 }
 
 describe('generated resource relation managers', () => {
+  it('preserves relation action overrides and reauthorizes their execution', async () => {
+    let allowed = true
+    const saved: string[] = []
+    class ConfiguredComments extends CommentsRelationManager {
+      static override compile(): object {
+        return { ...super.compile(), actions: [{
+          authorize: () => allowed,
+          confirmation: null,
+          handle: (_input: object, context: { record: CommentRecord | null }) => { saved.push(context.record?.body ?? 'missing'); return 'reviewed' },
+          id: 'review', kind: 'edit', label: 'Review comment', mount: 'record', transactional: false, usesDefaultHandler: false,
+        }] }
+      }
+    }
+    const resource = new ResourceBuilder<typeof postModel, PostRecord, PostQuery>(postModel).shared().relations(ConfiguredComments)
+    const input = { context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null }, operation: 'action' as const, panelId: 'admin', payload: { actionId: 'review', idempotencyKey: 'review-comment', intent: 'relation', managerId: 'comments', ownerId: 'post-1', relatedId: 'comment-1', relationOperation: 'edit', resourceId: 'posts', values: {} } }
+    const result = await executeGeneratedResourceOperation(resource, input)
+    expect(saved).toEqual(['First comment'])
+    expect(result.data.status).toBe('succeeded')
+    expect(result.data.relations).toEqual(expect.arrayContaining([expect.objectContaining({ recordActions: [{ recordId: 'comment-1', actions: [expect.objectContaining({ confirmation: null, id: 'review', label: 'Review comment' })] }] })]))
+    allowed = false
+    await expect(executeGeneratedResourceOperation(resource, input)).rejects.toThrow('not authorized')
+  })
   it('loads relation manager classes registered by a resource', async () => {
     const resource = new ResourceBuilder<typeof postModel, PostRecord, PostQuery>(postModel)
       .shared()

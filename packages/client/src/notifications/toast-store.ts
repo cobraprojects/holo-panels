@@ -2,13 +2,18 @@ import {
   panelNotification,
   type PanelNotificationAction,
   type PanelNotificationPresentation,
+  type ActionManifest,
+  notificationExecution,
 } from '@holo-js/panels-core'
 import type {
   ClientNotificationActionHandler,
   ClientToast,
   ClientToastState,
   ClientToastStateListener,
+  ClientNotificationTransport,
 } from './contracts'
+import { ClientActionStore } from '../actions/store'
+import { actionManifestCollection, isActionManifest } from '../actions/manifest'
 
 function freezeState(items: readonly ClientToast[], liveMessage: string, version: number): ClientToastState {
   return Object.freeze({ items: Object.freeze(items.map(item => Object.freeze(structuredClone(item)))), liveMessage, version })
@@ -39,6 +44,8 @@ function safeClientPresentation(presentation: Readonly<PanelNotificationPresenta
 }
 
 export class ClientToastStore {
+  readonly #actions = new Map<string, ClientActionStore>()
+  #transport: Pick<ClientNotificationTransport, 'executeToastAction'> | undefined
   readonly #handlers = new Set<ClientNotificationActionHandler>()
   readonly #listeners = new Set<ClientToastStateListener>()
   readonly #timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -46,6 +53,40 @@ export class ClientToastStore {
 
   get state(): ClientToastState {
     return this.#state
+  }
+
+  connectActions(transport: Pick<ClientNotificationTransport, 'executeToastAction'>): void {
+    this.#transport = transport
+  }
+
+  actionHost(id: string): { readonly actions: readonly ActionManifest[], readonly store: ClientActionStore } | null {
+    const toast = this.#state.items.find(item => item.id === id)
+    if (!toast?.trusted || !this.#transport?.executeToastAction) return null
+    const attached = toast.actions.flatMap(value => {
+      const action = notificationExecution(value)
+      if (!action || !value || typeof value !== 'object' || Array.isArray(value) || typeof value.token !== 'string' || !isActionManifest(value.actionManifest, action.id) || value.actionManifest.mount !== 'notification') return []
+      return [{ manifest: value.actionManifest, token: value.token }]
+    })
+    if (!attached.length) return null
+    let store = this.#actions.get(id)
+    if (!store) {
+      store = new ClientActionStore({ createIdempotencyKey: () => crypto.randomUUID(), transport: {
+        execute: (request, signal) => {
+          const action = attached.find(item => actionManifestCollection([item.manifest]).some(manifest => manifest.id === request.actionId))
+          if (!action || !this.#transport?.executeToastAction) throw new Error('The toast action is no longer available')
+          return this.#transport.executeToastAction(action.token, request, signal)
+        },
+      } })
+      store.subscribe(state => {
+        const timer = this.#timers.get(id)
+        if (timer) clearTimeout(timer)
+        this.#timers.delete(id)
+        const current = this.#state.items.find(item => item.id === id)
+        if (state.frames.length === 0 && current) this.schedule(current)
+      })
+      this.#actions.set(id, store)
+    }
+    return { actions: attached.map(action => action.manifest), store }
   }
 
   subscribe(listener: ClientToastStateListener): () => void {
@@ -59,6 +100,8 @@ export class ClientToastStore {
   }
 
   push(presentation: Readonly<PanelNotificationPresentation>, trusted = true): void {
+    this.#actions.get(presentation.id)?.dispose()
+    this.#actions.delete(presentation.id)
     const normalized = trusted ? structuredClone(presentation) : safeClientPresentation(presentation)
     const item: ClientToast = {
       ...normalized,
@@ -72,6 +115,8 @@ export class ClientToastStore {
   }
 
   dismiss(id: string): void {
+    this.#actions.get(id)?.dispose()
+    this.#actions.delete(id)
     const timer = this.#timers.get(id)
     if (timer) clearTimeout(timer)
     this.#timers.delete(id)
@@ -91,6 +136,9 @@ export class ClientToastStore {
   }
 
   dispose(): void {
+    for (const store of this.#actions.values()) store.dispose()
+    this.#actions.clear()
+    this.#transport = undefined
     for (const timer of this.#timers.values()) clearTimeout(timer)
     this.#timers.clear()
     this.#listeners.clear()

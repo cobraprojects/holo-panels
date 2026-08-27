@@ -1,6 +1,7 @@
 import {
   Fragment,
   createElement,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -11,19 +12,12 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { ClientTransferStore, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
+import { ClientTransferStore, createTableActionHost, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
+import { ReactActionRenderer } from '../actions/renderer'
 import { TablesRenderHook } from '@holo-js/panels-core'
-import { ChevronDown, ChevronLeft, ChevronRight, Columns3, ListFilter, MoreHorizontal, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Columns3, ListFilter, Search, X } from 'lucide-react'
 import { Button, PanelsIcon, Input, NativeSelect } from '../internal-ui'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
   Checkbox,
   Dialog,
   DialogContent,
@@ -31,10 +25,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -287,50 +277,29 @@ function ColumnManager<TRecord extends object, TRecordId extends TableRecordId>(
   </Popover>
 }
 
-function ActionButton<TRecord extends object, TRecordId extends TableRecordId>({ action, menuItem = false, onComplete, props, record }: {
-  readonly action: ReactTableAction
-  readonly menuItem?: boolean
-  readonly onComplete?: () => void
+function TableActions<TRecord extends object, TRecordId extends TableRecordId>({ actions, group, props, record }: {
+  readonly actions: readonly ReactTableAction[]
+  readonly group?: ReactTableActionGroup
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
   readonly record?: Readonly<TRecord>
 }): ReactNode {
   const feedback = useReactFeedback()
-  const [pending, setPending] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const run = async (): Promise<void> => {
-    const transport = props.actionTransport
-    if (!transport) throw new Error('[Holo Panels] React table actions require an action transport.')
-    setPending(true)
-    setConfirming(false)
-    const controller = new AbortController()
-    try {
-      await transport.execute({
-        actionId: action.id,
-        ...(record ? { recordId: props.getRecordId(record) } : {}),
-        ...(action.scope === 'bulk' ? { selection: props.store.selectionPayload() } : {}),
-      }, controller.signal)
-    } catch (cause) {
-      feedback.error(`${action.label} failed`, cause)
-    } finally {
-      setPending(false)
-      onComplete?.()
-    }
-  }
-  const activate = (): void => {
-    if (action.confirmation) setConfirming(true)
-    else void run()
-  }
-  const triggerClass = 'hp-action-trigger hp-table-action'
-  const variant = action.color === 'danger' ? 'destructive' : 'outline'
-  const content = <Fragment>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>{pending ? 'Working…' : action.label}</span></Fragment>
-  const trigger = menuItem
-    ? record && action.url
-      ? <DropdownMenuItem asChild variant={action.color === 'danger' ? 'destructive' : 'default'}><a data-action={action.id} data-color={action.color ?? undefined} href={action.url(props.getRecordId(record))}>{content}</a></DropdownMenuItem>
-      : <DropdownMenuItem data-action={action.id} data-color={action.color ?? undefined} disabled={pending} onSelect={event => { event.preventDefault(); activate() }} variant={action.color === 'danger' ? 'destructive' : 'default'}>{content}</DropdownMenuItem>
-    : record && action.url
-      ? <Button asChild className={triggerClass} variant={variant}><a data-action={action.id} data-color={action.color ?? undefined} href={action.url(props.getRecordId(record))}>{content}</a></Button>
-      : <Button className={triggerClass} data-action={action.id} data-color={action.color ?? undefined} disabled={pending} onClick={activate} type="button" variant={variant}>{content}</Button>
-  return <Fragment>{trigger}{confirming ? <AlertDialog onOpenChange={setConfirming} open><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{action.label}</AlertDialogTitle><AlertDialogDescription>{action.confirmation}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="hp-action-trigger" data-action={action.id} data-color={action.color ?? undefined} onClick={() => void run()} variant={action.color === 'danger' ? 'destructive' : 'default'}>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>Confirm</span></AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog> : null}</Fragment>
+  const recordId = record ? props.getRecordId(record) : undefined
+  const host = useMemo(() => createTableActionHost({
+    actions, group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined, recordId,
+    selection: () => props.store.selectionPayload(),
+    execute: async (request, signal) => {
+      try {
+        if (!props.actionTransport) throw new Error('Table actions require an action transport')
+        await props.actionTransport.execute(request, signal)
+      } catch (cause) {
+        if (!signal.aborted) feedback.error(`${actions.find(action => action.id === request.actionId)?.label ?? 'Action'} failed`, cause)
+        throw cause
+      }
+    },
+  }), [actions, feedback, group, props.actionTransport, props.store, recordId])
+  useEffect(() => () => { while (host.store.activeFrame) host.store.close() }, [host])
+  return host.actions[0] ? <ReactActionRenderer {...host} manifest={host.actions[0]} panelId={props.panelId} registry={props.registry} /> : null
 }
 
 function ActionGroupButton<TRecord extends object, TRecordId extends TableRecordId>({ group, props, record }: {
@@ -338,12 +307,7 @@ function ActionGroupButton<TRecord extends object, TRecordId extends TableRecord
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
   readonly record?: Readonly<TRecord>
 }): ReactNode {
-  const [open, setOpen] = useState(false)
-  const label = group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : group.scope === 'row' ? 'Row actions' : 'Actions')
-  return <DropdownMenu onOpenChange={setOpen} open={open}>
-    <DropdownMenuTrigger asChild><Button aria-label={label} className="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} size={group.scope === 'row' ? 'icon' : 'default'} type="button" variant={group.scope === 'row' ? 'ghost' : 'outline'}>{group.icon ? <PanelsIcon name={group.icon} /> : group.scope === 'row' ? <MoreHorizontal aria-hidden="true" /> : null}<span className={group.scope === 'row' ? 'hp:sr-only' : undefined}>{label}</span>{group.scope === 'row' ? null : <ChevronDown aria-hidden="true" />}</Button></DropdownMenuTrigger>
-    <DropdownMenuContent align="end">{group.actions.map(action => <ActionButton action={action} key={action.id} menuItem onComplete={() => setOpen(false)} props={props} record={record} />)}</DropdownMenuContent>
-  </DropdownMenu>
+  return <TableActions actions={group.actions} group={group} props={props} record={record} />
 }
 
 function isActionGroup(item: ReactTableActionItem): item is ReactTableActionGroup {
@@ -353,7 +317,7 @@ function isActionGroup(item: ReactTableActionItem): item is ReactTableActionGrou
 function actionItem<TRecord extends object, TRecordId extends TableRecordId>(item: ReactTableActionItem, props: ReactTableRendererProps<TRecord, TRecordId>, record?: Readonly<TRecord>): ReactNode {
   return isActionGroup(item)
     ? <ActionGroupButton group={item} key={item.id} props={props} record={record} />
-    : <ActionButton action={item} key={item.id} props={props} record={record} />
+    : <TableActions actions={[item]} key={item.id} props={props} record={record} />
 }
 
 function TransferAction<TRecord extends object, TRecordId extends TableRecordId>({ manifest, props }: {
@@ -517,7 +481,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
   const paginationItems = paginationRange(state.page, pageCount)
   const paginationFrom = state.total === 0 ? 0 : (state.page - 1) * state.perPage + 1
   const paginationTo = Math.min(state.page * state.perPage, state.total)
-  const headerActions = props.actions?.filter(action => action.scope === 'header') ?? []
+  const headerActions = props.actions?.filter(action => action.scope === 'header' && (!action.emptyStateOnly || state.records.length === 0)) ?? []
   const bulkActions = props.actions?.filter(action => action.scope === 'bulk') ?? []
   const selectable = bulkActions.length > 0 || (props.transfers?.some(transfer => transfer.kind === 'export') ?? false)
   const hasSelection = selectable && (state.selection.mode === 'all-matching' || state.selection.selectedRecordIds.length > 0)

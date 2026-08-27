@@ -25,6 +25,11 @@ import {
 } from '../src'
 
 describe('built-in action presentation', () => {
+  it('compiles pivot editing with a stable action identifier', async () => {
+    const action = EditPivotAction.make().compile()
+    const manifest = await compileActionManifest(action, 'Edit pivot', { actor: {}, mount: 'record', record: {}, services: {}, signal: new AbortController().signal, tenant: null })
+    expect(manifest).toMatchObject({ id: 'edit-pivot', kind: 'editPivot', icon: 'edit' })
+  })
   it('gives every built-in action an icon and destructive actions confirmation and danger defaults', () => {
     const manifests = [
       CreateAction.make().manifest(),

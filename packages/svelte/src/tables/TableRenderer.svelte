@@ -10,7 +10,6 @@
   import * as Popover from '../ui/popover'
   import RenderHook from '../components/RenderHook.svelte'
   import { toSvelteSnapshot } from '../stores'
-  import ActionButton from './ActionButton.svelte'
   import ActionGroupButton from './ActionGroupButton.svelte'
   import FilterCollectionSlot from './FilterCollectionSlot.svelte'
   import { filterCollectionStyle, pageCount, paginationRange, perPageOptions, visibleColumns } from './helpers'
@@ -58,7 +57,7 @@
   const recordIds = $derived($snapshotStore.records.map(table.getRecordId))
   const selectedOnPage = $derived(recordIds.length > 0 && recordIds.every(recordId => table.store.isSelected(recordId)))
   const pages = $derived(pageCount($snapshotStore.total, $snapshotStore.perPage))
-  const headerActions = $derived(table.actions?.filter(action => action.scope === 'header') ?? [])
+  const headerActions = $derived(table.actions?.filter(action => action.scope === 'header' && (!action.emptyStateOnly || $snapshotStore.records.length === 0)) ?? [])
   const bulkActions = $derived(table.actions?.filter(action => action.scope === 'bulk') ?? [])
   const rowActions = $derived(table.actions?.filter(action => action.scope === 'row') ?? [])
   const rowActionGroups = $derived(rowActions.filter(isActionGroup))
@@ -224,7 +223,7 @@
       {/if}
     {/if}
     {#each headerActions as action (action.id)}
-      {#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionButton {action} {table} />{/if}
+      {#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionGroupButton {action} {table} />{/if}
     {/each}
     {#each table.transfers ?? [] as manifest (manifest.id)}
       <TransferAction {manifest} {table} />
@@ -237,7 +236,7 @@
     <div aria-live="polite" class="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
       <span>{$snapshotStore.selection.mode === 'all-matching' ? `All ${$snapshotStore.total} matching records selected` : `${$snapshotStore.selection.selectedRecordIds.length} records selected`}</span>
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
-      {#each bulkActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionButton {action} {table} />{/if}{/each}
+      {#each bulkActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionGroupButton {action} {table} />{/if}{/each}
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
       <Button type="button" onclick={() => table.store.clearSelection()}>Clear selection</Button>
     </div>

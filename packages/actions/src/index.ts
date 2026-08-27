@@ -16,7 +16,14 @@ import {
 } from '@holo-js/panels-core'
 
 export { ActionsRenderHook }
-import { Schema, type SchemaComponentContract, type SchemaComponentFor } from '@holo-js/panels-schemas'
+import { compileSchemaComponentManifest, Schema, type SchemaComponentContract, type SchemaComponentFor } from '@holo-js/panels-schemas'
+
+function actionSchema(schema: { compile(): object, getComponents(): readonly SchemaComponentContract[] } | null): JsonObject | null {
+  if (!schema) return null
+  const value = toJsonValue({ ...schema.compile(), fields: schema.getComponents().map(compileSchemaComponentManifest) })
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Action schemas must compile to an object')
+  return value
+}
 
 export type ActionColor = 'danger' | 'gray' | 'info' | 'primary' | 'success' | 'warning' | string
 export type ActionAlignment = 'center' | 'end' | 'start'
@@ -65,7 +72,7 @@ interface ActionModalState<TRecord extends object, TData extends object, TActor 
   heading: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null>
   icon: string | null
   iconColor: ActionColor | null
-  nestedActions: readonly Action[]
+  nestedActions: readonly ActionContract<TRecord>[]
   schema: Schema<TRecord, TData, TSchemaFactory> | null
   slideOver: boolean
   stickyFooter: boolean
@@ -84,6 +91,8 @@ function headline(value: string): string {
 function literal<TContext, TValue>(value: Resolvable<TContext, TValue>): TValue | null {
   return typeof value === 'function' ? null : value
 }
+
+const compilingActions = new Set<object>()
 
 export class Action<
   TRecord extends object = RegisteredPanelRecord,
@@ -120,6 +129,7 @@ export class Action<
   #tooltip: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
   #url: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string | null> = null
   #urlInNewTab = false
+  #usesDefaultHandler = true
   #visible: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = true
   readonly #schemaFactory: TSchemaFactory | undefined
 
@@ -144,6 +154,7 @@ export class Action<
   }
 
   action<TNextResult>(handler: ActionHandler<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TData, TNextResult>): Action<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory> {
+    this.#usesDefaultHandler = false
     this.#handler = handler as ActionHandler<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TData, TResult>
     return this as unknown as Action<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory>
   }
@@ -290,7 +301,7 @@ export class Action<
     return this
   }
 
-  registerModalActions(actions: readonly Action[]): this {
+  registerModalActions(actions: readonly ActionContract<TRecord>[]): this {
     this.modal().nestedActions = Object.freeze([...actions])
     return this
   }
@@ -399,7 +410,7 @@ export class Action<
         icon: modal.icon,
         iconColor: modal.iconColor,
         nestedActions: modal.nestedActions.map(action => action.id),
-        schema: modal.schema ? toJsonValue(modal.schema.compile()) : null,
+        schema: actionSchema(modal.schema),
         slideOver: modal.slideOver,
         stickyFooter: modal.stickyFooter,
         stickyHeader: modal.stickyHeader,
@@ -420,6 +431,9 @@ export class Action<
   }
 
   compile(): Readonly<ActionDefinition<TRecord, TData & JsonObject, TResult, TActor, TTenant, TServices>> {
+    if (compilingActions.has(this) || compilingActions.size >= 10) throw new Error('Nested actions must be acyclic and cannot exceed ten levels')
+    compilingActions.add(this)
+    try {
     return Object.freeze({
       authorize: (context: CoreActionContext<TRecord, TActor, TTenant, TServices>, data: Readonly<TData & JsonObject>) => this.#authorize(this.executionContext(data, context)),
       badge: this.coreResolver(this.#badge),
@@ -433,18 +447,25 @@ export class Action<
       kind: this.kind,
       label: this.coreResolver(this.#label),
       modal: this.compiledModal(),
+      nestedActions: this.#modal?.nestedActions.map(action => action.compile()),
       mount: this.mount,
       successNotification: this.#successNotification ?? undefined,
       size: this.#size,
       tooltip: this.coreResolver(this.#tooltip),
       visible: this.coreResolver(this.#visible),
+      usesDefaultHandler: this.#usesDefaultHandler,
+      url: this.coreResolver(this.#url),
+      urlInNewTab: this.#urlInNewTab,
     })
+    } finally {
+      compilingActions.delete(this)
+    }
   }
 
   private compiledModal(): ActionDefinition<TRecord, TData & JsonObject, TResult, TActor, TTenant, TServices>['modal'] {
     const modal = this.#modal
     if (!modal) return undefined
-    const schema = modal.schema ? toJsonValue(modal.schema.compile()) : null
+    const schema = actionSchema(modal.schema)
     if (schema !== null && (Array.isArray(schema) || typeof schema !== 'object')) throw new TypeError('Action modal schemas must serialize to JSON objects')
     return Object.freeze({
       alignment: modal.alignment,
@@ -633,7 +654,7 @@ export const DetachAction = Object.freeze({ make: <TRecord extends object = Regi
 export const DetachBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('detach', 'detach') })
 export const DissociateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('dissociate', 'dissociate', 'record') })
 export const DissociateBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('dissociate', 'dissociate') })
-export const EditPivotAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('editPivot', 'editPivot', 'record') })
+export const EditPivotAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('edit-pivot', 'editPivot', 'record') })
 export const ReplicateAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn('replicate', 'replicate', 'record') })
 export const ForceDeleteAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): Action<TRecord> => makeBuiltIn<TRecord>('force-delete', 'force-delete', 'record') })
 export const ForceDeleteBulkAction = Object.freeze({ make: <TRecord extends object = RegisteredPanelRecord>(): BulkAction<TRecord> => makeBuiltInBulk<TRecord>('force-delete', 'force-delete') })
@@ -700,7 +721,7 @@ export function createActionFactory<
     DissociateAction: Object.freeze({ make: () => action('dissociate', 'dissociate', 'record') }),
     DissociateBulkAction: Object.freeze({ make: () => bulkAction('dissociate', 'dissociate') }),
     EditAction: Object.freeze({ make: () => action('edit', 'edit', 'record') }),
-    EditPivotAction: Object.freeze({ make: () => action('editPivot', 'editPivot', 'record') }),
+    EditPivotAction: Object.freeze({ make: () => action('edit-pivot', 'editPivot', 'record') }),
     ExportAction: Object.freeze({ make: () => action('export', 'custom', 'page') }),
     ForceDeleteAction: Object.freeze({ make: () => action('force-delete', 'force-delete', 'record') }),
     ForceDeleteBulkAction: Object.freeze({ make: () => bulkAction('force-delete', 'force-delete') }),

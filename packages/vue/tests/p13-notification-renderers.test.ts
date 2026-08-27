@@ -25,6 +25,29 @@ afterEach(() => {
 })
 
 describe('P13 Vue notification renderers', () => {
+  it('executes a toast action once after shared confirmation without an inbox', async () => {
+    const executeToastAction = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
+    const store = new ClientToastStore()
+    store.connectActions({ executeToastAction })
+    const actionManifest = { badge: null, color: null, confirmation: 'Retry publishing?', disabled: false, icon: 'rotate-cw', id: 'retry', kind: 'custom', label: 'Retry', modal: null, mount: 'notification', size: 'medium', tooltip: null, type: 'custom', visible: true }
+    store.push({ ...presentation, actions: [{ actionManifest, execution: { actionId: 'retry', resourceId: 'posts' }, id: 'retry', kind: 'execute', label: 'Retry', token: 'signed-token', url: null }] })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(() => h(VueToastViewport, { store }))
+    apps.push(app)
+    app.mount(container)
+    await nextTick()
+    await vi.waitFor(() => expect(container.querySelector('[data-action-id="retry"]')).not.toBeNull())
+    container.querySelector<HTMLButtonElement>('[data-action-id="retry"]')?.click()
+    await nextTick()
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull())
+    expect(executeToastAction).not.toHaveBeenCalled()
+    Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find(button => button.textContent === 'Confirm')?.click()
+    await nextTick()
+    await vi.waitFor(() => expect(executeToastAction).toHaveBeenCalledWith('signed-token', expect.objectContaining({ actionId: 'retry', mount: 'notification' }), expect.any(AbortSignal)))
+    expect(executeToastAction).toHaveBeenCalledOnce()
+    store.dispose()
+  })
   it('runs saved notification actions through the shared confirmation dialog', async () => {
     const executeAction = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
     const manifest = { badge: null, color: null, confirmation: 'Retry publishing?', disabled: false, icon: 'rotate-cw', id: 'retry', kind: 'custom', label: 'Retry', modal: null, mount: 'notification', size: 'medium', tooltip: null, type: 'custom', visible: true }
@@ -44,9 +67,8 @@ describe('P13 Vue notification renderers', () => {
     expect(executeAction).not.toHaveBeenCalled()
     Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find(button => button.textContent === 'Confirm')?.click()
     await nextTick()
-    await vi.waitFor(() => expect(document.querySelector('[role="dialog"] form')).not.toBeNull())
-    document.querySelector<HTMLFormElement>('[role="dialog"] form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await vi.waitFor(() => expect(executeAction).toHaveBeenCalledWith('saved-1', expect.objectContaining({ actionId: 'retry', mount: 'notification' }), expect.any(AbortSignal)))
+    expect(executeAction).toHaveBeenCalledOnce()
   })
 
   it('renders and operates the accessible toast queue with persistence and safe actions', async () => {

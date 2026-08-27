@@ -17,7 +17,8 @@ import { notificationExecution } from './presentation'
 import { actionCacheIdentity } from '../actions/identity'
 import { isAuthorizationError } from '@holo-js/authorization'
 import { ActionExecutionError } from '../actions/engine'
-import { NotificationActionRegistrationError } from './action-reference'
+import { NotificationActionRegistrationError, resolveResourceNotificationAction } from './action-reference'
+import { executeToastAction } from './toast-actions'
 
 export interface ExecutePanelDatabaseNotificationOperationOptions<TActor> {
   readonly panel: CompiledPanelDefinition<TActor>
@@ -50,7 +51,7 @@ interface ExecuteRequest {
   readonly notificationId: string
 }
 
-type NotificationRequest = ListRequest | MutationRequest | ExecuteRequest
+type NotificationRequest = ListRequest | MutationRequest | ExecuteRequest | Omit<ExecuteRequest, 'action' | 'notificationId'> & { readonly action: 'execute-toast', readonly token: string }
 const NOTIFICATION_ID = /^[A-Za-z0-9._:-]{1,200}$/u
 
 interface TenantScopedQuery<TQuery> {
@@ -70,6 +71,12 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 function parseRequest(payload: unknown): NotificationRequest {
   if (!isRecord(payload)) throw new PanelNotificationRequestError('Panel notification requests require an object payload')
+  if (payload.action === 'execute-toast') {
+    if (typeof payload.token !== 'string' || payload.token.length > 100_000) throw new PanelNotificationRequestError('Toast actions require a signed token')
+    const execution = parseRequest({ ...payload, action: 'execute', notificationId: 'toast' })
+    if (execution.action !== 'execute') throw new PanelNotificationRequestError('Invalid toast action')
+    return { action: 'execute-toast', actionId: execution.actionId, idempotencyKey: execution.idempotencyKey, input: execution.input, token: payload.token }
+  }
   if (payload.action === 'execute') {
     if (typeof payload.notificationId !== 'string' || !NOTIFICATION_ID.test(payload.notificationId)
       || typeof payload.actionId !== 'string' || !NOTIFICATION_ID.test(payload.actionId)
@@ -133,6 +140,7 @@ export async function executePanelDatabaseNotificationOperation<TActor>(
   options: ExecutePanelDatabaseNotificationOperationOptions<TActor>,
 ): Promise<PanelDatabaseNotificationOperationResult> {
   const request = parseRequest(options.payload)
+  if (request.action === 'execute-toast') return executeToastAction({ ...options, panel: options.panel as CompiledPanelDefinition<object>, scope: options.scope as PanelAuthenticatedScope<object> }, request)
   const operation = request.action === 'execute' ? 'list' : request.action
   const inboxOptions = options.panel.server.notifications?.inbox
   if (!inboxOptions || options.panel.manifest.databaseNotifications === null) {
@@ -198,11 +206,26 @@ export async function executePanelDatabaseNotificationOperation<TActor>(
     const context = await actionContext()
     if (options.scope.signal.aborted) throw options.scope.signal.reason
     const item = await inbox.find(scope, request.notificationId)
-    const action = item?.presentation.actions.map(notificationExecution).find(candidate => candidate?.id === request.actionId)
+    const attached = item?.presentation.actions.flatMap(value => notificationExecution(value) ?? []) ?? []
+    let action = attached.find(candidate => candidate.id === request.actionId)
+    if (!action) {
+      for (const candidate of attached) {
+        const reference = candidate.execution
+        const loader = reference ? options.registry[`${scope.panelId}:resource:${reference.resourceId}`] : undefined
+        if (!loader || !reference) continue
+        try {
+          resolveResourceNotificationAction(await loader(), reference, request.actionId)
+          if (action) throw new PanelNotificationAccessError('list')
+          action = candidate
+        } catch (error: unknown) {
+          if (!(error instanceof NotificationActionRegistrationError)) throw error
+        }
+      }
+    }
     if (!item || !action) throw new PanelNotificationAccessError('list')
     const actor = actionCacheIdentity(context.actor)
     const tenant = JSON.stringify([scope.panelId, scope.guard, options.scope.provider, scope.tenantId, recipient, item.id])
-    return executeNotificationAction({ action, context, panel: options.panel as CompiledPanelDefinition<object>, registry: options.registry, transaction: options.transaction }, request.input, request.idempotencyKey, actor === null ? null : { actor, tenant })
+    return executeNotificationAction({ action, actionId: request.actionId, context, panel: options.panel as CompiledPanelDefinition<object>, registry: options.registry, transaction: options.transaction }, request.input, request.idempotencyKey, actor === null ? null : { actor, tenant })
   }
   const affected = request.action === 'delete'
     ? await inbox.delete(scope, request.ids)

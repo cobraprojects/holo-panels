@@ -23,6 +23,21 @@ function manifest(id: string, options: Partial<ActionManifest> = {}): ActionMani
 }
 
 describe('P8-B client action state', () => {
+  it('does not close a reopened action when an obsolete request rejects', async () => {
+    const requests: Array<{ reject(cause: Error): void }> = []
+    const store = new ClientActionStore({ createIdempotencyKey: () => crypto.randomUUID(), transport: { execute: () => new Promise<ActionExecutionResult<number | string, unknown>>((_resolve, reject) => requests.push({ reject })) } })
+    store.mount(manifest('save'))
+    const obsolete = store.submit()
+    store.close()
+    store.mount(manifest('save'))
+    requests[0]?.reject(new Error('Obsolete failure'))
+    await expect(obsolete).rejects.toThrow('Obsolete failure')
+    expect(store.activeFrame).toMatchObject({ phase: 'ready', manifest: { id: 'save' } })
+    const current = store.submit()
+    requests[1]?.reject(new Error('Current failure'))
+    await expect(current).rejects.toThrow('Current failure')
+    expect(store.activeFrame).toBeNull()
+  })
   it('mounts confirmation, schema, and nested modal actions in order', () => {
     const store = new ClientActionStore({ createIdempotencyKey: () => 'request-00000001', transport: { execute: vi.fn() } })
     store.mount(manifest('parent', {
@@ -92,7 +107,7 @@ describe('P8-B client action state', () => {
     const denied = store.submit()
     requests[1]?.reject(new Error('Not authorized'))
     await expect(denied).rejects.toThrow('Not authorized')
-    expect(store.activeFrame).toEqual(expect.objectContaining({ error: 'Not authorized', phase: 'failed' }))
+    expect(store.activeFrame).toBeNull()
   })
 
   it('starts a fresh submission when the same action reopens before its obsolete request settles', async () => {

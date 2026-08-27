@@ -115,7 +115,7 @@ export type { TranslationCatalogRegistry } from './translations/catalog-registry
 export { panelNotification } from './notifications/notification'
 export { notificationExecution } from './notifications/presentation'
 export { dispatchPanelNotification } from './notifications/dispatch'
-export { bindResourceActionOwner, notificationActionReference } from './notifications/action-reference'
+export { bindResourceActionOwner, notificationActionReference, resourceNotificationPermissionReferences } from './notifications/action-reference'
 export {
   isPanelDatabaseNotificationPayload,
   PanelNotificationAccessError,

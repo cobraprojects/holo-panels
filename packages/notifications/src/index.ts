@@ -73,7 +73,7 @@ export class Notification {
 
   async send(): Promise<this> {
     if (notificationSender) await notificationSender.send(this.toPayload())
-    else await dispatchPanelNotification(this.toPayload(), { kind: 'toast' })
+    else await dispatchPanelNotification(this.toPayload(), { kind: 'toast' }, this.#actions)
     return this
   }
 

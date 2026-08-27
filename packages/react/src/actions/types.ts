@@ -8,6 +8,7 @@ export interface ReactActionCustomProps<TResult> {
 }
 
 export interface ReactActionRendererProps<TResult = unknown> {
+  readonly input?: JsonObject
   readonly actions?: readonly Readonly<ClientActionManifest>[]
   readonly groups?: readonly Readonly<ActionGroupManifest>[]
   readonly manifest: Readonly<ClientActionManifest>

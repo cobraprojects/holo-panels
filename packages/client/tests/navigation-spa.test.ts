@@ -1,6 +1,6 @@
 import { Window } from 'happy-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installPanelSpaNavigation } from '../src/navigation/spa'
+import { installPanelSpaNavigation, navigatePanelUrl } from '../src/navigation/spa'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -8,6 +8,25 @@ afterEach(() => {
 })
 
 describe('panel SPA navigation', () => {
+  it('uses framework navigation for action redirects and browser navigation for exclusions', async () => {
+    const window = new Window({ url: 'https://example.test/admin/posts' })
+    vi.stubGlobal('location', window.location)
+    const navigate = vi.fn()
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined)
+    const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined)
+    const options = { enabled: true, exceptions: ['/admin/download/*'], navigate }
+
+    await navigatePanelUrl('/admin/posts/one/edit', options, true)
+    expect(navigate).toHaveBeenCalledWith('/admin/posts/one/edit', true)
+    await navigatePanelUrl('/admin/download/report', options)
+    expect(assign).toHaveBeenCalledWith('/admin/download/report')
+    await navigatePanelUrl('https://billing.test/checkout', options, true)
+    expect(replace).toHaveBeenCalledWith('https://billing.test/checkout')
+    await navigatePanelUrl('/admin/posts', { ...options, enabled: false })
+    expect(assign).toHaveBeenCalledWith('/admin/posts')
+    expect(navigate).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves fragment navigation to the browser', () => {
     const window = new Window({ url: 'https://example.test/admin/posts' })
     vi.stubGlobal('document', window.document)

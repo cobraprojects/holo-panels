@@ -1,18 +1,14 @@
-import type { ClientRelationManager, ClientRelationOption, ClientRelationSelection, JsonValue, RelationOperation } from '@holo-js/panels-client'
+import type { SvelteComponentRegistry } from '../registry'
+import type { ClientRelationActionRequest, ClientRelationManager, ClientRelationOption, ClientRelationSelection } from '@holo-js/panels-client'
 
-export interface SvelteRelationOperationRequest {
-  readonly managerId: string
-  readonly operation: RelationOperation
-  readonly pivot?: Readonly<Record<string, JsonValue>>
-  readonly recordId?: number | string
-  readonly values?: Readonly<Record<string, JsonValue>>
-}
+export type SvelteRelationOperationRequest = ClientRelationActionRequest
 
 export interface SvelteRelationManagerRendererProps {
   readonly loadOptions?: (managerId: string, search: string) => Promise<readonly ClientRelationOption[]>
   readonly managers: readonly ClientRelationManager[]
-  readonly onOperation?: (request: SvelteRelationOperationRequest) => void | Promise<void>
+  readonly onOperation?: (request: SvelteRelationOperationRequest, signal?: AbortSignal) => void | Promise<void>
   readonly onSelectionChange?: (groupId: string, managerId: string) => void
+  readonly registry?: SvelteComponentRegistry
   readonly panelId?: string
   readonly selection?: ClientRelationSelection
 }

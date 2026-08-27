@@ -4,7 +4,10 @@ import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/d
 import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
 import type { Effect } from '../protocol/effects'
 import type { CompiledPanelDefinition } from '../panels/contracts'
-import { authorizePanelActionPermissions } from '../actions/authorization'
+import { actionExecutionPermissions, resourceActionPermissions, authorizePanelActionPermissions } from '../actions/authorization'
+import { ActionEngineState, ActionExecutionError } from '../actions/engine'
+import { actionCacheIdentity } from '../actions/identity'
+import { findRegisteredAction } from '../actions/registration'
 import type { CompiledPageDefinition, PageContext, PageManifest, PageType } from '../pages/contracts'
 import { defaultSlugTransform } from '../fields/basic'
 import { OptionService, type OptionQueryRequest, type OptionSource, type OptionValue } from '../fields/options'
@@ -51,6 +54,20 @@ type RuntimeDefinition = ResourceDefinition<
   unknown,
   boolean
 >
+
+const resourceActionStates = new WeakMap<object, Map<string, ActionEngineState<number | string>>>()
+
+function resourceActionState(model: object, scope: string): ActionEngineState<number | string> {
+  const states = resourceActionStates.get(model) ?? new Map<string, ActionEngineState<number | string>>()
+  const state = states.get(scope) ?? new ActionEngineState<number | string>()
+  states.set(scope, state)
+  if (states.size > 1000) {
+    const oldest = states.keys().next().value
+    if (oldest !== undefined) states.delete(oldest)
+  }
+  resourceActionStates.set(model, states)
+  return state
+}
 
 interface GeneratedResourcePageOptions {
   readonly panelPath: string
@@ -583,9 +600,36 @@ function relationManagerOperations(manager: object, relation: RelationDefinition
     return Object.freeze(configured.filter((operation): operation is RelationOperation => typeof operation === 'string' && allowed.has(operation as RelationOperation)))
   }
   return Object.freeze(compositionArrayMember(manager, 'actions').flatMap((action) => {
-    if (Reflect.get(action, 'visible') === false || Reflect.get(action, 'disabled') === true) return []
     const kind = Reflect.get(action, 'kind')
     return typeof kind === 'string' && allowed.has(kind as RelationOperation) ? [kind as RelationOperation] : []
+  }))
+}
+
+function relationActions(manager: object, relation: RelationDefinition): readonly ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>[] {
+  const declared = compositionArrayMember(manager, 'actions')
+  const definitions = declared.length > 0 ? declared : relationManagerOperations(manager, relation).filter(operation => operation !== 'list').map(kind => ({ id: kind === 'editPivot' ? 'edit-pivot' : kind, kind }))
+  return definitions.map(value => {
+    const action = value as Partial<ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>>
+    if (!action.id || !action.kind) throw new Error('Relation actions require registered IDs and kinds')
+    const defaults = builtInActionPresentation(action.kind)
+    return {
+      ...defaults,
+      ...action,
+      authorize: action.authorize ?? (() => true),
+      handle: action.handle ?? (() => undefined),
+      id: action.id,
+      kind: action.kind,
+      label: action.label ?? label(action.id),
+      mount: action.mount ?? (['create', 'associate', 'attach'].includes(action.kind) ? 'page' : 'record'),
+    }
+  })
+}
+
+async function relationActionManifests(actions: ReturnType<typeof relationActions>, context: GeneratedResourceOperationInput['context'], record: RuntimeRecord | null, editable: boolean, owner: RuntimeRecord): Promise<readonly ActionManifest[]> {
+  return Promise.all(actions.filter(action => (record ? action.mount === 'record' : action.mount !== 'record') && (editable || action.kind === 'view')).map(async action => {
+    const scope = { ...context, owner, mount: action.mount, record, selectedRecords: [], services: undefined }
+    const state = await resolveActionState(action, scope)
+    return compileActionManifest(action, state.label, scope, state)
   }))
 }
 
@@ -655,9 +699,11 @@ async function resourceRelations(
       return Object.freeze({ id, values: record })
     })
     const operations = relationManagerOperations(compiled, relation as RelationDefinition)
+    const actions = relationActions(compiled, relation as RelationDefinition)
     const writableFields = runtime?.writableInputFields ?? relationWritableFields(relation)
     const writablePivotFields = runtime?.writablePivotFields ?? automaticPivotFields(relation as RelationDefinition, context).writable
     return Object.freeze({
+      actions: await relationActionManifests(actions, context, null, editable, owner),
       badge,
       columns: relationColumns(compiled, relation, records),
       fields: relationFields(relation, writableFields),
@@ -668,6 +714,10 @@ async function resourceRelations(
       pivotFields: relationPivotFields(relation, writablePivotFields),
       presentation: runtime?.presentation ?? 'inline',
       records: serializedRecords,
+      recordActions: await Promise.all(page.records.map(async (record, index) => ({
+        actions: await relationActionManifests(actions, context, record as RuntimeRecord, editable, owner),
+        recordId: serializedRecords[index]?.id,
+      }))),
       url: null,
       visible,
     })
@@ -786,6 +836,13 @@ function resourcePageActions(definition: RuntimeDefinition, pageType: PageType):
   return [...(Array.isArray(header) ? header : []), ...(Array.isArray(footer) ? footer : [])]
 }
 
+function resourceFormActions(definition: RuntimeDefinition, pageType: PageType): readonly object[] {
+  const registered = (definition.actions ?? []).filter(action => Reflect.get(action, 'source') === `${pageType}:form`)
+  if (explicitResourcePages(definition).length > 0 || registered.length > 0 || !['create', 'edit'].includes(pageType)) return registered
+  const kind = pageType === 'create' ? 'create' : 'edit'
+  return [{ ...builtInActionPresentation(kind), authorize: () => true, formIntent: 'submit', handle: () => undefined, id: kind, kind, label: kind === 'create' ? 'Create' : 'Save', mount: kind === 'create' ? 'page' : 'record', source: `${pageType}:form`, usesDefaultHandler: true }]
+}
+
 function resourceRoutes(definition: RuntimeDefinition, basePath: string): JsonObject {
   const pages = explicitResourcePages(definition)
   if (pages.length === 0) {
@@ -812,13 +869,9 @@ function resourceFieldProperties(field: object, fields: readonly object[]): Read
     : properties as Readonly<Record<string, unknown>>
 }
 
-function resourceProperties(definition: RuntimeDefinition, pageType: PageType, basePath: string): JsonObject {
-  const form = definition.form
-  const table = definition.table
-  const slug = resourceSlug(definition)
-  const capabilities = definition.capabilities ?? { delete: true, forceDelete: false, restore: false }
-  const compiledFields = arrayMember(form, 'fields')
-  const fields = compiledFields.map((field) => {
+function resourceFormFields(definition: RuntimeDefinition) {
+  const compiledFields = arrayMember(definition.form, 'fields')
+  return compiledFields.map((field) => {
     const path = String(Reflect.get(field, 'path'))
     const source = objectMember(objectMember(field, 'server'), 'options')
     const manifestOptions = source && 'manifestOptions' in source && typeof source.manifestOptions === 'function'
@@ -843,6 +896,29 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
       visible: Reflect.get(field, 'visible') !== false,
     }
   })
+}
+
+function resourceModalAction<TServices>(
+  action: ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, TServices>,
+  definition: RuntimeDefinition,
+  record: RuntimeRecord | null,
+): typeof action {
+  if (action.url || action.modal?.schema || action.mount === 'bulk' || !['create', 'edit', 'view'].includes(action.kind) || resourceRoutes(definition, '')[action.kind] !== undefined) return action
+  const values = record ? serializeResourceRecord(record) : {}
+  const fields = resourceFormFields(definition).filter(field => action.kind === 'view' || definition.writableAttributes.includes(field.path)).map(field => ({
+    ...field,
+    defaultValue: valueAtPath(values, field.path) ?? Reflect.get(field.properties, 'defaultValue') ?? '',
+    kind: 'field',
+    readOnly: action.kind === 'view' || field.readOnly,
+  }))
+  return { ...action, modal: { ...action.modal, schema: jsonObject({ fields }) } }
+}
+
+function resourceProperties(definition: RuntimeDefinition, pageType: PageType, basePath: string): JsonObject {
+  const table = definition.table
+  const slug = resourceSlug(definition)
+  const capabilities = definition.capabilities ?? { delete: true, forceDelete: false, restore: false }
+  const fields = resourceFormFields(definition)
   const columns = arrayMember(table, 'columns').map(column => ({
     alignment: Reflect.get(column, 'alignment') === 'center' || Reflect.get(column, 'alignment') === 'end' ? Reflect.get(column, 'alignment') : 'start',
     copyable: Reflect.get(column, 'copyable') === true,
@@ -868,8 +944,7 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
   const navigation = definition.navigation ?? {}
   const plural = typeof navigation.label === 'string' ? navigation.label : label(slug)
   const singular = singularize(plural)
-  const canDelete = capabilities.delete
-  const configuredActions = (definition.actions ?? []).filter(action => !String(Reflect.get(action, 'source')).startsWith('infolist:')).map(action => actionManifestSeed(action))
+  const configuredActions = (definition.actions ?? []).filter(action => !String(Reflect.get(action, 'source')).startsWith('infolist:') && !String(Reflect.get(action, 'source')).endsWith(':form')).map(action => actionManifestSeed(action))
   const hasExplicitPages = explicitResourcePages(definition).length > 0
   const pageActionScope = pageType === 'edit' || pageType === 'view' ? 'record' : 'header'
   const pageActions = resourcePageActions(definition, pageType).map(action => 'manifest' in action && typeof action.manifest === 'function'
@@ -899,32 +974,12 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
       type: String(Reflect.get(entry, 'type') ?? 'text'),
     }
   })
-  const explicitPages = explicitResourcePages(definition)
   const configuredTableActions = arrayMember(table, 'actions')
-  const defaultTableAction = (id: string, kind: 'delete' | 'edit' | 'view', actionLabelValue: string, removesRecord: boolean): JsonObject => {
-    const presentation = builtInActionPresentation(kind)
-    return {
-      color: presentation?.color ?? null,
-      confirmation: presentation?.confirmation ?? null,
-      icon: presentation?.icon ?? null,
-      id,
-      kind,
-      label: actionLabelValue,
-      removesRecord,
-      scope: 'row',
-    }
-  }
-  const deletePresentation = builtInActionPresentation('delete')
   const properties = {
     resource: {
-      actions: [
-        ...recordActions,
-        ...(explicitPages.length === 0 && canDelete
-          ? [{ badge: null, color: deletePresentation?.color ?? null, confirmation: `Delete this ${singular.toLowerCase()}?`, disabled: false, icon: deletePresentation?.icon ?? null, id: 'delete-record', kind: 'delete', label: `Delete ${singular.toLowerCase()}`, modal: null, mount: 'record', size: 'medium', tooltip: null, type: 'delete', visible: true }]
-          : []),
-      ],
+      actions: recordActions,
       capabilities,
-      form: { dependencies, fields },
+      form: { actions: resourceFormActions(definition, pageType).map(action => ({ ...actionManifestSeed(action), formIntent: Reflect.get(action, 'formIntent') ?? 'submit' })), dependencies, fields },
       id: definition.id,
       infolist: {
         entries,
@@ -944,12 +999,7 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
       routes: resourceRoutes(definition, basePath),
       slug,
       table: {
-        actions: configuredTableActions.length > 0 || explicitPages.length > 0 ? configuredTableActions : [
-          defaultTableAction('view-record', 'view', 'View', false),
-          defaultTableAction('edit-record', 'edit', 'Edit', false),
-          ...(canDelete ? [defaultTableAction('delete-record', 'delete', 'Delete', true)] : []),
-          ...tableActions,
-        ],
+        actions: configuredTableActions.length > 0 ? configuredTableActions : tableActions,
         columns,
         filterMode: table && Reflect.get(table, 'filterMode') === 'deferred' ? 'deferred' : 'live',
         filters: resourceFilters(table),
@@ -1033,9 +1083,9 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
     const executionContext = { actor: context.actor, signal: context.signal, strictAuthorization: context.strictAuthorization, tenant: context.tenant }
     if (manifest.pageType === 'list') {
       const tableState = Object.freeze({ includeTotal: true, page: 1, pagination: 'page' as const, perPage: 25 })
-      const table = await executor.table(tableState, executionContext)
+      const table = await executor.table(tableState, executionContext, record => resolveGeneratedRowActions(definition, executionContext, record))
       const presentation = await tablePresentation(definition, table.records, executionContext)
-      return jsonObject({ groups: presentation.groups, operation: 'list', records: table.records, resourceId: definition.id, summaries: presentation.summaries, tableState, total: table.total })
+      return jsonObject({ groups: presentation.groups, operation: 'list', records: table.records, resourceId: definition.id, rowActions: table.recordPresentations, summaries: presentation.summaries, tableActions: await resolveGeneratedTableActions(definition, executionContext), tableState, total: table.total })
     }
     if (manifest.pageType === 'create') return { operation: 'create', resourceId: definition.id }
     const record = context.parameters.record
@@ -1066,6 +1116,26 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
   })
 }
 
+async function resolveGeneratedRowActions(definition: RuntimeDefinition, context: GeneratedResourceOperationInput['context'], record: RuntimeRecord): Promise<JsonObject> {
+  return jsonObject({ actions: await resolveGeneratedTableActions(definition, context, record), recordId: valueAtPath(record.toJSON(), definition.routeKey ?? definition.model.definition.primaryKey) })
+}
+
+async function resolveGeneratedTableActions(definition: RuntimeDefinition, context: GeneratedResourceOperationInput['context'], record: RuntimeRecord | null = null): Promise<readonly object[]> {
+  const resolve = async (entries: readonly object[]): Promise<readonly object[]> => Promise.all(entries.map(async entry => {
+    if (Reflect.get(entry, 'kind') === 'action-group') return { ...entry, actions: await resolve(arrayMember(entry, 'actions')) }
+    const mount: ActionMount = Reflect.get(entry, 'scope') === 'bulk' ? 'bulk' : Reflect.get(entry, 'scope') === 'header' ? 'page' : 'record'
+    if ((mount === 'record') !== (record !== null)) return entry
+    const candidates = (definition.actions ?? []).filter(action => action.id === Reflect.get(entry, 'id') && action.mount === mount && (!Reflect.get(action, 'source') || Reflect.get(action, 'source') === 'table'))
+    if (candidates.length > 1) throw new Error('[Holo Panels] The table action registration is ambiguous.')
+    const action = candidates[0] as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined> | undefined
+    if (!action) return entry
+    const scope = { ...context, mount, record, selectedRecords: record ? [record] : [], services: undefined }
+    const state = await resolveActionState(action, scope)
+    return { ...entry, ...await compileActionManifest(resourceModalAction(action, definition, record), state.label, scope, state) }
+  }))
+  return resolve(arrayMember(definition.table, 'actions'))
+}
+
 async function resolveGeneratedPageActions(
   definition: RuntimeDefinition,
   manifest: PageManifest,
@@ -1084,16 +1154,24 @@ async function resolveGeneratedPageActions(
   const infolist = objectMember(resource, 'infolist')
   const infolistEntries = arrayMember(infolist, 'entries')
   const infolistActions = (definition.actions ?? []).filter(action => String(Reflect.get(action, 'source')).startsWith('infolist:'))
-  if (!entries.some(entry => entry.definition) && infolistActions.length === 0) return manifest
+  const form = objectMember(resource, 'form')
+  const formActions = resourceFormActions(definition, manifest.pageType)
+  if (!entries.some(entry => entry.definition) && infolistActions.length === 0 && formActions.length === 0) return manifest
   const executor = new ResourceExecutor(definition, { strictAuthorization: context.strictAuthorization })
   const recordId = manifest.pageType === 'edit' || manifest.pageType === 'view' ? context.parameters.record : undefined
   const record = recordId ? await executor.resolveActionRecord(recordId, context) : null
   const actions = await Promise.all(entries.map(async (entry) => {
     if (!entry.definition) return entry.manifest
-    const compiled = entry.definition as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>
+    const compiled = resourceModalAction(entry.definition as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>, definition, record)
     const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
     const state = await resolveActionState(compiled, scope)
     return { ...entry.manifest, ...await compileActionManifest(compiled, state.label, scope, state) }
+  }))
+  const resolvedFormActions = await Promise.all(formActions.map(async (action) => {
+    const compiled = action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>
+    const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+    const state = await resolveActionState(compiled, scope)
+    return { ...await compileActionManifest(compiled, state.label, scope, state), formIntent: Reflect.get(action, 'formIntent') ?? 'submit' }
   }))
   const resolvedEntries = await Promise.all(infolistEntries.map(async (entry) => {
     const registered = infolistActions.filter(action => Reflect.get(action, 'source') === `infolist:${String(Reflect.get(entry, 'path'))}`)
@@ -1109,7 +1187,7 @@ async function resolveGeneratedPageActions(
     ...manifest.body,
     properties: jsonObject({
       ...properties,
-      resource: { ...resource, actions, ...(infolist ? { infolist: { ...infolist, entries: resolvedEntries } } : {}) },
+      resource: { ...resource, actions, ...(form ? { form: { ...form, actions: resolvedFormActions } } : {}), ...(infolist ? { infolist: { ...infolist, entries: resolvedEntries } } : {}) },
     }),
   }
   return Object.freeze({ ...manifest, body })
@@ -1126,7 +1204,7 @@ function recordIdentifier(payload: JsonObject): number | string | null {
 function mutationValues(payload: JsonObject): Readonly<Record<string, JsonValue>> {
   const nested = payload.values
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) return nested
-  const reserved = new Set(['actionId', 'intent', 'mutation', 'record', 'recordId', 'recordIds', 'resourceId'])
+  const reserved = new Set(['actionId', 'idempotencyKey', 'intent', 'mutation', 'record', 'recordId', 'recordIds', 'resourceId'])
   return Object.freeze(Object.fromEntries(Object.entries(payload).filter(([key]) => !reserved.has(key))))
 }
 
@@ -1397,7 +1475,11 @@ function configuredAction(
   mount: ActionMount | null,
   source: string | null,
 ): ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined> {
-  const candidates = (definition.actions ?? []).filter(candidate => candidate.id === actionId)
+  const candidates = (definition.actions ?? []).flatMap(candidate => {
+    const registered = candidate as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>
+    const action = findRegisteredAction(registered, actionId)
+    return action ? [{ ...action, source: Reflect.get(candidate, 'source') }] : []
+  })
   const sourcedCandidates = source ? candidates.filter(candidate => Reflect.get(candidate, 'source') === source) : candidates
   const mountedCandidates = mount ? sourcedCandidates.filter(candidate => candidate.mount === mount) : sourcedCandidates
   const action = mountedCandidates.length === 1 ? mountedCandidates[0] : undefined
@@ -1413,19 +1495,38 @@ function executableResourceAction(
   executor: ResourceExecutor<RuntimeDefinition['model'], RuntimeRecord, RuntimeQuery, Readonly<Record<string, unknown>>, object, unknown, boolean>,
   input: GeneratedResourceOperationInput,
 ): ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined> {
+  if (action.usesDefaultHandler === false || action.kind === 'custom') return action
+  if (Reflect.get(action, 'formIntent') === 'cancel') return action
+  if (String(Reflect.get(action, 'source')).endsWith(':form')) return {
+    ...action,
+    handle: async (submitted: JsonObject) => {
+      const identifier = recordIdentifier(input.payload)
+      const values = normalizeValues(definition, submitted)
+      validateRequiredValues(definition, values, identifier === null)
+      await validateOptionValues(definition, values, input)
+      const finalized = await finalizedUploadValues(definition, values, input)
+      const result = identifier === null ? await executor.create(finalized, input.context) : await executor.update(identifier, finalized, input.context)
+      return jsonObject({ record: serializeResourceRecord(result.record), resourceId: definition.id })
+    },
+  }
   if (!['create', 'delete', 'edit', 'force-delete', 'replicate', 'restore'].includes(action.kind)) return action
   return Object.freeze({
     ...action,
-    handle: async (values: JsonObject, context: Parameters<typeof action.handle>[1]) => {
+    handle: async (submitted: JsonObject, context: Parameters<typeof action.handle>[1]) => {
+      const values = normalizeValues(definition, submitted)
+      if (action.kind === 'create' || action.kind === 'edit') {
+        validateRequiredValues(definition, values, action.kind === 'create')
+        await validateOptionValues(definition, values, input)
+      }
       if (action.kind === 'create') {
-        await executor.create(values, input.context)
+        await executor.create(await finalizedUploadValues(definition, values, input), input.context)
         return
       }
       if (!context.record) throw new Error('[Holo Panels] Built-in resource actions require a resolved record.')
       const identifier = valueAtPath(context.record.toJSON(), definition.routeKey)
       if (typeof identifier !== 'number' && typeof identifier !== 'string') throw new Error('[Holo Panels] Built-in resource actions require a stable record identifier.')
       if (action.kind === 'delete') await executor.delete(identifier, input.context)
-      else if (action.kind === 'edit') await executor.update(identifier, values, input.context)
+      else if (action.kind === 'edit') await executor.update(identifier, await finalizedUploadValues(definition, values, input), input.context)
       else if (action.kind === 'force-delete') await executor.forceDelete(identifier, input.context)
       else if (action.kind === 'restore') await executor.restore(identifier, input.context)
       else if (action.kind === 'replicate') {
@@ -1442,7 +1543,8 @@ function executableResourceAction(
 
 function actionRecordIds(payload: JsonObject): readonly (number | string)[] {
   if (Array.isArray(payload.recordIds)) {
-    return Object.freeze(payload.recordIds.filter((value): value is number | string => typeof value === 'number' || typeof value === 'string'))
+    if (payload.recordIds.some(value => typeof value !== 'number' && typeof value !== 'string' || typeof value === 'number' && !Number.isFinite(value) || typeof value === 'string' && !value.trim())) throw new Error('Action record IDs must be canonical identifiers')
+    return Object.freeze(payload.recordIds as (number | string)[])
   }
   const identifier = recordIdentifier(payload)
   return identifier === null ? Object.freeze([]) : Object.freeze([identifier])
@@ -1474,16 +1576,46 @@ async function executeCustomAction(
     throw new Error('[Holo Panels] Registered action requests require an allow-listed mount.')
   }
   const source = typeof input.payload.source === 'string' && input.payload.source ? input.payload.source : null
-  const action = executableResourceAction(configuredAction(definition, actionId, requestedMount as ActionMount, source), definition, executor, input)
-  if (input.panel) await authorizePanelActionPermissions(input.panel, { ...input.context, panelId: input.panelId }, [`${definition.id}.${action.mount === 'page' ? 'viewAny' : 'view'}`, `actions.${action.id}.view`])
+  const registered = configuredAction(definition, actionId, requestedMount as ActionMount, source)
+  const selection = input.payload.selection
+  if (selection && typeof selection === 'object' && !Array.isArray(selection)) {
+    if (registered.mount !== 'bulk' || source !== 'table' || selection.mode !== 'all-matching' || !Array.isArray(selection.excludedRecordIds) || !selection.query || typeof selection.query !== 'object' || Array.isArray(selection.query)) throw new Error('The table action selection is invalid')
+    const excluded = actionRecordIds({ recordIds: selection.excludedRecordIds })
+    const state = await tableQueryState(definition, { ...input, payload: selection.query })
+    const identifiers = await executor.selectTableRecords(state, excluded, input.context)
+    input = { ...input, payload: { ...input.payload, recordIds: [...identifiers] } }
+  }
+  const panelPath = input.panel?.manifest.path ?? `/${input.panelId}`
+  const route = registered.mount !== 'bulk' && !registered.modal?.schema && !source?.endsWith(':form') && ['create', 'edit', 'view'].includes(registered.kind)
+    ? resourceRoutes(definition, `${panelPath === '/' ? '' : panelPath}/${resourceSlug(definition)}`)[registered.kind]
+    : null
+  const action = registered.url || typeof route === 'string' ? {
+    ...registered,
+    url: registered.url ?? (() => typeof route === 'string' ? route.replace(':record', encodeURIComponent(String(actionRecordIds(input.payload)[0] ?? ''))) : null),
+    handle: async (values: JsonObject, context: Parameters<typeof registered.handle>[1]) => {
+      if (registered.kind === 'create') await executor.authorizeCreate(input.context)
+      if (registered.kind === 'edit') {
+        const identifier = actionRecordIds(input.payload)[0]
+        if (identifier === undefined) throw new Error('Edit navigation requires a record')
+        await executor.authorizeUpdate(identifier, input.context)
+      }
+      return registered.handle(values, context)
+    },
+  } : executableResourceAction(registered, definition, executor, input)
+  if (input.panel) await authorizePanelActionPermissions(input.panel, { ...input.context, panelId: input.panelId }, [`${definition.id}.${action.mount === 'page' ? 'viewAny' : 'view'}`, ...actionExecutionPermissions(action), ...resourceActionPermissions(definition.id, action)])
   if (action.mount === 'page') await executor.authorizeViewAny(input.context)
   const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
+    identity: scope => {
+      const actor = actionCacheIdentity(scope.actor)
+      const tenant = actionCacheIdentity(scope.tenant)
+      return actor === null || tenant === null ? null : { actor, tenant }
+    },
     records: {
       resolve: (id, scope) => executor.resolveActionRecord(id, { ...input.context, ...scope }),
       version: recordVersion,
     },
     transaction: { run: operation => executor.runInTransaction(operation) },
-  })
+  }, resourceActionState(definition.model, JSON.stringify([input.panelId, input.panel?.guard, input.context.tenantBindings, definition.id, source, action.mount])))
   const expectedVersions = input.payload.expectedVersions && typeof input.payload.expectedVersions === 'object' && !Array.isArray(input.payload.expectedVersions)
     ? Object.fromEntries(Object.entries(input.payload.expectedVersions).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
     : undefined
@@ -1501,12 +1633,79 @@ async function executeCustomAction(
     signal: input.context.signal,
     tenant: input.context.tenant,
   })
-  const serialized = toJsonValue(result)
+  const effects = result.effects
+  const formResult = source?.endsWith(':form') ? result.result ?? result.items[0]?.result : null
+  const serialized = toJsonValue({ ...result, ...(source?.endsWith(':form') ? { formIntent: Reflect.get(registered, 'formIntent') ?? 'submit' } : {}), ...(formResult && typeof formResult === 'object' && !Array.isArray(formResult) ? formResult : {}), effects })
   if (!serialized || Array.isArray(serialized) || typeof serialized !== 'object') throw new TypeError('[Holo Panels] Action results must be JSON-safe objects.')
-  return Object.freeze({ data: serialized, effects: result.effects })
+  return Object.freeze({ data: serialized, effects })
 }
 
 async function executeRelationOperation(
+  definition: RuntimeDefinition,
+  executor: ResourceExecutor<RuntimeDefinition['model'], RuntimeRecord, RuntimeQuery, Readonly<Record<string, unknown>>, object, unknown, boolean>,
+  input: GeneratedResourceOperationInput,
+): Promise<GeneratedResourceOperationResult> {
+  const managerId = typeof input.payload.managerId === 'string' ? input.payload.managerId : ''
+  const manager = relationManager(definition, managerId)
+  const ownerId = relationIdentifier(input.payload, 'ownerId')
+  await executor.authorizeUpdate(ownerId, input.context)
+  const owner = await executor.resolveActionRecord(ownerId, input.context)
+  if (!owner) throw new Error('[Holo Panels] The relation owner was not found.')
+  if (manager.runtime && !await manager.runtime.visible({ ...input.context, owner })) throw new Error('The relation manager is not available')
+  const requestedId = typeof input.payload.actionId === 'string' ? input.payload.actionId : null
+  const candidates = relationActions(manager.compiled, manager.relation).flatMap(action => requestedId ? findRegisteredAction(action, requestedId) ?? [] : action.kind === input.payload.relationOperation ? [action] : [])
+  const action = candidates.length === 1 ? candidates[0] : undefined
+  if (!action) throw new Error('[Holo Panels] The relation operation is not registered for this relation manager.')
+  if (input.payload.mount !== undefined && input.payload.mount !== action.mount) throw new Error('The relation action mount does not match its registration')
+  if (input.panel) await authorizePanelActionPermissions(input.panel, { ...input.context, panelId: input.panelId }, actionExecutionPermissions(action))
+  const recordIds = action.mount === 'page' ? [] : Array.isArray(input.payload.relatedIds) ? actionRecordIds({ recordIds: input.payload.relatedIds }) : [relationIdentifier(input.payload, 'relatedId')]
+  const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
+    identity: scope => {
+      const actor = actionCacheIdentity(scope.actor)
+      const tenant = actionCacheIdentity(scope.tenant)
+      return actor === null || tenant === null ? null : { actor, tenant }
+    },
+    records: { resolve: async id => manager.runtime
+      ? await new RelationManagerExecutor(manager.runtime).resolveActionRecord(id, action.kind === 'custom' ? 'view' : relationOperation(action.kind), { ...input.context, owner }) as RuntimeRecord
+      : ownedRelatedRecord(owner, manager.relationName, manager.relation, id, input.context), version: record => {
+        const values = relationRecord(record)
+        const version = values.version ?? values.updatedAt ?? values.updated_at
+        return typeof version === 'number' || typeof version === 'string' ? String(version) : null
+      } },
+    transaction: { run: operation => executor.runInTransaction(operation) },
+  }, resourceActionState(definition.model, JSON.stringify([input.panelId, input.panel?.guard, input.context.tenantBindings, definition.id, managerId, ownerId, action.mount])))
+  const executable = action.usesDefaultHandler === false || action.kind === 'custom' ? action : {
+    ...action,
+    handle: async (values: JsonObject, context: Parameters<typeof action.handle>[1]) => {
+      if (action.kind === 'view') return context.record ? relationRecord(context.record) : null
+      const related = relatedDefinition(manager.relation)
+      const primaryKey = related && typeof Reflect.get(related, 'primaryKey') === 'string' ? String(Reflect.get(related, 'primaryKey')) : 'id'
+      const relatedId = context.record ? relationRecord(context.record)[primaryKey] : input.payload.relatedId
+      const result = await performRelationOperation(definition, executor, { ...input, payload: {
+        ...input.payload,
+        ...(values.values === undefined ? {} : { values: values.values }),
+        ...(values.pivot === undefined ? {} : { pivot: values.pivot }),
+        ...(relatedId === undefined ? values.relatedId === undefined ? {} : { relatedId: values.relatedId } : { relatedId }),
+        relationOperation: action.kind,
+      } }).catch((cause: unknown) => {
+        if (cause instanceof RelationRecordNotFoundError) throw new ActionExecutionError('record-not-found', 'The requested related record was not found.')
+        throw cause
+      })
+      return result.data
+    },
+  }
+  const result = await engine.execute(executable, {
+    idempotencyKey: typeof input.payload.idempotencyKey === 'string' ? input.payload.idempotencyKey : crypto.randomUUID(),
+    input: actionInput(input.payload),
+    mount: action.mount,
+    recordIds,
+  }, { ...input.context, owner, services: undefined })
+  const refreshed = await executor.resolveActionRecord(ownerId, input.context)
+  if (!refreshed) throw new Error('The relation owner is no longer available')
+  return { data: jsonObject({ ...result, relations: await resourceRelations(definition, refreshed, input.context, true) }), effects: result.effects }
+}
+
+async function performRelationOperation(
   definition: RuntimeDefinition,
   executor: ResourceExecutor<RuntimeDefinition['model'], RuntimeRecord, RuntimeQuery, Readonly<Record<string, unknown>>, object, unknown, boolean>,
   input: GeneratedResourceOperationInput,
@@ -1590,12 +1789,9 @@ async function executeRelationOperation(
   } else {
     throw new Error('[Holo Panels] This relation operation is read-only.')
   }
-  const refreshedOwner = await executor.resolveActionRecord(ownerId, input.context)
-  if (!refreshedOwner) throw new Error('[Holo Panels] The relation owner was not found after the operation completed.')
-  const relations = await resourceRelations(definition, refreshedOwner, context, true)
   return Object.freeze({
-    data: jsonObject({ managerId, operation, ownerId, ...(record ? { record: relationRecord(record) } : {}), relatedId, relations }),
-    effects: Object.freeze([{ kind: 'toast' as const, level: 'success' as const, message: `${label(operation)} completed.` }]),
+    data: jsonObject({ managerId, operation, ownerId, ...(record ? { record: relationRecord(record) } : {}), relatedId }),
+    effects: [],
   })
 }
 
@@ -1721,15 +1917,19 @@ export async function executeGeneratedResourceOperation(
     ? input.payload.intent
     : typeof input.payload.mutation === 'string' ? input.payload.mutation : ''
   const actionId = typeof input.payload.actionId === 'string' ? input.payload.actionId : ''
-  const deleting = input.operation === 'action'
-    && actionId === 'delete-record'
-    && intent === 'delete'
-    && explicitResourcePages(definition).length === 0
-    && definition.capabilities?.delete === true
+  if (input.operation === 'form-submit') {
+    const source = `${identifier === null ? 'create' : 'edit'}:form`
+    const actions = resourceFormActions(definition, identifier === null ? 'create' : 'edit')
+    const requestedId = actionId || (explicitResourcePages(definition).length === 0 ? identifier === null ? 'create' : 'edit' : '')
+    const registered = actions.find(action => findRegisteredAction(action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>, requestedId))
+    if (!registered) throw new Error('[Holo Panels] The form action is not registered.')
+    const registrations = actions as NonNullable<RuntimeDefinition['actions']>
+    return executeCustomAction({ ...definition, actions: [...(definition.actions ?? []).filter(action => Reflect.get(action, 'source') !== source), ...registrations] }, executor, { ...input, payload: { ...input.payload, input: jsonObject(mutationValues(input.payload)), mount: identifier === null ? 'page' : 'record', source } }, requestedId)
+  }
   if (input.operation === 'action' && intent === 'relation') {
     return executeRelationOperation(definition, executor, input)
   }
-  if (input.operation === 'action' && (definition.actions ?? []).some(action => action.id === actionId)) {
+  if (input.operation === 'action' && (definition.actions ?? []).some(action => findRegisteredAction(action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>, actionId))) {
     return executeCustomAction(definition, executor, input, actionId)
   }
   let data: JsonObject
@@ -1737,33 +1937,13 @@ export async function executeGeneratedResourceOperation(
     data = await executeOptions(definition, input)
   } else if (input.operation === 'table-data') {
     const tableState = await tableQueryState(definition, input)
-    const result = await executor.table(tableState, input.context)
+    const result = await executor.table(tableState, input.context, record => resolveGeneratedRowActions(definition, input.context, record))
     const presentation = await tablePresentation(definition, result.records, input.context)
-    data = jsonObject({ groups: presentation.groups, records: result.records, resourceId: definition.id, summaries: presentation.summaries, tableState, total: result.total })
-  } else if (deleting) {
-    if (identifier === null) throw new Error('[Holo Panels] Delete operations require one record identifier.')
-    await executor.delete(identifier, input.context)
-    data = { deleted: true, recordId: identifier, resourceId: definition.id }
-  } else if (input.operation === 'form-submit' && identifier !== null) {
-    const values = normalizeValues(definition, mutationValues(input.payload))
-    validateRequiredValues(definition, values, false)
-    await validateOptionValues(definition, values, input)
-    const result = await executor.update(identifier, await finalizedUploadValues(definition, values, input), input.context)
-    data = jsonObject({ record: serializeResourceRecord(result.record), resourceId: definition.id })
-  } else if (input.operation === 'form-submit') {
-    const values = normalizeValues(definition, mutationValues(input.payload))
-    validateRequiredValues(definition, values, true)
-    await validateOptionValues(definition, values, input)
-    const result = await executor.create(await finalizedUploadValues(definition, values, input), input.context)
-    data = jsonObject({ record: serializeResourceRecord(result.record), resourceId: definition.id })
+    data = jsonObject({ groups: presentation.groups, records: result.records, resourceId: definition.id, rowActions: result.recordPresentations, summaries: presentation.summaries, tableActions: await resolveGeneratedTableActions(definition, input.context), tableState, total: result.total })
   } else {
     throw new Error('[Holo Panels] The generated resource action is not registered.')
   }
-  const message = deleting ? 'Record deleted.' : 'Record saved.'
-  const effects: GeneratedResourceOperationResult['effects'] = input.operation === 'options' || input.operation === 'table-data'
-    ? Object.freeze([])
-    : Object.freeze([{ kind: 'toast', level: 'success', message }])
-  return Object.freeze({ data, effects })
+  return Object.freeze({ data, effects: Object.freeze([]) })
 }
 
 export async function executeGeneratedUploadOperation(

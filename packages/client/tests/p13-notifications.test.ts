@@ -20,6 +20,29 @@ function page(read = false): PanelDatabaseNotificationPage {
 }
 
 describe('P13 client notifications', () => {
+  it('executes trusted toast actions through confirmation and cancels them on dismissal', async () => {
+    vi.useFakeTimers()
+    const requests: object[] = []
+    const store = new ClientToastStore()
+    store.connectActions({ executeToastAction: async (token, request) => { requests.push({ token, ...request }); return { effects: [], items: [], status: 'succeeded' } } })
+    const actionManifest = { badge: null, color: 'primary', confirmation: 'Retry?', disabled: false, icon: 'check', id: 'retry', kind: 'custom', label: 'Retry', modal: null, mount: 'notification', size: 'medium', tooltip: null, type: 'custom', visible: true }
+    const presentation = { ...panelNotification('toast').title('Failed').duration(1000).presentation(), actions: [{ actionManifest, execution: { actionId: 'retry', resourceId: 'posts' }, id: 'retry', kind: 'execute', label: 'Retry', token: 'signed-token', url: null }] }
+    store.push(presentation)
+    const host = store.actionHost('toast')!
+    host.store.mount(host.actions[0]!)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(store.state.items).toHaveLength(1)
+    expect(requests).toEqual([])
+    host.store.confirm()
+    await host.store.submit()
+    expect(requests).toMatchObject([{ actionId: 'retry', input: {}, mount: 'notification', token: 'signed-token' }])
+    store.dismiss('toast')
+    expect(host.store.activeFrame).toBeNull()
+    store.push(presentation, false)
+    expect(store.actionHost('toast')).toBeNull()
+    store.dispose()
+    vi.useRealTimers()
+  })
   it('queues, announces, deduplicates, dismisses, and limits client actions', async () => {
     const store = new ClientToastStore()
     const trusted = panelNotification('saved').title('Saved').persistent().action('read', 'Read', 'mark-read').presentation()

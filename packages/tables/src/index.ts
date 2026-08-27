@@ -10,6 +10,7 @@ import {
   TextInputColumn as CoreTextInputColumn,
   ToggleColumn as CoreToggleColumn,
   type JsonObject,
+  type ActionMount,
   type RelatedRecord,
   type RelationPath,
   type RecordPath,
@@ -24,6 +25,10 @@ import type { Schema } from '@holo-js/panels-schemas'
 export type TableRecordPath<TRecord extends object> = RecordPath<TRecord>
 export type TableRecordPathFor<TRecord extends object, TValue> = RecordPathFor<TRecord, TValue>
 export type TableAction<TRecord extends object> = ActionContract<TRecord> | ActionGroup<ActionContract<TRecord>>
+
+function mountedActions<TRecord extends object>(actions: readonly TableAction<TRecord>[], mount: ActionMount): readonly object[] {
+  return actions.flatMap(action => 'actions' in action ? action.actions : [action]).map(action => Object.freeze({ ...action.compile(), mount }))
+}
 export type TableActionPosition = 'after-cells' | 'after-columns' | 'before-cells' | 'before-columns'
 export type TablePaginationPageOption = 'all' | number
 export type TableSortDirection = 'asc' | 'desc'
@@ -306,7 +311,7 @@ export class Table<
   toolbarActions(actions: readonly TableAction<TRecord>[]): this { this.#toolbarActions = Object.freeze([...actions]); return this }
 
   getActions(): readonly TableAction<TRecord>[] {
-    return Object.freeze([...this.#recordActions, ...this.#headerActions, ...this.#toolbarActions])
+    return Object.freeze([...this.#recordActions, ...this.#headerActions, ...this.#toolbarActions, ...this.#emptyStateActions])
   }
 
   compile(): Readonly<Record<string, unknown>> {
@@ -316,10 +321,17 @@ export class Table<
     const actions = [
       ...this.#recordActions.map(action => action.manifest('row')),
       ...this.#headerActions.map(action => action.manifest('header')),
+      ...this.#emptyStateActions.map(action => ({ ...action.manifest('header'), emptyStateOnly: true })),
       ...this.#toolbarActions.map(action => action.manifest('bulk')),
     ]
     return Object.freeze({
       actions: Object.freeze(actions),
+      serverActions: Object.freeze([
+        ...mountedActions(this.#recordActions, 'record'),
+        ...mountedActions(this.#headerActions, 'page'),
+        ...mountedActions(this.#emptyStateActions, 'page'),
+        ...mountedActions(this.#toolbarActions, 'bulk'),
+      ]),
       actionsPosition: this.#actionsPosition,
       columns: Object.freeze(columns),
       defaultSort: this.#defaultSort,

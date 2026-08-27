@@ -54,7 +54,7 @@ export interface SvelteFieldDefinition<
   readonly properties?: JsonObject
 }
 
-export type SvelteFormStore<TValues extends object = Record<string, unknown>> = FormStore<TValues>
+export type SvelteFormStore<TValues extends object = Record<string, unknown>> = Pick<FormStore<TValues>, 'batch' | 'state' | 'subscribe'>
 export type SvelteOptionStore = OptionStore<OptionValue>
 export type SvelteCollectionStore = CollectionStore<JsonValue>
 

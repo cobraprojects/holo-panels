@@ -69,6 +69,7 @@ function resourcePage(): NuxtPanelPage {
       manifest: { ...current.page.manifest, body: { component: 'resource-page', properties: {} }, pageType: 'create' },
       schema: {
         actions: [],
+        formActions: [{ badge: null, color: null, confirmation: null, disabled: false, icon: 'plus', id: 'create', kind: 'create', label: 'Create', modal: null, mount: 'page', size: 'medium', tooltip: null, type: 'create', visible: true }],
         basePath: '/admin/articles',
         columns: [],
         fields: [{ disabled: false, helperText: null, hint: null, label: 'Title', path: 'title', placeholder: null, properties: {}, readOnly: false, required: false, type: 'text', visible: true }],
@@ -262,7 +263,7 @@ describe('Nuxt P13 notification integration', () => {
       order.push('toast')
       return originalPush.apply(this, args)
     })
-    vi.spyOn(window.location, 'assign').mockImplementation(() => { order.push('redirect') })
+    configureNuxtNavigation(async () => { order.push('redirect') })
     const { requests } = installFetch([
       { kind: 'redirect', url: '/admin/articles' },
       { kind: 'toast', presentation },

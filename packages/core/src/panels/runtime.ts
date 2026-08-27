@@ -85,7 +85,7 @@ export async function executePanelPipeline<TActor, TResult>(
       return DB.writeTransaction(async () => await handler())
     }
     return handler()
-  })
+  }, { panel: panel as CompiledPanelDefinition<object>, scope: scope as PanelAuthenticatedScope<object> })
   const configured = panel.server.middleware
   if (!configured) return terminal()
   const middleware = options.initial ?? operation === 'bootstrap'

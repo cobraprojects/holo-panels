@@ -20,6 +20,8 @@ export interface VueCustomNotificationProps {
 }
 
 export interface VueToastViewportProps {
+  readonly panelId?: string
+  readonly registry?: ComponentRegistry
   readonly navigate?: (url: string) => void
   readonly placement?: 'bottom' | 'top'
   readonly store: ClientToastStore

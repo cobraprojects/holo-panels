@@ -14,6 +14,7 @@ import {
 import { csrfProtection } from '@holo-js/security/nuxt/server'
 import {
   ActionExecutionError,
+  normalizeTransportError,
   AuthControllerError,
   decodeTransportServerRequest,
   executePanelPipeline,
@@ -130,6 +131,7 @@ function requestId(event: H3Event): string {
 }
 
 function errorDetails(cause: unknown): { readonly category: ErrorCategory, readonly code: string, readonly message: string, readonly retryable: boolean, readonly status: number } {
+  if (cause instanceof ActionExecutionError) return { ...normalizeTransportError(cause, cause.status), status: cause.status }
   const name = cause instanceof Error ? cause.name : ''
   if (cause instanceof TransportDecodingError) return { category: 'protocol', code: 'invalid_request', message: cause.message, retryable: false, status: 400 }
   if (cause && typeof cause === 'object' && 'statusCode' in cause && typeof cause.statusCode === 'number') {

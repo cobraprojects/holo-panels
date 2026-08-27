@@ -1,7 +1,8 @@
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress } from '../internal-ui'
-import { ClientTransferStore, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress } from '../internal-ui'
+import { ClientTransferStore, createTableActionHost, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import { VueActionRenderer } from '../actions/renderer'
 import { TablesRenderHook } from '@holo-js/panels-core'
-import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, MoreHorizontal, Search } from 'lucide-vue-next'
+import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, Search } from 'lucide-vue-next'
 import {
   computed,
   defineComponent,
@@ -188,141 +189,52 @@ function reportTableError(table: RuntimeTable, title: string): void {
   publishPanelError(table.panelId ?? 'default', title)
 }
 
-async function executeTableAction(action: VueTableAction, table: RuntimeTable, record?: RuntimeRecord): Promise<void> {
-  if (!table.actionTransport) {
-    reportTableError(table, 'Action failed')
-    return
-  }
-  try {
-    await table.actionTransport.execute({
-      actionId: action.id,
-      ...(record ? { recordId: table.getRecordId(record) } : {}),
-      ...(action.scope === 'bulk' ? { selection: table.store.selectionPayload() } : {}),
-    }, new AbortController().signal)
-  } catch {
-    reportTableError(table, `${action.label} failed`)
-  }
-}
-
-const TableActionButton = defineComponent({
-  name: 'VueTableActionButton',
-  props: {
-    action: { type: Object as PropType<VueTableAction>, required: true },
-    menuItem: { type: Boolean, default: false },
-    record: { type: Object as PropType<RuntimeRecord>, default: undefined },
-    table: { type: Object as PropType<object>, required: true },
-  },
-  setup(componentProps) {
-    const pending = ref(false)
-    const confirming = ref(false)
-    const run = async (): Promise<void> => {
-      const table = runtimeTable(componentProps.table)
-      pending.value = true
-      try {
-        await executeTableAction(componentProps.action, table, componentProps.record)
-      } finally {
-        pending.value = false
-      }
-    }
-    return (): VNode => {
-      const action = componentProps.action
-      const activate = (): void => {
-        if (action.confirmation) confirming.value = true
-        else void run()
-      }
-      const content = () => [action.icon ? PanelsIcon(action.icon) : null, h('span', pending.value ? 'Working…' : action.label)]
-      const trigger = componentProps.menuItem
-        ? h(DropdownMenuItem, { 'data-action': action.id, 'data-color': action.color ?? undefined, disabled: pending.value, variant: action.color === 'danger' ? 'destructive' : 'default', onSelect: activate }, content)
-        : h(Button, { class: 'hp-action-trigger hp-table-action', 'data-action': action.id, 'data-color': action.color ?? undefined, disabled: pending.value, type: 'button', variant: action.color === 'danger' ? 'destructive' : 'outline', onClick: activate }, content)
-      return h(Fragment, [
-      trigger,
-      confirming.value ? h(AlertDialog, { open: true, 'onUpdate:open': (active: boolean) => { if (!active) confirming.value = false } }, () => h(AlertDialogContent, { 'data-holo-panel': '' }, () => [
-          h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => action.label), h(AlertDialogDescription, {}, () => action.confirmation)]),
-          h(AlertDialogFooter, {}, () => [
-            h(AlertDialogCancel, { onClick: () => { confirming.value = false } }, () => 'Cancel'),
-            h(AlertDialogAction, {
-              class: 'hp-action-trigger',
-              'data-action': action.id,
-              'data-color': action.color ?? undefined,
-              type: 'button',
-              variant: action.color === 'danger' ? 'destructive' : 'default',
-              onClick: () => { confirming.value = false; void run() },
-            }, () => [action.icon ? PanelsIcon(action.icon) : null, h('span', 'Confirm')]),
-          ]),
-        ])) : null,
-      ])
-    }
-  },
-})
-
 function isActionGroup(action: VueTableActionItem): action is VueTableActionGroup {
   return 'kind' in action && action.kind === 'action-group'
 }
 
 const TableActionGroupButton = defineComponent({
-  name: 'VueTableActionGroupButton',
+  name: 'VueTableActions',
   props: {
-    group: { type: Object as PropType<VueTableActionGroup>, required: true },
+    action: { type: Object as PropType<VueTableAction>, default: undefined },
+    group: { type: Object as PropType<VueTableActionGroup>, default: undefined },
     record: { type: Object as PropType<RuntimeRecord>, default: undefined },
     table: { type: Object as PropType<object>, required: true },
   },
   setup(props) {
-    const confirming = ref<VueTableAction | null>(null)
-    const pending = ref<ReadonlySet<string>>(new Set())
-    const run = async (action: VueTableAction): Promise<void> => {
-      pending.value = new Set([...pending.value, action.id])
-      try {
-        await executeTableAction(action, runtimeTable(props.table), props.record)
-      } finally {
-        const next = new Set(pending.value)
-        next.delete(action.id)
-        pending.value = next
-      }
-    }
-    return (): VNode => {
-      const label = props.group.label ?? (props.group.scope === 'bulk' ? 'Bulk actions' : props.group.scope === 'row' ? 'Row actions' : 'Actions')
-      const confirmation = confirming.value
-      return h(Fragment, [
-        h(DropdownMenu, {}, () => [
-          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': label, class: 'hp-action-group-trigger hp-action-trigger', 'data-action-group': props.group.id, size: props.group.scope === 'row' ? 'icon' : 'default', type: 'button', variant: props.group.scope === 'row' ? 'ghost' : 'outline' }, () => [props.group.icon ? PanelsIcon(props.group.icon) : props.group.scope === 'row' ? h(MoreHorizontal, { 'aria-hidden': 'true' }) : null, h('span', { class: props.group.scope === 'row' ? 'hp:sr-only' : undefined }, label), props.group.scope === 'row' ? null : h(ChevronDown, { 'aria-hidden': 'true' })])),
-          h(DropdownMenuContent, { align: 'end' }, () => props.group.actions.map(action => h(DropdownMenuItem, {
-            'data-action': action.id,
-            'data-color': action.color ?? undefined,
-            disabled: pending.value.has(action.id),
-            key: action.id,
-            variant: action.color === 'danger' ? 'destructive' : 'default',
-            onSelect: () => {
-              if (action.confirmation) confirming.value = action
-              else void run(action)
-            },
-          }, () => [action.icon ? PanelsIcon(action.icon) : null, h('span', action.label)]))),
-        ]),
-        confirmation ? h(AlertDialog, { open: true, 'onUpdate:open': (active: boolean) => { if (!active) confirming.value = null } }, () => h(AlertDialogContent, { 'data-holo-panel': '' }, () => [
-          h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => confirmation.label), h(AlertDialogDescription, {}, () => confirmation.confirmation)]),
-          h(AlertDialogFooter, {}, () => [
-            h(AlertDialogCancel, { onClick: () => { confirming.value = null } }, () => 'Cancel'),
-            h(AlertDialogAction, {
-              class: 'hp-action-trigger',
-              'data-action': confirmation.id,
-              'data-color': confirmation.color ?? undefined,
-              type: 'button',
-              variant: confirmation.color === 'danger' ? 'destructive' : 'default',
-              onClick: () => {
-                confirming.value = null
-                void run(confirmation)
-              },
-            }, () => [confirmation.icon ? PanelsIcon(confirmation.icon) : null, h('span', 'Confirm')]),
-          ]),
-        ])) : null,
-      ])
+    const host = computed(() => {
+      const table = runtimeTable(props.table)
+      const group = props.group
+      return createTableActionHost({
+        actions: group?.actions ?? (props.action ? [props.action] : []),
+        group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined,
+        recordId: props.record ? table.getRecordId(props.record) : undefined,
+        selection: () => table.store.selectionPayload(),
+        execute: async (request, signal) => {
+          try {
+            if (!table.actionTransport) throw new Error('Table actions require an action transport')
+            await table.actionTransport.execute(request, signal)
+          } catch (cause) {
+            const action = (group?.actions ?? (props.action ? [props.action] : [])).find(action => action.id === request.actionId)
+            if (!signal.aborted) reportTableError(table, `${action?.label ?? 'Action'} failed`)
+            throw cause
+          }
+        },
+      })
+    })
+    const close = (value: typeof host.value): void => { while (value.store.activeFrame) value.store.close() }
+    watch(host, (_value, previous) => close(previous))
+    onScopeDispose(() => close(host.value))
+    return (): VNodeChild => {
+      const table = runtimeTable(props.table)
+      const current = host.value
+      return current.actions[0] ? h(VueActionRenderer, { ...current, action: current.actions[0], panelId: table.panelId, registry: table.registry }) : null
     }
   },
 })
 
 function tableActionNode(action: VueTableActionItem, table: RuntimeTable, record?: RuntimeRecord): VNode {
-  return isActionGroup(action)
-    ? h(TableActionGroupButton, { group: action, key: action.id, record, table })
-    : h(TableActionButton, { action, key: action.id, record, table })
+  return h(TableActionGroupButton, { ...(isActionGroup(action) ? { group: action } : { action }), key: action.id, record, table })
 }
 
 function optionValue(option: unknown): boolean | number | string | null | undefined {
@@ -630,7 +542,7 @@ export const VueTableRenderer = defineComponent({
       const paginationItems = paginationRange(snapshot.page, pageCount)
       const paginationFrom = snapshot.total === 0 ? 0 : (snapshot.page - 1) * snapshot.perPage + 1
       const paginationTo = Math.min(snapshot.page * snapshot.perPage, snapshot.total)
-      const headerActions = table.actions?.filter(action => action.scope === 'header') ?? []
+      const headerActions = table.actions?.filter(action => action.scope === 'header' && (!action.emptyStateOnly || snapshot.records.length === 0)) ?? []
       const bulkActions = table.actions?.filter(action => action.scope === 'bulk') ?? []
       const rowActions = table.actions?.filter(action => action.scope === 'row') ?? []
       const rowActionGroups = rowActions.filter(isActionGroup)

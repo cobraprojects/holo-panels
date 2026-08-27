@@ -1,61 +1,33 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
-  import type { TableRecordId } from '@holo-js/panels-client'
-  import ChevronDown from 'lucide-svelte/icons/chevron-down'
-  import Ellipsis from 'lucide-svelte/icons/ellipsis'
-  import Icon from '../components/Icon.svelte'
-  import { Button } from '../ui/button'
-  import * as AlertDialog from '../ui/alert-dialog'
-  import * as DropdownMenu from '../ui/dropdown-menu'
-  import { executeTableAction } from './execute-action'
+  import { createTableActionHost, publishPanelError, type TableRecordId } from '@holo-js/panels-client'
+  import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { SvelteTableAction, SvelteTableActionGroup, SvelteTableRendererProps } from './types'
 
-  let { group, record, table }: {
-    readonly group: SvelteTableActionGroup
+  let { action, group, record, table }: {
+    readonly action?: SvelteTableAction
+    readonly group?: SvelteTableActionGroup
     readonly record?: Readonly<TRecord>
     readonly table: SvelteTableRendererProps<TRecord, TRecordId>
   } = $props()
-  const label = $derived(group.label ?? (group.scope === 'bulk' ? 'Bulk actions' : group.scope === 'row' ? 'Row actions' : 'Actions'))
-  let confirmation = $state<SvelteTableAction | null>(null)
-  let pendingActionId = $state<string | null>(null)
-
-  async function run(action: SvelteTableAction): Promise<void> {
-    pendingActionId = action.id
-    try {
-      await executeTableAction(action, record, table)
-    } finally {
-      pendingActionId = null
-    }
-  }
-
-  function activate(action: SvelteTableAction): void {
-    if (action.confirmation) confirmation = action
-    else void run(action)
-  }
+  const host = $derived(createTableActionHost({
+    actions: group?.actions ?? (action ? [action] : []),
+    group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined,
+    recordId: record ? table.getRecordId(record) : undefined,
+    selection: () => table.store.selectionPayload(),
+    execute: async (request, signal) => {
+      try {
+        if (!table.actionTransport) throw new Error('Table actions require an action transport')
+        await table.actionTransport.execute(request, signal)
+      } catch (cause) {
+        if (!signal.aborted) publishPanelError(table.panelId ?? 'default', `${(group?.actions ?? (action ? [action] : [])).find(candidate => candidate.id === request.actionId)?.label ?? 'Action'} failed`)
+        throw cause
+      }
+    },
+  }))
+  $effect(() => {
+    const store = host.store
+    return () => { while (store.activeFrame) store.close() }
+  })
 </script>
 
-<DropdownMenu.Root>
-  <DropdownMenu.Trigger>
-    {#snippet child({ props })}<Button {...props} aria-label={label} class="hp-action-group-trigger hp-action-trigger" data-action-group={group.id} size={group.scope === 'row' ? 'icon' : 'default'} type="button" variant={group.scope === 'row' ? 'ghost' : 'outline'}>{#if group.icon}<Icon name={group.icon} />{:else if group.scope === 'row'}<Ellipsis aria-hidden="true" />{/if}<span class={group.scope === 'row' ? 'hp:sr-only' : undefined}>{label}</span>{#if group.scope !== 'row'}<ChevronDown aria-hidden="true" />{/if}</Button>{/snippet}
-  </DropdownMenu.Trigger>
-  <DropdownMenu.Content align="end" data-holo-panel>
-    {#each group.actions as action (action.id)}
-      {@const href = record ? table.getRecordActionUrl?.(action, record) : null}
-      {#if href}
-        <DropdownMenu.Item data-action={action.id} data-color={action.color ?? undefined} variant={action.color === 'danger' ? 'destructive' : 'default'}>
-          {#snippet child({ props })}<a {...props} {href}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{action.label}</span></a>{/snippet}
-        </DropdownMenu.Item>
-      {:else}
-        <DropdownMenu.Item data-action={action.id} data-color={action.color ?? undefined} disabled={pendingActionId !== null} variant={action.color === 'danger' ? 'destructive' : 'default'} onSelect={() => activate(action)}>{#if action.icon}<Icon name={action.icon} />{/if}<span>{pendingActionId === action.id ? 'Working…' : action.label}</span></DropdownMenu.Item>
-      {/if}
-    {/each}
-  </DropdownMenu.Content>
-</DropdownMenu.Root>
-
-{#if confirmation}
-  <AlertDialog.Root open onOpenChange={(open) => { if (!open) confirmation = null }}>
-    <AlertDialog.Content data-holo-panel>
-      <AlertDialog.Header><AlertDialog.Title id={`${confirmation.id}-confirmation-title`}>{confirmation.label}</AlertDialog.Title><AlertDialog.Description>{confirmation.confirmation}</AlertDialog.Description></AlertDialog.Header>
-      <AlertDialog.Footer><AlertDialog.Cancel onclick={() => { confirmation = null }}>Cancel</AlertDialog.Cancel><AlertDialog.Action variant={confirmation.color === 'danger' ? 'destructive' : 'default'} onclick={() => { const action = confirmation; confirmation = null; if (action) void run(action) }}>{#if confirmation.icon}<Icon name={confirmation.icon} />{/if}Confirm</AlertDialog.Action></AlertDialog.Footer>
-    </AlertDialog.Content>
-  </AlertDialog.Root>
-{/if}
+{#if host.actions[0]}<ActionRenderer {...host} action={host.actions[0]} panelId={table.panelId} registry={table.registry} />{/if}

@@ -5,6 +5,7 @@ import {
   createWidgetActionStore,
   GlobalSearchStore,
   installPanelSpaNavigation,
+  navigatePanelUrl,
   ClientNotificationInboxStore,
   ClientToastStore,
   createDefaultComponentRegistry,
@@ -373,6 +374,8 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
   }, [payload])
   const state = useSyncExternalStore(store.subscribe.bind(store), () => store.snapshot, () => store.snapshot)
   const manifest = state.manifest!
+  const navigation = useRef({ router, runtime: manifest.runtime })
+  navigation.current = { router, runtime: manifest.runtime }
   const shell = useRef<HTMLDivElement>(null)
   const TopbarComponent = manifest.components?.topbar
     ? registry.resolve<PanelChromeComponentProps<typeof payload.page>>(manifest.components.topbar, state.panelId, 'panel topbar')
@@ -390,10 +393,21 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
   const toastStore = useMemo(() => new ClientToastStore(), [state.panelId])
   const effects = useMemo(() => new ClientEffectSession({
     panelId: state.panelId,
-    redirect: effect => browserNavigate(effect.url),
+    redirect: effect => {
+      if (effect.newTab) { window.open(effect.url, '_blank', 'noopener,noreferrer'); return }
+      const current = navigation.current
+      return navigatePanelUrl(effect.url, { enabled: current.runtime?.spa !== false, exceptions: current.runtime?.spaUrlExceptions ?? [], navigate: (url, replacing) => replacing ? current.router.replace(url) : current.router.push(url) }, effect.replace)
+    },
     toastStore,
   }), [state.panelId, toastStore])
   useStrictModeSafeDisposal(effects, disposeEffectSession)
+  useEffect(() => {
+    toastStore.connectActions(createPanelNotificationTransport(browserPanelsTransport(), {
+      applyEffects: response => effects.apply(response),
+      endpoint: `/holo/panels/${state.panelId}/notification`,
+      panelId: state.panelId,
+    }))
+  }, [effects, state.panelId, toastStore])
   useEffect(() => {
     if (manifest.runtime?.spa === false || !shell.current) return
     return installPanelSpaNavigation(shell.current, {
@@ -523,6 +537,6 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
       </Sidebar> : null}
       {page}
     </SidebarProvider>
-    {renderHook(PanelsRenderHook.FOOTER)}<ReactToastViewport navigate={browserNavigate} store={toastStore} />{renderHook(PanelsRenderHook.LAYOUT_END)}{renderHook(PanelsRenderHook.BODY_END)}
+    {renderHook(PanelsRenderHook.FOOTER)}<ReactToastViewport navigate={browserNavigate} panelId={state.panelId} registry={registry} store={toastStore} />{renderHook(PanelsRenderHook.LAYOUT_END)}{renderHook(PanelsRenderHook.BODY_END)}
   </div></PanelsPortalProvider></PanelsPageActionsProvider></ReactPanelsRenderHookProvider></ReactFeedbackProvider>
 }

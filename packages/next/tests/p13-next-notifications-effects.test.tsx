@@ -191,7 +191,7 @@ describe('Next notification and effect integration', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    await click(container, 'Save post')
+    await click(container, 'Save')
     await vi.waitFor(() => expect(document.body.textContent).toContain('Post saved.'))
     await act(async () => root.unmount())
   })
@@ -214,6 +214,13 @@ describe('Next notification and effect integration', () => {
     const source = await payload()
     const resourcePayload = (path: string, title: string): NextPanelPagePayload => ({
       ...source,
+      bootstrap: {
+        ...source.bootstrap,
+        manifest: {
+          ...source.bootstrap.manifest,
+          runtime: { ...source.bootstrap.manifest.runtime!, spaUrlExceptions: [] },
+        },
+      },
       page: {
         ...source.page,
         data: { record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title } },
@@ -230,7 +237,7 @@ describe('Next notification and effect integration', () => {
     const root = createRoot(container)
 
     await act(async () => root.render(<NextPanelClient payload={resourcePayload('/admin/posts/first-post/edit', 'First post')} />))
-    await click(container, 'Save post')
+    await click(container, 'Save')
     expect(requests).toHaveLength(1)
 
     await act(async () => {
@@ -238,7 +245,7 @@ describe('Next notification and effect integration', () => {
       await Promise.resolve()
     })
     expect(requests[0]?.signal?.aborted).toBe(true)
-    await click(container, 'Save post')
+    await click(container, 'Save')
     expect(requests).toHaveLength(2)
     expect(requests[1]?.signal?.aborted).toBe(false)
 
@@ -285,11 +292,11 @@ describe('Next notification and effect integration', () => {
     />
 
     await act(async () => root.render(resource('first', 'First post')))
-    await click(container, 'Save post')
+    await click(container, 'Save')
     await act(async () => root.render(resource('replacement', 'Replacement post')))
     expect(requests[0]?.signal?.aborted).toBe(true)
 
-    await click(container, 'Save post')
+    await click(container, 'Save')
     expect(requests[1]?.signal?.aborted).toBe(false)
     requests[0]?.resolve({ data: { record: { id: 1, slug: 'first-post', title: 'Obsolete post' } }, ok: true })
     await act(async () => await Promise.resolve())
@@ -410,7 +417,6 @@ describe('Next notification and effect integration', () => {
     await act(async () => root.render(<NextPanelResourcePage data={{ record: { id: 1, slug: 'first-post', title: 'First post' } }} effects={effects} panelId="admin" panelPath="/admin" properties={editProperties()} />))
     await click(container, 'Delete')
     await click(container, 'Confirm')
-    await click(container, 'Run action')
     expect(order).toEqual(['toast', 'redirect'])
     expect(toastStore.state.items).toHaveLength(1)
     if (!ok) expect(toastStore.state.items[0]?.title).toBe('Failed safely')

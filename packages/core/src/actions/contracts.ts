@@ -9,6 +9,7 @@ export type ActionMount = 'bulk' | 'modal' | 'notification' | 'page' | 'record'
 
 export interface ActionContext<TRecord, TActor, TTenant, TServices> {
   readonly actor: TActor
+  readonly owner?: object
   readonly mount: ActionMount
   readonly record: TRecord | null
   readonly selectedRecords?: readonly TRecord[]
@@ -57,6 +58,7 @@ export interface ActionModalOptions<TContext> {
 }
 
 export interface ActionModalManifest {
+  readonly actions?: readonly ActionManifest[]
   readonly alignment: 'center' | 'end' | 'start'
   readonly autofocus: boolean
   readonly cancelActionLabel: string | null
@@ -105,6 +107,8 @@ export interface ActionPresentationManifest {
 }
 
 export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> extends ActionPresentationDefinition<TRecord, TActor, TTenant, TServices, TInput> {
+  readonly ancestorActionIds?: readonly string[]
+  readonly nestedActions?: readonly object[]
   readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>, input: Readonly<TInput>) => boolean | Promise<boolean>
   readonly confirmation?: string | null
   readonly disabled?: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, boolean>
@@ -123,6 +127,9 @@ export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, T
   readonly sideEffects?: readonly ((result: TResult, context: ActionContext<TRecord, TActor, TTenant, TServices>) => void | Promise<void>)[]
   readonly successNotification?: ActionSuccessNotification<TResult, ActionContext<TRecord, TActor, TTenant, TServices>>
   readonly transactional?: boolean
+  readonly usesDefaultHandler?: boolean
+  readonly url?: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, string | null>
+  readonly urlInNewTab?: boolean
   readonly visible?: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, boolean>
 }
 

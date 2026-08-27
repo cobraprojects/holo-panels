@@ -5,12 +5,17 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
   import Icon from '../components/Icon.svelte'
   import { notificationActions, notificationUrl } from './helpers'
+  import ActionRenderer from '../actions/ActionRenderer.svelte'
+  import type { SvelteToastViewportProps } from './contracts'
 
-  let { navigate, store, toast }: {
+  let { navigate, panelId, registry, store, toast }: {
+    readonly panelId?: SvelteToastViewportProps['panelId']
+    readonly registry?: SvelteToastViewportProps['registry']
     readonly navigate?: (url: string) => void
     readonly store: ClientToastStore
     readonly toast: ClientToast
   } = $props()
+  const host = $derived(store.actionHost(toast.id))
 
   function ignoreFailure(operation: Promise<unknown>): void {
     void operation.catch(() => undefined)
@@ -35,4 +40,5 @@
     </CardContent>
   {/if}
   {#if toast.closeable}<Button aria-label={`Close ${toast.title}`} class="hp:absolute hp:right-2 hp:top-2" size="icon-sm" type="button" variant="ghost" onclick={() => store.dismiss(toast.id)}><X /></Button>{/if}
+  {#if host?.actions[0]}<CardContent><ActionRenderer action={host.actions[0]} actions={host.actions} {panelId} {registry} store={host.store} /></CardContent>{/if}
 </Card>

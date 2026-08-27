@@ -34,6 +34,7 @@ export interface ResourcePageMetadata {
   readonly dependencies: readonly ResourceDependency[]
   readonly entries: readonly JsonObject[]
   readonly fields: readonly SvelteFieldDefinition[]
+  readonly formActions: readonly ClientActionManifest[]
   readonly filterMode: 'deferred' | 'live'
   readonly filters: readonly SvelteTableFilter[]
   readonly id: string
@@ -99,7 +100,7 @@ function isActionModal(value: unknown): value is NonNullable<ClientActionManifes
   const modal = value as Record<string, unknown>
   const schema = modal.schema
   const schemaRecord = schema && typeof schema === 'object' && !Array.isArray(schema) ? schema as Record<string, unknown> : null
-  const validSchema = schema === null || (
+  const validSchema = schema === null || Array.isArray(schemaRecord?.fields) || (
     schemaRecord?.kind === 'schema'
     && typeof schemaRecord.id === 'string'
     && Array.isArray(schemaRecord.components)
@@ -278,6 +279,7 @@ function tableAction(value: JsonValue): SvelteTableActionItem | null {
       icon: typeof action.icon === 'string' ? action.icon : null,
       id,
       kind: 'action-group',
+      emptyStateOnly: action.emptyStateOnly === true,
       label: typeof action.label === 'string' ? action.label : null,
       scope,
     } satisfies SvelteTableActionGroup
@@ -286,6 +288,7 @@ function tableAction(value: JsonValue): SvelteTableActionItem | null {
   if (!label) return null
   return {
     color: typeof action.color === 'string' ? action.color : null,
+    emptyStateOnly: action.emptyStateOnly === true,
     confirmation: typeof action.confirmation === 'string' ? action.confirmation : undefined,
     icon: typeof action.icon === 'string' ? action.icon : null,
     id,
@@ -362,6 +365,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
     dependencies: generatedDependencies,
     entries: Array.isArray(infolist?.entries) ? infolist.entries : [],
     fields,
+    formActions: form.actions ?? [],
     filterMode: table.filterMode === 'deferred' ? 'deferred' : 'live',
     filters: Array.isArray(table.filters) ? table.filters : [],
     id,
@@ -414,6 +418,7 @@ export function resourcePageMetadata(value: JsonValue | undefined, pagePath?: st
     dependencies: Object.freeze(dependencies(resource.dependencies)),
     entries: Object.freeze(inferredEntries),
     fields: Object.freeze(Array.isArray(resource.fields) ? resource.fields.flatMap(item => fieldDefinition(item) ?? []) : []),
+    formActions: Object.freeze(Array.isArray(resource.formActions) ? resource.formActions.flatMap(item => actionManifest(item) ?? []) : []),
     filterMode: resource.filterMode === 'deferred' ? 'deferred' : 'live',
     filters: Object.freeze(Array.isArray(resource.filters) ? resource.filters.flatMap(item => filterDefinition(item) ?? []) : []),
     id,

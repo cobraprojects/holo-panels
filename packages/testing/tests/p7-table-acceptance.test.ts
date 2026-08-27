@@ -92,7 +92,7 @@ describe('P7 table phase-gate acceptance', () => {
       const rendered = browser.document.createElement('div')
       rendered.innerHTML = report.render.markup
       expect(rendered.querySelector('[data-slot="badge"]')?.getAttribute('data-variant'), name).toBe('secondary')
-      expect(rendered.querySelector('[aria-label="Row actions"]')?.classList.contains('hp-action-trigger'), name).toBe(true)
+      expect(rendered.querySelector('[aria-label="Row actions"]')?.getAttribute('aria-haspopup'), name).toBe('menu')
       expect(rendered.querySelector('th[aria-sort] button')?.getAttribute('data-variant'), name).toBe('ghost')
       expect(rendered.querySelector('.hp-table-pagination-pages button')?.getAttribute('data-variant'), name).toBe('outline')
       rendered.innerHTML = report.loadingMarkup

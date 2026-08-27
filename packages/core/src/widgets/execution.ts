@@ -1,7 +1,8 @@
 import { DB } from '@holo-js/db'
 import { ActionEngine, ActionEngineState, ActionExecutionError } from '../actions/engine'
-import { authorizePanelActionPermissions } from '../actions/authorization'
+import { actionExecutionPermissions, authorizePanelActionPermissions } from '../actions/authorization'
 import { actionCacheIdentity } from '../actions/identity'
+import { findRegisteredAction } from '../actions/registration'
 import type { ActionExecutionRequest, ActionExecutionResult, ActionTransaction } from '../actions/contracts'
 import type { JsonObject, JsonValue } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
@@ -47,7 +48,9 @@ export async function executeGeneratedWidgetOperation(
   if (!resourceWidget && !loader) throw new Error('The widget is not registered')
   const widget = compiledWidget(resourceWidget ?? await loader!())
   if (widget.manifest.id !== widgetId) throw new Error('The widget is not registered under the requested ID')
-  await authorizePanelActionPermissions(panel, context, [...(typeof payload.resourceId === 'string' ? [`${payload.resourceId}.viewAny`] : []), `widgets.${widgetId}.view`, `actions.${actionId}.view`])
+  const action = widget.server.actions?.flatMap(candidate => findRegisteredAction(candidate, actionId) ?? [])
+  if (action?.length !== 1 || !action[0]) throw new Error('The widget action is not registered')
+  await authorizePanelActionPermissions(panel, context, [...(typeof payload.resourceId === 'string' ? [`${payload.resourceId}.viewAny`] : []), `widgets.${widgetId}.view`, ...actionExecutionPermissions(action[0])])
   const result = await executeWidgetAction(widget, { actionId, idempotencyKey, input, mount: 'page' }, context, actionTransaction)
   const data = toJsonValue({ items: result.items, result: result.result ?? null, status: result.status })
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Widget action results require JSON objects')
@@ -61,7 +64,8 @@ export async function executeWidgetAction<TData extends JsonValue, TActor, TTena
   actionTransaction: ActionTransaction = transaction,
 ): Promise<ActionExecutionResult<number | string, unknown>> {
   if (!await definition.server.authorize(context)) throw new WidgetAccessError(definition.manifest.id)
-  const action = definition.server.actions?.find(candidate => candidate.id === request.actionId)
+  const matches = definition.server.actions?.flatMap(candidate => findRegisteredAction(candidate, request.actionId) ?? []) ?? []
+  const action = matches.length === 1 ? matches[0] : undefined
   if (!action) throw new Error('The widget action is not registered')
   if (!await action.authorize({ ...context, mount: action.mount, record: null, selectedRecords: [] }, request.input)) throw new ActionExecutionError('denied', 'The action is not authorized')
   const engine = new ActionEngine<TRecord, number | string, TActor, TTenant, TServices>({

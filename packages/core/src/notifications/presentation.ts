@@ -14,7 +14,11 @@ export function notificationExecution(value: unknown): PanelNotificationExecutio
   const actionId = Reflect.get(reference, 'actionId')
   const resourceId = Reflect.get(reference, 'resourceId')
   if (actionId !== action.id || typeof resourceId !== 'string' || !ID.test(resourceId)) return null
-  return { id: action.id, kind: 'execute', label: action.label, url: null, execution: { actionId, resourceId } }
+  const manifest = action.actionManifest
+  return { id: action.id, kind: 'execute', label: action.label, url: null, execution: { actionId, resourceId },
+    ...(manifest && typeof manifest === 'object' && !Array.isArray(manifest) ? { actionManifest: manifest as JsonObject } : {}),
+    ...(typeof action.token === 'string' ? { token: action.token } : {}),
+  }
 }
 
 export function notificationPresentation(payload: {

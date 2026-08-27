@@ -38,7 +38,7 @@ function actionPayload(overrides: Partial<ClientActionManifest> & Pick<ClientAct
 }
 
 const postResource = {
-  actions: [actionPayload({ confirmation: 'Delete this post?', id: 'posts.delete', kind: 'delete', label: 'Delete', type: 'core:action:delete' })],
+  actions: [{ ...actionPayload({ confirmation: 'Delete this post?', id: 'posts.delete', kind: 'delete', label: 'Delete', type: 'core:action:delete' }), scope: 'row' }],
   basePath: '/admin/posts',
   columns: ['title', 'slug', 'category', 'city'].map(path => ({
     manifest: { alignment: 'start', copyable: path === 'slug', formatters: path === 'title' ? [{ kind: 'prefix', value: 'Post: ' }] : [], hidden: false, inlineEditor: null, label: `${path[0]?.toUpperCase() ?? ''}${path.slice(1)}`, lineClamp: path === 'title' ? 2 : null, path, searchable: path === 'title', sortable: true, toggleable: true, type: 'text', width: null, wrap: true },
@@ -69,6 +69,7 @@ const postResource = {
   routeKey: 'slug',
   routes: { create: '/admin/posts/create', edit: '/admin/posts/:record/edit', view: '/admin/posts/:record' },
   saveLabel: 'Save post',
+  formActions: [actionPayload({ id: 'posts.save', label: 'Save post', mount: 'page' })],
 }
 
 function pageData(pageType: 'create' | 'edit' | 'list' | 'view'): PanelPageData {
@@ -223,7 +224,7 @@ describe('SvelteKit resource page acceptance', () => {
     expect(list).toContain('data-panels-component="table"')
     expect(list).toContain('First post')
     expect(list).toContain('Post: First post')
-    expect(list).toContain('href="/admin/posts/create"')
+    expect(list).toContain('data-action-id="posts.create"')
     expect(list).toContain('aria-label="Row actions"')
     expect(list).toContain('hp-panel-topbar-start')
     expect(list).toContain('hp-panel-topbar-end')
@@ -239,7 +240,7 @@ describe('SvelteKit resource page acceptance', () => {
     expect(create).toContain('Category')
     expect(view).toContain('First post')
     expect(view).toContain('Delete')
-    expect(view).toContain('href="/admin/posts/first-post/edit"')
+    expect(view).toContain('data-action-id="posts.edit"')
     expect(edit).toContain('value="First post"')
     expect(render(PanelPage, { props: { data: pageData('list') } }).body).toBe(list)
   })
@@ -462,7 +463,7 @@ describe('SvelteKit resource page acceptance', () => {
     const html = render(PanelPage, { props: { data: inventory } }).body
 
     expect(html).toContain('Widget one')
-    expect(html).toContain('href="/control/inventory/widget-1/edit"')
+    expect(html).toContain('data-action-id="inventory.edit"')
     expect(html).toContain('Archive')
     expect(html).not.toContain('/admin/posts')
     expect(html).not.toContain('Save post')
@@ -543,6 +544,6 @@ describe('SvelteKit resource page acceptance', () => {
     })
     denied.mount(actionManifest({ id: 'posts.delete', kind: 'delete', label: 'Delete', type: 'core:action:delete' }))
     await expect(denied.submit(['first-post'])).rejects.toThrow('not authorized')
-    expect(denied.activeFrame?.error).toBe('You are not authorized to perform this operation.')
+    expect(denied.activeFrame).toBeNull()
   })
 })

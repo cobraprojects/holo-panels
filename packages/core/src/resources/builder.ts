@@ -1,7 +1,7 @@
 import { DISCOVERY_MARKER } from '../discovery/types'
 import { collectInfolistActions } from './infolist-actions'
 import type { ClientManifestValue, DiscoverableBuilder, DiscoveryDirectories } from '../discovery/types'
-import { createResourceActionComposer, type ResourceActionComposer } from '../actions'
+import { actionPermissionReferences, createResourceActionComposer, type ResourceActionComposer } from '../actions'
 import type { OptionalRuntimeTypeValue, RecordTypeSource, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import type { JsonObject } from '../protocol/json'
 import type {
@@ -509,7 +509,7 @@ export class ResourceBuilder<
       ...(infolist ? { infolist } : {}),
       ...(table ? { table } : {}),
       actions,
-      permissionReferences: [...new Set([...actions.map(action => `actions.${action.id}.view`), ...widgetPermissionReferences(this.#state.widgets)])],
+      permissionReferences: [...new Set([...actionPermissionReferences(actions), ...widgetPermissionReferences(this.#state.widgets)])],
       capabilities,
       client,
       componentKeys: Object.freeze(componentKeys),

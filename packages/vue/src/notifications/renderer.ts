@@ -72,6 +72,8 @@ const VueToastContent = defineComponent({
   name: 'HoloPanelsToastContent',
   props: {
     navigate: Function as PropType<VueToastViewportProps['navigate']>,
+    panelId: String,
+    registry: Object as PropType<VueToastViewportProps['registry']>,
     store: { required: true, type: Object as PropType<VueToastViewportProps['store']> },
     toast: { required: true, type: Object as PropType<ClientToast> },
   },
@@ -79,6 +81,7 @@ const VueToastContent = defineComponent({
     const store = toRaw(props.store)
     return (): VNode => {
       const actions = props.toast.actions.map(actionValue).filter(action => action !== null)
+      const host = store.actionHost(props.toast.id)
       const renderAction = (action: NotificationAction): VNode => {
         const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
         if (url) {
@@ -116,6 +119,7 @@ const VueToastContent = defineComponent({
           props.toast.body ? h(CardDescription, {}, () => props.toast.body) : null,
         ]),
         actions.length > 0 ? h(CardContent, { class: 'hp:flex hp:flex-wrap hp:gap-2' }, () => actions.map(renderAction)) : null,
+        host?.actions[0] ? h(CardContent, {}, () => h(VueActionRenderer, { action: host.actions[0]!, actions: host.actions, panelId: props.panelId, registry: props.registry, store: host.store })) : null,
         props.toast.closeable ? h(Button, { 'aria-label': `Close ${props.toast.title}`, class: 'hp:absolute hp:right-2 hp:top-2', onClick: () => store.dismiss(props.toast.id), size: 'icon-sm', type: 'button', variant: 'ghost' }, () => PanelsIcon('x')) : null,
       ])
     }
@@ -126,6 +130,8 @@ export const VueToastViewport = defineComponent({
   name: 'HoloPanelsToastViewport',
   props: {
     navigate: Function as PropType<VueToastViewportProps['navigate']>,
+    panelId: String,
+    registry: Object as PropType<VueToastViewportProps['registry']>,
     placement: { default: 'top', type: String as PropType<NonNullable<VueToastViewportProps['placement']>> },
     store: { required: true, type: Object as PropType<VueToastViewportProps['store']> },
   },
@@ -144,8 +150,8 @@ export const VueToastViewport = defineComponent({
         const fingerprint = JSON.stringify(item)
         if (rendered.get(item.id) === fingerprint) continue
         sonnerToast.custom(VueToastContent, {
-          componentProps: { navigate: props.navigate, store: props.store, toast: item },
-          duration: item.persistent ? Number.POSITIVE_INFINITY : (item.duration ?? 5000),
+          componentProps: { navigate: props.navigate, panelId: props.panelId, registry: props.registry, store: props.store, toast: item },
+          duration: Number.POSITIVE_INFINITY,
           id: item.id,
           onAutoClose: () => props.store.dismiss(item.id),
           onDismiss: () => props.store.dismiss(item.id),

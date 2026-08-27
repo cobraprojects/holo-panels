@@ -4,7 +4,7 @@ export { isPanelDatabaseNotificationPayload, PanelNotificationAccessError, Panel
 export { holoNotificationStore } from './holo-store'
 export { notificationExecution, notificationPresentation } from './presentation'
 export { dispatchPanelNotification } from './dispatch'
-export { bindResourceActionOwner, notificationActionReference, resolveResourceNotificationAction, type NotificationActionReference } from './action-reference'
+export { bindResourceActionOwner, notificationActionReference, resourceNotificationPermissionReferences, resolveResourceNotificationAction, type NotificationActionReference } from './action-reference'
 export type {
   PanelDatabaseNotificationItem,
   PanelDatabaseNotificationPage,

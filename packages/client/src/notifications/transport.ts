@@ -194,16 +194,15 @@ export function createPanelNotificationTransport(
     return validateAffected(requireSuccess(response), selected.length)
   }
 
-  return Object.freeze({
-    delete: (ids: readonly string[], signal: AbortSignal) => mutate('delete', ids, signal),
-    async executeAction(notificationId: string, request: ClientActionRequest, signal: AbortSignal) {
-      validateIds([notificationId, request.actionId])
+  const execute = async (target: { readonly notificationId: string } | { readonly token: string }, request: ClientActionRequest, signal: AbortSignal) => {
+      validateIds([request.actionId])
+      if ('notificationId' in target) validateIds([target.notificationId])
       if (request.mount !== 'notification' || request.recordIds?.length) throw new Error('Notification actions require a notification mount without record IDs')
       const response = await transport.execute(MUTATION_OPERATION, {
         endpoint: resolved.endpoint,
         idempotencyKey: request.idempotencyKey,
         panelId: resolved.panelId,
-        payload: { action: 'execute', actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, notificationId },
+        payload: { action: 'token' in target ? 'execute-toast' : 'execute', actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, ...target },
         signal,
       }).catch((cause: unknown) => {
         if (!signal.aborted) publishPanelActionFailure(resolved.panelId)
@@ -226,7 +225,12 @@ export function createPanelNotificationTransport(
         throw new Error('The notification action could not be completed')
       }
       return { effects: [], items: [], result: data.result, status: 'succeeded' as const }
-    },
+  }
+
+  return Object.freeze({
+    delete: (ids: readonly string[], signal: AbortSignal) => mutate('delete', ids, signal),
+    executeAction: (notificationId: string, request: ClientActionRequest, signal: AbortSignal) => execute({ notificationId }, request, signal),
+    executeToastAction: (token: string, request: ClientActionRequest, signal: AbortSignal) => execute({ token }, request, signal),
     async list(page: number, pageSize: number, signal: AbortSignal): Promise<PanelDatabaseNotificationPage> {
       validatePagination(page, pageSize)
       const response = await transport.execute(LIST_OPERATION, {

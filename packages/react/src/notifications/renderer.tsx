@@ -86,18 +86,22 @@ function ToastAction({ action, navigate, store, toast }: {
   return <Button onClick={() => ignoreFailure(store.trigger(toast.id, action.id))} size="sm" type="button" variant={action.kind === 'dismiss' ? 'destructive' : 'outline'}><PanelsIcon name={notificationActionIcon(action.kind)} />{action.label}</Button>
 }
 
-function ToastContent({ navigate, store, toast }: {
+function ToastContent({ navigate, panelId, registry, store, toast }: {
+  readonly panelId?: ReactToastViewportProps['panelId']
+  readonly registry?: ReactToastViewportProps['registry']
   readonly navigate?: (url: string) => void
   readonly store: ClientToastStore
   readonly toast: ClientToast
 }): ReactNode {
   const actions = toast.actions.map(actionValue).filter(action => action !== null)
+  const host = store.actionHost(toast.id)
   return <Card className="hp-notification-toast hp:relative hp:w-full hp:border-0 hp:shadow-none" data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} data-slot="notification-toast">
     <CardHeader className="hp:gap-1 hp:pr-10">
       <CardTitle className="hp:flex hp:items-center hp:gap-2 hp:text-sm">{toast.icon ? <PanelsIcon name={toast.icon} /> : null}{toast.title}</CardTitle>
       {toast.body ? <CardDescription>{toast.body}</CardDescription> : null}
     </CardHeader>
     {actions.length > 0 ? <CardContent className="hp:flex hp:flex-wrap hp:gap-2">{actions.map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</CardContent> : null}
+    {host?.actions[0] ? <CardContent><ReactActionRenderer actions={host.actions} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /></CardContent> : null}
     {toast.closeable ? <Button aria-label={`Close ${toast.title}`} className="hp:absolute hp:right-2 hp:top-2" onClick={() => store.dismiss(toast.id)} size="icon-sm" type="button" variant="ghost"><PanelsIcon name="x" /></Button> : null}
   </Card>
 }
@@ -106,7 +110,7 @@ function toastFingerprint(value: ClientToast): string {
   return JSON.stringify(value)
 }
 
-export function ReactToastViewport({ navigate, placement = 'top', store }: ReactToastViewportProps): ReactNode {
+export function ReactToastViewport({ navigate, panelId, placement = 'top', registry, store }: ReactToastViewportProps): ReactNode {
   const state = useSyncExternalStore(
     listener => store.subscribe(listener),
     () => store.state,
@@ -124,15 +128,15 @@ export function ReactToastViewport({ navigate, placement = 'top', store }: React
     for (const item of state.items) {
       const fingerprint = toastFingerprint(item)
       if (rendered.current.get(item.id) === fingerprint) continue
-      sonnerToast.custom(() => <ToastContent navigate={navigate} store={store} toast={item} />, {
-        duration: item.persistent ? Infinity : (item.duration ?? 5000),
+      sonnerToast.custom(() => <ToastContent navigate={navigate} panelId={panelId} registry={registry} store={store} toast={item} />, {
+        duration: Infinity,
         id: item.id,
         onDismiss: () => store.dismiss(item.id),
         onAutoClose: () => store.dismiss(item.id),
       })
       rendered.current.set(item.id, fingerprint)
     }
-  }, [navigate, state.items, store])
+  }, [navigate, panelId, registry, state.items, store])
 
   return <><div aria-atomic="true" aria-live="polite" className="hp:sr-only" role="status">{state.liveMessage}</div><Toaster closeButton={false} position={placement === 'top' ? 'top-center' : 'bottom-center'} /></>
 }

@@ -4,6 +4,8 @@ import type {
   ActionMount,
   JsonObject,
 } from '@holo-js/panels-core'
+import type { ActionFormField } from './form'
+import type { OptionStore } from '../options/store'
 
 export type ClientActionManifest = ActionManifest
 
@@ -37,6 +39,7 @@ export interface ClientActionTransport<TResult> {
 }
 
 export interface ClientActionStoreOptions<TResult> {
+  readonly createOptionStore?: (field: ActionFormField, actionId: string) => OptionStore<number | string> | undefined
   readonly createIdempotencyKey: () => string
   readonly transport: ClientActionTransport<TResult>
 }

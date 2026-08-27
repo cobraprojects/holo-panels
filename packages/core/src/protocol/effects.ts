@@ -1,9 +1,11 @@
 import { isPanelDatabaseNotificationPayload } from '../notifications/inbox'
 import type { PanelNotificationAction, PanelNotificationPresentation } from '../notifications/contracts'
 import { toJsonValue } from './serialization'
+import { notificationExecution } from '../notifications/presentation'
 
 export interface RedirectEffect {
   kind: 'redirect'
+  newTab?: boolean
   replace?: boolean
   url: string
 }
@@ -71,7 +73,7 @@ export function validatedToastPresentation(value: unknown): Readonly<PanelNotifi
   const normalized: PanelNotificationPresentation = {
     actions: presentation.actions.map(value => {
       const action = value as PanelNotificationAction
-      return { id: action.id, kind: action.kind, label: action.label, url: action.url }
+      return notificationExecution(action) ?? { id: action.id, kind: action.kind, label: action.label, url: action.url }
     }),
     body: presentation.body,
     closeable: presentation.closeable,

@@ -2,6 +2,10 @@
 
 import {
   ClientActionStore,
+  actionManifestCollection,
+  resolveTableActionManifest,
+  relationActionPayload,
+  relationActionPresentation,
   CollectionStore,
   createBrowserUploadAdapter,
   createUploadStore,
@@ -19,6 +23,7 @@ import {
   ReactPanelsRenderHook,
   ReactTableRenderer,
   TableStateStore,
+  toJsonValue,
   createDefaultComponentRegistry,
   registerReactFieldRenderers,
   useFormStore,
@@ -42,8 +47,8 @@ import {
   type UploadPolicy,
 } from '@holo-js/panels-react'
 import { useRouter } from 'next/navigation.js'
-import { createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { Button, Card, CardContent, CardFooter, PanelsIcon } from './internal-ui'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Card, CardContent, CardFooter } from './internal-ui'
 import { useClientRequestController } from './client-lifecycle'
 
 export interface NextResourceOperationResult {
@@ -141,6 +146,7 @@ function relationManagers(value: JsonValue | undefined): ReactRelationManagerRen
         : []
     })
     return [{
+      ...relationActionPresentation(manager),
       badge: typeof manager.badge === 'number' || typeof manager.badge === 'string' ? manager.badge : null,
       columns: objects(manager.columns).flatMap(column => text(column.key) ? [{ key: text(column.key), label: text(column.label) || text(column.key) }] : []),
       fields: relationFields(manager.fields),
@@ -225,7 +231,7 @@ function isActionModal(value: unknown): value is NonNullable<ClientActionManifes
   const modal = value as Record<string, unknown>
   const schema = modal.schema
   const schemaRecord = schema && typeof schema === 'object' && !Array.isArray(schema) ? schema as Record<string, unknown> : null
-  const validSchema = schema === null || (
+  const validSchema = schema === null || Array.isArray(schemaRecord?.fields) || (
     schemaRecord?.kind === 'schema'
     && typeof schemaRecord.id === 'string'
     && Array.isArray(schemaRecord.components)
@@ -341,13 +347,13 @@ function tableColumn(definition: JsonObject, resource: JsonObject, routeKey: str
   }
 }
 
-function tableAction(action: JsonObject, resource: JsonObject): ReactTableActionItem | null {
+function tableAction(action: JsonObject, resource: JsonObject, presentation?: JsonObject): ReactTableActionItem | null {
   const id = text(action.id)
   const scope = action.scope
   if (!id || (scope !== 'bulk' && scope !== 'header' && scope !== 'row')) return null
   if (action.kind === 'action-group') {
     const actions = objects(action.actions).flatMap(item => {
-      const parsed = tableAction(item, resource)
+      const parsed = tableAction(item, resource, presentation)
       return parsed && !('kind' in parsed) ? [parsed] : []
     })
     if (actions.length === 0) return null
@@ -357,6 +363,7 @@ function tableAction(action: JsonObject, resource: JsonObject): ReactTableAction
       icon: typeof action.icon === 'string' ? action.icon : null,
       id,
       kind: 'action-group',
+      emptyStateOnly: action.emptyStateOnly === true,
       label: typeof action.label === 'string' ? action.label : null,
       scope,
     } satisfies ReactTableActionGroup
@@ -367,20 +374,22 @@ function tableAction(action: JsonObject, resource: JsonObject): ReactTableAction
   const route = kind === 'view' || kind === 'edit' ? configuredRoute(resource, kind) : null
   return {
     color: typeof action.color === 'string' ? action.color : null,
+    emptyStateOnly: action.emptyStateOnly === true,
     confirmation: typeof action.confirmation === 'string' ? action.confirmation : undefined,
     icon: typeof action.icon === 'string' ? action.icon : null,
     id,
     label,
     scope,
+    ...(presentation && Array.isArray(presentation.tableActions) ? { resolveManifest: (recordId?: string | number) => resolveTableActionManifest(presentation, id, recordId) } : {}),
     ...(scope === 'row' && route
       ? { url: (recordId: string | number) => route.replace(':record', encodeURIComponent(String(recordId))) }
       : {}),
   }
 }
 
-function tableActions(table: JsonObject, resource: JsonObject): readonly ReactTableActionItem[] {
+function tableActions(table: JsonObject, resource: JsonObject, presentation?: JsonObject): readonly ReactTableActionItem[] {
   return objects(table.actions).flatMap((action) => {
-    const parsed = tableAction(action, resource)
+    const parsed = tableAction(action, resource, presentation)
     return parsed ? [parsed] : []
   })
 }
@@ -463,7 +472,8 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
     ? configuredRecordLink
     : propertyPath(text(resource.recordTitle))
   const columns = useMemo(() => columnDefinitions.map(definition => tableColumn(definition, resource, routeKey, recordLink)), [columnDefinitions, recordLink, resource, routeKey])
-  const actions = useMemo(() => tableActions(table, resource), [resource, table])
+  const [actionData, setActionData] = useState(data)
+  const actions = useMemo(() => tableActions(table, resource, actionData), [resource, table, actionData])
   const filters = useMemo(() => tableFilters(table), [table])
   const actionDefinitions = useMemo(() => new Map(executableTableActions(objects(table.actions)).map(action => [text(action.id), action])), [table])
   const [groups, setGroups] = useState(() => tableGroups(data.groups))
@@ -503,21 +513,23 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
       const total = typeof result.data.total === 'number' ? result.data.total : nextRecords.length
       setGroups(tableGroups(result.data.groups))
       setSummaries(tableSummaries(result.data.summaries))
+      setActionData(result.data)
       store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total })
     }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
-  const createAction = objects(resource.actions).find(action => action.kind === 'create' && action.visible !== false)
-  const createRoute = configuredRoute(resource, 'create')
-  return <div className="hp-resource-page">{createAction && createRoute ? <PanelsPageActions><Button asChild className="hp-action-trigger"><a data-action-id={text(createAction.id)} data-color={text(createAction.color) || undefined} href={createRoute}>{typeof createAction.icon === 'string' ? <PanelsIcon name={createAction.icon} /> : null}<span>{text(createAction.label) || text(labels.create) || 'Create'}</span></a></Button></PanelsPageActions> : null}<ResourcePageActions basePath="" operation={operation} panelId={panelId} registry={registry} resource={resource} source="list" /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
+  return <div className="hp-resource-page"><ResourcePageActions basePath="" operation={operation} panelId={panelId} registry={registry} resource={resource} source="list" /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
+    panelId={panelId}
+    registry={registry}
     actions={actions}
     actionTransport={{
       async execute(request, signal) {
-        const manifest = actionDefinitions.get(request.actionId)
+        const resolved = resolveTableActionManifest(actionData, request.actionId, request.recordId)
+        const manifest = resolved ? { ...resolved, removesRecord: resolved.kind === 'delete' || resolved.kind === 'force-delete', scope: resolved.mount === 'bulk' ? 'bulk' : resolved.mount === 'page' ? 'header' : 'row' } : actionDefinitions.get(request.actionId)
         if (!manifest) throw new Error('The requested action is not available.')
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds
           : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: globalThis.crypto.randomUUID(), intent: text(manifest.kind) || request.actionId, mount: manifest.scope === 'bulk' ? 'bulk' : 'record', recordIds: [...recordIds], resourceId, source: 'table' }, signal)
+        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? globalThis.crypto.randomUUID(), input: request.input ?? {}, intent: text(manifest.kind) || request.actionId, mount: request.mount ?? (manifest.scope === 'bulk' ? 'bulk' : manifest.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId, source: 'table' }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
@@ -731,7 +743,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   readonly resource: JsonObject
   readonly unsavedChangesAlerts: boolean
 }): ReactNode {
-  const router = useRouter()
+  const navigate = useRouter().push
   const record = useMemo(() => object(data.record), [data])
   const formManifest = object(resource.form)
   const fields = useMemo(() => objects(formManifest.fields).map(fieldDefinition), [formManifest])
@@ -775,53 +787,72 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
       return (typeof value === 'number' || typeof value === 'string') && optionLabel ? [{ label: optionLabel, value }] : []
     })
   }
-  const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request) => {
+  const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request, signal) => {
     const result = await operation.execute('action', {
-      intent: 'relation',
-      managerId: request.managerId,
+      ...relationActionPayload(request),
       ownerId: record[routeKey] ?? null,
-      ...(request.pivot ? { pivot: { ...request.pivot } } : {}),
-      ...(typeof request.recordId === 'number' || typeof request.recordId === 'string' ? { relatedId: request.recordId } : {}),
-      relationOperation: request.operation,
       resourceId,
-      ...(request.values ? { values: { ...request.values } } : {}),
-    })
-    if (!result.ok) throw new Error(result.error ?? 'The relation operation could not be completed.')
+    }, signal)
+    if (!result.ok || result.data?.status === 'partial') throw new Error(result.error ?? 'The relation operation could not be completed.')
     setRelations(relationManagers(result.data?.relations))
   }
-  const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-    setSaved(false)
-    await form.submit(async context => {
-      const errors = Object.fromEntries(fields.filter(field => field.required && (context.values[field.path] === '' || context.values[field.path] === null || typeof context.values[field.path] === 'undefined')).map(field => [field.path, 'This field is required.']))
+  const formActions = useMemo(() => objects(formManifest.actions).map(actionManifest).filter((action): action is ClientActionManifest => action !== null), [formManifest])
+  const formActionStore = useMemo(() => new ClientActionStore({
+    createIdempotencyKey: () => globalThis.crypto.randomUUID(),
+    transport: {
+      async execute(request, signal) {
+        setSaved(false)
+        let completed = false
+        let reset = false
+        await form.submit(async context => {
+      const intent = objects(formManifest.actions).find(action => action.id === request.actionId)?.formIntent
+      const errors = Object.fromEntries(fields.filter(field => intent !== 'cancel' && field.required && (valueAtPath(request.input, field.path) === '' || valueAtPath(request.input, field.path) === null || typeof valueAtPath(request.input, field.path) === 'undefined')).map(field => [field.path, 'This field is required.']))
       if (Object.keys(errors).length > 0) return { errors, focusFirstError: true }
-      const result = await operation.execute('form-submit', { ...context.values, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, context.signal)
-      if (!result.ok) return { errors: { [fields[0]?.path ?? routeKey]: result.error ?? 'The record could not be saved.' }, focusFirstError: true }
+      const result = await operation.execute('form-submit', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, values: request.input, intent: pageOperation, recordId: record[routeKey] ?? null, resourceId }, AbortSignal.any([context.signal, signal]))
+      if (!result.ok || result.data?.status === 'partial') return { errors: { [fields[0]?.path ?? routeKey]: result.error ?? 'The record could not be saved.' }, focusFirstError: true }
+      completed = true
+      if (result.data?.formIntent === 'cancel') {
+        reset = true
+        return { commitValues: false }
+      }
       setSaved(true)
       const savedRecord = object(result.data?.record)
       const savedIdentifier = valueAtPath(savedRecord, routeKey)
-      const redirect = pageOperation === 'create' ? createRedirect : editRedirect
+      const redirect = result.data?.formIntent === 'create-another' ? null : pageOperation === 'create' ? createRedirect : editRedirect
       if (redirect && (typeof savedIdentifier === 'number' || typeof savedIdentifier === 'string')) {
         const encodedIdentifier = encodeURIComponent(String(savedIdentifier))
         const target = redirect === 'index' ? basePath : redirect === 'view' ? `${basePath}/${encodedIdentifier}` : `${basePath}/${encodedIdentifier}/edit`
-        router.push(target)
+        navigate(target)
       }
-      return { commitValues: true }
-    })
-  }
+      reset = result.data?.formIntent === 'create-another'
+      return { commitValues: !reset }
+        })
+        if (!completed) throw new Error('The record could not be saved.')
+        if (reset) form.reset()
+        if (objects(formManifest.actions).find(action => action.id === request.actionId)?.formIntent === 'cancel') navigate(basePath)
+        return { effects: [], items: [], status: 'succeeded' as const }
+      },
+    },
+  }), [basePath, createRedirect, editRedirect, fields, form, formManifest, operation, pageOperation, record, resourceId, routeKey, navigate])
+  useEffect(() => () => {
+    while (formActionStore.activeFrame) formActionStore.close()
+  }, [formActionStore])
   const recordIdentifier = record[routeKey]
   return <>
-    {pageOperation === 'edit' && (typeof recordIdentifier === 'number' || typeof recordIdentifier === 'string')
+    {pageOperation === 'create' ? <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} registry={registry} resource={resource} source="create" /> : pageOperation === 'edit' && (typeof recordIdentifier === 'number' || typeof recordIdentifier === 'string')
       ? <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={recordIdentifier} registry={registry} resource={resource} source="edit" />
       : null}
-    <form className="hp-resource-form hp:grid hp:gap-6" onSubmit={event => void submit(event)}>
+    <form className="hp-resource-form hp:grid hp:gap-6" onSubmit={event => {
+      event.preventDefault()
+      event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
+    }}>
       <Card>
         <CardContent className="hp:grid hp:gap-6 hp:pt-6">{fields.map(definition => <ResourceField definition={definition} form={form} key={definition.path} operation={operation} pageOperation={pageOperation} panelId={panelId} recordId={record[routeKey]} registry={registry} resourceId={resourceId} values={state.values} />)}</CardContent>
-        <CardFooter className="hp:justify-end"><Button className="hp-form-actions hp-button hp-button-primary" disabled={state.submitting} type="submit">{state.submitting ? text(labels.saving) || 'Saving…' : text(labels.save) || 'Save'}</Button></CardFooter>
+        <CardFooter className="hp:justify-end">{formActions[0] ? <ReactActionRenderer actions={formActions} input={state.values} manifest={formActions[0]} panelId={panelId} registry={registry} store={formActionStore} /> : null}</CardFooter>
       </Card>
       {saved ? <p className="hp:text-sm hp:text-muted-foreground" role="status">{text(labels.saved) || 'Saved.'}</p> : null}
     </form>
-    {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactRelationManagerRenderer loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
+    {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
   </>
 }
 
@@ -877,13 +908,12 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
   readonly recordId?: string | number
   readonly registry: ComponentRegistry
   readonly resource: JsonObject
-  readonly source: 'edit' | 'list' | 'view'
+  readonly source: 'create' | 'edit' | 'list' | 'view'
 }): ReactNode {
   const router = useRouter()
   const resourceId = text(resource.id)
   const actions = useMemo(() => objects(resource.actions).map(actionManifest).filter((action): action is ClientActionManifest => action !== null && action.visible && action.mount === (recordId === undefined ? 'page' : 'record')), [recordId, resource])
-  const executableActions = useMemo(() => actions.filter(action => action.kind !== 'edit' && action.kind !== 'view' && action.kind !== 'create'), [actions])
-  const actionKinds = useMemo(() => new Map(executableActions.map(action => [action.id, action.kind])), [executableActions])
+  const actionKinds = useMemo(() => new Map(actionManifestCollection(actions).map(action => [action.id, action.kind])), [actions])
   const store = useMemo(() => new ClientActionStore({
     createIdempotencyKey: () => globalThis.crypto.randomUUID(),
     transport: {
@@ -927,15 +957,7 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
   }, [store])
   if (actions.length === 0) return null
   return <PanelsPageActions>
-    {actions.map((action) => {
-      if (action.kind === 'edit' || action.kind === 'view') {
-        const route = configuredRoute(resource, action.kind, recordId)
-        return route ? <Button asChild className="hp-action-trigger" key={action.id} variant="outline"><a data-action-id={action.id} data-color={action.color ?? undefined} href={route}>{action.icon ? <PanelsIcon name={action.icon} /> : null}<span>{action.label}</span></a></Button> : null
-      }
-      if (action.kind === 'create') return null
-      return null
-    })}
-    {executableActions[0] ? <ReactActionRenderer actions={executableActions} manifest={executableActions[0]} panelId={panelId} recordIds={recordId === undefined ? undefined : [recordId]} registry={registry} store={store} /> : null}
+    {actions[0] ? <ReactActionRenderer actions={actions} manifest={actions[0]} panelId={panelId} recordIds={recordId === undefined ? undefined : [recordId]} registry={registry} store={store} /> : null}
   </PanelsPageActions>
 }
 
@@ -954,7 +976,7 @@ function ResourceEntry({ definition, operation, panelId, record, recordId, regis
     createIdempotencyKey: () => globalThis.crypto.randomUUID(),
     transport: {
       async execute(request, signal) {
-        if (!actions.some(action => action.id === request.actionId)) throw new Error('The entry action is not available.')
+        if (!actionManifestCollection(actions).some(action => action.id === request.actionId)) throw new Error('The entry action is not available.')
         const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [recordId], resourceId, source }, signal).catch((cause: unknown) => {
           if (!signal.aborted) publishPanelActionFailure(panelId, cause instanceof NextResourceEffectError ? cause.effects : [])
           throw cause
@@ -1000,26 +1022,19 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
       return (typeof value === 'number' || typeof value === 'string') && label ? [{ label, value }] : []
     })
   }
-  const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request) => {
+  const runRelationOperation: NonNullable<ReactRelationManagerRendererProps['onOperation']> = async (request, signal) => {
     const result = await operation.execute('action', {
-      intent: 'relation',
-      managerId: request.managerId,
-      ownerId: record[routeKey] ?? null,
-      ...(request.pivot ? { pivot: { ...request.pivot } } : {}),
-      ...(typeof request.recordId === 'number' || typeof request.recordId === 'string' ? { relatedId: request.recordId } : {}),
-      relationOperation: request.operation,
-      resourceId,
-      ...(request.values ? { values: { ...request.values } } : {}),
-    })
-    if (!result.ok) throw new Error(result.error ?? 'The relation operation could not be completed.')
+      ...relationActionPayload(request), ownerId: record[routeKey] ?? null, resourceId,
+    }, signal)
+    if (!result.ok || result.data?.status === 'partial') throw new Error(result.error ?? 'The relation operation could not be completed.')
     setRelations(relationManagers(result.data?.relations))
   }
   return <article className="hp-resource-view"><h2>{text(record[recordTitle])}</h2>
     <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={text(record[routeKey])} registry={registry} resource={resource} source="view" />
     <div className="hp-infolist">{entries.map(definition => <ResourceEntry definition={definition} key={text(definition.id) || text(definition.path)} operation={operation} panelId={panelId} record={record} recordId={text(record[routeKey])} registry={registry} resourceId={resourceId} />)}</div>
     {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} />{readOnlyRelations
-      ? <ReactRelationManagerRenderer managers={relations} />
-      : <ReactRelationManagerRenderer loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} />}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
+      ? <ReactRelationManagerRenderer panelId={panelId} registry={registry} managers={relations} />
+      : <ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} />}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
   </article>
 }
 

@@ -37,6 +37,7 @@ export interface ActionContext<
   TServices = object,
 > extends CoreActionContext<TRecord, TActor, TTenant, TServices> {
   readonly data: Readonly<TData>
+  readonly selectedRecordIds: readonly (number | string)[]
   readonly selectedRecords: readonly TRecord[]
 }
 
@@ -504,6 +505,7 @@ export class Action<
     return Object.freeze({
       ...context,
       data,
+      selectedRecordIds: context.selectedRecordIds ?? Object.freeze([]),
       selectedRecords: context.selectedRecords ?? Object.freeze(context.record ? [context.record] : []),
     })
   }
@@ -542,6 +544,38 @@ export class BulkAction<
   TServices = object,
   TSchemaFactory = undefined,
 > extends Action<TRecord, TData, TResult, TActor, TTenant, TServices, TSchemaFactory> {
+  #chunkSize: number | undefined
+  #deselectAfterCompletion = false
+  #fetchRecords = true
+
+  override action<TNextResult>(handler: ActionHandler<ActionContext<TRecord, TData, TActor, TTenant, TServices>, TData, TNextResult>): BulkAction<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory> {
+    return super.action(handler) as BulkAction<TRecord, TData, TNextResult, TActor, TTenant, TServices, TSchemaFactory>
+  }
+
+  chunkSelectedRecords(size: number): this {
+    if (!Number.isSafeInteger(size) || size < 1 || size > 1000) throw new Error('Bulk chunk sizes must be integers from 1 to 1000')
+    this.#chunkSize = size
+    return this
+  }
+
+  deselectRecordsAfterCompletion(value = true): this {
+    this.#deselectAfterCompletion = value
+    return this
+  }
+
+  fetchSelectedRecords(value = true): this {
+    this.#fetchRecords = value
+    return this
+  }
+
+  override compile(): Readonly<ActionDefinition<TRecord, TData & JsonObject, TResult, TActor, TTenant, TServices>> {
+    return Object.freeze({ ...super.compile(), bulk: Object.freeze({ chunkSize: this.#chunkSize, deselectAfterCompletion: this.#deselectAfterCompletion, fetchRecords: this.#fetchRecords }) })
+  }
+
+  override manifest(scope: 'bulk' | 'header' | 'notification' | 'record' | 'row' = 'bulk'): JsonObject {
+    return { ...super.manifest(scope), deselectAfterCompletion: this.#deselectAfterCompletion }
+  }
+
   constructor(id: string, kind: ActionKind = 'custom', schemaFactory?: TSchemaFactory) {
     super(id, kind, 'bulk', schemaFactory)
   }

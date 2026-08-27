@@ -31,6 +31,7 @@ export interface TablePresentationSummary {
 }
 
 export interface TablePresentationGroup<TRecord extends object> {
+  readonly selection?: { readonly checked: boolean, readonly disabled: boolean, readonly onChange: (checked: boolean) => void }
   readonly collapsed?: boolean
   readonly collapsible?: boolean
   readonly description?: ReactNode
@@ -98,6 +99,7 @@ export function TablePresentation<TRecord extends object>({
   const body = groups && groups.length > 0
     ? groups.map(group => <Fragment key={group.key}>
         <TableRow className="hp-table-group"><TableHead colSpan={columnCount}>
+          {group.selection ? <Checkbox aria-label={`Select group ${group.title}`} checked={group.selection.checked} disabled={group.selection.disabled} onCheckedChange={checked => group.selection?.onChange(checked === true)} /> : null}
           {group.collapsible
             ? <Button aria-expanded={!group.collapsed} onClick={group.onToggle} type="button"><ChevronDown aria-hidden="true" /><span>{group.title}</span><span className="hp-table-group-count">{group.records.length}</span></Button>
             : group.title}

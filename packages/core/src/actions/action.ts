@@ -115,6 +115,7 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   }
   const serialized = toJsonValue({
     ...presentation,
+    ...(definition.mount === 'bulk' ? { deselectAfterCompletion: definition.bulk?.deselectAfterCompletion ?? false } : {}),
     confirmation: definition.confirmation === undefined ? defaults?.confirmation ?? null : definition.confirmation,
     disabled: state.disabled,
     id: definition.id,

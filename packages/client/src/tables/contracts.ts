@@ -1,4 +1,4 @@
-import type { JsonValue } from '@holo-js/panels-core'
+import type { JsonObject, JsonValue } from '@holo-js/panels-core'
 
 export type TableSortDirection = 'asc' | 'desc'
 
@@ -66,12 +66,18 @@ export type TableStateOptions<TRecord extends object> = {
   readonly visibleColumns?: readonly string[]
   readonly records?: readonly TRecord[]
   readonly total?: number
+  readonly selection?: {
+    readonly currentPageOnly?: boolean
+    readonly groupsOnly?: boolean
+    readonly maximum?: number | null
+  }
 }
 
 export type TableDataResponse<TRecord extends object> = {
   readonly queryVersion: number
   readonly records: readonly TRecord[]
   readonly total: number
+  readonly selection?: JsonObject
 }
 
 export type TableQuerySnapshot = {
@@ -95,6 +101,7 @@ export type ExplicitTableSelection<TRecordId extends TableRecordId> = {
 export type AllMatchingTableSelection<TRecordId extends TableRecordId> = {
   readonly mode: 'all-matching'
   readonly excludedRecordIds: readonly TRecordId[]
+  readonly recordIds?: readonly TRecordId[]
   readonly query: Omit<TableQuerySnapshot, 'page' | 'queryVersion'>
 }
 

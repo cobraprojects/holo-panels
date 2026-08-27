@@ -95,6 +95,7 @@ export interface HoloTableQuery<TQuery, TRecord> {
   withMin(relation: string, column: string): TQuery
   withMax(relation: string, column: string): TQuery
   limit(value: number): TQuery
+  select(...columns: readonly string[]): TQuery
   get(): Promise<readonly TRecord[]>
   first(): Promise<TRecord | undefined>
   count(): Promise<number>

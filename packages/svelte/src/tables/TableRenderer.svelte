@@ -41,6 +41,16 @@
   let filtersOpen = $state(false)
   let toggledGroups = $state<ReadonlySet<string>>(new Set())
   const columns = $derived(visibleColumns(table, $snapshotStore.visibleColumns))
+  const selectionState = $derived.by(() => {
+    const records = [...$snapshotStore.records, ...table.groups?.flatMap(group => group.records) ?? []]
+    const ids = records.map(table.getRecordId)
+    return {
+      count: table.store.selectedCount,
+      canSelectAllMatching: table.store.canSelectAllMatching,
+      selectedIds: new Set(ids.filter(id => table.store.isSelected(id))),
+      selectableIds: new Set(ids.filter(id => table.store.canSelectRecord(id))),
+    }
+  })
   const presentationColumns = $derived(columns.map(column => ({
     alignment: column.manifest.alignment,
     ariaSort: ariaSort(column),
@@ -51,11 +61,12 @@
   })))
   const presentationGroups = $derived(table.groups?.map(group => ({
     ...group,
+    selection: selectable ? { checked: group.records.length > 0 && group.records.every(record => selectionState.selectedIds.has(table.getRecordId(record))), disabled: $snapshotStore.loading, onChange: (checked: boolean) => table.store.selectGroup(group.records.map(table.getRecordId), group.key, checked) } : undefined,
     collapsed: group.collapsed !== toggledGroups.has(group.key),
     onToggle: () => toggleGroup(group.key),
   })))
   const recordIds = $derived($snapshotStore.records.map(table.getRecordId))
-  const selectedOnPage = $derived(recordIds.length > 0 && recordIds.every(recordId => table.store.isSelected(recordId)))
+  const selectedOnPage = $derived(recordIds.length > 0 && recordIds.every(recordId => selectionState.selectedIds.has(recordId)))
   const pages = $derived(pageCount($snapshotStore.total, $snapshotStore.perPage))
   const headerActions = $derived(table.actions?.filter(action => action.scope === 'header' && (!action.emptyStateOnly || $snapshotStore.records.length === 0)) ?? [])
   const bulkActions = $derived(table.actions?.filter(action => action.scope === 'bulk') ?? [])
@@ -234,14 +245,14 @@
 
   {#if hasSelection}
     <div aria-live="polite" class="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
-      <span>{$snapshotStore.selection.mode === 'all-matching' ? `All ${$snapshotStore.total} matching records selected` : `${$snapshotStore.selection.selectedRecordIds.length} records selected`}</span>
+      <span>{$snapshotStore.selection.mode === 'all-matching' ? `All ${selectionState.count} matching records selected` : `${selectionState.count} records selected`}</span>
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
       {#each bulkActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionGroupButton {action} {table} />{/if}{/each}
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
       <Button type="button" onclick={() => table.store.clearSelection()}>Clear selection</Button>
     </div>
   {/if}
-  {#if $snapshotStore.selection.mode === 'explicit' && selectedOnPage && $snapshotStore.total > recordIds.length}
+  {#if selectionState.canSelectAllMatching && $snapshotStore.selection.mode === 'explicit' && selectedOnPage && $snapshotStore.total > recordIds.length}
     <Button type="button" onclick={() => table.store.selectAllMatching()}>Select all {$snapshotStore.total} matching records</Button>
   {/if}
 
@@ -258,11 +269,11 @@
       {/if}
     {/snippet}
     {#snippet leadingHeader()}
-      <Checkbox aria-label="Select page" checked={selectedOnPage} onCheckedChange={(checked) => table.store.selectPage(recordIds, checked)} />
+      {#if !table.store.selectionSettings.groupsOnly}<Checkbox aria-label="Select page" checked={selectedOnPage} indeterminate={!selectedOnPage && recordIds.some(id => selectionState.selectedIds.has(id))} disabled={$snapshotStore.loading} onCheckedChange={(checked) => table.store.selectPage(recordIds, checked)} />{/if}
     {/snippet}
     {#snippet leadingCell(record: Readonly<TRecord>)}
       {@const recordId = table.getRecordId(record)}
-      <Checkbox aria-label="Select record {String(recordId)}" checked={table.store.isSelected(recordId)} onCheckedChange={(checked) => table.store.selectRecord(recordId, checked)} />
+      <Checkbox aria-label="Select record {String(recordId)}" checked={selectionState.selectedIds.has(recordId)} disabled={$snapshotStore.loading || !selectionState.selectableIds.has(recordId)} onCheckedChange={(checked) => table.store.selectRecord(recordId, checked, table.groups?.find(group => group.records.some(item => table.getRecordId(item) === recordId))?.key)} />
     {/snippet}
     {#snippet tableCell(record: Readonly<TRecord>, presentationColumn: { readonly key: string })}
       {@const column = columns.find(candidate => candidate.manifest.path === presentationColumn.key)}

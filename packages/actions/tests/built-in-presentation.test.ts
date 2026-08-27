@@ -134,7 +134,27 @@ describe('built-in action presentation', () => {
       tenant: null,
     })
 
-    expect(selections).toEqual([[3, 5, 8], [3, 5, 8], [3, 5, 8]])
+    expect(selections).toEqual([[3, 5, 8]])
+  })
+
+  it('executes identifier-only chunks through the fluent bulk action API', async () => {
+    const selections: Array<readonly (number | string)[]> = []
+    const action = createActionFactory<{ readonly id: number }>().BulkAction.make('queue')
+      .action((_data, context) => {
+        expect(context.selectedRecords).toEqual([])
+        selections.push(context.selectedRecordIds)
+        return 'queued'
+      })
+      .fetchSelectedRecords(false)
+      .chunkSelectedRecords(2)
+      .deselectRecordsAfterCompletion()
+    const engine = new ActionEngine<{ readonly id: number }, number, object, unknown, object>({
+      records: { resolve: async id => ({ id }), version: () => null }, transaction: { run: operation => operation() },
+    })
+    const result = await engine.execute(action.compile(), { idempotencyKey: 'queue-many', input: {}, mount: 'bulk', recordIds: [3, 5, 8] }, { actor: {}, services: {}, signal: new AbortController().signal, tenant: null })
+    expect(selections).toEqual([[3, 5], [8]])
+    expect(result.items.every(item => item.result === 'queued')).toBe(true)
+    expect(action.manifest()).toMatchObject({ deselectAfterCompletion: true, scope: 'bulk' })
   })
 
   it('preserves resolver-backed presentation and modal configuration in compiled definitions', async () => {

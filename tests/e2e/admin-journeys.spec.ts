@@ -668,6 +668,66 @@ test.describe('authenticated admin journeys', () => {
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('table-mobile-dark.png') })
   })
 
+  test('preserves selections across pages and executes a captured query with exclusions and additions', async ({ page }) => {
+    test.setTimeout(90_000)
+    await login(page)
+    const prefix = `selection-${crypto.randomUUID()}`
+    const created: string[] = []
+    try {
+      for (let index = 0; index < 12; index += 1) {
+        const response = await panelOperation(page, 'form-submit', { actionId: 'create', resourceId: 'posts', values: { title: `${prefix}-${String(index).padStart(2, '0')}`, slug: `${prefix}-${index}`, category: index === 11 ? 'News' : 'Guides', city: 'Cairo' } })
+        expect(response.body).toMatchObject({ ok: true, data: { record: { id: expect.any(String) } } })
+        created.push((response.body as { data: { record: { id: string } } }).data.record.id)
+      }
+      await gotoPanelPage(page, '/admin/posts')
+      const table = page.locator('[data-panels-component="table"]')
+      await table.getByRole('searchbox', { name: 'Search', exact: true }).fill(prefix)
+      await expect(table).toHaveAttribute('data-state', 'ready')
+      await table.getByRole('combobox', { name: 'Results per page' }).selectOption('10')
+      await expect(table).toHaveAttribute('data-state', 'ready')
+      await table.getByRole('checkbox', { name: /^Select record /u }).first().click()
+      await table.getByRole('button', { name: 'Next page', exact: true }).click()
+      await expect(table).toHaveAttribute('data-state', 'ready')
+      await expect(table.locator('.hp-table-bulk-actions')).toContainText('1 records selected')
+      await table.getByRole('checkbox', { name: /^Select record /u }).first().click()
+      await expect(table.locator('.hp-table-bulk-actions')).toContainText('2 records selected')
+      await table.getByRole('button', { name: 'Clear selection', exact: true }).click()
+
+      const filterCategory = async (category: string): Promise<void> => {
+        await table.getByRole('button', { name: 'Filters', exact: true }).click()
+        await page.getByRole('combobox', { name: 'Category', exact: true }).selectOption(category)
+        await page.getByRole('button', { name: 'Apply filters', exact: true }).click()
+        await page.keyboard.press('Escape')
+        await expect(table).toHaveAttribute('data-state', 'ready')
+      }
+      await filterCategory('Guides')
+      await table.getByRole('checkbox', { name: 'Select page', exact: true }).click()
+      await table.getByRole('button', { name: 'Select all 11 matching records', exact: true }).click()
+      await table.getByRole('checkbox', { name: /^Select record /u }).first().click()
+      await expect(table.locator('.hp-table-bulk-actions')).toContainText('10 matching records selected')
+      await filterCategory('News')
+      const news = table.getByRole('checkbox', { name: /^Select record /u })
+      await expect(news).not.toBeChecked()
+      await news.click()
+      await table.getByRole('button', { name: 'Bulk actions', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'Publish selected', exact: true }).click()
+      const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
+      await page.getByRole('button', { name: 'Confirm', exact: true }).click()
+      const response = await responsePromise
+      expect(await response.json()).toMatchObject({ ok: true, data: { status: 'succeeded', items: expect.arrayContaining([{ recordId: created[11], status: 'succeeded', result: { published: expect.arrayContaining([created[11]]) } }]) } })
+      const body = await response.json() as { data: { items: readonly { recordId: string }[] } }
+      expect(body.data.items).toHaveLength(11)
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })).toBeVisible()
+      await table.getByRole('button', { name: 'Clear selection', exact: true }).click()
+      await expect(table.locator('.hp-table-bulk-actions')).toHaveCount(0)
+    } finally {
+      if (created.length) {
+        const response = await panelOperation(page, 'action', { actionId: 'delete', idempotencyKey: crypto.randomUUID(), input: {}, mount: 'bulk', recordIds: created, resourceId: 'posts', source: 'table' })
+        expect(response.body).toMatchObject({ ok: true, data: { status: 'succeeded' } })
+      }
+    }
+  })
+
   test('executes grouped bulk actions through the table and reports failures with Sonner', async ({ page }) => {
     await login(page)
     await gotoPanelPage(page, '/admin/posts')

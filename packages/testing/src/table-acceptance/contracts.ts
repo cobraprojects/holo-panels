@@ -1,4 +1,4 @@
-import type { JsonValue, TableRecordId, TableStateStore } from '@holo-js/panels-client'
+import type { JsonValue, TableRecordId, TableSelectionPayload, TableStateStore } from '@holo-js/panels-client'
 
 export interface TableAcceptanceColumn {
   readonly manifest: {
@@ -92,6 +92,7 @@ export interface TableAcceptanceFixture {
 }
 
 export interface TableAcceptanceJourneyReport {
+  readonly groupSelection: TableSelectionPayload<number>
   readonly actionRequests: readonly TableAcceptanceActionRequest[]
   readonly collapsedGroupRows: number
   readonly columnVisibility: readonly string[]

@@ -193,6 +193,7 @@ interface ResourceActionGroup extends Omit<VueTableActionGroup, 'actions'> {
 type ResourceTableAction = ResourceAction | ResourceActionGroup
 
 interface ResourceRenderSchema {
+  readonly selection: JsonObject
   readonly actions: readonly ResourceTableAction[]
   readonly basePath: string
   readonly columns: readonly VueTableColumn<ResourceRecord>[]
@@ -351,6 +352,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
         formActions: generatedForm.actions,
         filters: Array.isArray(generatedTable.filters) ? generatedTable.filters.map(manifest => ({ manifest, options: resourceFilterOptions(manifest) })) : [],
         filterMode: generatedTable.filterMode === 'deferred' ? 'deferred' : 'live',
+        selection: generatedTable.selection ?? {},
         kind: 'resource',
         recordTitle: generated.recordTitle,
         recordActions: Array.isArray(generated.actions) ? generated.actions : [],
@@ -383,6 +385,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
     filters: schema.filters as unknown as readonly VueTableFilter[],
     formActions: (Array.isArray(schema.formActions) ? schema.formActions : []).flatMap(item => clientAction(item) ?? []),
     filterMode: schema.filterMode === 'deferred' ? 'deferred' : 'live',
+    selection: isObject(schema.selection) ? mutationPayload(schema.selection) : {},
     recordTitle: schema.recordTitle,
     recordActions: (Array.isArray(schema.recordActions) ? schema.recordActions : schema.actions).flatMap(item => clientAction(item) ?? []),
     resourceId: schema.resourceId,
@@ -851,7 +854,7 @@ function navigableColumns(schema: ResourceRenderSchema): readonly VueTableColumn
 function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRenderSchema, runtime: PanelPageRuntime): VNode {
   const records = recordsFrom(page)
   const visibleColumns = schema.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path)
-  const store = new TableStateStore<ResourceRecord>({ filterMode: schema.filterMode, panelId, records, tableId: schema.resourceId, total: typeof page.data.total === 'number' ? page.data.total : records.length, visibleColumns })
+  const store = new TableStateStore<ResourceRecord>({ selection: schema.selection, filterMode: schema.filterMode, panelId, records, tableId: schema.resourceId, total: typeof page.data.total === 'number' ? page.data.total : records.length, visibleColumns })
   const groups = shallowReactive([...tableGroups(page.data.groups)])
   const summaries = shallowReactive([...tableSummaries(page.data.summaries)])
   const actionData = shallowReactive({ ...page.data })
@@ -869,7 +872,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
     void runtime.transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {
       endpoint: `/holo/panels/${encodeURIComponent(panelId)}/table-data`,
       panelId,
-      payload: mutationPayload({ filters: query.filters, page: query.page, perPage: query.perPage, resourceId: schema.resourceId, search: query.search, sort: query.sort }),
+      payload: mutationPayload({ selection: store.selectionPayload(), filters: query.filters, page: query.page, perPage: query.perPage, resourceId: schema.resourceId, search: query.search, sort: query.sort }),
       signal: runtime.signal,
     }).then(async (response) => {
       await runtime.effects.apply(response)
@@ -878,10 +881,11 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
         return
       }
       const nextRecords: ResourceRecord[] = Array.isArray(response.data.records) ? response.data.records.flatMap(item => isObject(item) ? [item] : []) : []
+      if (query.queryVersion !== store.query.queryVersion) return
       groups.splice(0, groups.length, ...tableGroups(response.data.groups))
       summaries.splice(0, summaries.length, ...tableSummaries(response.data.summaries))
       Object.assign(actionData, response.data)
-      store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total: typeof response.data.total === 'number' ? response.data.total : nextRecords.length })
+      store.applyData({ selection: isObject(response.data.selection) ? mutationPayload(response.data.selection) : undefined, queryVersion: query.queryVersion, records: nextRecords, total: typeof response.data.total === 'number' ? response.data.total : nextRecords.length })
       if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}?${store.toQueryString()}`)
     }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
@@ -897,7 +901,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
           const recordIds = request.selection?.mode === 'explicit'
             ? request.selection.recordIds
             : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? crypto.randomUUID(), input: request.input ?? {}, mount: request.mount ?? ('mount' in action ? action.mount : action.scope === 'bulk' ? 'bulk' : action.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId: schema.resourceId, source: 'table' }, signal)
+          await mutate(runtime, panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? crypto.randomUUID(), input: request.input ?? {}, mount: request.mount ?? ('mount' in action ? action.mount : action.scope === 'bulk' ? 'bulk' : action.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId: schema.resourceId, source: 'table', tableQuery: toJsonValue(store.query) }, signal)
           refresh()
         },
       },

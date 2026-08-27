@@ -488,6 +488,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
     slots: Object.freeze({}),
   }), [resourceId])
   const store = useMemo(() => new TableStateStore<JsonObject, string>({
+    selection: object(table.selection),
     filterMode: table.filterMode === 'deferred' ? 'deferred' : 'live',
     panelId,
     records,
@@ -502,6 +503,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
       page: query.page,
       perPage: query.perPage,
       resourceId,
+      selection: toJsonValue(store.selectionPayload()),
       search: query.search,
       sort: query.sort.map(item => ({ ...item })),
     }).then((result) => {
@@ -511,10 +513,11 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
       }
       const nextRecords = recordsFrom(result.data)
       const total = typeof result.data.total === 'number' ? result.data.total : nextRecords.length
+      if (query.queryVersion !== store.query.queryVersion) return
       setGroups(tableGroups(result.data.groups))
       setSummaries(tableSummaries(result.data.summaries))
       setActionData(result.data)
-      store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total })
+      store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total, selection: object(result.data.selection) })
     }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
   return <div className="hp-resource-page"><ResourcePageActions basePath="" operation={operation} panelId={panelId} registry={registry} resource={resource} source="list" /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
@@ -529,9 +532,10 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
         const recordIds = request.selection?.mode === 'explicit'
           ? request.selection.recordIds
           : typeof request.recordId === 'number' || typeof request.recordId === 'string' ? [request.recordId] : []
-        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? globalThis.crypto.randomUUID(), input: request.input ?? {}, intent: text(manifest.kind) || request.actionId, mount: request.mount ?? (manifest.scope === 'bulk' ? 'bulk' : manifest.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId, source: 'table' }, signal)
+        const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? globalThis.crypto.randomUUID(), input: request.input ?? {}, intent: text(manifest.kind) || request.actionId, mount: request.mount ?? (manifest.scope === 'bulk' ? 'bulk' : manifest.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId, source: 'table', tableQuery: toJsonValue(store.query) }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
+        if (manifest.mount === 'bulk' || manifest.scope === 'bulk') refresh()
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
           const remaining = store.snapshot.records.filter(record => text(record[routeKey]) !== String(request.recordId))
           setGroups(current => current.map(group => ({

@@ -78,6 +78,7 @@ describe('P7 table phase-gate acceptance', () => {
       const report = await runTableAcceptanceJourney(fixture)
 
       expect(report.framework, name).toBe(fixture.framework)
+      expect(report.groupSelection, name).toEqual({ mode: 'explicit', recordIds: [1] })
       expect(report.render.ssrStable, name).toBe(true)
       expect(report.render.markup, name).toContain('<table')
       expect(report.render.markup, name).toContain('<caption')

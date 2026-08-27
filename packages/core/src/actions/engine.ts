@@ -13,7 +13,7 @@ import type {
   ActionItemResult,
 } from './contracts'
 
-const MAX_BULK_RECORDS = 500
+const MAX_BULK_RECORDS = 10_000
 const MAX_CACHED_EXECUTIONS = 1000
 const MAX_RESPONSE_EFFECTS = 20
 const EXECUTION_TTL_MS = 5 * 60 * 1000
@@ -152,11 +152,14 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       if (recordIds.length === 0 || recordIds.length > MAX_BULK_RECORDS) {
         throw new Error(`Bulk actions require between 1 and ${MAX_BULK_RECORDS} allow-listed record IDs`)
       }
-      if (new Set(recordIds).size !== recordIds.length) throw new Error('Bulk action record IDs must be unique')
+      if (new Set(recordIds.map(String)).size !== recordIds.length) throw new Error('Bulk action record IDs must be unique')
     } else if (recordIds.length > 0) {
       throw new Error('Only record and bulk actions accept record IDs')
     }
     if (definition.mount === 'record' || definition.mount === 'bulk') {
+      if (definition.mount === 'bulk') {
+        return this.executeBulk(definition, request, scope)
+      }
       const resolvedRecords = await Promise.all(recordIds.map(async recordId => ({
         record: await this.options.records.resolve(recordId, scope),
         recordId,
@@ -189,6 +192,100 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     }
   }
 
+  private async executeBulk<TInput extends JsonObject, TResult>(
+    definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
+    request: ActionExecutionRequest<TInput, TRecordId>,
+    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+  ): Promise<ActionExecutionResult<TRecordId, TResult>> {
+    const recordIds = request.recordIds ?? []
+    const usesRecordHandler = definition.kind !== 'custom' && definition.usesDefaultHandler !== false
+    const chunkSize = definition.bulk?.chunkSize ?? (definition.bulk?.fetchRecords === false && usesRecordHandler ? 250 : recordIds.length)
+    if (!Number.isSafeInteger(chunkSize) || chunkSize < 1 || definition.bulk?.chunkSize !== undefined && chunkSize > 1000) throw new Error('Bulk chunk sizes must be integers from 1 to 1000')
+    const items: ActionItemResult<TRecordId, TResult>[] = []
+    const retainRecords = definition.bulk?.fetchRecords !== false || usesRecordHandler
+    const successfulNotifications: { readonly context: ActionContext<TRecord, TActor, TTenant, TServices>, readonly result: TResult }[] = []
+    const failedNotifications: ActionContext<TRecord, TActor, TTenant, TServices>[] = []
+    let lastContext = this.context(definition, scope, null)
+    let lastResult: TResult | undefined
+    for (let offset = 0; offset < recordIds.length; offset += chunkSize) {
+      const allowed: { readonly id: TRecordId, readonly record: TRecord | null }[] = []
+      for await (const { recordId: id, record } of this.resolveRecords(recordIds.slice(offset, offset + chunkSize), scope)) {
+        if (scope.signal.aborted) throw scope.signal.reason
+        try {
+          if (!record) {
+            items.push({ recordId: id, status: 'denied' })
+            if (usesRecordHandler && failedNotifications.length < MAX_RESPONSE_EFFECTS) failedNotifications.push(this.context(definition, scope, null, [], [id]))
+            continue
+          }
+          const expected = request.expectedVersions?.[String(id)]
+          if (expected !== undefined && this.options.records.version(record) !== expected) {
+            items.push({ recordId: id, status: 'stale' })
+            if (usesRecordHandler && failedNotifications.length < MAX_RESPONSE_EFFECTS) failedNotifications.push(this.context(definition, scope, record, [record], [id]))
+            continue
+          }
+          await this.authorize(definition, request.input, this.context(definition, scope, record, [record], [id]))
+          allowed.push({ id, record: retainRecords ? record : null })
+        } catch {
+          items.push({ recordId: id, status: 'denied' })
+          if (usesRecordHandler && failedNotifications.length < MAX_RESPONSE_EFFECTS) failedNotifications.push(this.context(definition, scope, record, record === null ? [] : [record], [id]))
+        }
+      }
+      if (scope.signal.aborted) throw scope.signal.reason
+      const context = this.context(definition, scope, allowed[0]?.record ?? null, Object.freeze(allowed.flatMap(item => item.record === null ? [] : [item.record])), Object.freeze(allowed.map(item => item.id)))
+      lastContext = context
+      if (usesRecordHandler) {
+        for (const item of allowed) {
+          const execution = await this.executeRecord(definition, request, scope, item.id, item.record, context.selectedRecords ?? [])
+          items.push(execution.item)
+          const notificationContext = this.context(definition, scope, item.record, item.record === null ? [] : [item.record], [item.id])
+          if (execution.item.status === 'succeeded') {
+            lastResult = execution.item.result
+            if (successfulNotifications.length < MAX_RESPONSE_EFFECTS) successfulNotifications.push({ context: notificationContext, result: execution.item.result as TResult })
+          } else if (failedNotifications.length < MAX_RESPONSE_EFFECTS) failedNotifications.push(notificationContext)
+        }
+        continue
+      }
+      if (!allowed.length) continue
+      try {
+        lastResult = await this.executeWithContext(definition, request.input, context, true)
+        items.push(...allowed.map(item => ({ recordId: item.id, ...(typeof lastResult === 'undefined' ? {} : { result: lastResult }), status: 'succeeded' as const })))
+      } catch {
+        items.push(...allowed.map(item => ({ recordId: item.id, status: 'failed' as const })))
+      }
+    }
+    const order = new Map(recordIds.map((id, index) => [id, index]))
+    items.sort((left, right) => (order.get(left.recordId) ?? 0) - (order.get(right.recordId) ?? 0))
+    const succeeded = items.every(item => item.status === 'succeeded')
+    const effects = succeeded
+      ? await this.successEffects(definition, usesRecordHandler ? successfulNotifications : [{ context: lastContext, result: lastResult as TResult }])
+      : await this.failureEffects(definition, usesRecordHandler ? failedNotifications : [lastContext])
+    return Object.freeze({ effects, items: Object.freeze(items), status: succeeded ? 'succeeded' : 'partial' })
+  }
+
+  private async *resolveRecords(
+    ids: readonly TRecordId[],
+    scope: { readonly actor: TActor, readonly signal: AbortSignal, readonly tenant: TTenant },
+  ): AsyncGenerator<{ readonly recordId: TRecordId, readonly record: TRecord | null }> {
+    const resolver = this.options.records
+    const batchSize = resolver.resolveMany ? 250 : 1
+    for (let offset = 0; offset < ids.length; offset += batchSize) {
+      if (scope.signal.aborted) throw scope.signal.reason
+      const batch = ids.slice(offset, offset + batchSize)
+      let resolved: ReadonlyMap<TRecordId, TRecord> = new Map()
+      try {
+        if (resolver.resolveMany) resolved = await resolver.resolveMany(batch, scope)
+        else {
+          const id = batch[0]
+          const record = id === undefined ? null : await resolver.resolve(id, scope)
+          if (id !== undefined && record !== null) resolved = new Map([[id, record]])
+        }
+      } catch {
+        if (scope.signal.aborted) throw scope.signal.reason
+      }
+      for (const recordId of batch) yield { recordId, record: resolved.get(recordId) ?? null }
+    }
+  }
+
   private async executeRecord<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
@@ -197,7 +294,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     record: TRecord | null,
     selectedRecords: readonly TRecord[],
   ): Promise<RecordExecution<TRecord, TRecordId, TResult, TActor, TTenant, TServices>> {
-    const context = this.context(definition, scope, record, selectedRecords)
+    const context = this.context(definition, scope, record, selectedRecords, [recordId])
     if (!record) return Object.freeze({ context, item: Object.freeze({ recordId, status: 'denied' }) })
     const expected = request.expectedVersions?.[String(recordId)]
     if (expected !== undefined && this.options.records.version(record) !== expected) return Object.freeze({ context, item: Object.freeze({ recordId, status: 'stale' }) })
@@ -218,16 +315,18 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     record: TRecord | null,
     selectedRecords: readonly TRecord[] = Object.freeze([]),
+    selectedRecordIds: readonly TRecordId[] = Object.freeze([]),
   ): ActionContext<TRecord, TActor, TTenant, TServices> {
-    return Object.freeze({ ...scope, mount: definition.mount, record, selectedRecords })
+    return Object.freeze({ ...scope, mount: definition.mount, record, selectedRecordIds, selectedRecords })
   }
 
   private async executeWithContext<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     input: TInput,
     context: ActionContext<TRecord, TActor, TTenant, TServices>,
+    authorized = false,
   ): Promise<TResult> {
-    await this.authorize(definition, input, context)
+    if (!authorized) await this.authorize(definition, input, context)
     await this.enforceRateLimit(definition, context)
     const mutated = definition.mutateInput ? await definition.mutateInput(structuredClone(input), context) : structuredClone(input)
     const operation = async (): Promise<TResult> => {
@@ -260,13 +359,10 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     if (request.mount !== definition.mount) throw new ActionExecutionError('denied', 'The action mount is no longer registered')
     const ids = request.recordIds ?? []
     if (ids.length === 0) return this.authorize(definition, request.input, this.context(definition, scope, null))
-    const resolved = await Promise.all(ids.map(id => this.options.records.resolve(id, scope)))
-    const records: TRecord[] = []
-    for (const record of resolved) {
+    for await (const { recordId, record } of this.resolveRecords(ids, scope)) {
       if (record === null) throw new ActionExecutionError('denied', 'An action record is no longer available')
-      records.push(record)
+      await this.authorize(definition, request.input, this.context(definition, scope, record, [record], [recordId]))
     }
-    for (const record of records) await this.authorize(definition, request.input, this.context(definition, scope, record, records))
   }
 
   private async enforceRateLimit<TInput extends JsonObject, TResult>(

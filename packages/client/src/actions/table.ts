@@ -4,6 +4,7 @@ import { ClientActionStore } from './store'
 import { actionManifestCollection, isActionManifest } from './manifest'
 
 export interface TableActionDefinition {
+  readonly deselectAfterCompletion?: boolean
   readonly emptyStateOnly?: boolean
   readonly color?: string | null
   readonly confirmation?: string
@@ -24,6 +25,7 @@ export interface TableActionExecutionRequest<TRecordId extends TableRecordId> {
 }
 
 interface TableActionHostOptions<TRecordId extends TableRecordId> {
+  readonly clearSelection?: () => void
   readonly actions: readonly TableActionDefinition[]
   readonly execute: (request: TableActionExecutionRequest<TRecordId>, signal: AbortSignal) => Promise<ActionExecutionResult<number | string, unknown> | void>
   readonly group?: { readonly color?: string | null, readonly icon?: string | null, readonly id: string, readonly label?: string | null }
@@ -55,7 +57,7 @@ export function resolveTableActionManifest(data: JsonObject, id: string, recordI
 function actionManifest(action: TableActionDefinition, recordId?: TableRecordId): Readonly<ActionManifest> | null {
   if (action.resolveManifest) return action.resolveManifest(recordId)
   const defaults = builtInActionPresentation(action.id)
-  return { badge: null, color: action.color ?? defaults?.color ?? null, confirmation: action.confirmation ?? null, disabled: false, icon: action.icon ?? defaults?.icon ?? null, id: action.id, kind: 'custom', label: action.label, modal: null, mount: action.scope === 'row' ? 'record' : action.scope === 'bulk' ? 'bulk' : 'page', size: 'medium', tooltip: null, type: 'custom', visible: true }
+  return { deselectAfterCompletion: action.deselectAfterCompletion, badge: null, color: action.color ?? defaults?.color ?? null, confirmation: action.confirmation ?? null, disabled: false, icon: action.icon ?? defaults?.icon ?? null, id: action.id, kind: 'custom', label: action.label, modal: null, mount: action.scope === 'row' ? 'record' : action.scope === 'bulk' ? 'bulk' : 'page', size: 'medium', tooltip: null, type: 'custom', visible: true }
 }
 
 export function createTableActionHost<TRecordId extends TableRecordId>(options: TableActionHostOptions<TRecordId>): { readonly actions: readonly Readonly<ActionManifest>[], readonly groups: readonly ActionGroupManifest[], readonly store: ClientActionStore } {
@@ -68,6 +70,7 @@ export function createTableActionHost<TRecordId extends TableRecordId>(options: 
       if (!action || action.disabled || !action.visible) throw new Error('The table action is not available')
       const result = await options.execute({ actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, ...(options.recordId === undefined ? {} : { recordId: options.recordId }), ...(action.mount === 'bulk' && options.selection ? { selection: options.selection() } : {}) }, signal)
       if (result && result.status !== 'succeeded') throw new Error('The action could not be completed for every record')
+      if (action.mount === 'bulk' && action.deselectAfterCompletion) options.clearSelection?.()
       return result ?? { effects: [], items: [], status: 'succeeded' }
     } },
   })

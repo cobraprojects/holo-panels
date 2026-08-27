@@ -17,6 +17,7 @@
   }
 
   export interface TablePresentationGroup<TItem extends object> {
+    readonly selection?: { readonly checked: boolean, readonly disabled: boolean, readonly onChange: (checked: boolean) => void }
     readonly collapsed: boolean
     readonly collapsible?: boolean
     readonly description?: string | null
@@ -37,6 +38,7 @@
 <script lang="ts" generics="TRecord extends object">
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
   import { Button } from '../ui/button'
+  import { Checkbox } from '../ui/checkbox'
   import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
   import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '../ui/empty'
   import { Skeleton } from '../ui/skeleton'
@@ -119,6 +121,7 @@
         {#each groups as group (group.key)}
           <TableRow class="hp-table-group">
             <TableCell colspan={columnCount}>
+              {#if group.selection}<Checkbox aria-label="Select group {group.title}" checked={group.selection.checked} disabled={group.selection.disabled} onCheckedChange={checked => group.selection?.onChange(checked === true)} />{/if}
               {#if group.collapsible}
                 <Button type="button" aria-expanded={!group.collapsed} onclick={group.onToggle}><ChevronDown aria-hidden="true" /><span>{group.title}</span><span class="hp-table-group-count">{group.records.length}</span></Button>
               {:else}

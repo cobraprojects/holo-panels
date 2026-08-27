@@ -194,6 +194,7 @@
       "name": "@holo-js/panels-core",
       "version": "0.1.0-next.1",
       "devDependencies": {
+        "@holo-js/db-sqlite": "catalog:",
         "fast-check": "catalog:",
         "tsup": "catalog:",
         "typescript": "catalog:",

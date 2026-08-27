@@ -1006,6 +1006,7 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
         groups: arrayMember(table, 'groups'),
         recordLink: definition.recordTitle ?? 'id',
         summaries: arrayMember(table, 'summaries'),
+        selection: objectMember(table, 'selection') ?? {},
       },
     },
   }
@@ -1575,15 +1576,48 @@ async function executeCustomAction(
   if (!['bulk', 'modal', 'notification', 'page', 'record'].includes(String(requestedMount))) {
     throw new Error('[Holo Panels] Registered action requests require an allow-listed mount.')
   }
-  const source = typeof input.payload.source === 'string' && input.payload.source ? input.payload.source : null
-  const registered = configuredAction(definition, actionId, requestedMount as ActionMount, source)
+  const requestedSource = typeof input.payload.source === 'string' && input.payload.source ? input.payload.source : null
+  const registered = configuredAction(definition, actionId, requestedMount as ActionMount, requestedSource)
+  const source = typeof Reflect.get(registered, 'source') === 'string' ? String(Reflect.get(registered, 'source')) : null
+  const selectionSettings = objectMember(definition.table, 'selection') ?? {}
+  const maximum = typeof Reflect.get(selectionSettings, 'maximum') === 'number' ? Number(Reflect.get(selectionSettings, 'maximum')) : 10_000
+  if (registered.mount === 'bulk' && actionRecordIds(input.payload).length > maximum) throw new Error('The table selection limit was exceeded')
   const selection = input.payload.selection
+  if (selection !== undefined && (!selection || typeof selection !== 'object' || Array.isArray(selection))) throw new Error('The table action selection is invalid')
   if (selection && typeof selection === 'object' && !Array.isArray(selection)) {
     if (registered.mount !== 'bulk' || source !== 'table' || selection.mode !== 'all-matching' || !Array.isArray(selection.excludedRecordIds) || !selection.query || typeof selection.query !== 'object' || Array.isArray(selection.query)) throw new Error('The table action selection is invalid')
     const excluded = actionRecordIds({ recordIds: selection.excludedRecordIds })
+    if (Reflect.get(selectionSettings, 'currentPageOnly') === true || Reflect.get(selectionSettings, 'groupsOnly') === true) throw new Error('All-matching selection is disabled for this table')
+    if (selection.query.panelId !== undefined && selection.query.panelId !== input.panelId || selection.query.tableId !== undefined && selection.query.tableId !== definition.id) throw new Error('The selection belongs to another table')
     const state = await tableQueryState(definition, { ...input, payload: selection.query })
     const identifiers = await executor.selectTableRecords(state, excluded, input.context)
-    input = { ...input, payload: { ...input.payload, recordIds: [...identifiers] } }
+    const included = selection.recordIds === undefined ? [] : actionRecordIds({ recordIds: selection.recordIds })
+    input = { ...input, payload: { ...input.payload, recordIds: [...new Set([...identifiers, ...included])] } }
+  }
+  if (registered.mount === 'bulk' && source === 'table') {
+    const ids = actionRecordIds(input.payload)
+    if (ids.length > maximum) throw new Error('The table selection limit was exceeded')
+    if (Reflect.get(selectionSettings, 'currentPageOnly') === true) {
+      const query = input.payload.tableQuery
+      if (!query || typeof query !== 'object' || Array.isArray(query)) throw new Error('Current-page selection requires its table query')
+      const page = await executor.table(await tableQueryState(definition, { ...input, payload: query }), input.context)
+      const allowedIds = new Set(page.records.map(record => String(valueAtPath(record, definition.routeKey))))
+      if (ids.some(id => !allowedIds.has(String(id)))) throw new Error('Selected records must belong to the current page')
+    }
+    if (Reflect.get(selectionSettings, 'groupsOnly') === true) {
+      const group = arrayMember(definition.table, 'serverGroups')[0]
+      const path = Reflect.get(objectMember(group, 'manifest') ?? {}, 'path')
+      if (typeof path !== 'string') throw new Error('Group-only selection requires a registered group')
+      const keys = new Set<string>()
+      for (const id of ids) {
+        const record = await executor.resolveActionRecord(id, input.context)
+        if (!record) throw new Error('A selected record is not available')
+        const value = valueAtPath(record.toJSON(), path)
+        if (value === undefined) throw new Error('The selected record group is not available')
+        keys.add(JSON.stringify(value))
+        if (keys.size > 1) throw new Error('Selected records must belong to the same group')
+      }
+    }
   }
   const panelPath = input.panel?.manifest.path ?? `/${input.panelId}`
   const route = registered.mount !== 'bulk' && !registered.modal?.schema && !source?.endsWith(':form') && ['create', 'edit', 'view'].includes(registered.kind)
@@ -1612,6 +1646,7 @@ async function executeCustomAction(
     },
     records: {
       resolve: (id, scope) => executor.resolveActionRecord(id, { ...input.context, ...scope }),
+      resolveMany: (ids, scope) => executor.resolveActionRecords(ids, { ...input.context, ...scope }),
       version: recordVersion,
     },
     transaction: { run: operation => executor.runInTransaction(operation) },
@@ -1939,7 +1974,16 @@ export async function executeGeneratedResourceOperation(
     const tableState = await tableQueryState(definition, input)
     const result = await executor.table(tableState, input.context, record => resolveGeneratedRowActions(definition, input.context, record))
     const presentation = await tablePresentation(definition, result.records, input.context)
-    data = jsonObject({ groups: presentation.groups, records: result.records, resourceId: definition.id, rowActions: result.recordPresentations, summaries: presentation.summaries, tableActions: await resolveGeneratedTableActions(definition, input.context), tableState, total: result.total })
+    let selectionData: JsonObject | undefined
+    const selection = input.payload.selection
+    if (selection && typeof selection === 'object' && !Array.isArray(selection) && selection.mode === 'all-matching') {
+      const query = selection.query
+      if (!query || typeof query !== 'object' || Array.isArray(query) || query.panelId !== undefined && query.panelId !== input.panelId || query.tableId !== undefined && query.tableId !== definition.id) throw new Error('The selection belongs to another table')
+      const matching = await executor.selectTableRecords(await tableQueryState(definition, { ...input, payload: query }), [], input.context)
+      const pageIds = new Set(result.records.map(record => String(valueAtPath(record, definition.routeKey))))
+      selectionData = { key: JSON.stringify(toJsonValue(selection)), matchingRecordIds: matching.filter(id => pageIds.has(String(id))) }
+    }
+    data = jsonObject({ groups: presentation.groups, records: result.records, resourceId: definition.id, rowActions: result.recordPresentations, ...(selectionData ? { selection: selectionData } : {}), summaries: presentation.summaries, tableActions: await resolveGeneratedTableActions(definition, input.context), tableState, total: result.total })
   } else {
     throw new Error('[Holo Panels] The generated resource action is not registered.')
   }

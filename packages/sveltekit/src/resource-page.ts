@@ -27,6 +27,7 @@ export interface ResourceOptions {
 }
 
 export interface ResourcePageMetadata {
+  readonly selection: JsonObject
   readonly actions: readonly ClientActionManifest[]
   readonly basePath: string
   readonly columns: readonly SvelteTableColumn<Record<string, unknown>>[]
@@ -367,6 +368,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
     fields,
     formActions: form.actions ?? [],
     filterMode: table.filterMode === 'deferred' ? 'deferred' : 'live',
+    selection: table.selection ?? {},
     filters: Array.isArray(table.filters) ? table.filters : [],
     id,
     label: labels.plural ?? id,
@@ -420,6 +422,7 @@ export function resourcePageMetadata(value: JsonValue | undefined, pagePath?: st
     fields: Object.freeze(Array.isArray(resource.fields) ? resource.fields.flatMap(item => fieldDefinition(item) ?? []) : []),
     formActions: Object.freeze(Array.isArray(resource.formActions) ? resource.formActions.flatMap(item => actionManifest(item) ?? []) : []),
     filterMode: resource.filterMode === 'deferred' ? 'deferred' : 'live',
+    selection: objectValue(resource.selection) ?? {},
     filters: Object.freeze(Array.isArray(resource.filters) ? resource.filters.flatMap(item => filterDefinition(item) ?? []) : []),
     id,
     label,

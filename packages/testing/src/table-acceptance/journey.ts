@@ -74,6 +74,9 @@ export async function runTableAcceptanceJourney(fixture: TableAcceptanceFixture)
   const render = await fixture.render(table)
   const driver = await fixture.mount(table)
   try {
+    await driver.click('[aria-label="Select group Draft posts"]')
+    const groupSelection = table.store.selectionPayload()
+    await driver.clickText('Clear selection')
     await driver.input('.hp-table-toolbar input[type="search"]', 'nile')
     const loadingMarkup = driver.markup()
     await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records, total: 6 }) })
@@ -94,7 +97,7 @@ export async function runTableAcceptanceJourney(fixture: TableAcceptanceFixture)
     await driver.input('input[aria-label="Title"]', 'Renamed from acceptance')
     await driver.keydown('input[aria-label="Title"]', 'Enter')
     await Promise.resolve()
-    await driver.click('.hp-table-group button')
+    await driver.click('.hp-table-group button[aria-expanded]')
     const collapsedGroupRows = (driver.markup().match(/data-label="Title"/gu) ?? []).length
     await driver.sync(() => { table.store.applyData({ queryVersion: table.store.snapshot.queryVersion, records, total: 6 }) })
     await driver.click('button[aria-label="Next page"]')
@@ -106,6 +109,7 @@ export async function runTableAcceptanceJourney(fixture: TableAcceptanceFixture)
       filter: table.store.snapshot.filters.applied.author_id,
       emptyMarkup: driver.markup(),
       framework: fixture.framework,
+      groupSelection,
       inlineEditRequests,
       loadingMarkup,
       markupAfterSelection,

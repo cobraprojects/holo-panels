@@ -155,18 +155,21 @@ export class TableQueryExecutor<TQuery extends HoloTableQuery<TQuery, TRecord>, 
     state: TableQueryState,
     selection: TableSelection<TRecordId>,
     context: TContext,
+    identifiersOnly = false,
   ): Promise<readonly TRecord[]> {
     const maximum = this.#definition.maxSelectionRecords ?? defaultMaxSelectionRecords
     const identifiers = selection.mode === 'explicit' ? selection.recordIds : selection.excludedRecordIds
     if (identifiers.length > maximum) throw new Error(`[Holo Panels] Table selection exceeds the ${maximum} record limit.`)
     for (const identifier of identifiers) assertRecordIdentifier(identifier)
+    if (selection.mode === 'explicit' && identifiers.length === 0) return Object.freeze([])
     let query = this.applyUserConstraints(this.createScopedQuery(context), state)
     query = selection.mode === 'explicit'
       ? query.whereIn(this.#definition.primaryKey, identifiers)
-      : query.whereNotIn(this.#definition.primaryKey, identifiers)
-    const count = await query.count()
-    if (count > maximum) throw new Error(`[Holo Panels] Table selection exceeds the ${maximum} record limit.`)
-    return this.applyPlans(query.limit(maximum), state).get()
+      : identifiers.length > 0 ? query.whereNotIn(this.#definition.primaryKey, identifiers) : query
+    const selected = identifiersOnly ? query.select(this.#definition.primaryKey) : this.applyPlans(query, state)
+    const records = await selected.limit(maximum + 1).get()
+    if (records.length > maximum) throw new Error(`[Holo Panels] Table selection exceeds the ${maximum} record limit.`)
+    return records
   }
 
   async resolveRowAction<TRecordId extends TableRecordIdentifier>(

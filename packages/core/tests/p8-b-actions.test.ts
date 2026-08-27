@@ -62,6 +62,54 @@ function editAction(handle = vi.fn(async (input: { title: string }) => input.tit
 }
 
 describe('P8-B action execution', () => {
+  it('fetches selected records in bounded batches and preserves request order', async () => {
+    const resolve = vi.fn(async () => null)
+    const resolveMany = vi.fn(async (ids: readonly number[]) => new Map([...ids].reverse().map(id => [id, { id, tenantId: 'tenant-a', version: 'v1' }])))
+    const executor = new ActionEngine<RecordValue, number, string, string, Services>({ records: { resolve, resolveMany, version: record => record.version }, transaction: { run: operation => operation() } })
+    const handle = vi.fn(async () => 'done')
+    const result = await executor.execute({ ...editAction(), authorize: () => true, bulk: { fetchRecords: false }, kind: 'custom', mount: 'bulk', handle }, { idempotencyKey: 'batched-ids', input: { title: 'Publish' }, mount: 'bulk', recordIds: Array.from({ length: 501 }, (_, index) => index + 1) }, scope())
+    expect(result.items.map(item => item.recordId)).toEqual(Array.from({ length: 501 }, (_, index) => index + 1))
+    expect(resolve).not.toHaveBeenCalled()
+    expect(resolveMany.mock.calls.map(([ids]) => ids.length)).toEqual([250, 250, 1])
+    expect(handle).toHaveBeenCalledOnce()
+    expect(handle).toHaveBeenCalledWith({ title: 'Publish' }, expect.objectContaining({ selectedRecords: [], selectedRecordIds: expect.arrayContaining([1, 501]) }))
+  })
+  it('passes only authorized identifiers to an identifier-only bulk callback', async () => {
+    const handle = vi.fn(async () => 'queued')
+    const result = await engine().execute({
+      ...editAction(), bulk: { fetchRecords: false }, kind: 'custom', mount: 'bulk', handle,
+    }, { idempotencyKey: 'identifier-bulk', input: { title: 'Publish' }, mount: 'bulk', recordIds: [1, 2, 3] }, scope())
+    expect(handle).toHaveBeenCalledExactlyOnceWith({ title: 'Publish' }, expect.objectContaining({ record: null, selectedRecordIds: [1], selectedRecords: [] }))
+    expect(result.items.map(item => item.status)).toEqual(['succeeded', 'denied', 'denied'])
+  })
+  it('resolves and executes bounded bulk chunks without loading later records early', async () => {
+    const events: string[] = []
+    const executor = new ActionEngine<RecordValue, number, string, string, Services>({
+      records: { resolve: async id => { events.push(`resolve:${id}`); return records.find(record => record.id === id) ?? null }, version: record => record.version },
+      transaction: { run: operation => operation() },
+    })
+    const result = await executor.execute({
+      ...editAction(), bulk: { chunkSize: 1 }, kind: 'custom', mount: 'bulk', authorize: () => true,
+      handle: async (_input, context) => { events.push(`handle:${context.selectedRecords?.map(record => record.id).join(',')}`); return 'done' },
+    }, { idempotencyKey: 'chunked-bulk', input: { title: 'Publish' }, mount: 'bulk', recordIds: [1, 2] }, scope())
+    expect(events).toEqual(['resolve:1', 'handle:1', 'resolve:2', 'handle:2'])
+    expect(result.status).toBe('succeeded')
+  })
+  it('runs a custom bulk handler once with only records authorized before execution', async () => {
+    const selections: number[][] = []
+    const result = await engine().execute({
+      ...editAction(),
+      kind: 'custom',
+      mount: 'bulk',
+      handle: async (_input, context) => {
+        selections.push((context.selectedRecords ?? []).map(record => record.id))
+        return 'published'
+      },
+    }, { idempotencyKey: 'authorized-bulk', input: { title: 'Publish' }, mount: 'bulk', recordIds: [1, 2, 3] }, scope())
+    expect(selections).toEqual([[1]])
+    expect(result.items.map(item => item.status)).toEqual(['succeeded', 'denied', 'denied'])
+    expect(result.effects).toMatchObject([{ kind: 'toast', presentation: { status: 'danger' } }])
+  })
   it('does not rerun a committed handler when navigation presentation fails', async () => {
     const handle = vi.fn(async () => 'saved')
     const action = { ...editAction(handle), url: () => { throw new Error('Unavailable navigation') } }
@@ -244,6 +292,8 @@ describe('P8-B action execution', () => {
       mount: 'bulk',
       recordIds: [1, 1],
     }, scope())).rejects.toThrow('unique')
+    const mixed = new ActionEngine<RecordValue, number | string, string, string, Services>({ records: { resolve: async () => records[0] ?? null, version: record => record.version }, transaction: { run: operation => operation() } })
+    await expect(mixed.execute({ ...editAction(), mount: 'bulk' }, { idempotencyKey: 'aliased-ids', input: { title: 'Invalid' }, mount: 'bulk', recordIds: [1, '1'] }, scope())).rejects.toThrow('unique')
   })
 
   it('returns stale, denied, tenant-hidden, and successful per-record bulk results', async () => {

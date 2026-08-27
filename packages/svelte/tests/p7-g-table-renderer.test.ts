@@ -358,6 +358,10 @@ describe('P7-G Svelte table renderer', () => {
     selectAll?.click()
     flushClient()
     expect(store.snapshot.selection.mode).toBe('all-matching')
+    container.querySelector<HTMLButtonElement>('[aria-label="Select record 1"]')?.click()
+    flushClient()
+    expect(container.querySelector('.hp-table-bulk-actions')?.textContent).toContain('3 matching records selected')
+    expect(container.querySelector('[aria-label="Select record 1"]')?.getAttribute('aria-checked')).toBe('false')
     const publish = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Publish')
     expect(publish?.querySelector('[data-icon="check"][data-slot="icon"]')).not.toBeNull()
     expect(publish?.getAttribute('data-color')).toBe('success')
@@ -366,7 +370,7 @@ describe('P7-G Svelte table renderer', () => {
     flushClient()
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({
       actionId: 'posts.publish',
-      selection: expect.objectContaining({ excludedRecordIds: [], mode: 'all-matching' }),
+      selection: expect.objectContaining({ excludedRecordIds: [1], mode: 'all-matching' }),
     }), expect.any(AbortSignal))
   })
 

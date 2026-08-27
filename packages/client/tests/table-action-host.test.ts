@@ -1,5 +1,24 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { createTableActionHost } from '../src/actions/table'
+
+it('clears bulk selection only after successful completion when configured', async () => {
+  const clearSelection = vi.fn()
+  let succeeds = false
+  const host = createTableActionHost({
+    actions: [{ id: 'publish', label: 'Publish', scope: 'bulk', deselectAfterCompletion: true }],
+    clearSelection,
+    selection: () => ({ mode: 'explicit', recordIds: [1] }),
+    execute: async () => ({ effects: [], items: [], status: succeeds ? 'succeeded' : 'partial' }),
+  })
+  host.store.mount(host.actions[0]!)
+  await expect(host.store.submit()).rejects.toThrow('every record')
+  expect(clearSelection).not.toHaveBeenCalled()
+  succeeds = true
+  host.store.close()
+  host.store.mount(host.actions[0]!)
+  await host.store.submit()
+  expect(clearSelection).toHaveBeenCalledOnce()
+})
 
 it('keeps resolved row presentation and sends modal input through the shared lifecycle', async () => {
   const requests: object[] = []

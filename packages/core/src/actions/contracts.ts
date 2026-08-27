@@ -12,6 +12,7 @@ export interface ActionContext<TRecord, TActor, TTenant, TServices> {
   readonly owner?: object
   readonly mount: ActionMount
   readonly record: TRecord | null
+  readonly selectedRecordIds?: readonly (number | string)[]
   readonly selectedRecords?: readonly TRecord[]
   readonly services: TServices
   readonly signal: AbortSignal
@@ -107,6 +108,11 @@ export interface ActionPresentationManifest {
 }
 
 export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, TActor, TTenant, TServices> extends ActionPresentationDefinition<TRecord, TActor, TTenant, TServices, TInput> {
+  readonly bulk?: {
+    readonly chunkSize?: number
+    readonly deselectAfterCompletion?: boolean
+    readonly fetchRecords?: boolean
+  }
   readonly ancestorActionIds?: readonly string[]
   readonly nestedActions?: readonly object[]
   readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>, input: Readonly<TInput>) => boolean | Promise<boolean>
@@ -134,6 +140,7 @@ export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, T
 }
 
 export interface ActionManifest extends ActionPresentationManifest {
+  readonly deselectAfterCompletion?: boolean
   confirmation: string | null
   disabled: boolean
   id: string
@@ -156,6 +163,7 @@ export interface ActionGroupItem {
 }
 
 export interface ActionRecordResolver<TRecord, TRecordId extends number | string, TActor, TTenant> {
+  resolveMany?(ids: readonly TRecordId[], scope: { readonly actor: TActor, readonly signal: AbortSignal, readonly tenant: TTenant }): Promise<ReadonlyMap<TRecordId, TRecord>>
   resolve(id: TRecordId, scope: { readonly actor: TActor, readonly signal: AbortSignal, readonly tenant: TTenant }): Promise<TRecord | null>
   version(record: TRecord): string | null
 }

@@ -148,6 +148,11 @@ export interface SvelteTableGroup<TRecord extends object> {
 }
 
 export interface SvelteTableStore<TRecord extends object, TRecordId extends TableRecordId> {
+  readonly selectionSettings: Readonly<{ currentPageOnly: boolean, groupsOnly: boolean, maximum: number | null }>
+  readonly canSelectAllMatching: boolean
+  readonly selectedCount: number
+  canSelectRecord(recordId: TRecordId): boolean
+  selectGroup(recordIds: readonly TRecordId[], groupKey: string, selected?: boolean): void
   readonly snapshot: TableState<TRecord, TRecordId>
   applyDeferredFilters(): void
   clearSelection(): void
@@ -155,7 +160,7 @@ export interface SvelteTableStore<TRecord extends object, TRecordId extends Tabl
   resetFilters(): void
   selectAllMatching(): void
   selectPage(recordIds: readonly TRecordId[], selected?: boolean): void
-  selectRecord(recordId: TRecordId, selected?: boolean): void
+  selectRecord(recordId: TRecordId, selected?: boolean, groupKey?: string): void
   selectionPayload(): TableSelectionPayload<TRecordId>
   setFilter(filterId: string, value: JsonValue): void
   setPage(page: number): void

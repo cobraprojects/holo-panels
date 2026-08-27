@@ -146,6 +146,7 @@ export interface VueTablePresentationSummary {
 }
 
 export interface VueTablePresentationGroup<TRecord extends object = object> {
+  readonly selection?: { readonly checked: boolean, readonly disabled: boolean, readonly onChange: (checked: boolean) => void }
   readonly collapsed?: boolean
   readonly collapsible?: boolean
   readonly description?: string
@@ -196,6 +197,7 @@ function presentationRows(
   if (group) {
     nodes.push(h(TableRow, { class: 'hp-table-group', key: `group-${group.key}` }, () => [
       h(TableHead, { colspan: Math.max(1, columnCount), scope: 'rowgroup' }, () => [
+        group.selection ? h(Checkbox, { 'aria-label': `Select group ${group.title}`, modelValue: group.selection.checked, disabled: group.selection.disabled, 'onUpdate:modelValue': (checked: boolean | 'indeterminate') => group.selection?.onChange(checked === true) }) : null,
         group.collapsible
           ? h(Button, { 'aria-expanded': !group.collapsed, type: 'button', onClick: group.onToggle }, {
               default: () => [PanelsIcon('chevron-down'), h('span', group.title), h(Badge, { variant: 'secondary' }, () => records.length)],

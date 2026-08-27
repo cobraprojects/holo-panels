@@ -1953,6 +1953,8 @@ Tasks:
 - [x] Implement create, edit, view, delete, restore, force-delete, replicate, and custom actions.
 - [x] Implement authorization, transactions, lifecycle, input mutation, idempotency, effects, and notifications.
 - [x] Implement bulk individual authorization and partial-result reporting.
+
+Ticket #15 API decisions: table selection supports `selectCurrentPageOnly()`, `selectGroupsOnly()`, and `maxSelectableRecords(n)`. Bulk actions support `deselectRecordsAfterCompletion()`, `chunkSelectedRecords(n)`, and `fetchSelectedRecords(false)`. Custom callbacks receive a selection once, or once per configured chunk. Identifier-only callbacks receive `selectedRecordIds`, an empty `selectedRecords` array, and a null `record`. Holo model policies remain authoritative; authorization lookups are bounded to 250 records per batch rather than retaining all selected models. These decisions do not introduce a new authorization or database service.
 - [x] Add double-submit, stale-record, denial, rollback, nested-modal, and partial-bulk tests.
 
 Evidence: the shared action engine and client store passed authorization, tenant-scoped and request-bound idempotency, record/bulk cardinality, transactional lifecycle/effect/notification, stale, denial, rollback, nested-modal, double-submit, and partial-bulk behavior tests; callback-free size-bounded manifests and accessible React/Vue/Svelte action renderers passed strict checks and builds on 2026-07-27.

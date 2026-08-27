@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { toJsonValue } from '@holo-js/panels-core'
 import { TableStateStore } from '../src/tables'
 
 type Row = { readonly id: string, readonly title: string }
@@ -77,8 +78,14 @@ describe('P4-B table query state', () => {
     })
     expect(store.selectionPayload()).not.toHaveProperty('query.page')
 
+    const selection = store.selectionPayload()
     store.setSearch('changed query')
-    expect(store.snapshot.selection).toEqual({ mode: 'explicit', selectedRecordIds: [], excludedRecordIds: [] })
+    store.setFilter('status', 'draft')
+    store.setSort([{ column: 'title', direction: 'desc' }])
+    store.setPage(3)
+    expect(store.selectionPayload()).toEqual(selection)
+    store.clearSelection()
+    expect(store.selectionPayload()).toEqual({ mode: 'explicit', recordIds: [] })
   })
 
   it('preserves explicit selections while the user changes pages, filters, search, and sorting', () => {
@@ -96,6 +103,60 @@ describe('P4-B table query state', () => {
       excludedRecordIds: [],
     })
     expect(store.selectionPayload()).toEqual({ mode: 'explicit', recordIds: ['1', '3', '8'] })
+  })
+
+  it('keeps matching membership separate from additional selections in another filter view', () => {
+    const store = table()
+    store.setFilter('status', 'published')
+    store.selectAllMatching()
+    store.selectRecord('excluded', false)
+    store.setFilter('status', 'draft')
+    expect(store.isSelected('draft')).toBe(false)
+    const selection = store.selectionPayload()
+    store.applyData({ queryVersion: store.query.queryVersion, records: [{ id: 'overlap', title: 'Overlap' }], total: 1, selection: { key: JSON.stringify(toJsonValue(selection)), matchingRecordIds: ['overlap'] } })
+    expect(store.isSelected('overlap')).toBe(true)
+    store.selectRecord('draft')
+    expect(store.selectionPayload()).toMatchObject({ mode: 'all-matching', recordIds: ['draft'], excludedRecordIds: ['excluded'], query: { filters: { status: 'published' } } })
+    store.selectRecord('draft', false)
+    expect(store.isSelected('draft')).toBe(false)
+    expect(store.selectionPayload()).toMatchObject({ excludedRecordIds: ['excluded'] })
+  })
+
+  it('enforces maximum, current-page, and group-only selections through the store', () => {
+    const limited = new TableStateStore<Row>({ panelId: 'admin', tableId: 'posts', total: 10, selection: { maximum: 2 } })
+    limited.selectPage(['1', '2', '3'])
+    limited.selectRecord('4')
+    expect(limited.selectionPayload()).toEqual({ mode: 'explicit', recordIds: ['1', '2'] })
+    expect(limited.canSelectAllMatching).toBe(false)
+    limited.selectAllMatching()
+    expect(limited.selectionPayload()).toEqual({ mode: 'explicit', recordIds: ['1', '2'] })
+    const page = new TableStateStore<Row>({ panelId: 'admin', tableId: 'posts', selection: { currentPageOnly: true } })
+    const firstPageQuery = page.toQueryString()
+    page.selectPage(['1'])
+    expect(page.canSelectAllMatching).toBe(false)
+    page.setPage(2)
+    expect(page.selectionPayload()).toEqual({ mode: 'explicit', recordIds: [] })
+    page.selectRecord('2')
+    page.restoreFromQuery(firstPageQuery)
+    expect(page.selectionPayload()).toEqual({ mode: 'explicit', recordIds: [] })
+    const grouped = new TableStateStore<Row>({ panelId: 'admin', tableId: 'posts', selection: { groupsOnly: true } })
+    grouped.selectPage(['1', '2'])
+    expect(grouped.selectionPayload()).toEqual({ mode: 'explicit', recordIds: [] })
+    grouped.selectGroup(['1', '2'], 'first')
+    grouped.selectRecord('3', true, 'second')
+    expect(grouped.selectionPayload()).toEqual({ mode: 'explicit', recordIds: ['3'] })
+  })
+
+  it('counts exclusions against the captured total and limits additions from another view', () => {
+    const store = new TableStateStore<Row>({ panelId: 'admin', tableId: 'posts', total: 2, selection: { maximum: 2 } })
+    store.selectAllMatching()
+    store.selectRecord('1', false)
+    store.setSearch('another view')
+    store.applyData({ queryVersion: store.query.queryVersion, records: [], total: 20 })
+    expect(store.selectedCount).toBe(1)
+    store.selectPage(['3', '4'])
+    expect(store.selectionPayload()).toMatchObject({ recordIds: ['3'], excludedRecordIds: ['1'] })
+    expect(store.selectedCount).toBe(2)
   })
 
   it('does not let stale responses or stale errors replace newer state', () => {

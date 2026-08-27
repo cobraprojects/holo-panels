@@ -210,6 +210,7 @@ const TableActionGroupButton = defineComponent({
         group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined,
         recordId: props.record ? table.getRecordId(props.record) : undefined,
         selection: () => table.store.selectionPayload(),
+        clearSelection: () => table.store.clearSelection(),
         execute: async (request, signal) => {
           try {
             if (!table.actionTransport) throw new Error('Table actions require an action transport')
@@ -603,11 +604,13 @@ export const VueTableRenderer = defineComponent({
           records: group.records,
           summaries: group.summaries,
           title: group.title,
+          selection: selectable ? { checked: group.records.length > 0 && group.records.every(record => table.store.isSelected(table.getRecordId(record))), disabled: snapshot.loading, onChange: (checked: boolean) => table.store.selectGroup(group.records.map(table.getRecordId), group.key, checked) } : undefined,
         })) } : {}),
         ...(selectable ? { leading: {
-          header: h(Checkbox, {
+          header: table.store.selectionSettings.groupsOnly ? null : h(Checkbox, {
             'aria-label': 'Select page',
-            modelValue: selectedOnPage,
+            modelValue: selectedOnPage ? true : recordIds.some(id => table.store.isSelected(id)) ? 'indeterminate' : false,
+            disabled: snapshot.loading,
             'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectPage(recordIds, checked === true),
           }),
           label: 'Select',
@@ -616,7 +619,8 @@ export const VueTableRenderer = defineComponent({
             return h(Checkbox, {
               'aria-label': `Select record ${String(recordId)}`,
               modelValue: table.store.isSelected(recordId),
-              'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectRecord(recordId, checked === true),
+              disabled: snapshot.loading || !table.store.canSelectRecord(recordId),
+              'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectRecord(recordId, checked === true, table.groups?.find(group => group.records.some(item => table.getRecordId(item) === recordId))?.key),
             })
           },
         } } : {}),
@@ -677,14 +681,14 @@ export const VueTableRenderer = defineComponent({
         renderHook(TablesRenderHook.TOOLBAR_AFTER),
         hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3' }, [
           h('span', snapshot.selection.mode === 'all-matching'
-            ? `All ${snapshot.total} matching records selected`
-            : `${snapshot.selection.selectedRecordIds.length} records selected`),
+            ? `All ${table.store.selectedCount} matching records selected`
+            : `${table.store.selectedCount} records selected`),
           renderHook(TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE),
           ...bulkActions.map(action => tableActionNode(action, table)),
           renderHook(TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER),
           h(Button, { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
         ]) : null,
-        snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
+        table.store.canSelectAllMatching && snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
           ? h(Button, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
           : null,
         h(VueTablePresentation, { presentation: tablePresentation }),

@@ -288,6 +288,7 @@ function TableActions<TRecord extends object, TRecordId extends TableRecordId>({
   const host = useMemo(() => createTableActionHost({
     actions, group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined, recordId,
     selection: () => props.store.selectionPayload(),
+    clearSelection: () => props.store.clearSelection(),
     execute: async (request, signal) => {
       try {
         if (!props.actionTransport) throw new Error('Table actions require an action transport')
@@ -516,11 +517,11 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
   })
   const leading: TablePresentationPlacement<TRecord> | undefined = selectable
     ? {
-        header: <Checkbox aria-label="Select page" checked={selectedOnPage} onCheckedChange={checked => props.store.selectPage(recordIds, checked === true)} />,
+        header: props.store.selectionSettings.groupsOnly ? null : <Checkbox aria-label="Select page" checked={selectedOnPage ? true : recordIds.some(id => props.store.isSelected(id)) ? 'indeterminate' : false} disabled={state.loading} onCheckedChange={checked => props.store.selectPage(recordIds, checked === true)} />,
         label: 'Select',
         render: record => {
           const recordId = props.getRecordId(record)
-          return <Checkbox aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} onCheckedChange={checked => props.store.selectRecord(recordId, checked === true)} />
+          return <Checkbox aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} disabled={state.loading || !props.store.canSelectRecord(recordId)} onCheckedChange={checked => props.store.selectRecord(recordId, checked === true, props.groups?.find(group => group.records.some(item => props.getRecordId(item) === recordId))?.key)} />
         },
       }
     : undefined
@@ -533,6 +534,11 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     : undefined
   const presentationGroups: readonly TablePresentationGroup<TRecord>[] | undefined = props.groups?.map(group => ({
     ...group,
+    selection: selectable ? {
+      checked: group.records.length > 0 && group.records.every(record => props.store.isSelected(props.getRecordId(record))),
+      disabled: state.loading,
+      onChange: checked => props.store.selectGroup(group.records.map(props.getRecordId), group.key, checked),
+    } : undefined,
     collapsed: collapsedGroups.has(group.key),
     onToggle: () => setCollapsedGroups(current => {
       const next = new Set(current)
@@ -564,13 +570,13 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     </div>
     <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_AFTER} />
     {hasSelection ? <div aria-live="polite" className="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
-      <span>{state.selection.mode === 'all-matching' ? `All ${state.total} matching records selected` : `${state.selection.selectedRecordIds.length} records selected`}</span>
+      <span>{state.selection.mode === 'all-matching' ? `All ${props.store.selectedCount} matching records selected` : `${props.store.selectedCount} records selected`}</span>
       <ReactPanelsRenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
       {bulkActions.map(action => actionItem(action, props))}
       <ReactPanelsRenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
       <Button aria-label="Clear selection" onClick={() => props.store.clearSelection()} type="button" variant="outline"><X aria-hidden="true" />Clear selection</Button>
     </div> : null}
-    {state.selection.mode === 'explicit' && selectedOnPage && state.total > recordIds.length
+    {props.store.canSelectAllMatching && state.selection.mode === 'explicit' && selectedOnPage && state.total > recordIds.length
       ? <Button onClick={() => props.store.selectAllMatching()} type="button">Select all {state.total} matching records</Button>
       : null}
     <TablePresentation

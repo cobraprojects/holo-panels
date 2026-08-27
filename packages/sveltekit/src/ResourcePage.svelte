@@ -134,6 +134,7 @@
     return [[field.path, upload] as const]
   })))
   const table = $derived.by(() => new TableStateStore<Record<string, unknown>, number | string>({
+    selection: resource?.selection,
     filterMode: resource?.filterMode ?? 'live',
     panelId: data.panel.manifest.id,
     records,
@@ -587,7 +588,7 @@
     const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {
       endpoint: `${endpoint}/table-data`,
       panelId: data.panel.manifest.id,
-      payload: { filters: toJsonValue(query.filters), page: query.page, perPage: query.perPage, resourceId: resource.id, search: query.search, sort: toJsonValue(query.sort) },
+      payload: { selection: toJsonValue(table.selectionPayload()), filters: toJsonValue(query.filters), page: query.page, perPage: query.perPage, resourceId: resource.id, search: query.search, sort: toJsonValue(query.sort) },
       signal: requestController.signal,
     })
     await effects.apply(response)
@@ -596,11 +597,12 @@
       return
     }
     const nextRecords = jsonRecords(response.data.records)
+    if (query.queryVersion !== table.query.queryVersion) return
     const total = typeof response.data.total === 'number' ? response.data.total : nextRecords.length
     loadedGroups = tableGroups(response.data.groups)
     loadedActionData = response.data
     loadedSummaries = tableSummaries(response.data.summaries)
-    table.applyData({ queryVersion: query.queryVersion, records: nextRecords, total })
+    table.applyData({ queryVersion: query.queryVersion, records: nextRecords, total, selection: response.data.selection && typeof response.data.selection === 'object' && !Array.isArray(response.data.selection) ? response.data.selection : undefined })
   }
 </script>
 
@@ -635,11 +637,13 @@
               : (request.recordId === undefined ? [] : [request.recordId])),
             resourceId: resource.id,
             source: 'table',
+            tableQuery: toJsonValue(table.query),
           },
           signal: requestSignal(requestController.signal, signal),
         })
         await effects.apply(response)
         if (!response.ok) throw new Error(response.error.message)
+        if (response.data.status === 'partial') throw new Error('One or more records could not be updated.')
         await refreshTable()
       },
     },

@@ -221,13 +221,12 @@ export class ResourceExecutor<
 
   async selectTableRecords(state: TableQueryState, excludedRecordIds: readonly ResourceIdentifier[], context: ResourceExecutionContext<TActor, TTenant>): Promise<readonly ResourceIdentifier[]> {
     const executor = await this.tableExecutor(context)
-    const records = await executor.executeSelection(state, { mode: 'all-matching', excludedRecordIds }, context)
-    return Promise.all(records.map(async record => {
-      await this.#authorization.authorizeRecord(context.actor, 'view', record)
+    const records = await executor.executeSelection(state, { mode: 'all-matching', excludedRecordIds }, context, true)
+    return records.map(record => {
       const id: unknown = Reflect.get(record.toJSON(), this.#definition.routeKey)
       if (typeof id !== 'number' && typeof id !== 'string') throw new Error('Selected resource records require stable route identifiers')
       return id
-    }))
+    })
   }
 
   private async tableExecutor(context: ResourceExecutionContext<TActor, TTenant>) {
@@ -270,7 +269,7 @@ export class ResourceExecutor<
       createQuery: () => query,
       eagerLoads: this.tableEagerLoads(),
       filters: Object.freeze(filters),
-      maxSelectionRecords: 500,
+      maxSelectionRecords: 10_000,
       primaryKey: this.#definition.routeKey,
     })
   }
@@ -294,6 +293,31 @@ export class ResourceExecutor<
       if (error instanceof ResourceRecordNotFoundError) return null
       throw error
     }
+  }
+
+  async resolveActionRecords(ids: readonly ResourceIdentifier[], context: ResourceExecutionContext<TActor, TTenant>): Promise<ReadonlyMap<ResourceIdentifier, TRecord>> {
+    if (ids.length === 0) return new Map()
+    if (ids.length > 250) throw new Error('Action record batches cannot exceed 250 identifiers')
+    await this.#authorization.authorizeClass(context.actor, 'viewAny', this.#definition.model)
+    if (context.signal.aborted) throw context.signal.reason
+    const query = await this.createScopedQuery(context, false)
+    const batchQuery = query as TQuery & { whereIn(column: string, values: readonly ResourceIdentifier[]): TQuery, limit(size: number): TQuery, get(): Promise<readonly TRecord[]> }
+    batchQuery.whereIn(this.#definition.routeKey, ids)
+    batchQuery.limit(ids.length)
+    const requested = new Map(ids.map(id => [String(id), id]))
+    const authorized = new Map<ResourceIdentifier, TRecord>()
+    for (const record of await batchQuery.get()) {
+      if (context.signal.aborted) throw context.signal.reason
+      const id = requested.get(String(Reflect.get(record.toJSON(), this.#definition.routeKey)))
+      if (id === undefined) continue
+      try {
+        await this.#authorization.authorizeRecord(context.actor, 'view', record)
+        authorized.set(id, record)
+      } catch {
+        if (context.signal.aborted) throw context.signal.reason
+      }
+    }
+    return authorized
   }
 
   runInTransaction<TResult>(operation: () => Promise<TResult>): Promise<TResult> {

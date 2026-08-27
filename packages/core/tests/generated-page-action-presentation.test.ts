@@ -1,10 +1,72 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DB, column, configureDB, createAdapter, createConnectionManager, createDialect, createSchemaService, defineGeneratedTable, defineModel, registerDatabaseDriverFactory, resetDB } from '@holo-js/db'
+import { sqliteDatabaseDriverFactory } from '@holo-js/db-sqlite'
 import { definePanel } from '../src/panels'
 import type { ActionPresentationContext } from '../src/actions'
 import { resolvePageData } from '../src/pages'
 import { createGeneratedResourcePage, executeGeneratedResourceOperation, generatedResourcePageManifests } from '../src/resources/generated-pages'
 
 describe('generated page action presentation', () => {
+  it('resolves captured selection membership through a real scoped Holo query', async () => {
+    registerDatabaseDriverFactory(sqliteDatabaseDriverFactory)
+    const manager = createConnectionManager({ defaultConnection: 'default', connections: { default: { adapter: createAdapter('sqlite', { database: ':memory:' }), dialect: createDialect('sqlite') } } })
+    configureDB(manager)
+    await manager.initializeAll()
+    try {
+      await createSchemaService(DB.connection()).createTable('selection_posts', table => { table.string('id').primaryKey(); table.string('category'); table.string('tenantId') })
+      const model = defineModel(defineGeneratedTable('selection_posts', { id: column.string().primaryKey(), category: column.string(), tenantId: column.string() }), { timestamps: false, guarded: [] })
+      await model.create({ id: 'first', category: 'Guides', tenantId: 'one' })
+      await model.create({ id: 'second', category: 'News', tenantId: 'one' })
+      await model.create({ id: 'foreign', category: 'Guides', tenantId: 'two' })
+      const handle = vi.fn(async () => undefined)
+      const resource = { actions: [{ authorize: () => true, bulk: { fetchRecords: false }, handle, id: 'queue', kind: 'custom', label: 'Queue', mount: 'bulk', source: 'table', transactional: false }], baseQuery: (query: ReturnType<typeof model.query>) => query.where('tenantId', '=', 'one'), id: 'posts', kind: 'resource', model, routeKey: 'id', shared: true, singular: null, table: { columns: [{ path: 'category' }], serverColumns: [{ manifest: { path: 'category' } }] } }
+      const selection = { mode: 'all-matching', excludedRecordIds: [], query: { panelId: 'admin', tableId: 'posts', filters: { category: 'Guides' } } }
+      const result = await executeGeneratedResourceOperation(resource, { context: { actor: {}, signal: new AbortController().signal, tenant: null }, operation: 'table-data', panelId: 'admin', payload: { resourceId: 'posts', filters: { category: 'News' }, selection } })
+      expect(result.data.records).toMatchObject([{ id: 'second' }])
+      expect(result.data.selection).toMatchObject({ matchingRecordIds: [] })
+      const action = await executeGeneratedResourceOperation(resource, { context: { actor: {}, signal: new AbortController().signal, tenant: null }, operation: 'action', panelId: 'admin', payload: { actionId: 'queue', mount: 'bulk', recordIds: ['second', 'foreign', 'first'], resourceId: 'posts', source: 'table' } })
+      expect(action.data.items).toMatchObject([{ recordId: 'second', status: 'succeeded' }, { recordId: 'foreign', status: 'denied' }, { recordId: 'first', status: 'succeeded' }])
+      expect(handle).toHaveBeenCalledWith({}, expect.objectContaining({ record: null, selectedRecordIds: ['second', 'first'], selectedRecords: [] }))
+    } finally {
+      await manager.disconnectAll()
+      resetDB()
+    }
+  })
+  it('enforces current-page and group-only modes against resolved server records', async () => {
+    const records = [{ id: 1, category: 'a' }, { id: 2, category: 'b' }].map(value => ({ ...value, toJSON: () => value }))
+    class Query {
+      private values = [...records]
+      where(key: 'id', _operator: string, value: unknown): this { this.values = this.values.filter(record => record[key] === value); return this }
+      whereIn(key: 'id', ids: readonly unknown[]): this { this.values = this.values.filter(record => ids.includes(record[key])); return this }
+      limit(size: number): this { this.values = this.values.slice(0, size); return this }
+      async get() { return this.values }
+      orderBy(): this { return this }
+      async first() { return this.values[0] ?? null }
+      async paginate(perPage: number, page: number) { return { data: this.values.slice((page - 1) * perPage, page * perPage), meta: { currentPage: page, hasMorePages: false, lastPage: 2, perPage, total: 2 } } }
+    }
+    const handle = vi.fn()
+    const resource = { actions: [{ authorize: () => true, handle, id: 'publish', kind: 'custom', label: 'Publish', mount: 'bulk', source: 'table', transactional: false }], baseQuery: (query: Query) => query, id: 'posts', kind: 'resource', model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, query: () => new Query() }, routeKey: 'id', shared: true, singular: null }
+    const input = { context: { actor: {}, signal: new AbortController().signal, tenant: null }, operation: 'action' as const, panelId: 'admin', payload: { actionId: 'publish', idempotencyKey: 'mode', input: {}, mount: 'bulk', recordIds: [1, 2], resourceId: 'posts', source: 'table', tableQuery: { page: 1, perPage: 1 } } }
+    await expect(executeGeneratedResourceOperation({ ...resource, table: { selection: { currentPageOnly: true } } }, input)).rejects.toThrow('current page')
+    await expect(executeGeneratedResourceOperation({ ...resource, table: { selection: { groupsOnly: true }, serverGroups: [{ manifest: { path: 'category' } }] } }, input)).rejects.toThrow('same group')
+    const { source: _source, ...withoutSource } = input.payload
+    await expect(executeGeneratedResourceOperation({ ...resource, table: { selection: { groupsOnly: true }, serverGroups: [{ manifest: { path: 'category' } }] } }, { ...input, payload: withoutSource })).rejects.toThrow('same group')
+    expect(handle).not.toHaveBeenCalled()
+    const result = await executeGeneratedResourceOperation({ ...resource, table: { selection: { currentPageOnly: true } } }, { ...input, payload: { ...input.payload, recordIds: [1] } })
+    expect(result.data.status).toBe('succeeded')
+    expect(handle).toHaveBeenCalledOnce()
+  })
+  it('rejects bulk selections that exceed the configured maximum before any mutation', async () => {
+    const handle = vi.fn()
+    const resource = {
+      actions: [{ authorize: () => true, handle, id: 'publish', kind: 'custom', label: 'Publish', mount: 'bulk', source: 'table', transactional: false }],
+      baseQuery: (query: object) => query, id: 'posts', kind: 'resource',
+      model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, query: () => { throw new Error('Must reject before lookup') } },
+      routeKey: 'id', shared: true, table: { selection: { maximum: 1 } },
+    }
+    await expect(executeGeneratedResourceOperation(resource, { context: { actor: {}, signal: new AbortController().signal, tenant: null }, operation: 'action', panelId: 'admin', payload: { actionId: 'publish', idempotencyKey: 'maximum', input: {}, mount: 'bulk', recordIds: [1, 2], resourceId: 'posts', source: 'table' } })).rejects.toThrow('selection limit')
+    expect(handle).not.toHaveBeenCalled()
+  })
   it('executes all-matching bulk selection using scoped route keys and exclusions', async () => {
     const records = [{ id: 1, slug: 'first', tenantId: 'one' }, { id: 2, slug: 'excluded', tenantId: 'one' }, { id: 3, slug: 'foreign', tenantId: 'two' }].map(value => ({ ...value, toJSON: () => value }))
     type RecordValue = (typeof records)[number]
@@ -12,8 +74,10 @@ describe('generated page action presentation', () => {
       private values = [...records]
       where(key: keyof RecordValue, operatorOrValue: unknown, value?: unknown): this { this.values = this.values.filter(record => record[key] === (value ?? operatorOrValue)); return this }
       whereNotIn(key: keyof RecordValue, excluded: readonly unknown[]): this { this.values = this.values.filter(record => !excluded.includes(record[key])); return this }
+      whereIn(key: keyof RecordValue, ids: readonly unknown[]): this { this.values = this.values.filter(record => ids.includes(record[key])); return this }
       async count(): Promise<number> { return this.values.length }
       limit(): this { return this }
+      select(): this { return this }
       orderBy(): this { return this }
       async get(): Promise<readonly RecordValue[]> { return this.values }
       async first(): Promise<RecordValue | null> { return this.values[0] ?? null }

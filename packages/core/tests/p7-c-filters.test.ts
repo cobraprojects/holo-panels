@@ -255,6 +255,7 @@ describe('P7-C filter state and P7-A compatibility', () => {
 type Operation = readonly [string, ...unknown[]]
 
 class RecordingQuery implements HoloTableQuery<RecordingQuery, PostRecord> {
+  select(...columns: readonly string[]): RecordingQuery { return this.record('select', ...columns) }
   constructor(readonly operations: readonly Operation[] = []) {}
 
   where(column: string, operator: '=' | '!=' | '>' | '>=' | '<' | '<=' | 'like', value: TableQueryScalar): RecordingQuery {

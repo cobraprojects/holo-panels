@@ -14,6 +14,7 @@
     group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined,
     recordId: record ? table.getRecordId(record) : undefined,
     selection: () => table.store.selectionPayload(),
+    clearSelection: () => table.store.clearSelection(),
     execute: async (request, signal) => {
       try {
         if (!table.actionTransport) throw new Error('Table actions require an action transport')

@@ -61,9 +61,17 @@ function freezeState<TRecord extends object, TRecordId extends TableRecordId>(
 
 export class TableStateStore<TRecord extends object, TRecordId extends TableRecordId = string> {
   #state: TableState<TRecord, TRecordId>
+  #selectionQuery: Omit<TableQuerySnapshot, 'page' | 'queryVersion'> | null = null
+  readonly #matchingRecordIds = new Set<TableRecordId>()
+  readonly selectionSettings: Readonly<{ currentPageOnly: boolean, groupsOnly: boolean, maximum: number | null }>
+  #selectedGroup: string | null = null
+  #matchingTotal = 0
   readonly #listeners = new Set<TableStateListener<TRecord, TRecordId>>()
 
   constructor(options: TableStateOptions<TRecord>) {
+    const maximum = options.selection?.maximum ?? null
+    if (maximum !== null && (!Number.isSafeInteger(maximum) || maximum < 1)) throw new Error('[Holo Panels] Maximum selection must be a positive integer.')
+    this.selectionSettings = Object.freeze({ currentPageOnly: options.selection?.currentPageOnly ?? false, groupsOnly: options.selection?.groupsOnly ?? false, maximum })
     assertTableIdentifier(options.panelId, 'panel')
     assertTableIdentifier(options.tableId, 'table')
     const perPage = options.perPage ?? 25
@@ -97,6 +105,22 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     return this.#state
   }
 
+  get canSelectAllMatching(): boolean {
+    return !this.selectionSettings.currentPageOnly && !this.selectionSettings.groupsOnly
+      && (this.selectionSettings.maximum === null || this.#state.total <= this.selectionSettings.maximum)
+  }
+
+  get selectedCount(): number {
+    if (this.#state.selection.mode === 'explicit') return this.#state.selection.selectedRecordIds.length
+    return Math.max(0, this.#matchingTotal - this.#state.selection.excludedRecordIds.length)
+      + this.#state.selection.selectedRecordIds.filter(id => !this.#matchingRecordIds.has(id)).length
+  }
+
+  canSelectRecord(recordId: TRecordId): boolean {
+    return this.isSelected(recordId) || this.selectionSettings.maximum === null
+      || this.selectedCount < this.selectionSettings.maximum
+  }
+
   get query(): TableQuerySnapshot {
     const state = this.#state
     return Object.freeze({
@@ -121,7 +145,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
   setPage(page: number): void {
     if (!Number.isSafeInteger(page) || page < 1) throw new Error('[Holo Panels] Table pages must be positive integers.')
     if (page === this.#state.page) return
-    this.#invalidate({ page }, false)
+    this.#invalidate({ page }, this.selectionSettings.currentPageOnly)
   }
 
   setPerPage(perPage: number): void {
@@ -129,7 +153,7 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
       throw new Error('[Holo Panels] Table page size must be an integer from 1 to 500.')
     }
     if (perPage === this.#state.perPage) return
-    this.#invalidate({ perPage, page: 1 }, false)
+    this.#invalidate({ perPage, page: 1 }, this.selectionSettings.currentPageOnly)
   }
 
   setSearch(search: string): void {
@@ -205,12 +229,18 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     this.#invalidate({ filters: { ...this.#state.filters, applied: {}, draft: {} }, page: 1 }, this.#queryChangeResetsSelection())
   }
 
-  selectRecord(recordId: TRecordId, selected = true): void {
+  selectRecord(recordId: TRecordId, selected = true, groupKey?: string): void {
+    if (selected && !this.#selectGroupScope(groupKey)) return
+    if (selected && !this.canSelectRecord(recordId)) return
     if (this.#state.selection.mode === 'all-matching') {
       const excluded = new Set(this.#state.selection.excludedRecordIds)
-      if (selected) excluded.delete(recordId)
-      else excluded.add(recordId)
-      this.#setSelection({ mode: 'all-matching', selectedRecordIds: [], excludedRecordIds: uniqueSorted([...excluded]) })
+      const included = new Set(this.#state.selection.selectedRecordIds)
+      if (this.#matchesSelection(recordId)) {
+        if (selected) excluded.delete(recordId)
+        else excluded.add(recordId)
+      } else if (selected) included.add(recordId)
+      else included.delete(recordId)
+      this.#setSelection({ mode: 'all-matching', selectedRecordIds: uniqueSorted([...included]), excludedRecordIds: uniqueSorted([...excluded]) })
       return
     }
     const selectedIds = new Set(this.#state.selection.selectedRecordIds)
@@ -219,34 +249,51 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     this.#setSelection({ mode: 'explicit', selectedRecordIds: uniqueSorted([...selectedIds]), excludedRecordIds: [] })
   }
 
-  selectPage(recordIds: readonly TRecordId[], selected = true): void {
+  selectPage(recordIds: readonly TRecordId[], selected = true, groupKey?: string): void {
+    if (selected && !this.#selectGroupScope(groupKey)) return
     if (this.#state.selection.mode === 'all-matching') {
       const excluded = new Set(this.#state.selection.excludedRecordIds)
+      const included = new Set(this.#state.selection.selectedRecordIds)
       for (const recordId of recordIds) {
-        if (selected) excluded.delete(recordId)
-        else excluded.add(recordId)
+        if (this.#matchesSelection(recordId)) {
+          if (selected) excluded.delete(recordId)
+          else excluded.add(recordId)
+        } else if (!selected) included.delete(recordId)
+        else if (this.selectionSettings.maximum === null || this.#matchingTotal - excluded.size + included.size < this.selectionSettings.maximum) included.add(recordId)
       }
-      this.#setSelection({ mode: 'all-matching', selectedRecordIds: [], excludedRecordIds: uniqueSorted([...excluded]) })
+      this.#setSelection({ mode: 'all-matching', selectedRecordIds: uniqueSorted([...included]), excludedRecordIds: uniqueSorted([...excluded]) })
       return
     }
     const selectedIds = new Set(this.#state.selection.selectedRecordIds)
     for (const recordId of recordIds) {
-      if (selected) selectedIds.add(recordId)
-      else selectedIds.delete(recordId)
+      if (!selected) selectedIds.delete(recordId)
+      else if (this.selectionSettings.maximum === null || selectedIds.size < this.selectionSettings.maximum) selectedIds.add(recordId)
     }
     this.#setSelection({ mode: 'explicit', selectedRecordIds: uniqueSorted([...selectedIds]), excludedRecordIds: [] })
   }
 
   selectAllMatching(): void {
+    if (!this.canSelectAllMatching) return
+    const { page: _page, queryVersion: _queryVersion, ...query } = this.query
+    this.#selectionQuery = Object.freeze(query)
+    this.#matchingTotal = this.#state.total
+    this.#matchingRecordIds.clear()
     this.#setSelection({ mode: 'all-matching', selectedRecordIds: [], excludedRecordIds: [] })
   }
 
   clearSelection(): void {
+    this.#selectionQuery = null
+    this.#matchingRecordIds.clear()
+    this.#selectedGroup = null
     this.#setSelection(emptySelection())
   }
 
+  selectGroup(recordIds: readonly TRecordId[], groupKey: string, selected = true): void {
+    this.selectPage(recordIds, selected, groupKey)
+  }
+
   isSelected(recordId: TRecordId): boolean {
-    if (this.#state.selection.mode === 'all-matching') return !this.#state.selection.excludedRecordIds.includes(recordId)
+    if (this.#state.selection.mode === 'all-matching') return this.#state.selection.selectedRecordIds.includes(recordId) || this.#matchesSelection(recordId) && !this.#state.selection.excludedRecordIds.includes(recordId)
     return this.#state.selection.selectedRecordIds.includes(recordId)
   }
 
@@ -254,11 +301,12 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     if (this.#state.selection.mode === 'explicit') {
       return Object.freeze({ mode: 'explicit', recordIds: this.#state.selection.selectedRecordIds })
     }
-    const { page: _page, queryVersion: _queryVersion, ...query } = this.query
+    if (!this.#selectionQuery) throw new Error('[Holo Panels] All-matching selection requires a captured query.')
     return Object.freeze({
       mode: 'all-matching',
+      ...(this.#state.selection.selectedRecordIds.length ? { recordIds: this.#state.selection.selectedRecordIds } : {}),
       excludedRecordIds: this.#state.selection.excludedRecordIds,
-      query: Object.freeze(query),
+      query: this.#selectionQuery,
     })
   }
 
@@ -266,6 +314,11 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
     if (response.queryVersion !== this.#state.queryVersion) return false
     if (!Number.isSafeInteger(response.total) || response.total < 0) {
       throw new Error('[Holo Panels] Table totals must be non-negative safe integers.')
+    }
+    if (response.selection?.key === JSON.stringify(toJsonValue(this.selectionPayload())) && Array.isArray(response.selection.matchingRecordIds)) {
+      for (const recordId of response.selection.matchingRecordIds) {
+        if (typeof recordId === 'number' || typeof recordId === 'string') this.#matchingRecordIds.add(recordId)
+      }
     }
     this.#publish({
       ...this.#state,
@@ -305,7 +358,9 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
       || JSON.stringify(visibleColumns) !== JSON.stringify(this.#state.visibleColumns)
       || JSON.stringify(appliedFilters) !== JSON.stringify(this.#state.filters.applied)
     if (!queryChanged) return
-    const selectionChanged = this.#queryChangeResetsSelection() && (search !== this.#state.search
+    const selectionChanged = this.#queryChangeResetsSelection() && (page !== this.#state.page
+      || perPage !== this.#state.perPage
+      || search !== this.#state.search
       || JSON.stringify(sort) !== JSON.stringify(this.#state.sort)
       || JSON.stringify(grouping) !== JSON.stringify(this.#state.grouping)
       || JSON.stringify(appliedFilters) !== JSON.stringify(this.#state.filters.applied))
@@ -325,7 +380,23 @@ export class TableStateStore<TRecord extends object, TRecordId extends TableReco
   }
 
   #queryChangeResetsSelection(): boolean {
-    return this.#state.selection.mode === 'all-matching'
+    return this.selectionSettings.currentPageOnly
+  }
+
+  #selectGroupScope(groupKey: string | undefined): boolean {
+    if (!this.selectionSettings.groupsOnly) return true
+    if (groupKey === undefined) return false
+    if (this.#selectedGroup !== groupKey) {
+      this.clearSelection()
+      this.#selectedGroup = groupKey
+    }
+    return true
+  }
+
+  #matchesSelection(recordId: TRecordId): boolean {
+    return this.#matchingRecordIds.has(recordId) || this.#selectionQuery !== null
+      && this.#selectionQuery.search === this.#state.search
+      && JSON.stringify(this.#selectionQuery.filters) === JSON.stringify(this.#state.filters.applied)
   }
 
   #invalidate(

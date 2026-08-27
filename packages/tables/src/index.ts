@@ -281,6 +281,16 @@ export class Table<
   #searchable = true
   #striped = false
   #toolbarActions: readonly TableAction<TRecord>[] = []
+  #selectCurrentPageOnly = false
+  #selectGroupsOnly = false
+  #maxSelectableRecords: number | null = null
+  selectCurrentPageOnly(value = true): this { this.#selectCurrentPageOnly = value; return this }
+  selectGroupsOnly(value = true): this { this.#selectGroupsOnly = value; return this }
+  maxSelectableRecords(value: number | null): this {
+    if (value !== null && (!Number.isSafeInteger(value) || value < 1 || value > 10_000)) throw new Error('Maximum selection must be an integer from 1 to 10000')
+    this.#maxSelectableRecords = value
+    return this
+  }
   columns(columns: readonly TableColumnContract<TRecord>[]): this {
     this.#columns = Object.freeze([...columns])
     return this
@@ -348,6 +358,7 @@ export class Table<
       recordClasses: typeof this.#recordClasses === 'string' ? this.#recordClasses : null,
       recordUrl: typeof this.#recordUrl === 'string' ? this.#recordUrl : null,
       searchable: this.#searchable,
+      selection: Object.freeze({ currentPageOnly: this.#selectCurrentPageOnly, groupsOnly: this.#selectGroupsOnly, maximum: this.#maxSelectableRecords }),
       serverColumns: Object.freeze(this.#columns.map(column => column.compile())),
       serverFilters: Object.freeze(this.#filters.map(filter => filter.compile())),
       serverGroups: Object.freeze(this.#groups.map(group => group.compile())),

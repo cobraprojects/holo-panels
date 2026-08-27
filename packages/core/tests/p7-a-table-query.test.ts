@@ -51,6 +51,7 @@ function compare(left: unknown, right: TableQueryScalar): number {
 }
 
 class FakeQuery implements HoloTableQuery<FakeQuery, PostRecord> {
+  select(...columns: readonly string[]): FakeQuery { return this.next(['select', ...columns], () => true) }
   readonly operations: readonly QueryOperation[]
   readonly #predicates: readonly Predicate[]
   readonly #orders: readonly { readonly column: string, readonly direction: TableSortDirection }[]

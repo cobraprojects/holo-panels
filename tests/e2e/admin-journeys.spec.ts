@@ -9,7 +9,7 @@ const guardResponses = Object.freeze({
 
 const generatedResources = Object.freeze([
   { id: 'post-acme-panels', label: 'Post', plural: 'Posts', slug: 'posts' },
-  { id: 'category-acme-guides', label: 'Category', plural: 'Categories', slug: 'categories' },
+  { id: 'category-acme-guides', label: 'Category', plural: 'Categories', simple: true, slug: 'categories' },
   { id: 'tag-acme-holo', label: 'Tag', plural: 'Tags', slug: 'tags' },
   { id: 'post-tag-post-acme-draft-tag-acme-tutorial', label: 'Post Tag', plural: 'Post tags', slug: 'post-tags' },
   { id: 'comment-acme-approved', label: 'Comment', plural: 'Comments', slug: 'comments' },
@@ -365,9 +365,11 @@ test.describe('authenticated admin journeys', () => {
     for (const resource of generatedResources) {
       const routes = [
         { heading: resource.plural, path: `/admin/${resource.slug}` },
-        { heading: `Create ${resource.label}`, path: `/admin/${resource.slug}/create` },
-        { heading: `View ${resource.label}`, path: `/admin/${resource.slug}/${resource.id}` },
-        { heading: `Edit ${resource.label}`, path: `/admin/${resource.slug}/${resource.id}/edit` },
+        ...('simple' in resource && resource.simple ? [] : [
+          { heading: `Create ${resource.label}`, path: `/admin/${resource.slug}/create` },
+          { heading: `View ${resource.label}`, path: `/admin/${resource.slug}/${resource.id}` },
+          { heading: `Edit ${resource.label}`, path: `/admin/${resource.slug}/${resource.id}/edit` },
+        ]),
       ]
 
       for (const route of routes) {
@@ -378,6 +380,77 @@ test.describe('authenticated admin journeys', () => {
         await expect(page.locator('body'), route.path).not.toContainText(/Application error|Policy definition was not found/iu)
       }
     }
+  })
+
+  test('runs Simple resource modal CRUD without leaving or resetting the list', async ({ page }, testInfo) => {
+    test.setTimeout(120_000)
+    const suffix = `${testInfo.project.name}-${Date.now()}`
+    const name = `Simple category ${suffix}`
+    const editedName = `${name} edited`
+    const slug = `simple-category-${suffix}`
+    await login(page)
+    await gotoPanelPage(page, '/admin/categories')
+    await expect(page).toHaveURL(url => url.pathname === '/admin/categories')
+    const sentinel = await markDocument(page)
+
+    const guides = page.getByRole('row').filter({ hasText: 'Guides' })
+    const selectedGuide = guides.getByRole('checkbox')
+    await selectedGuide.check()
+    await guides.getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click()
+    const view = page.getByRole('dialog')
+    await expect(view.locator('[data-read-only-presentation="infolist"]')).toBeVisible()
+    await expect(view.getByRole('region', { name: 'Name', exact: true }).getByText('Guides', { exact: true })).toBeVisible()
+    await expect(view.locator('form')).toHaveCount(0)
+    await view.getByRole('button', { name: 'Close', exact: true }).first().click()
+    await expect(selectedGuide).toBeChecked()
+    await expectSameDocument(page, sentinel)
+
+    await guides.getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click()
+    await expect(page.getByRole('dialog').getByRole('region', { name: 'Name', exact: true }).getByText('Guides', { exact: true })).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).first().click()
+    await expect(selectedGuide).toBeChecked()
+
+    await expect(page).toHaveURL(url => url.pathname === '/admin/categories')
+    await page.getByRole('button', { name: 'Create', exact: true }).click()
+    const create = page.getByRole('dialog')
+    await create.getByRole('button', { name: 'Create', exact: true }).click()
+    await expect(create.locator('[data-field-path="name"] [role="alert"]')).toBeVisible()
+    await expect(page).toHaveURL(url => url.pathname === '/admin/categories')
+    await create.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
+    await create.getByRole('textbox', { name: 'Slug', exact: true }).fill(slug)
+    const createResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
+    await create.getByRole('button', { name: 'Create', exact: true }).click()
+    expect((await createResponse).ok()).toBe(true)
+    await expect(create).toHaveCount(0)
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })).toBeVisible()
+    const created = page.getByRole('row').filter({ hasText: name })
+    await expect(created).toBeVisible()
+
+    await created.getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
+    const edit = page.getByRole('dialog')
+    await expect(edit.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(name)
+    await edit.getByRole('textbox', { name: 'Name', exact: true }).fill(editedName)
+    const editResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
+    await edit.getByRole('button', { name: 'Save', exact: true }).click()
+    expect((await editResponse).ok()).toBe(true)
+    await expect(page.getByRole('row').filter({ hasText: editedName })).toBeVisible()
+    await expectSameDocument(page, sentinel)
+
+    const edited = page.getByRole('row').filter({ hasText: editedName })
+    await edited.getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
+    const confirmation = page.getByRole('alertdialog')
+    await expect(confirmation).toContainText(/delete/iu)
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(edited).toBeVisible()
+    await edited.getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click()
+    await expect(page.getByRole('row').filter({ hasText: editedName })).toHaveCount(0)
+    await expect(page).toHaveURL(url => url.pathname === '/admin/categories')
   })
 
   test('returns a framework-native safe page for an unknown admin route', async ({ page }) => {

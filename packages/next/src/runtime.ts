@@ -288,11 +288,11 @@ export async function resolveNextPanelPage(
       const navigation = await resolvePanelNavigationSeed(discoveredPanel.manifest.navigation, pages, context)
       const loadedPage = await resolvePageData(match.definition, { ...context, parameters: match.parameters! })
       let page = loadedPage
-      let tableState: Readonly<TableQueryState> | null = loadedPage.manifest.pageType === 'list'
+      let tableState: Readonly<TableQueryState> | null = loadedPage.manifest.pageType === 'list' || loadedPage.manifest.pageType === 'manage'
         ? Object.freeze({ filters: Object.freeze([]), includeTotal: true, page: 1, pagination: 'page', perPage: 25, search: '', sort: Object.freeze([]) })
         : null
       const search = new URL(request.url).searchParams.get('search')?.trim() ?? ''
-      if (search && loadedPage.manifest.pageType === 'list' && runtime.execute) {
+      if (search && (loadedPage.manifest.pageType === 'list' || loadedPage.manifest.pageType === 'manage') && runtime.execute) {
         const resourceValue = loadedPage.manifest.body?.properties.resource
         const resourceId = resourceValue && typeof resourceValue === 'object' && !Array.isArray(resourceValue) && typeof resourceValue.id === 'string' ? resourceValue.id : ''
         if (resourceId) {

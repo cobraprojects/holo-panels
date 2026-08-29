@@ -28,12 +28,13 @@ import {
 } from '../internal-ui'
 import { defineComponent, h, shallowRef, watch, type PropType, type VNode } from 'vue'
 import type { ClientActionFrame, ClientActionState, JsonObject } from '@holo-js/panels-client'
-import { actionFormField, actionFormSchema, actionManifestCollection } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores } from '@holo-js/panels-client'
 import { ActionsRenderHook } from '@holo-js/panels-core'
 import type { ActionModalWidth, RenderSlotReference } from '@holo-js/panels-core'
 import { createComponentRegistry } from '../registry'
 import { VueSchemaRenderer } from '../schemas/renderer'
 import { VueFieldRenderer } from '../fields/renderer'
+import { VueEntryRenderer } from '../entries/renderer'
 import { usePanelsRenderHook } from '../render-hooks'
 import type { VueActionCustomProps, VueActionRendererProps, VueActionSlotProps } from './types'
 
@@ -141,6 +142,11 @@ export const VueActionRenderer = defineComponent({
       return h(Renderer, { ...(slot.properties ?? {}), frame } satisfies VueActionSlotProps)
     }
 
+    function readOnlyPresentation(frame: ClientActionFrame): VNode {
+      const stores = readOnlyPresentationStores(frame.manifest.modal?.readOnlyPresentation)
+      return h('div', { class: 'hp:grid hp:gap-4', 'data-read-only-presentation': 'infolist' }, stores.map(store => h(VueEntryRenderer, { entry: { panelId: props.panelId, registry: props.registry, store }, key: store.snapshot.id })))
+    }
+
     return () => {
       const actions = actionManifestCollection(props.actions ?? [props.action])
       const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
@@ -200,6 +206,8 @@ export const VueActionRenderer = defineComponent({
                 setInput: (input: JsonObject) => props.store.setInput(input),
                 submit,
               } satisfies VueActionCustomProps)]
+            : frame.manifest.modal?.readOnlyPresentation
+              ? [readOnlyPresentation(frame)]
             : [form(frame)]
         const slideOver = frame.manifest.modal?.slideOver === true
         const Root = slideOver ? Sheet : Dialog

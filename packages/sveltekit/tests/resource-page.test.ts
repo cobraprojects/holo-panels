@@ -72,9 +72,9 @@ const postResource = {
   formActions: [actionPayload({ id: 'posts.save', label: 'Save post', mount: 'page' })],
 }
 
-function pageData(pageType: 'create' | 'edit' | 'list' | 'view'): PanelPageData {
+function pageData(pageType: 'create' | 'edit' | 'list' | 'manage' | 'view'): PanelPageData {
   const record = posts[0]
-  const path = pageType === 'list'
+  const path = pageType === 'list' || pageType === 'manage'
     ? '/admin/posts'
     : pageType === 'create'
       ? '/admin/posts/create'
@@ -108,15 +108,15 @@ function pageData(pageType: 'create' | 'edit' | 'list' | 'view'): PanelPageData 
     page: {
       breadcrumbs: [{ label: 'Posts', path: '/admin/posts' }],
       data: {
-        ...(pageType === 'list' ? { filters: { search: '' }, records: posts } : {}),
+        ...(pageType === 'list' || pageType === 'manage' ? { filters: { search: '' }, records: posts } : {}),
         ...(pageType === 'edit' || pageType === 'view' ? { record } : {}),
         resource: postResource,
       },
-      heading: pageType === 'list' ? 'Posts' : `${pageType[0]?.toUpperCase() ?? ''}${pageType.slice(1)} post`,
+      heading: pageType === 'list' || pageType === 'manage' ? 'Posts' : `${pageType[0]?.toUpperCase() ?? ''}${pageType.slice(1)} post`,
       manifest: {
         actions: {
           footer: [],
-          header: pageType === 'list' ? ['posts.create'] : pageType === 'view' ? ['posts.edit', 'posts.delete'] : pageType === 'edit' ? ['posts.delete'] : [],
+          header: pageType === 'list' || pageType === 'manage' ? ['posts.create'] : pageType === 'view' ? ['posts.edit', 'posts.delete'] : pageType === 'edit' ? ['posts.delete'] : [],
         },
         body: null,
         id: `posts.${pageType}`,
@@ -215,13 +215,15 @@ describe('SvelteKit resource page acceptance', () => {
     expect(resourceOperationIdentifiers([record], 'id', 'slug', 'missing-id')).toEqual([])
   })
 
-  it('SSR-renders List/Create/View/Edit through shared Svelte resource renderers', () => {
+  it('SSR-renders List/Manage/Create/View/Edit through shared Svelte resource renderers', () => {
     const list = render(PanelPage, { props: { data: pageData('list') } }).body
+    const manage = render(PanelPage, { props: { data: pageData('manage') } }).body
     const create = render(PanelPage, { props: { data: pageData('create') } }).body
     const view = render(PanelPage, { props: { data: pageData('view') } }).body
     const edit = render(PanelPage, { props: { data: pageData('edit') } }).body
 
     expect(list).toContain('data-panels-component="table"')
+    expect(manage).toContain('data-panels-component="table"')
     expect(list).toContain('First post')
     expect(list).toContain('Post: First post')
     expect(list).toContain('data-action-id="posts.create"')

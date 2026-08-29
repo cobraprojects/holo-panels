@@ -915,6 +915,29 @@ function resourceFormFields(definition: RuntimeDefinition) {
   })
 }
 
+function resourceInfolistEntries(definition: RuntimeDefinition) {
+  const fields = resourceFormFields(definition)
+  const configuredEntries = infolistComponents(definition.infolist).map(entry => objectMember(entry, 'manifest') ?? entry)
+  return (configuredEntries.length > 0 ? configuredEntries : fields).map((entry, index) => {
+    const source = objectMember(entry, 'source')
+    const pathValue = Reflect.get(entry, 'path') ?? Reflect.get(source ?? {}, 'path')
+    const path = typeof pathValue === 'string' ? pathValue : String(index)
+    const entryProperties = objectMember(entry, 'properties') ?? {}
+    const formatters = arrayMember(entry, 'formatters')
+    return {
+      actions: Array.isArray(Reflect.get(entry, 'actions')) ? Reflect.get(entry, 'actions') : [],
+      copyable: Reflect.get(entry, 'copyable') === true,
+      id: `${definition.id}-${path.replaceAll('.', '-')}`,
+      inlineLabel: Reflect.get(entry, 'inlineLabel') === true,
+      label: typeof Reflect.get(entry, 'label') === 'string' ? Reflect.get(entry, 'label') : label(path),
+      path,
+      placeholder: typeof Reflect.get(entry, 'placeholder') === 'string' ? Reflect.get(entry, 'placeholder') : null,
+      properties: formatters.length > 0 ? { ...entryProperties, formats: formatters } : entryProperties,
+      type: String(Reflect.get(entry, 'type') ?? 'text'),
+    }
+  })
+}
+
 async function resolvedResourceFormFields(
   definition: RuntimeDefinition,
   context: Readonly<{ actor: object, services?: unknown, signal: AbortSignal, tenant: unknown }>,
@@ -949,15 +972,22 @@ function resourceModalAction<TServices>(
 ): typeof action {
   if (action.url || action.modal?.schema || action.mount === 'bulk' || !['create', 'edit', 'view'].includes(action.kind) || resourceRoutes(definition, '')[action.kind] !== undefined) return action
   const values = record ? serializeResourceRecord(record) : {}
-  const viewEntries = infolistComponents(definition.infolist).map(entry => objectMember(entry, 'manifest') ?? entry)
-  const sourceFields = action.kind === 'view' && viewEntries.length > 0 ? viewEntries : resourceFormFields(definition)
-  const fields = sourceFields.filter(field => action.kind === 'view' || definition.writableAttributes.includes(String(Reflect.get(field, 'path')))).map(field => ({
+  if (action.kind === 'view') {
+    const entries = resourceInfolistEntries(definition).map(entry => ({
+      ...entry,
+      actions: [],
+      defaultValue: valueAtPath(values, entry.path) ?? null,
+    }))
+    return { ...action, modal: { ...action.modal, readOnlyPresentation: jsonObject({ entries, kind: 'infolist' }) } }
+  }
+  const fields = resourceFormFields(definition).filter(field => definition.writableAttributes.includes(String(Reflect.get(field, 'path')))).map(field => ({
     ...field,
     defaultValue: valueAtPath(values, String(Reflect.get(field, 'path'))) ?? Reflect.get(objectMember(field, 'properties') ?? {}, 'defaultValue') ?? '',
     kind: 'field',
-    readOnly: action.kind === 'view' || Reflect.get(field, 'readOnly') === true,
+    readOnly: Reflect.get(field, 'readOnly') === true,
   }))
-  return { ...action, modal: { ...action.modal, schema: jsonObject({ fields }) } }
+  const submitActionLabel = action.kind === 'create' ? 'Create' : 'Save'
+  return { ...action, modal: { ...action.modal, schema: jsonObject({ fields }), submitActionLabel } }
 }
 
 function resourceProperties(definition: RuntimeDefinition, pageType: PageType, basePath: string): JsonObject {
@@ -1001,25 +1031,7 @@ function resourceProperties(definition: RuntimeDefinition, pageType: PageType, b
     const scope = action.mount === 'bulk' ? 'bulk' : action.mount === 'page' ? 'header' : action.mount === 'record' ? 'row' : null
     return scope ? [{ color: action.color, confirmation: action.confirmation, icon: action.icon, id: action.id, kind: action.kind, label: action.label, removesRecord: false, scope }] : []
   })
-  const configuredEntries = infolistComponents(definition.infolist).map(entry => objectMember(entry, 'manifest') ?? entry)
-  const entries = (configuredEntries.length > 0 ? configuredEntries : fields).map((entry, index) => {
-    const source = objectMember(entry, 'source')
-    const pathValue = Reflect.get(entry, 'path') ?? Reflect.get(source ?? {}, 'path')
-    const path = typeof pathValue === 'string' ? pathValue : String(index)
-    const entryProperties = objectMember(entry, 'properties') ?? {}
-    const formatters = arrayMember(entry, 'formatters')
-    return {
-      actions: Array.isArray(Reflect.get(entry, 'actions')) ? Reflect.get(entry, 'actions') : [],
-      copyable: Reflect.get(entry, 'copyable') === true,
-      id: `${definition.id}-${path.replaceAll('.', '-')}`,
-      inlineLabel: Reflect.get(entry, 'inlineLabel') === true,
-      label: typeof Reflect.get(entry, 'label') === 'string' ? Reflect.get(entry, 'label') : label(path),
-      path,
-      placeholder: typeof Reflect.get(entry, 'placeholder') === 'string' ? Reflect.get(entry, 'placeholder') : null,
-      properties: formatters.length > 0 ? { ...entryProperties, formats: formatters } : entryProperties,
-      type: String(Reflect.get(entry, 'type') ?? 'text'),
-    }
-  })
+  const entries = resourceInfolistEntries(definition)
   const configuredTableActions = arrayMember(table, 'actions')
   const properties = {
     resource: {

@@ -300,7 +300,7 @@
           publishPanelActionFailure(data.panel.manifest.id, response.effects)
           throw new Error(response.ok ? 'The action could not be completed for every record.' : response.error.message)
         }
-        if (source === 'list') await refreshTable()
+        if (source === 'list' || source === 'manage') await refreshTable()
         return { effects: [], items: [], result: response.data, status: 'succeeded' }
       },
     },
@@ -724,7 +724,7 @@
 
 {#if !resource}
   <div role="alert">Resource page metadata is unavailable.</div>
-{:else if pageType === 'list'}
+{:else if pageType === 'list' || pageType === 'manage'}
   <div class="hp-resource-page">
     <PanelsPageActions to={pageActionsTarget}>
       {@const actions = resource.recordActions.filter(action => action.mount === 'page' && action.visible)}

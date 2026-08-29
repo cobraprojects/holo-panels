@@ -131,7 +131,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const category = url.searchParams.get('category')?.trim() ?? ''
   let resolvedPage = page
   let tableState: Readonly<TableQueryState> | null = null
-  if (match.definition.manifest.pageType === 'list') {
+  if (match.definition.manifest.pageType === 'list' || match.definition.manifest.pageType === 'manage') {
     const resourceValue = match.definition.manifest.body?.properties.resource
     const resourceId = resourceValue && typeof resourceValue === 'object' && !Array.isArray(resourceValue) && typeof resourceValue.id === 'string' ? resourceValue.id : ''
     const loader = resourceId ? registry[`${context.panelId}:resource:${resourceId}`] : undefined

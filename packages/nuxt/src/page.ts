@@ -1195,7 +1195,7 @@ const VueResourcePage = defineComponent({
     if (props.page.manifest.pageType === 'create' || props.page.manifest.pageType === 'edit') {
       return formPage(props.page, props.panelId, props.registry, schema, runtime, props.resourceCreatePageRedirect, props.resourceEditPageRedirect, props.unsavedChangesAlerts)
     }
-    return () => props.page.manifest.pageType === 'list'
+    return () => props.page.manifest.pageType === 'list' || props.page.manifest.pageType === 'manage'
       ? tablePage(props.page, props.panelId, schema, runtime)
       : props.page.manifest.pageType === 'view'
         ? viewPage(props.page, props.panelId, props.readOnlyRelations, props.registry, schema, runtime)

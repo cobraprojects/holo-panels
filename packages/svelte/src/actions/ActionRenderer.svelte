@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from '../ui/button'
   import Icon from '../components/Icon.svelte'
-  import { actionFormField, actionFormSchema, actionManifestCollection, type JsonObject } from '@holo-js/panels-client'
+  import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores, type JsonObject } from '@holo-js/panels-client'
   import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference, type SchemaManifest } from '@holo-js/panels-core'
   import * as AlertDialog from '../ui/alert-dialog'
   import * as Dialog from '../ui/dialog'
@@ -10,6 +10,7 @@
   import { SvelteComponentRegistry } from '../registry'
   import SchemaRenderer from '../schemas/SchemaRenderer.svelte'
   import FieldRenderer from '../fields/FieldRenderer.svelte'
+  import EntryRenderer from '../entries/EntryRenderer.svelte'
   import RenderHook from '../components/RenderHook.svelte'
   import { toSvelteState } from '../stores'
   import type { SvelteActionCustomProps, SvelteActionRendererProps, SvelteActionSlotProps } from './contracts'
@@ -92,6 +93,7 @@
     {@const titleId = `hp-action-${frame.manifest.id.replace(/[^a-z0-9_-]/giu, '-')}-title-${index}`}
     {@const typeId = customTypeId(frame.manifest.id)}
     {@const schema = actionFormSchema(frame.manifest.modal?.schema ?? null, frame.manifest.id)}
+    {@const readOnlyStores = readOnlyPresentationStores(frame.manifest.modal?.readOnlyPresentation)}
     {@const contentReference = modalSlotReference(frame.manifest.modal?.content ?? null)}
     {@const footerReference = modalSlotReference(frame.manifest.modal?.footer ?? null)}
     {@const Custom = registry?.hasRenderer(typeId, panelId) ? registry.resolve<SvelteActionCustomProps>(typeId, panelId, 'action modal') : undefined}
@@ -103,6 +105,12 @@
       <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_AFTER} />
       {#if Custom}
         <Custom {frame} setInput={(input: JsonObject) => store.setInput(input)} {submit} />
+      {:else if readOnlyStores.length > 0}
+        <div class="hp:grid hp:gap-4" data-read-only-presentation="infolist">
+          {#each readOnlyStores as entryStore (entryStore.snapshot.id)}
+            <EntryRenderer store={entryStore} {panelId} {registry} />
+          {/each}
+        </div>
       {:else}
         <form class="hp-panel-form hp:grid hp:gap-6" novalidate onsubmit={(event) => { event.preventDefault(); void submit() }}>
           {#if schema}

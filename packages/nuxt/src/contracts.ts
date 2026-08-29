@@ -30,7 +30,7 @@ export type NuxtPanelManifest = PanelShellBootstrap['manifest']
 export interface NuxtPanelPageManifest {
   readonly body: { readonly component: string, readonly properties: NuxtPanelJsonObject } | null
   readonly id: string
-  readonly pageType: 'create' | 'custom' | 'edit' | 'list' | 'related-record' | 'singular' | 'view'
+  readonly pageType: 'create' | 'custom' | 'edit' | 'list' | 'manage' | 'related-record' | 'singular' | 'view'
   readonly path: string
   readonly schemaId: string | null
   readonly widgets: { readonly footer: readonly string[], readonly header: readonly string[] }

@@ -511,7 +511,7 @@
       <ResourcePage {data} {effects} pageActionsTarget={pageActionsElement} {registry} />
     {:else if Body && body}
       <Body {...body.properties} />
-    {:else if ['create', 'edit', 'list', 'view'].includes(data.page.manifest.pageType)}
+    {:else if ['create', 'edit', 'list', 'manage', 'view'].includes(data.page.manifest.pageType)}
       <ResourcePage {data} {effects} pageActionsTarget={pageActionsElement} {registry} />
     {:else if data.page.schema}
       <section aria-label={data.page.title} data-panels-schema={data.page.manifest.schemaId}></section>

@@ -65,6 +65,20 @@ afterEach(() => {
 })
 
 describe('P8-B Vue action renderer', () => {
+  it('renders view modals through the shared read-only entry presentation', async () => {
+    const store = createStore()
+    const action = { ...manifest, confirmation: null, kind: 'view' as const, modal: { ...manifest.modal!, readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, id: 'posts-published', inlineLabel: false, label: 'Published', path: 'published', placeholder: null, properties: {}, type: 'boolean' }], kind: 'infolist' }, schema: null } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(defineComponent(() => () => h(VueActionRenderer, { action, store })))
+    app.mount(container)
+    mounted.push({ app, container })
+    container.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
+    await flush()
+    expect(document.querySelector('[data-panels-entry="posts-published"] [role="img"]')?.getAttribute('aria-label')).toBe('Yes')
+    expect(document.querySelector('[role="dialog"] form')).toBeNull()
+  })
+
   it('renders grouped triggers and complete slide-over presentation with nested actions and slots', async () => {
     const store = createStore()
     const nested = { ...manifest, confirmation: null, id: 'posts.schedule', label: 'Schedule', modal: null }

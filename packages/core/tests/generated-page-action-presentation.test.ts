@@ -195,7 +195,13 @@ describe('generated page action presentation', () => {
       expect.objectContaining({ id: 'create', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ path: 'title', readOnly: false })] }) }) }),
     ]))
     expect(result.data.rowActions).toMatchObject([{ actions: expect.arrayContaining([
-      expect.objectContaining({ id: 'view', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ label: 'Post title', path: 'title', readOnly: true })] }) }) }),
+      expect.objectContaining({ id: 'view', modal: expect.objectContaining({
+        readOnlyPresentation: {
+          entries: [expect.objectContaining({ defaultValue: 'Draft', label: 'Post title', path: 'title', type: 'text' })],
+          kind: 'infolist',
+        },
+        schema: null,
+      }) }),
       expect.objectContaining({ id: 'edit', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ defaultValue: 'Draft', path: 'title', readOnly: false })] }) }) }),
     ]), recordId: 7 }])
   })

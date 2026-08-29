@@ -64,6 +64,28 @@ afterEach(() => {
 })
 
 describe('P8-B React action renderer', () => {
+  it('renders view modals through the shared read-only entry presentation', async () => {
+    const store = createStore()
+    const action = {
+      ...manifest,
+      confirmation: null,
+      kind: 'view' as const,
+      modal: {
+        ...manifest.modal!,
+        readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, id: 'posts-published', inlineLabel: false, label: 'Published', path: 'published', placeholder: null, properties: {}, type: 'boolean' }], kind: 'infolist' },
+        schema: null,
+      },
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    await act(async () => root.render(createElement(ReactActionRenderer, { manifest: action, store })))
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-action-id]')?.click())
+    expect(document.querySelector('[data-panels-entry="posts-published"] [role="img"]')?.getAttribute('aria-label')).toBe('Yes')
+    expect(document.querySelector('[role="dialog"] form')).toBeNull()
+  })
+
   it('collects values from a public action schema before execution', async () => {
     const execute = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
     const store = new ClientActionStore({ createIdempotencyKey: () => 'modal-input-0001', transport: { execute } })

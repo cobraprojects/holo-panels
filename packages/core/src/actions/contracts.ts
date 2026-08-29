@@ -57,6 +57,7 @@ export interface ActionModalOptions<TContext> {
   readonly icon?: string | null
   readonly iconColor?: string | null
   readonly nestedActions?: readonly string[]
+  readonly readOnlyPresentation?: JsonObject
   readonly schema?: CompiledSchema<JsonObject, TContext> | JsonObject
   readonly slideOver?: boolean
   readonly stickyFooter?: boolean
@@ -79,6 +80,7 @@ export interface ActionModalManifest {
   readonly icon: string | null
   readonly iconColor: string | null
   readonly nestedActions: readonly string[]
+  readonly readOnlyPresentation?: JsonObject | null
   readonly schema: JsonObject | null
   readonly slideOver: boolean
   readonly stickyFooter: boolean

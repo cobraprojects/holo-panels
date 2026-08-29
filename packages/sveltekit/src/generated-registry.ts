@@ -164,7 +164,7 @@ async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, reg
     tenant: input.tenant ?? tenancy?.tenantId,
   })
   const search = input.event.url.searchParams.get('search')?.trim().toLocaleLowerCase() ?? ''
-  if (match.definition.manifest.pageType !== 'list') return page
+  if (match.definition.manifest.pageType !== 'list' && match.definition.manifest.pageType !== 'manage') return page
   const resourceValue = match.definition.manifest.body?.properties.resource
   const resourceId = resourceValue && typeof resourceValue === 'object' && !Array.isArray(resourceValue) && typeof resourceValue.id === 'string' ? resourceValue.id : ''
   const loader = resourceId ? registry[`${input.panelId}:resource:${resourceId}`] : undefined
@@ -346,7 +346,7 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
       }
       const widgets = await definitions(serverRegistry, input.panelId, 'widget')
       const search = input.event.url.searchParams.get('search')?.trim().toLocaleLowerCase() ?? ''
-      const tableState: Readonly<TableQueryState> | null = input.page.manifest.pageType === 'list'
+      const tableState: Readonly<TableQueryState> | null = input.page.manifest.pageType === 'list' || input.page.manifest.pageType === 'manage'
         ? Object.freeze({ filters: Object.freeze([]), includeTotal: true, page: 1, pagination: 'page', perPage: 25, search, sort: Object.freeze([]) })
         : null
       const resource = pageWidgetResource(input.page, tableState)

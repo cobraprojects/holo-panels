@@ -1,5 +1,6 @@
 export * from './contracts'
 export * from './formatting'
+export * from './presentation'
 export * from './registry'
 export * from './safety'
 export * from './store'

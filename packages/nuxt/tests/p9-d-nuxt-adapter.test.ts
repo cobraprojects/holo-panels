@@ -683,7 +683,7 @@ describe('P9-D Nuxt adapter', () => {
     })
     app.unmount()
 
-    const listApp = createApp(PanelPage, { page: { ...resourcePage, page: { ...resourcePage.page, manifest: { ...resourcePage.page.manifest, pageType: 'list' as const } } } })
+    const listApp = createApp(PanelPage, { page: { ...resourcePage, page: { ...resourcePage.page, manifest: { ...resourcePage.page.manifest, pageType: 'manage' as const } } } })
     const actionRequests: Request[] = []
     document.cookie = 'XSRF-TOKEN=signed; path=/'
     const fetchAction = vi.spyOn(window, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -15,7 +15,7 @@ function modal(value: JsonValue | undefined): boolean {
     && typeof value.width === 'string' && ['small', 'medium', 'large', 'extra-large', 'screen'].includes(value.width)
     && ['autofocus', 'closeByClickingAway', 'closeByEscaping', 'slideOver', 'stickyFooter', 'stickyHeader'].every(key => typeof value[key] === 'boolean')
     && nullableStrings(value, ['cancelActionLabel', 'description', 'heading', 'icon', 'iconColor', 'submitActionLabel'])
-    && ['content', 'footer', 'schema'].every(key => value[key] === null || object(value[key]))
+    && ['content', 'footer', 'readOnlyPresentation', 'schema'].every(key => value[key] === undefined || value[key] === null || object(value[key]))
     && Array.isArray(value.nestedActions) && value.nestedActions.every(id => typeof id === 'string')
 }
 

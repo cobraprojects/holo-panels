@@ -110,6 +110,19 @@ afterEach(async () => {
 })
 
 describe('P8-B Svelte action renderer', () => {
+  it('renders view modals through the shared read-only entry presentation', () => {
+    const store = createStore()
+    const view = { ...manifest, confirmation: null, kind: 'view' as const, modal: { ...manifest.modal!, readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, id: 'posts-published', inlineLabel: false, label: 'Published', path: 'published', placeholder: null, properties: {}, type: 'boolean' }], kind: 'infolist' }, schema: null } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(P8BActionFixture, { props: { action: { action: view, store } }, target: container })
+    mounted.push({ component, container })
+    container.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
+    flushClient()
+    expect(document.querySelector('[data-panels-entry="posts-published"] [role="img"]')?.getAttribute('aria-label')).toBe('Yes')
+    expect(document.querySelector('[role="dialog"] form')).toBeNull()
+  })
+
   it('renders grouped triggers and complete slide-over presentation with nested actions and slots', async () => {
     const store = createStore()
     const nested = { ...manifest, confirmation: null, id: 'posts.schedule', label: 'Schedule', modal: null }

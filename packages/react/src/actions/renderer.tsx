@@ -1,6 +1,6 @@
-import { createElement, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
+import { createElement, useMemo, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import type { ClientActionFrame, JsonObject } from '@holo-js/panels-client'
-import { actionFormField, actionFormSchema, actionManifestCollection } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores } from '@holo-js/panels-client'
 import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference } from '@holo-js/panels-core'
 import { PanelsIcon } from '../internal-ui'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog'
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { createComponentRegistry } from '../registry'
 import { ReactSchemaRenderer } from '../schema'
 import { ReactFieldRenderer } from '../fields/renderer'
+import { ReactEntryRenderer } from '../entries/renderer'
 import { ReactPanelsRenderHook } from '../render-hooks'
 import type { ReactActionCustomProps, ReactActionRendererProps, ReactActionSlotProps } from './types'
 
@@ -89,6 +90,12 @@ function ModalSlot<TResult>({ frame, placement, props }: { readonly frame: Clien
   return Renderer ? createElement(Renderer, { ...(slot.properties ?? {}), frame }) : null
 }
 
+function ReadOnlyPresentation<TResult>({ frame, props }: { readonly frame: ClientActionFrame<TResult>, readonly props: ReactActionRendererProps<TResult> }): ReactNode {
+  const presentation = frame.manifest.modal?.readOnlyPresentation
+  const stores = useMemo(() => readOnlyPresentationStores(presentation), [presentation])
+  return <div className="hp:grid hp:gap-4" data-read-only-presentation="infolist">{stores.map(store => <ReactEntryRenderer key={store.snapshot.id} panelId={props.panelId} registry={props.registry} store={store} />)}</div>
+}
+
 export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendererProps<TResult>): ReactNode {
   const state = useSyncExternalStore(
     listener => props.store.subscribe(listener),
@@ -131,6 +138,8 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
         <ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_AFTER} />
         {Custom
           ? createElement(Custom, { frame, setInput: input => props.store.setInput(input), submit })
+          : frame.manifest.modal?.readOnlyPresentation
+            ? <ReadOnlyPresentation frame={frame} props={props} />
           : <form className="hp-panel-form hp:grid hp:gap-6" noValidate onSubmit={(event: FormEvent) => {
               event.preventDefault()
               void submit()

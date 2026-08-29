@@ -1,9 +1,6 @@
 import { Resource } from '@holo-js/panels'
 import Category from '../../../models/Category'
-import CreateCategory from './pages/CreateCategory'
-import EditCategory from './pages/EditCategory'
-import ListCategories from './pages/ListCategories'
-import ViewCategory from './pages/ViewCategory'
+import ManageCategories from './pages/ManageCategories'
 
 export default class CategoryResource extends Resource {
   protected static override model = Category
@@ -22,15 +19,12 @@ export default class CategoryResource extends Resource {
     .toolbarActions([component.ActionGroup.make([component.DeleteBulkAction.make()])]))
   static override getGloballySearchableAttributes() { return this.attributes(['name', 'slug']) }
   static override getGlobalSearchResultsLimit() { return 10 }
-  static getCreateBindings = this.configureCreateBindings(context => ({ tenantId: context.tenant }))
+  static getCreateBindings = this.configureCreateBindings(context => ({ id: `category-${crypto.randomUUID()}`, tenantId: context.tenant }))
   static scopeQueryToTenant = this.configureQuery((query, context) => query.where('tenantId', context.tenant))
 
   static getPages() {
     return {
-      index: ListCategories.route('/'),
-      create: CreateCategory.route('/create'),
-      view: ViewCategory.route('/{record}'),
-      edit: EditCategory.route('/{record}/edit'),
+      index: ManageCategories.route('/'),
     }
   }
 }

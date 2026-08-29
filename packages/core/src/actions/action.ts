@@ -93,6 +93,7 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
         icon: definition.modal.icon ?? null,
         iconColor: definition.modal.iconColor ?? null,
         nestedActions: [...(definition.modal.nestedActions ?? [])],
+        readOnlyPresentation: definition.modal.readOnlyPresentation ?? null,
         schema: await modalSchema(definition.modal.schema, context),
         slideOver: definition.modal.slideOver ?? false,
         stickyFooter: definition.modal.stickyFooter ?? false,

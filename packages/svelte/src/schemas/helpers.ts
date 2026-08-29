@@ -7,6 +7,7 @@ const KINDS = new Set([
   'custom',
   'empty-state',
   'entry',
+  'field',
   'fieldset',
   'filter',
   'grid',
@@ -52,12 +53,26 @@ export function layoutAttributes(component: SchemaComponentManifest): Record<str
     attributes[`data-layout-${toKebabCase(name)}`] = stableJson(value)
   }
   if (component.dynamicVisibility) attributes['data-dynamic-visibility'] = 'true'
+  if (component.properties.compact) attributes['data-compact'] = 'true'
+  if (component.properties.contained === false) attributes['data-contained'] = 'false'
+  if (component.properties.grow === false) attributes['data-grow'] = 'false'
   if (component.statePath) attributes['data-state-path'] = component.statePath
+  const styles: string[] = []
+  for (const breakpoint of ['default', 'sm', 'md', 'lg', 'xl', '2xl'] as const) {
+    const suffix = breakpoint === 'default' ? 'default' : breakpoint
+    const span = component.layout.columnSpan?.[breakpoint]
+    const start = span === 'full' ? 1 : component.layout.columnStart?.[breakpoint]
+    if (component.layout.columns?.[breakpoint] !== undefined) styles.push(`--hp-schema-columns-${suffix}:${component.layout.columns[breakpoint]}`)
+    if (start !== undefined) styles.push(`--hp-schema-column-start-${suffix}:${start}`)
+    if (span !== undefined) styles.push(`--hp-schema-column-end-${suffix}:${span === 'full' ? -1 : `span ${span}`}`)
+    if (component.layout.order?.[breakpoint] !== undefined) styles.push(`--hp-schema-order-${suffix}:${component.layout.order[breakpoint]}`)
+  }
+  if (styles.length > 0) attributes.style = styles.join(';')
   return attributes
 }
 
 export function componentClass(component: SchemaComponentManifest): string {
-  return ['hp-schema-component', `hp-schema-${component.kind}`, extraClass(component.extraAttributes)]
+  return ['hp-schema-node', `hp-schema-${component.kind}`, extraClass(component.extraAttributes)]
     .filter((value): value is string => Boolean(value))
     .join(' ')
 }

@@ -50,7 +50,8 @@ export interface FormState<TValues> {
 }
 
 export type FormOperation =
-  | { readonly kind: 'set', readonly path: string, readonly value: unknown, readonly touch?: boolean }
+  | { readonly kind: 'set', readonly path: string, readonly value: unknown, readonly touch?: boolean, readonly reactivity?: 'blur' | Readonly<{ readonly debounceMilliseconds: number }> }
+  | { readonly kind: 'reactivity-flush', readonly path: string }
   | { readonly kind: 'touch', readonly path: string, readonly touched?: boolean }
   | { readonly kind: 'errors', readonly path: string, readonly errors: readonly string[] }
   | { readonly kind: 'visible', readonly path: string, readonly value: boolean }

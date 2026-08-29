@@ -1,4 +1,4 @@
-import { type JsonObject, type RecordPath, toJsonValue } from '@holo-js/panels-core'
+import { type JsonObject, type RecordPath, type RecordPathValue, toJsonValue } from '@holo-js/panels-core'
 
 export type SchemaOperation = 'create' | 'edit' | 'view' | string
 export type SchemaColumns = number | Readonly<Record<string, number>>
@@ -15,6 +15,17 @@ export interface SchemaComponentContract<TRecord extends object = object> {
   readonly resourceRecordType: TRecord
   compile(): object
 }
+
+export interface SchemaResolverContext<TRecord extends object> {
+  readonly operation: SchemaOperation
+  readonly record: TRecord | null
+  readonly get: <TPath extends RecordPath<TRecord>>(path: TPath) => RecordPathValue<TRecord, TPath> | undefined
+  readonly set: <TPath extends RecordPath<TRecord>>(path: TPath, value: RecordPathValue<TRecord, TPath>) => void
+}
+
+export type SchemaComponentResolver<TRecord extends object> = (
+  context: SchemaResolverContext<TRecord>,
+) => readonly SchemaComponentContract<TRecord>[] | Promise<readonly SchemaComponentContract<TRecord>[]>
 
 export type SchemaComponent<TRecord extends object = object> = SchemaComponentContract<TRecord>
 export type SchemaComponentFor<TRecord extends object> = SchemaComponentContract<TRecord> & (
@@ -102,6 +113,9 @@ export abstract class Component<TRecord extends object = object> implements Sche
   #columnStart: number | Readonly<Record<string, number>> | null = null
   #extraAttributes: JsonObject = {}
   #hidden = false
+  #columnOrder: number | Readonly<Record<string, number>> | null = null
+  #columns: SchemaColumns | null = null
+  #grow = true
 
   protected constructor(kind: string, key: string) {
     this.kind = kind
@@ -119,6 +133,21 @@ export abstract class Component<TRecord extends object = object> implements Sche
 
   columnStart(start: number | Readonly<Record<string, number>> | null): this {
     this.#columnStart = typeof start === 'object' && start !== null ? Object.freeze({ ...start }) : start
+    return this
+  }
+
+  columnOrder(order: number | Readonly<Record<string, number>> | null): this {
+    this.#columnOrder = typeof order === 'object' && order !== null ? Object.freeze({ ...order }) : order
+    return this
+  }
+
+  columns(columns: SchemaColumns): this {
+    this.#columns = typeof columns === 'object' ? Object.freeze({ ...columns }) : columns
+    return this
+  }
+
+  grow(value = true): this {
+    this.#grow = value
     return this
   }
 
@@ -145,8 +174,11 @@ export abstract class Component<TRecord extends object = object> implements Sche
     return Object.freeze({
       columnSpan: this.#columnSpan,
       columnStart: this.#columnStart,
+      columnOrder: this.#columnOrder,
+      columns: this.#columns,
       extraAttributes: Object.freeze({ ...this.#extraAttributes }),
       hidden: this.#hidden,
+      grow: this.#grow,
       key: this.key,
       kind: this.kind,
       ...this.componentProperties(),
@@ -160,9 +192,18 @@ export abstract class Component<TRecord extends object = object> implements Sche
 
 abstract class ChildComponent<TRecord extends object = object> extends Component<TRecord> {
   #children: readonly SchemaComponentContract<TRecord>[] = []
+  #resolver: SchemaComponentResolver<TRecord> | null = null
 
-  schema<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: TComponents): this {
-    this.#children = Object.freeze([...components])
+  schema<const TComponents extends readonly SchemaComponentContract<TRecord>[]>(components: TComponents): this
+  schema(resolver: SchemaComponentResolver<TRecord>): this
+  schema(componentsOrResolver: readonly SchemaComponentContract<TRecord>[] | SchemaComponentResolver<TRecord>): this {
+    if (typeof componentsOrResolver === 'function') {
+      this.#children = Object.freeze([])
+      this.#resolver = componentsOrResolver
+      return this
+    }
+    this.#children = Object.freeze([...componentsOrResolver])
+    this.#resolver = null
     return this
   }
 
@@ -174,6 +215,17 @@ abstract class ChildComponent<TRecord extends object = object> extends Component
     return this.#children
   }
 
+  override compile(): SchemaComponentManifest {
+    return Object.freeze({
+      ...super.compile(),
+      dynamicSchema: this.#resolver !== null,
+      server: Object.freeze({
+        children: this.#children.map(compileComponent),
+        ...(this.#resolver ? { resolveChildren: async (context: SchemaResolverContext<TRecord>) => (await this.#resolver!(context)).map(compileComponent) } : {}),
+      }),
+    })
+  }
+
   protected override componentProperties(): JsonObject {
     return {
       children: this.#children.map(compileSchemaComponentManifest),
@@ -182,19 +234,36 @@ abstract class ChildComponent<TRecord extends object = object> extends Component
 }
 
 export class Grid<TRecord extends object = object> extends ChildComponent<TRecord> {
-  readonly #gridColumns: SchemaColumns
-
   private constructor(columns: SchemaColumns = 2) {
     super('grid', 'grid')
-    this.#gridColumns = columns
+    this.columns(columns)
   }
 
   static make<TRecord extends object = object>(columns: SchemaColumns = 2): Grid<TRecord> {
     return new Grid(columns)
   }
 
+}
+
+export class Flex<TRecord extends object = object> extends ChildComponent<TRecord> {
+  #from = 'md'
+
+  private constructor(children: readonly SchemaComponentContract<TRecord>[] = []) {
+    super('flex', 'flex')
+    this.schema(children)
+  }
+
+  static make<TRecord extends object = object>(children: readonly SchemaComponentContract<TRecord>[] = []): Flex<TRecord> {
+    return new Flex(children)
+  }
+
+  from(breakpoint: 'sm' | 'md' | 'lg' | 'xl' | '2xl'): this {
+    this.#from = breakpoint
+    return this
+  }
+
   protected override componentProperties(): JsonObject {
-    return { ...super.componentProperties(), columns: this.#gridColumns }
+    return { ...super.componentProperties(), from: this.#from }
   }
 }
 
@@ -305,6 +374,7 @@ export class Tab<TRecord extends object = object> extends ChildComponent<TRecord
 }
 
 export class Fieldset<TRecord extends object = object> extends ChildComponent<TRecord> {
+  #contained = true
   readonly #label: string
 
   private constructor(label: string) {
@@ -316,9 +386,44 @@ export class Fieldset<TRecord extends object = object> extends ChildComponent<TR
     return new Fieldset(label)
   }
 
-  protected override componentProperties(): JsonObject {
-    return { ...super.componentProperties(), label: this.#label }
+  contained(value = true): this {
+    this.#contained = value
+    return this
   }
+
+  protected override componentProperties(): JsonObject {
+    return { ...super.componentProperties(), contained: this.#contained, label: this.#label }
+  }
+}
+
+abstract class MessageComponent<TRecord extends object> extends Component<TRecord> {
+  #color: string | null = null
+  #description: string | null = null
+  #icon: string | null = null
+  readonly #heading: string
+
+  protected constructor(kind: 'callout' | 'empty-state', heading: string) {
+    super(kind, heading)
+    this.#heading = heading
+  }
+
+  color(value: string | null): this { this.#color = value; return this }
+  description(value: string | null): this { this.#description = value; return this }
+  icon(value: string | null): this { this.#icon = value; return this }
+
+  protected override componentProperties(): JsonObject {
+    return { color: this.#color, description: this.#description, heading: this.#heading, icon: this.#icon }
+  }
+}
+
+export class Callout<TRecord extends object = object> extends MessageComponent<TRecord> {
+  private constructor(heading: string) { super('callout', heading) }
+  static make<TRecord extends object = object>(heading: string): Callout<TRecord> { return new Callout(heading) }
+}
+
+export class EmptyState<TRecord extends object = object> extends MessageComponent<TRecord> {
+  private constructor(heading: string) { super('empty-state', heading) }
+  static make<TRecord extends object = object>(heading: string): EmptyState<TRecord> { return new EmptyState(heading) }
 }
 
 export class Wizard<TRecord extends object = object> extends ChildComponent<TRecord> {
@@ -353,7 +458,10 @@ export class WizardStep<TRecord extends object = object> extends ChildComponent<
 }
 
 export interface LayoutFactory<TRecord extends object> {
+  readonly Callout: { make(heading: string): Callout<TRecord> }
+  readonly EmptyState: { make(heading: string): EmptyState<TRecord> }
   readonly Fieldset: { make(label: string): Fieldset<TRecord> }
+  readonly Flex: { make(children?: readonly SchemaComponentContract<TRecord>[]): Flex<TRecord> }
   readonly Grid: { make(columns?: SchemaColumns): Grid<TRecord> }
   readonly Section: { make(heading?: string | null): Section<TRecord> }
   readonly Tab: { make(label: string): Tab<TRecord> }
@@ -364,7 +472,10 @@ export interface LayoutFactory<TRecord extends object> {
 
 export function createLayoutFactory<TRecord extends object>(): LayoutFactory<TRecord> {
   return Object.freeze({
+    Callout: Object.freeze({ make: (heading: string) => Callout.make<TRecord>(heading) }),
+    EmptyState: Object.freeze({ make: (heading: string) => EmptyState.make<TRecord>(heading) }),
     Fieldset: Object.freeze({ make: (label: string) => Fieldset.make<TRecord>(label) }),
+    Flex: Object.freeze({ make: (children: readonly SchemaComponentContract<TRecord>[] = []) => Flex.make<TRecord>(children) }),
     Grid: Object.freeze({ make: (columns?: SchemaColumns) => Grid.make<TRecord>(columns) }),
     Section: Object.freeze({ make: (heading?: string | null) => Section.make<TRecord>(heading) }),
     Tab: Object.freeze({ make: (label: string) => Tab.make<TRecord>(label) }),

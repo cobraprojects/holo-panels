@@ -18,10 +18,7 @@ export function ReactFieldRenderer<TValues extends object>(props: ReactFieldRend
   const context = useFieldContext(props)
   if (!context) return null
   const controlProps: ReactFieldControlProps<TValues> = { ...props, context }
-  if (basicTypes.has(props.definition.type)) return <ReactBasicField {...controlProps} />
-  if (optionTypes.has(props.definition.type)) return <ReactOptionField {...controlProps} />
-  if (collectionTypes.has(props.definition.type)) return <ReactCollectionField {...controlProps} />
-  if (props.definition.type === 'panels:field:upload') return <ReactUploadField {...controlProps} />
+  registerReactFieldRenderers(props.registry)
   const CustomRenderer = props.registry.resolve<ReactFieldControlProps<TValues>>(
     fieldRendererName(props.definition.type),
     props.panelId,
@@ -31,9 +28,9 @@ export function ReactFieldRenderer<TValues extends object>(props: ReactFieldRend
 }
 
 export function registerReactFieldRenderers(registry: ReactFieldRendererProps<object>['registry']): typeof registry {
-  for (const type of basicTypes) registry.register(fieldRendererName(type), ReactBasicField, '@holo-js/panels-react')
-  for (const type of optionTypes) registry.register(fieldRendererName(type), ReactOptionField, '@holo-js/panels-react')
-  for (const type of collectionTypes) registry.register(fieldRendererName(type), ReactCollectionField, '@holo-js/panels-react')
-  registry.register('field.upload', ReactUploadField, '@holo-js/panels-react')
+  for (const type of basicTypes) if (!registry.has(fieldRendererName(type))) registry.register(fieldRendererName(type), ReactBasicField, '@holo-js/panels-react')
+  for (const type of optionTypes) if (!registry.has(fieldRendererName(type))) registry.register(fieldRendererName(type), ReactOptionField, '@holo-js/panels-react')
+  for (const type of collectionTypes) if (!registry.has(fieldRendererName(type))) registry.register(fieldRendererName(type), ReactCollectionField, '@holo-js/panels-react')
+  if (!registry.has('field.upload')) registry.register('field.upload', ReactUploadField, '@holo-js/panels-react')
   return registry
 }

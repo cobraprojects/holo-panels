@@ -18,6 +18,8 @@ import type { SvelteFieldRendererProps } from '../src/fields/contracts'
 import { SvelteComponentRegistry } from '../src/registry'
 import P6GFieldFixture from './P6GFieldFixture.svelte'
 import P6GHydrationFixture from './P6GHydrationFixture.svelte'
+import P6GCustomField from './P6GCustomField.svelte'
+import FieldRenderer from '../src/fields/FieldRenderer.svelte'
 
 interface FixtureProps {
   readonly form: FormStore<Record<string, unknown>>
@@ -123,6 +125,22 @@ afterEach(async () => {
 })
 
 describe('P6-G Svelte field renderers', () => {
+  it('uses a panel registry override for a built-in field with shared values and updates', () => {
+    const form = new FormStore<Record<string, unknown>>({ title: 'Initial' })
+    const registry = new SvelteComponentRegistry()
+    registry.override('editor', { component: P6GCustomField, source: 'test', typeId: 'field.text' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mountClient(FieldRenderer, { target: container, props: { definition: { type: 'text', path: 'title', label: 'Title' }, form, panelId: 'editor', registry } })
+    mounted.push({ component, container })
+    flushClient()
+
+    expect(container.querySelector('[data-custom-path="title"]')?.textContent).toBe('Initial')
+    container.querySelector<HTMLButtonElement>('button')?.click()
+    flushClient()
+    expect(form.state.values.title).toBe('custom-updated')
+  })
+
   it('renders every field family with accessible value, description, error, required, preview, and editor contracts', async () => {
     const props = stores()
     await props.optionStore.preload()

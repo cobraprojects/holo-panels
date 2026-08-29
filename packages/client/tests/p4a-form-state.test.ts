@@ -49,6 +49,28 @@ function deferred<TValue>(): {
 }
 
 describe('P4-A form state engine', () => {
+  it('updates values immediately while honoring blur and debounce dependency modes', async () => {
+    vi.useFakeTimers()
+    const store = new FormStore({ source: '', result: '' }, { dependencies: [{
+      id: 'copy',
+      paths: ['source'],
+      recompute: context => [{ kind: 'set', path: 'result', value: context.get('source') }],
+    }] })
+
+    store.batch([{ kind: 'set', path: 'source', value: 'blurred', reactivity: 'blur' }])
+    expect(store.state.values).toEqual({ source: 'blurred', result: '' })
+    store.touch('source')
+    expect(store.state.values.result).toBe('blurred')
+
+    store.batch([{ kind: 'set', path: 'source', value: 'debounced', reactivity: { debounceMilliseconds: 200 } }])
+    expect(store.state.values.result).toBe('blurred')
+    await vi.advanceTimersByTimeAsync(199)
+    expect(store.state.values.result).toBe('blurred')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(store.state.values.result).toBe('debounced')
+    vi.useRealTimers()
+  })
+
   it('updates nested values immutably and preserves unaffected identities', () => {
     const store = new FormStore(initialValues())
     const listener = vi.fn()

@@ -23,6 +23,8 @@ export interface SvelteFieldFrameProps {
   readonly children: Snippet<[FieldControlAttributes]>
   readonly description?: string
   readonly errors?: readonly string[]
+  readonly executeAction?: (actionId: string) => void
+  readonly hintAction?: JsonValue
   readonly hint?: string
   readonly inputId: string
   readonly label: string
@@ -41,6 +43,7 @@ export interface SvelteFieldDefinition<
   TValues extends object = Record<string, unknown>,
   TPath extends SvelteFieldPath<TValues> = SvelteFieldPath<TValues>,
 > {
+  readonly debounceMilliseconds?: number
   readonly type: string
   readonly path: TPath
   readonly label: string
@@ -63,6 +66,7 @@ export interface SvelteFieldRendererProps<
   TPath extends SvelteFieldPath<TValues> = SvelteFieldPath<TValues>,
 > {
   readonly definition: SvelteFieldDefinition<TValues, TPath>
+  readonly executeAction?: (actionId: string) => void
   readonly form: SvelteFormStore<TValues>
   readonly optionStore?: SvelteOptionStore
   readonly collectionStore?: SvelteCollectionStore

@@ -139,6 +139,8 @@ export class FormStore<TValues extends object> {
   readonly #form: FormClientState<TValues>
   readonly #fields: readonly FormValidationField[]
   #correctionSequence = 0
+  readonly #deferredDependencyPaths = new Set<string>()
+  readonly #dependencyTimers = new Map<string, ReturnType<typeof setTimeout>>()
   #state: FormState<TValues>
   readonly #listeners = new Set<FormStateListener<TValues>>()
   readonly #dependencies = new Map<string, FormDependency<TValues>>()
@@ -220,10 +222,39 @@ export class FormStore<TValues extends object> {
     if (operations.length === 0) return this.#state
     const working = this.createWorkingState()
     this.applyOperations(working, operations)
+    const flushPaths = operations.flatMap(operation => operation.kind === 'reactivity-flush' || operation.kind === 'touch' && this.#deferredDependencyPaths.has(operation.path) ? [operation.path] : [])
+    const deferredSets = operations.filter((operation): operation is Extract<FormOperation, { kind: 'set' }> => operation.kind === 'set' && operation.reactivity !== undefined)
+    const immediateSets = operations.filter((operation): operation is Extract<FormOperation, { kind: 'set' }> => operation.kind === 'set' && operation.reactivity === undefined)
+    for (const operation of immediateSets) this.clearDeferredDependency(operation.path)
+    for (const operation of deferredSets) this.#deferredDependencyPaths.add(operation.path)
+    const deferred = new Set(deferredSets.map(operation => operation.path))
+    working.changedPaths = new Set([...working.changedPaths].filter(path => !deferred.has(path)))
+    for (const path of flushPaths) {
+      this.clearDeferredDependency(path)
+      working.changedPaths.add(path)
+    }
     this.recomputeDependencies(working)
     const result = this.commit(working)
+    for (const operation of deferredSets) {
+      const reactivity = operation.reactivity
+      if (reactivity && reactivity !== 'blur') this.scheduleDependencyFlush(operation.path, reactivity.debounceMilliseconds)
+    }
     if (working.changedPaths.size > 0) this.revalidateInvalidFields()
     return result
+  }
+
+  private clearDeferredDependency(path: string): void {
+    this.#deferredDependencyPaths.delete(path)
+    const timer = this.#dependencyTimers.get(path)
+    if (timer) clearTimeout(timer)
+    this.#dependencyTimers.delete(path)
+  }
+
+  private scheduleDependencyFlush(path: string, milliseconds: number): void {
+    if (!Number.isSafeInteger(milliseconds) || milliseconds < 0 || milliseconds > 60_000) throw new Error('Field debounce must be from 0 to 60000 milliseconds')
+    const active = this.#dependencyTimers.get(path)
+    if (active) clearTimeout(active)
+    this.#dependencyTimers.set(path, setTimeout(() => this.batch([{ kind: 'reactivity-flush', path }]), milliseconds))
   }
 
   reset(): FormState<TValues> {
@@ -411,6 +442,8 @@ export class FormStore<TValues extends object> {
           working.changed ||= !working.editedPaths.has(operation.path)
           working.editedPaths.add(operation.path)
         }
+      } else if (operation.kind === 'reactivity-flush') {
+        working.changedPaths.add(operation.path)
       } else if (operation.kind === 'touch') {
         this.applyTouch(working, operation.path, operation.touched ?? true)
       } else if (operation.kind === 'errors') {

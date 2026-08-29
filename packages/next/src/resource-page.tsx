@@ -25,6 +25,7 @@ import {
   ReactEntryRenderer,
   ReactFieldRenderer,
   ReactRelationManagerRenderer,
+  ReactSchemaRenderer,
   ReactPanelsRenderHook,
   ReactTableRenderer,
   TableStateStore,
@@ -51,8 +52,9 @@ import {
   type ReactTableSummary,
   type UploadPolicy,
 } from '@holo-js/panels-react'
+import type { SchemaManifest } from '@holo-js/panels-client'
 import { useRouter } from 'next/navigation.js'
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Card, CardContent, CardFooter } from './internal-ui'
 import { useClientRequestController } from './client-lifecycle'
 
@@ -568,6 +570,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
 function fieldDefinition(definition: JsonObject): ReactCompiledField<ResourceValues> {
   const path = propertyPath(text(definition.path))
   return {
+    debounceMilliseconds: typeof definition.debounceMilliseconds === 'number' ? definition.debounceMilliseconds : 0,
     disabled: boolean(definition.disabled, false),
     helperText: typeof definition.helperText === 'string' ? definition.helperText : null,
     hint: typeof definition.hint === 'string' ? definition.hint : null,
@@ -620,6 +623,12 @@ function staticOptions(properties: JsonObject): readonly { readonly disabled: bo
   })
 }
 
+function useStructurallyStableValue<TValue>(value: TValue): TValue {
+  const stable = useRef(value)
+  if (JSON.stringify(stable.current) !== JSON.stringify(value)) stable.current = value
+  return stable.current
+}
+
 function ResourceField({ definition, form, operation, pageOperation, panelId, recordId, registry, resourceId, values }: {
   readonly definition: ReactCompiledField<ResourceValues>
   readonly form: FormStore<ResourceValues>
@@ -639,7 +648,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
   const serverOptions = !!sourceKind && sourceKind !== 'static'
   const collection = ['builder', 'key-value', 'repeater'].includes(definition.type)
   const collectionStore = useMemo(() => collection ? new CollectionStore(collectionValues(valueAtPath(values, definition.path)), 'resource-item') : undefined, [collection, definition.path, values])
-  const uploadPolicy = definition.type === 'panels:field:upload' ? Reflect.get(definition.properties, 'uploadPolicy') as UploadPolicy | undefined : undefined
+  const uploadPolicy = useStructurallyStableValue(definition.type === 'panels:field:upload' ? Reflect.get(definition.properties, 'uploadPolicy') as UploadPolicy | undefined : undefined)
   const uploadStore = useMemo(() => uploadPolicy ? createUploadStore({
     adapter: ownedUploadAdapter(createBrowserUploadAdapter({
       endpoint: `/holo/panels/${encodeURIComponent(panelId)}/upload`,
@@ -729,6 +738,18 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
     collectionStore={collectionStore}
     createCollectionItem={definition.type === 'builder' ? blockType => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined}
     definition={definition}
+    executeAction={(actionId) => {
+      const idempotencyKey = crypto.randomUUID()
+      void operation.execute('action', {
+        actionId,
+        idempotencyKey,
+        input: {},
+        mount: pageOperation === 'create' ? 'page' : 'record',
+        recordIds: pageOperation === 'create' || typeof recordId !== 'string' && typeof recordId !== 'number' ? [] : [recordId],
+        resourceId,
+        source: `form-field:${definition.path}`,
+      }).catch(() => undefined)
+    }}
     optionStore={optionStore}
     panelId={panelId}
     registry={registry}
@@ -754,17 +775,52 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   const navigate = useRouter().push
   const record = useMemo(() => object(data.record), [data])
   const formManifest = object(resource.form)
-  const fields = useMemo(() => objects(formManifest.fields).map(fieldDefinition), [formManifest])
+  const resourceId = text(resource.id)
+  const routeKey = propertyPath(text(resource.routeKey))
+  const configuredFields = useMemo(() => objects(formManifest.fields).map(fieldDefinition), [formManifest])
+  const configuredSchema = object(formManifest.schema) as unknown as SchemaManifest<ResourceValues>
+  const [fields, setFields] = useState(configuredFields)
+  const [formSchema, setFormSchema] = useState(configuredSchema)
+  useEffect(() => {
+    setFields(configuredFields)
+    setFormSchema(configuredSchema)
+  }, [configuredFields, configuredSchema])
   const initialValues = useMemo(() => {
     const values: ResourceValues = {}
-    for (const field of fields) {
+    for (const field of configuredFields) {
       const configured = object(objects(formManifest.fields).find(item => item.path === field.path)?.properties).defaultValue
       setValueAtPath(values, field.path, valueAtPath(record, field.path) ?? configured ?? '')
     }
     return values
-  }, [fields, formManifest, record])
-  const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest), fields }), [fields, formManifest, initialValues])
+  }, [configuredFields, formManifest, record])
+  const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest), fields: configuredFields }), [configuredFields, formManifest, initialValues])
   const state = useFormStore<ResourceValues>(form)
+  const previousLifecycleValues = useRef<ResourceValues | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    const previousValues = previousLifecycleValues.current
+    previousLifecycleValues.current = state.values
+    void operation.execute('options', {
+      action: 'schema',
+      formOperation: pageOperation,
+      lifecycle: previousValues ? 'update' : 'hydrate',
+      ...(previousValues ? { previousValues } : {}),
+      recordId: record[routeKey] ?? null,
+      resourceId,
+      values: { ...state.values },
+    }, controller.signal).then((result) => {
+      if (!result.ok || !result.data || controller.signal.aborted) return
+      const nextFields = objects(result.data.fields).map(fieldDefinition)
+      const nextSchema = object(result.data.schema) as unknown as SchemaManifest<ResourceValues>
+      if (nextFields.length > 0 || nextSchema.components.length > 0) {
+        setFields(current => JSON.stringify(current) === JSON.stringify(nextFields) ? current : nextFields)
+        setFormSchema(current => JSON.stringify(current) === JSON.stringify(nextSchema) ? current : nextSchema)
+      }
+      const operations = objects(result.data.operations).flatMap(operation => typeof operation.path === 'string' && operation.kind === 'set' ? [{ kind: 'set' as const, path: operation.path, value: operation.value }] : [])
+      if (operations.length > 0) form.batch(operations)
+    })
+    return () => controller.abort()
+  }, [form, operation, pageOperation, record, resourceId, routeKey, state.values])
   useEffect(() => () => form.cancelRequests(), [form])
   useEffect(() => {
     if (!unsavedChangesAlerts || state.dirtyPaths.length === 0) return
@@ -775,8 +831,6 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     globalThis.addEventListener('beforeunload', preventUnload)
     return () => globalThis.removeEventListener('beforeunload', preventUnload)
   }, [state.dirtyPaths.length, unsavedChangesAlerts])
-  const resourceId = text(resource.id)
-  const routeKey = propertyPath(text(resource.routeKey))
   const [relations, setRelations] = useState(() => relationManagers(data.relations))
   useEffect(() => setRelations(relationManagers(data.relations)), [data.relations])
   const loadRelationOptions: NonNullable<ReactRelationManagerRendererProps['loadOptions']> = async (managerId, search) => {
@@ -855,7 +909,16 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
       event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
     }}>
       <Card>
-        <CardContent className="hp:grid hp:gap-6 hp:pt-6">{fields.map(definition => <ResourceField definition={definition} form={form} key={definition.path} operation={operation} pageOperation={pageOperation} panelId={panelId} recordId={record[routeKey]} registry={registry} resourceId={resourceId} values={state.values} />)}</CardContent>
+        <CardContent className="hp:grid hp:gap-6 hp:pt-6"><ReactSchemaRenderer
+          panelId={panelId}
+          registry={registry}
+          renderContent={({ component }) => {
+            if (component.kind !== 'field' || !component.statePath) return null
+            const definition = fields.find(field => field.path === component.statePath)
+            return definition ? <ResourceField definition={definition} form={form} key={definition.path} operation={operation} pageOperation={pageOperation} panelId={panelId} recordId={record[routeKey]} registry={registry} resourceId={resourceId} values={state.values} /> : null
+          }}
+          schema={formSchema}
+        /></CardContent>
         <CardFooter className="hp:justify-end">{formActions[0] ? <ReactActionRenderer actions={formActions} input={state.values} manifest={formActions[0]} panelId={panelId} registry={registry} store={formActionStore} /> : null}</CardFooter>
       </Card>
       {state.errors._root?.length ? <ul data-form-errors="" role="alert">{state.errors._root.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}

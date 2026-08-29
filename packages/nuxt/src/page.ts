@@ -39,6 +39,7 @@ import {
   VueNotificationInboxTrigger,
   VueTenantSwitcher,
   VueRelationManagerRenderer,
+  VueSchemaRenderer,
   VueTableRenderer,
   VueToastViewport,
   WidgetStore,
@@ -52,10 +53,12 @@ import {
   renderPanelsHook,
   toJsonValue,
   type ClientActionManifest,
+  type FormOperation,
   type ClientNotificationRealtime,
   type ClientSearchResponse,
   type ComponentRegistry,
   type JsonObject,
+  type SchemaManifest,
   type PanelAvatarComponentProps,
   type PanelChromeComponentProps,
   type VueNotificationInboxTriggerProps,
@@ -213,6 +216,7 @@ interface ResourceRenderSchema {
   readonly resourceId: string
   readonly routeKey: string
   readonly routes: Readonly<{ create: string | null, edit: string | null, view: string | null }>
+  readonly schema?: SchemaManifest<ResourceValues>
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -345,16 +349,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
         basePath: `${page.manifest.path.split(/\/:record/u, 1)[0]?.replace(/\/(?:create)$/u, '') ?? ''}`,
         columns: Array.isArray(generatedTable.columns) ? generatedTable.columns.map(manifest => ({ manifest })) : [],
         entries: Array.isArray(generatedInfolist?.entries) ? generatedInfolist.entries : [],
-        fields: Array.isArray(generatedForm.fields) ? generatedForm.fields.map((field) => {
-          if (!isObject(field)) return field
-          const properties = isObject(field.properties) ? field.properties : {}
-          const options = Array.isArray(properties.options) ? properties.options : []
-          const sourceKind = typeof properties.optionSource === 'string' ? properties.optionSource : ''
-          const reactive = properties.specialization === 'slug' && isPath(properties.source)
-            ? { source: properties.source, transform: 'slug' as const }
-            : undefined
-          return { ...field, ...(options.length > 0 || (sourceKind && sourceKind !== 'static') ? { optionSource: { options, server: !!sourceKind && sourceKind !== 'static' } } : {}), ...(reactive ? { reactive } : {}), ...(typeof properties.defaultValue !== 'undefined' ? { defaultValue: properties.defaultValue } : {}) }
-        }) : [],
+        fields: Array.isArray(generatedForm.fields) ? generatedForm.fields.map(resourceField) : [],
         formActions: generatedForm.actions,
         filters: Array.isArray(generatedTable.filters) ? generatedTable.filters.map(manifest => ({ manifest, options: resourceFilterOptions(manifest) })) : [],
         filterMode: generatedTable.filterMode === 'deferred' ? 'deferred' : 'live',
@@ -365,6 +360,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
         resourceId: generated.id,
         routeKey: generated.routeKey,
         routes: isObject(generated.routes) ? generated.routes : {},
+        schema: generatedForm.schema as unknown as SchemaManifest<ResourceValues>,
       }
     : page.schema
   if (!isObject(schema) || schema.kind !== 'resource' || typeof schema.resourceId !== 'string' || typeof schema.basePath !== 'string' || !schema.basePath.startsWith('/') || !isPath(schema.routeKey) || !isPath(schema.recordTitle)) {
@@ -384,10 +380,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
     basePath: schema.basePath.replace(/\/+$/gu, ''),
     columns: schema.columns as unknown as readonly VueTableColumn<ResourceRecord>[],
     entries: (Array.isArray(schema.entries) ? schema.entries : schema.fields) as JsonObject[],
-    fields: (schema.fields as unknown as readonly ResourceField[]).map(field => ({
-      ...field,
-      label: typeof field.label === 'string' && field.label.trim() ? field.label : humanizePath(field.path),
-    })),
+    fields: (schema.fields as unknown as readonly ResourceField[]).map(resourceField),
     filters: schema.filters as unknown as readonly VueTableFilter[],
     formActions: (Array.isArray(schema.formActions) ? schema.formActions : []).flatMap(item => clientAction(item) ?? []),
     cancelFormActions: (Array.isArray(schema.formActions) ? schema.formActions : []).flatMap(item => isObject(item) && item.formIntent === 'cancel' && typeof item.id === 'string' ? [item.id] : []),
@@ -402,7 +395,25 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
       edit: typeof routes.edit === 'string' ? routes.edit : null,
       view: typeof routes.view === 'string' ? routes.view : null,
     },
+    ...(isObject(schema.schema) ? { schema: schema.schema as unknown as SchemaManifest<ResourceValues> } : {}),
   }
+}
+
+function resourceField(value: unknown): ResourceField {
+  if (!isObject(value) || !isPath(value.path) || typeof value.type !== 'string') throw new Error('Resource render schema fields are invalid')
+  const properties = isObject(value.properties) ? value.properties : {}
+  const options = Array.isArray(properties.options) ? properties.options : []
+  const sourceKind = typeof properties.optionSource === 'string' ? properties.optionSource : ''
+  const reactive = properties.specialization === 'slug' && isPath(properties.source)
+    ? { source: properties.source, transform: 'slug' as const }
+    : undefined
+  return {
+    ...value,
+    label: typeof value.label === 'string' && value.label.trim() ? value.label : humanizePath(value.path),
+    ...(options.length > 0 || sourceKind && sourceKind !== 'static' ? { optionSource: { options, server: !!sourceKind && sourceKind !== 'static' } } : {}),
+    ...(reactive ? { reactive } : {}),
+    ...(typeof properties.defaultValue !== 'undefined' ? { defaultValue: properties.defaultValue } : {}),
+  } as ResourceField
 }
 
 function resourceTableAction(action: JsonObject, routes: JsonObject): ResourceTableAction | null {
@@ -672,6 +683,12 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   let routeValue = record ? valueAtPath(record, schema.routeKey) : undefined
   const recordActions = schema.recordActions.filter(action => action.mount === (page.manifest.pageType === 'create' ? 'page' : 'record') && action.visible)
   const values = initialValues(schema, record)
+  const renderedFields = shallowReactive([...schema.fields])
+  const formSchema = ref(schema.schema ?? {
+    components: schema.fields.map(field => ({ children: [], dynamicVisibility: false, extraAttributes: {}, id: `${schema.resourceId}-${field.path}`, key: field.path, kind: 'field' as const, layout: {}, properties: {}, slots: {}, statePath: field.path, type: 'field', visible: field.visible })),
+    id: `${schema.resourceId}-form`,
+    kind: 'schema' as const,
+  })
   const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new FormStore(values, {
     fields: schema.fields,
@@ -710,6 +727,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   onMounted(() => window.addEventListener('beforeunload', preventUnload))
   onUnmounted(() => {
     window.removeEventListener('beforeunload', preventUnload)
+    schemaRequest?.abort()
     store.cancelRequests()
     while (actionStore.activeFrame) actionStore.close()
     while (formActionStore.activeFrame) formActionStore.close()
@@ -744,10 +762,48 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     return [[field.path, upload] as const]
   }))
   const formState = shallowReactive({ values: store.state.values, errors: store.state.errors })
+  let schemaRequest: AbortController | null = null
+  const refreshFormSchema = (nextValues: Readonly<ResourceValues>, previousValues: Readonly<ResourceValues> | null): void => {
+    schemaRequest?.abort()
+    schemaRequest = new AbortController()
+    const controller = schemaRequest
+    void runtime.transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
+      endpoint: `/holo/panels/${encodeURIComponent(panelId)}/options`,
+      panelId,
+      payload: mutationPayload({
+        action: 'schema',
+        formOperation: page.manifest.pageType,
+        lifecycle: previousValues ? 'update' : 'hydrate',
+        ...(previousValues ? { previousValues: fieldValues(previousValues) } : {}),
+        ...(typeof routeValue === 'number' || typeof routeValue === 'string' ? { record: routeValue } : {}),
+        resourceId: schema.resourceId,
+        values: fieldValues(nextValues),
+      }),
+      signal: requestSignal(runtime.signal, controller.signal),
+    }).then((response) => {
+      if (!response.ok) throw new Error(response.error.message)
+      const fields = Array.isArray(response.data.fields) ? response.data.fields.map(resourceField) : renderedFields
+      for (const field of fields) {
+        if (!optionStores.has(field.path)) {
+          const options = optionStore(runtime, panelId, schema.resourceId, field, store.state.values)
+          if (options) optionStores.set(field.path, options)
+        }
+        if (!collectionStores.has(field.path) && ['builder', 'key-value', 'repeater'].includes(field.type)) {
+          const value = valueAtPath(store.state.values, field.path)
+          collectionStores.set(field.path, new CollectionStore(Array.isArray(value) ? value : [], 'resource-item'))
+        }
+      }
+      if (JSON.stringify(fields) !== JSON.stringify(renderedFields)) renderedFields.splice(0, renderedFields.length, ...fields)
+      if (isObject(response.data.schema)) formSchema.value = response.data.schema as unknown as SchemaManifest<ResourceValues>
+      if (Array.isArray(response.data.operations)) store.batch(response.data.operations as unknown as readonly FormOperation[])
+    }).catch(() => {
+      if (!controller.signal.aborted) publishPanelActionFailure(panelId)
+    })
+  }
   store.subscribe((next, previous) => {
     formState.values = next.values
     formState.errors = next.errors
-    for (const field of schema.fields) {
+    for (const field of renderedFields) {
       const dependency = field.optionSource?.dependency
       const options = optionStores.get(field.path)
       if (!dependency || !options || valueAtPath(next.values, dependency) === valueAtPath(previous.values, dependency)) continue
@@ -758,7 +814,10 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
         if (typeof dependencyValue === 'string' || typeof dependencyValue === 'number') await options.preload()
       })
     }
+    if (next.values === previous.values) return
+    refreshFormSchema(next.values, previous.values)
   })
+  refreshFormSchema(store.state.values, null)
   const formActionStore = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
     transport: {
@@ -818,6 +877,10 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     if (!response.ok) throw new Error(response.error.message)
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
+  const renderFormContent = ({ component }: { readonly component: { readonly kind: string, readonly statePath?: string } }): VNode | null => {
+    const definition = component.kind === 'field' ? renderedFields.find(field => field.path === component.statePath) : undefined
+    return definition ? h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, executeAction: (actionId: string) => { void mutate(runtime, panelId, 'action', mutationPayload({ actionId, idempotencyKey: crypto.randomUUID(), input: {}, mount: page.manifest.pageType === 'create' ? 'page' : 'record', recordIds: page.manifest.pageType === 'create' || typeof routeValue !== 'string' && typeof routeValue !== 'number' ? [] : [routeValue], resourceId: schema.resourceId, source: `form-field:${definition.path}` })).catch(() => undefined) }, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path }) : null
+  }
   return () => h('div', { class: 'hp-resource-page' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
       recordActions[0] ? h(VueActionRenderer, { action: recordActions[0], actions: recordActions, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], registry, store: actionStore }) : null,
@@ -827,7 +890,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       if (event.currentTarget instanceof HTMLFormElement) event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
     } }, [
       h(Card, {}, () => [
-        h(CardContent, { class: 'hp:grid hp:gap-6 hp:pt-6' }, () => schema.fields.map(definition => h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path }))),
+        h(CardContent, { class: 'hp:grid hp:gap-6 hp:pt-6' }, () => h(VueSchemaRenderer as Component, { panelId, registry, schema: formSchema.value, renderContent: renderFormContent })),
         h(CardFooter, { class: 'hp:justify-end' }, () => schema.formActions[0] ? h(VueActionRenderer, { action: schema.formActions[0], actions: schema.formActions, input: mutationPayload(formState.values), panelId, registry, store: formActionStore }) : null),
       ]),
       formState.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, formState.errors._root.map(message => h('li', message))) : null,

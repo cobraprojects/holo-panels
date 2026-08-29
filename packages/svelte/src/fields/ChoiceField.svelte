@@ -47,7 +47,7 @@
   }
 
   function setSelection(next: OptionValue | readonly OptionValue[] | null): void {
-    writeFieldValue(form, definition.path, next)
+    writeFieldValue(form, definition, next)
   }
 
   function changeSelect(event: Event): void {

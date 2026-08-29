@@ -15,7 +15,7 @@
     uploadFormPatch,
     createUploadStore,
     EntryRenderer,
-    FieldRenderer,
+    ResourceForm,
     FormStore,
     formValidationErrors,
     formValidationFailure,
@@ -34,8 +34,10 @@
     toSvelteState,
     type JsonObject,
     type JsonValue,
+    type FormOperation,
     type SvelteEntryStore,
     type SvelteComponentRegistry,
+    SvelteComponentRegistry as ComponentRegistry,
     type SvelteRelationManagerRendererProps,
     type SvelteTableGroup,
     type SvelteTableAction,
@@ -49,9 +51,13 @@
     jsonRecord,
     jsonRecords,
     resourcePageMetadata,
+    resourceFieldDefinition,
+    resourceOptionsFromFields,
+    resourceSchemaManifest,
     resourceOperationIdentifier,
       resourceRoute,
     slugValue,
+    type ResourcePageMetadata,
     type ResourceOptions,
   } from './resource-page'
 
@@ -63,6 +69,11 @@
   const endpoint = $derived(`/holo/panels/${data.panel.manifest.id}`)
   const pageType = $derived(data.page.manifest.pageType)
   const resource = $derived(resourcePageMetadata(data.page.data.resource ?? data.page.manifest.body?.properties.resource, data.page.manifest.path, pageType))
+  let resolvedFields = $state<ResourcePageMetadata['fields'] | null>(null)
+  let resolvedSchema = $state<ResourcePageMetadata['schema'] | null>(null)
+  let resolvedOptions = $state<ResourcePageMetadata['options'] | null>(null)
+  const renderedFields = $derived(resolvedFields ?? resource?.fields ?? [])
+  const renderedSchema = $derived(resolvedSchema ?? resource?.schema)
   const resourceScopes = $derived([data.page.manifest.id, ...(resource ? [resource.id] : [])])
   const record = $derived(jsonRecord(data.page.data.record))
   const records = $derived(jsonRecords(data.page.data.records))
@@ -106,6 +117,7 @@
     })),
   }))
   const formState = $derived.by(() => toSvelteState(form))
+  const componentRegistry = $derived(registry ?? new ComponentRegistry())
   onMount(() => {
     const preventUnload = (event: BeforeUnloadEvent): void => {
       if (!data.panel.manifest.runtime?.unsavedChangesAlerts || form.state.dirtyPaths.length === 0) return
@@ -115,7 +127,7 @@
     window.addEventListener('beforeunload', preventUnload)
     return () => window.removeEventListener('beforeunload', preventUnload)
   })
-  const optionStores = $derived.by(() => new Map(Object.entries(resource?.options ?? {}).map(([path, definition]) => [path, optionStore(path, definition)])))
+  const optionStores = $derived.by(() => new Map(Object.entries(resolvedOptions ?? resource?.options ?? {}).map(([path, definition]) => [path, optionStore(path, definition)])))
   const collectionStores = $derived.by(() => new Map((resource?.fields ?? []).flatMap((field) => {
     if (!['builder', 'key-value', 'repeater'].includes(field.type)) return []
     const value = toJsonValue(recordValue(initialValues, field.path))
@@ -163,6 +175,40 @@
       },
     },
   }))
+  let previousLifecycleValues: JsonObject | null = null
+  $effect(() => {
+    if (!resource || pageType !== 'create' && pageType !== 'edit') return
+    const values = toJsonValue($formState.values)
+    if (!values || typeof values !== 'object' || Array.isArray(values)) return
+    const previousValues = previousLifecycleValues
+    previousLifecycleValues = values
+    const controller = new AbortController()
+    void transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
+      endpoint: `${endpoint}/options`,
+      panelId: data.panel.manifest.id,
+      payload: {
+        action: 'schema',
+        formOperation: pageType,
+        lifecycle: previousValues ? 'update' : 'hydrate',
+        ...(previousValues ? { previousValues } : {}),
+        ...(currentRouteIdentifier === '' ? {} : { record: currentRouteIdentifier }),
+        resourceId: resource.id,
+        values,
+      },
+      signal: requestSignal(requestController.signal, controller.signal),
+    }).then((response) => {
+      if (!response.ok) throw new Error(response.error.message)
+      if (Array.isArray(response.data.fields)) {
+        resolvedFields = response.data.fields.flatMap(field => resourceFieldDefinition(field) ?? [])
+        resolvedOptions = resourceOptionsFromFields(response.data.fields)
+      }
+      resolvedSchema = resourceSchemaManifest(response.data.schema) ?? resolvedSchema
+      if (Array.isArray(response.data.operations)) form.batch(response.data.operations as unknown as readonly FormOperation[])
+    }).catch(() => {
+      if (!controller.signal.aborted) publishPanelActionFailure(data.panel.manifest.id)
+    })
+    return () => controller.abort()
+  })
   const actionStore = $derived(createActionStore(pageType))
   const formInput: JsonObject = $derived(Object.fromEntries(Object.entries($formState.values).map(([key, value]) => [key, toJsonValue(value)])))
   const formActionStore = $derived(new ClientActionStore({
@@ -221,6 +267,31 @@
       },
     },
     })
+  }
+
+  async function executeFieldAction(path: string, actionId: string): Promise<void> {
+    if (!resource) return
+    const idempotencyKey = globalThis.crypto.randomUUID()
+    const response = await transport.execute<JsonObject, JsonObject>({ kind: 'mutation', name: 'action', supportsIdempotency: true }, {
+      endpoint: `${endpoint}/action`,
+      idempotencyKey,
+      panelId: data.panel.manifest.id,
+      payload: {
+        actionId,
+        idempotencyKey,
+        input: {},
+        mount: pageType === 'create' ? 'page' : 'record',
+        recordIds: pageType === 'create' || currentRouteIdentifier === '' ? [] : [currentRouteIdentifier],
+        resourceId: resource.id,
+        source: `form-field:${path}`,
+      },
+      signal: requestController.signal,
+    })
+    await effects.apply(response)
+    if (!response.ok) {
+      publishPanelActionFailure(data.panel.manifest.id, response.effects)
+      throw new Error(response.error.message)
+    }
   }
 
   $effect(() => {
@@ -694,7 +765,9 @@
     event.currentTarget.querySelector<HTMLButtonElement>('[data-action-id]')?.click()
   }}>
     <Card>
-      <CardContent class="hp:grid hp:gap-6 hp:pt-6">{#each resource.fields as definition (definition.path)}<FieldRenderer {definition} {form} collectionStore={collectionStores.get(definition.path)} optionStore={optionStores.get(definition.path)} panelId={data.panel.manifest.id} uploadStore={uploadStores.get(definition.path)} />{/each}</CardContent>
+      <CardContent class="hp:grid hp:gap-6 hp:pt-6">
+        <ResourceForm executeAction={(path: string, actionId: string) => { void executeFieldAction(path, actionId).catch(() => undefined) }} fields={renderedFields} {form} {collectionStores} {optionStores} panelId={data.panel.manifest.id} registry={componentRegistry} schema={renderedSchema} {uploadStores} />
+      </CardContent>
       <CardFooter class="hp:justify-end">{#if resource.formActions[0]}<SvelteActionRenderer action={resource.formActions[0]} actions={resource.formActions} input={formInput} panelId={data.panel.manifest.id} {registry} store={formActionStore} />{/if}</CardFooter>
     </Card>
     {#if $formState.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}

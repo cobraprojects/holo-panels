@@ -403,6 +403,40 @@ describe('P7-B text formatting and manifest security', () => {
     expect(result.effects).toEqual([{ kind: 'toast', presentation: expect.objectContaining({ id: 'publish.succeeded', status: 'success' }) }])
   })
 
+  it('runs form lifecycle hooks while resolving dependent schemas', async () => {
+    const hydrated = vi.fn((_state: unknown, context: { set(path: string, value: unknown): void }) => context.set('status', 'draft'))
+    const updated = vi.fn((_state: unknown, _previous: unknown, context: { set(path: string, value: unknown): void }) => context.set('title', 'Updated title'))
+    const resource = {
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [
+        { path: 'status', server: { afterStateHydrated: hydrated }, type: 'select' },
+        { path: 'title', server: { afterStateUpdated: updated }, type: 'text' },
+      ] },
+      id: 'posts',
+      kind: 'resource',
+      model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, getConnectionName: () => undefined },
+      shared: true,
+      singular: null,
+      table: { columns: [] },
+    }
+    const request = (payload: Readonly<Record<string, unknown>>) => executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'options' as const,
+      panelId: 'admin',
+      payload: { action: 'schema', formOperation: 'create', resourceId: 'posts', ...payload },
+    })
+
+    const hydration = await request({ lifecycle: 'hydrate', values: { status: '', title: '' } })
+    const update = await request({ lifecycle: 'update', previousValues: { status: 'draft', title: 'Old title' }, values: { status: 'draft', title: 'New title' } })
+
+    expect(hydrated).toHaveBeenCalledOnce()
+    expect(updated).toHaveBeenCalledOnce()
+    expect(hydration.data.schema).toMatchObject({ id: 'posts-create-form' })
+    expect(update.data.schema).toMatchObject({ id: 'posts-create-form' })
+    expect(hydration.data.operations).toEqual([{ kind: 'set', path: 'status', value: 'draft' }])
+    expect(update.data.operations).toEqual([{ kind: 'set', path: 'title', value: 'Updated title' }])
+  })
+
   it('selects the registered action by both ID and mount', async () => {
     const page = vi.fn(() => ({ source: 'page' }))
     const notification = vi.fn(() => ({ source: 'notification' }))

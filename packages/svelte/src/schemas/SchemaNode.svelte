@@ -23,7 +23,7 @@
   const headingId = $derived(contentId(context.schemaId, component.id, 'heading'))
   const contentRegionId = $derived(contentId(context.schemaId, component.id, 'content'))
   const visibleChildren = $derived(component.children.filter(child => child.visible))
-  const leaf = $derived(component.kind === 'entry' || component.kind === 'filter' || component.kind === 'widget')
+  const leaf = $derived(component.kind === 'entry' || component.kind === 'field' || component.kind === 'filter' || component.kind === 'widget')
   const tabs = $derived(visibleChildren.filter(child => child.kind === 'tab'))
   const steps = $derived(visibleChildren.filter(child => child.kind === 'step'))
   let selectedTab = $state(0)

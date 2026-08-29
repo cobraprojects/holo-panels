@@ -22,8 +22,11 @@ export function readFieldValue(values: Record<string, unknown>, path: string): u
   return current
 }
 
-export function writeFieldValue(form: SvelteFormStore, path: string, value: unknown): void {
-  form.batch([{ kind: 'set', path, touch: true, value }])
+export function writeFieldValue(form: SvelteFormStore, field: string | SvelteFieldDefinition, value: unknown): void {
+  const path = typeof field === 'string' ? field : field.path
+  const debounce = typeof field === 'string' ? 0 : field.debounceMilliseconds ?? 0
+  const reactivity = debounce < 0 ? 'blur' as const : debounce > 0 ? { debounceMilliseconds: debounce } : undefined
+  form.batch([{ kind: 'set', path, reactivity, touch: true, value }])
 }
 
 export function fieldPresentation(

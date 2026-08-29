@@ -8,7 +8,7 @@ import {
   type RelationPath,
   toJsonValue,
 } from '@holo-js/panels-core'
-import { Component, compileSchemaComponentManifest, type SchemaComponentManifest } from '@holo-js/panels-schemas'
+import { Component, compileSchemaComponentManifest, type SchemaColumns, type SchemaComponentManifest } from '@holo-js/panels-schemas'
 
 export type FieldPath<TRecord extends object> = RecordPath<TRecord>
 export type FieldValue<TRecord extends object, TPath extends FieldPath<TRecord>> = RecordPathValue<TRecord, TPath>
@@ -16,6 +16,7 @@ export type FieldPathFor<TRecord extends object, TValue> = RecordPathFor<TRecord
 export type FieldState<TValue> = TValue | null | undefined
 export type FieldOptions<TValue extends boolean | number | string> = Readonly<Record<string, string>> | readonly Readonly<{ readonly disabled?: boolean, readonly label: string, readonly value: TValue }>[]
 export type FieldResolver<TRecord extends object, TValue> = TValue | ((context: FieldContext<TRecord>) => TValue | Promise<TValue>)
+export interface FieldActionReference { compile(): object }
 
 export interface FieldContext<TRecord extends object> {
   readonly operation: string
@@ -32,6 +33,17 @@ function staticValue(value: unknown): JsonValue {
   return typeof value === 'function' || typeof value === 'undefined' ? null : json(value)
 }
 
+function actionValue(action: FieldActionReference | null): JsonValue {
+  if (!action) return null
+  const compiled = action.compile()
+  const manifest = Reflect.get(compiled, 'manifest')
+  const source = manifest && typeof manifest === 'object' ? manifest : compiled
+  return json(Object.fromEntries(['color', 'icon', 'id', 'kind', 'label', 'type'].flatMap(key => {
+    const value = Reflect.get(source, key)
+    return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' || value === null ? [[key, value]] : []
+  })))
+}
+
 export abstract class Field<
   TRecord extends object = Record<string, unknown>,
   TPath extends FieldPath<TRecord> = FieldPath<TRecord>,
@@ -43,6 +55,7 @@ export abstract class Field<
   readonly type: string
   #afterStateHydrated: ((state: FieldState<TValue>, context: FieldContext<TRecord>) => void | Promise<void>) | null = null
   #afterStateUpdated: ((state: FieldState<TValue>, previous: FieldState<TValue>, context: FieldContext<TRecord>) => void | Promise<void>) | null = null
+  readonly #actions = new Map<string, FieldActionReference>()
   #autocomplete: string | null = null
   #debounceMilliseconds = 0
   #defaultValue: FieldResolver<TRecord, FieldState<TValue>> = undefined
@@ -52,11 +65,13 @@ export abstract class Field<
   #helperText: FieldResolver<TRecord, string | null> = null
   #hint: FieldResolver<TRecord, string | null> = null
   #hintIcon: string | null = null
+  #hintAction: FieldActionReference | null = null
   #label: FieldResolver<TRecord, string | null> = null
   #placeholder: FieldResolver<TRecord, string | null> = null
   #readOnly: FieldResolver<TRecord, boolean> = false
   #required = false
   #rules: readonly string[] = []
+  #dehydrateStateUsing: ((state: FieldState<TValue>, context: FieldContext<TRecord>) => FieldState<TValue> | Promise<FieldState<TValue>>) | null = null
 
   protected constructor(type: string, path: TPath) {
     super('field', path)
@@ -110,6 +125,11 @@ export abstract class Field<
     return this
   }
 
+  dehydrateStateUsing(callback: (state: FieldState<TValue>, context: FieldContext<TRecord>) => FieldState<TValue> | Promise<FieldState<TValue>>): this {
+    this.#dehydrateStateUsing = callback
+    return this
+  }
+
   disabled(value: FieldResolver<TRecord, boolean> = true): this {
     this.#disabled = value
     return this
@@ -137,6 +157,24 @@ export abstract class Field<
     return this
   }
 
+  hintAction(action: FieldActionReference | null): this {
+    this.#hintAction = action
+    this.registerAction('hint', action)
+    return this
+  }
+
+  override compile(): SchemaComponentManifest & Readonly<{ server: object }> {
+    return Object.freeze({
+      ...super.compile(),
+      server: Object.freeze({
+        ...(this.#afterStateHydrated ? { afterStateHydrated: this.#afterStateHydrated } : {}),
+        ...(this.#afterStateUpdated ? { afterStateUpdated: this.#afterStateUpdated } : {}),
+        ...(this.#dehydrateStateUsing ? { dehydrateStateUsing: this.#dehydrateStateUsing } : {}),
+        actions: [...this.#actions].map(([position, action]) => ({ ...action.compile(), position })),
+      }),
+    })
+  }
+
   label(value: FieldResolver<TRecord, string | null>): this {
     this.#label = value
     return this
@@ -145,6 +183,11 @@ export abstract class Field<
   placeholder(value: FieldResolver<TRecord, string | null>): this {
     this.#placeholder = value
     return this
+  }
+
+  protected registerAction(position: string, action: FieldActionReference | null): void {
+    if (action) this.#actions.set(position, action)
+    else this.#actions.delete(position)
   }
 
   readOnly(value: FieldResolver<TRecord, boolean> = true): this {
@@ -212,6 +255,7 @@ export abstract class Field<
       helperText: staticValue(this.#helperText),
       hint: staticValue(this.#hint),
       hintIcon: this.#hintIcon,
+      hintAction: actionValue(this.#hintAction),
       kind: 'field',
       label: staticValue(this.#label),
       path: this.path,
@@ -234,8 +278,10 @@ export class TextInput<TRecord extends object = Record<string, unknown>, TPath e
   #inputMode = 'text'
   #mask: string | null = null
   #prefix: string | null = null
+  #prefixAction: FieldActionReference | null = null
   #revealable = false
   #suffix: string | null = null
+  #suffixAction: FieldActionReference | null = null
 
   private constructor(path: TPath) {
     super('text', path)
@@ -280,10 +326,13 @@ export class TextInput<TRecord extends object = Record<string, unknown>, TPath e
     return this
   }
 
+  prefixAction(action: FieldActionReference | null): this { this.#prefixAction = action; this.registerAction('prefix', action); return this }
+
   suffix(value: string | null): this {
     this.#suffix = value
     return this
   }
+  suffixAction(action: FieldActionReference | null): this { this.#suffixAction = action; this.registerAction('suffix', action); return this }
 
   mask(value: string | null): this {
     this.#mask = value
@@ -296,7 +345,7 @@ export class TextInput<TRecord extends object = Record<string, unknown>, TPath e
   }
 
   protected override fieldProperties(): JsonObject {
-    return { datalist: [...this.#datalist], inputMode: this.#inputMode, mask: this.#mask, prefix: this.#prefix, revealable: this.#revealable, suffix: this.#suffix }
+    return { datalist: [...this.#datalist], inputMode: this.#inputMode, mask: this.#mask, prefix: this.#prefix, prefixAction: actionValue(this.#prefixAction), revealable: this.#revealable, suffix: this.#suffix, suffixAction: actionValue(this.#suffixAction) }
   }
 }
 
@@ -442,9 +491,10 @@ abstract class ChoiceField<TRecord extends object, TPath extends FieldPath<TReco
   searchable(value = true): this { this.#searchable = value; return this }
 
   override compile(): SchemaComponentManifest & Readonly<{ server: Readonly<{ options: FieldOptionSource<TRecord> }> }> {
+    const compiled = super.compile()
     return Object.freeze({
-      ...super.compile(),
-      server: Object.freeze({ options: new FieldOptionSource(this.#options) }),
+      ...compiled,
+      server: Object.freeze({ ...compiled.server, options: new FieldOptionSource(this.#options) }),
     })
   }
 
@@ -462,14 +512,14 @@ export class Select<TRecord extends object = Record<string, unknown>, TPath exte
 
 export class CheckboxList<TRecord extends object = Record<string, unknown>, TPath extends FieldPath<TRecord> = FieldPath<TRecord>> extends ChoiceField<TRecord, TPath> {
   #bulkToggleable = false
-  #columns = 1
+  #columns: SchemaColumns = 1
   #gridDirection: 'column' | 'row' = 'column'
   private constructor(path: TPath) { super('checkbox-list', path) }
   static make(path: string): CheckboxList<Record<string, unknown>, string>
   static make<TRecord extends object, const TPath extends FieldPath<TRecord>>(path: TPath): CheckboxList<TRecord, TPath>
   static make(path: string): unknown { return new CheckboxList<Record<string, unknown>, string>(path) }
   bulkToggleable(value = true): this { this.#bulkToggleable = value; return this }
-  columns(value: number): this { this.#columns = value; return this }
+  override columns(value: SchemaColumns): this { this.#columns = value; return this }
   gridDirection(value: 'column' | 'row'): this { this.#gridDirection = value; return this }
   protected override fieldProperties(): JsonObject { return { ...super.fieldProperties(), bulkToggleable: this.#bulkToggleable, columns: this.#columns, gridDirection: this.#gridDirection } }
 }

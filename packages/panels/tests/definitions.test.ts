@@ -31,6 +31,44 @@ const Post = defineModel(posts, {
 type PostRecord = ResourceRecordFor<typeof Post>
 type AuthorRecord = ResourceRecordFor<typeof Author>
 
+class NestedResource extends Resource {
+  protected static override model = Post
+  static form = this.configureForm((schema, { Grid, Section, Select, TextInput }) => schema.columns({ default: 1, lg: 2 }).components([
+    Section.make('Details').schema([
+      Grid.make({ default: 1, md: 2 }).schema([
+        TextInput.make('title').required(),
+        Select.make('authorId').options([{ value: 1, label: 'Author' }]),
+      ]),
+    ]),
+  ]))
+}
+
+class CompleteFormResource extends Resource {
+  protected static override model = Post
+  static form = this.configureForm((schema, { Callout, EmptyState, Fieldset, Flex, Section, TextInput }) => schema.components([
+    Flex.make([
+      Section.make('Main').grow().columns({ default: 1, md: 2 }).schema([
+        TextInput.make('title').prefix('@').prefixAction({ compile: () => ({ id: 'copy-title', kind: 'custom', label: 'Copy title' }) }).hint('Public title').dehydrateStateUsing(state => state?.trim() ?? ''),
+      ]),
+      Fieldset.make('Status').contained(false).grow(false).schema([]),
+    ]).from('md').columnOrder({ default: 2, lg: 1 }),
+    Callout.make('Check this').description('Before publishing').icon('info').color('warning'),
+    EmptyState.make('Nothing here').description('Add a record').icon('plus'),
+  ]))
+}
+
+class DependentResource extends Resource {
+  protected static override model = Post
+  static override isScopedToTenant = false
+  static form = this.configureForm((schema, { Grid, TextInput }) => schema.components([
+    Grid.make().schema(({ get, set }) => {
+      expectTypeOf(get('published')).toEqualTypeOf<boolean | undefined>()
+      set('title', 'Draft')
+      return get('published') ? [TextInput.make('title')] : []
+    }),
+  ]))
+}
+
 declare module '@holo-js/panels-core' {
   interface PanelRecordTypeRegistry {
     readonly author: AuthorRecord
@@ -39,6 +77,68 @@ declare module '@holo-js/panels-core' {
 }
 
 function typecheckOnly(): boolean { return false }
+
+it('keeps nested fields and their server option sources inside the generated form layout', () => {
+  const compiled = NestedResource.compile()
+  expect(compiled.form).toMatchObject({ fields: [{ kind: 'section', server: { children: [{ kind: 'grid' }] } }] })
+  const manifest = generatedResourcePageManifests({ panelPath: '/admin', resource: NestedResource })
+    .find(page => page.pageType === 'create')
+
+  expect(manifest?.body?.properties).toMatchObject({ resource: { form: {
+    fields: [{ path: 'title', required: true }, { path: 'authorId', properties: { options: [{ value: 1, label: 'Author' }] } }],
+    schema: { components: [{ kind: 'grid', layout: { columns: { default: 1, lg: 2 } }, children: [{ kind: 'section', properties: { heading: 'Details' }, children: [{ kind: 'grid', children: [{ kind: 'field', statePath: 'title' }, { kind: 'field', statePath: 'authorId' }] }] }] }] },
+  } } })
+  expect(JSON.stringify(manifest)).not.toContain('server')
+  expect(compiled.form).toBeDefined()
+})
+
+it('compiles the approved responsive layouts, field actions, and dehydration callbacks', async () => {
+  const compiled = CompleteFormResource.compile()
+  const form = compiled.form as { readonly fields: readonly object[] }
+  const title = resourceField(form.fields, 'title')
+
+  expect(title).toMatchObject({ properties: { prefixAction: { id: 'copy-title', label: 'Copy title' } }, server: { dehydrateStateUsing: expect.any(Function) } })
+  expect(await Reflect.apply(Reflect.get(Reflect.get(title, 'server'), 'dehydrateStateUsing'), null, ['  Trimmed  ', {}])).toBe('Trimmed')
+  expect(form.fields).toMatchObject([
+    { kind: 'flex', from: 'md', columnOrder: { default: 2, lg: 1 } },
+    { kind: 'callout', heading: 'Check this' },
+    { kind: 'empty-state', heading: 'Nothing here' },
+  ])
+  expect(compiled.actions).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'copy-title', mount: 'page', source: 'form-field:title' }),
+    expect.objectContaining({ id: 'copy-title', mount: 'record', source: 'form-field:title' }),
+  ]))
+})
+
+it('keeps dependent schema callbacks server-only with inferred get and set utilities', async () => {
+  const form = DependentResource.compile().form as { readonly fields: readonly object[] }
+  const grid = form.fields[0]
+  if (!grid) throw new Error('Expected a grid component')
+  const resolver = Reflect.get(Reflect.get(grid, 'server'), 'resolveChildren')
+  const values = { published: true, title: '' }
+  const children = await Reflect.apply(resolver, grid, [{
+    get: (path: keyof typeof values) => values[path],
+    operation: 'create',
+    record: null,
+    set: (path: keyof typeof values, value: boolean | string) => { Object.assign(values, { [path]: value }) },
+  }])
+
+  expect(children).toMatchObject([{ path: 'title', type: 'text' }])
+  expect(values.title).toBe('Draft')
+  expect(JSON.stringify(generatedResourcePageManifests({ panelPath: '/admin', resource: DependentResource }))).not.toContain('resolveChildren')
+})
+
+function resourceField(components: readonly object[], path: string): object {
+  for (const component of components) {
+    if (Reflect.get(component, 'path') === path) return component
+    const children = Reflect.get(Reflect.get(component, 'server') ?? {}, 'children')
+    if (Array.isArray(children)) {
+      const match = resourceField(children, path)
+      if (match) return match
+    }
+  }
+  throw new Error(`Missing field ${path}`)
+}
 
 it('serializes action select options without serializing server option sources', () => {
   const action = PostResource.action(({ Action, Select }) => Action.make('choose').schema([Select.make('title').options({ draft: 'Draft' })]))
@@ -218,6 +318,9 @@ class SharedPostResource extends Resource {
 
 declare module '@holo-js/panels-resources' {
   interface ResourceTypeRegistry {
+    readonly completeForm: { readonly model: typeof Post, readonly resource: typeof CompleteFormResource }
+    readonly dependent: { readonly model: typeof Post, readonly resource: typeof DependentResource }
+    readonly nested: { readonly model: typeof Post, readonly resource: typeof NestedResource }
     readonly post: { readonly model: typeof Post, readonly resource: typeof PostResource }
   }
 }

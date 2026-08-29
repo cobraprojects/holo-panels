@@ -393,6 +393,20 @@ function pageActionDefinitions(pages: readonly ResourcePageRegistration[]): read
   })
 }
 
+function fieldActionDefinitions(form: Schema): readonly object[] {
+  const visit = (components: readonly object[]): readonly object[] => components.flatMap((component) => {
+    const server = Reflect.get(component, 'server')
+    const actions = server && typeof server === 'object' && Array.isArray(Reflect.get(server, 'actions')) ? Reflect.get(server, 'actions') as readonly object[] : []
+    const children = server && typeof server === 'object' && Array.isArray(Reflect.get(server, 'children')) ? Reflect.get(server, 'children') as readonly object[] : []
+    const path = Reflect.get(component, 'path')
+    return [
+      ...actions.flatMap(action => ['page', 'record'].map(mount => Object.freeze({ ...action, mount, source: `form-field:${String(path)}` }))),
+      ...visit(children),
+    ]
+  })
+  return visit(form.compile().fields)
+}
+
 export function defineImporter<TResource extends ResourceClass>(
   id: string,
   resource: TResource,
@@ -530,13 +544,15 @@ export abstract class Resource {
     const compiled = builder.compile() as CompiledResourceDefinition
     const actions = Reflect.get(compiled, 'actions')
     const pageActions = pageActionDefinitions(pages)
+    const fieldActions = fieldActionDefinitions(form)
     return Object.freeze({
       ...compiled,
       actions: Object.freeze([
         ...(Array.isArray(actions) ? actions.map(action => Object.freeze({ ...action, source: Reflect.get(action, 'source') ?? 'table' })) : []),
         ...pageActions,
+        ...fieldActions,
       ]),
-      permissionReferences: Object.freeze([...new Set([...(Array.isArray(compiled.permissionReferences) ? compiled.permissionReferences.filter((key): key is string => typeof key === 'string') : []), ...actionPermissionReferences(pageActions), ...resourceNotificationPermissionReferences(this)])]),
+      permissionReferences: Object.freeze([...new Set([...(Array.isArray(compiled.permissionReferences) ? compiled.permissionReferences.filter((key): key is string => typeof key === 'string') : []), ...actionPermissionReferences([...pageActions, ...fieldActions]), ...resourceNotificationPermissionReferences(this)])]),
     })
   }
 

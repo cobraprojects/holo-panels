@@ -9,6 +9,7 @@ import type {
   SvelteTableActionGroup,
   SvelteTableActionItem,
 } from '@holo-js/panels-svelte'
+import type { SchemaManifest } from '@holo-js/panels-client'
 
 export interface ResourceDependency {
   readonly id: string
@@ -51,6 +52,7 @@ export interface ResourcePageMetadata {
     readonly view: string | null
   }
   readonly saveLabel: string
+  readonly schema: SchemaManifest<Record<string, unknown>>
   readonly tableActions: readonly SvelteTableActionItem[]
 }
 
@@ -77,7 +79,7 @@ function isSchemaComponent(value: unknown): boolean {
   const component = value as Record<string, unknown>
   return typeof component.id === 'string'
     && typeof component.key === 'string'
-    && ['callout', 'custom', 'empty-state', 'fieldset', 'grid', 'group', 'section', 'split', 'step', 'tab', 'tabs', 'wizard'].includes(String(component.kind))
+    && ['callout', 'custom', 'empty-state', 'field', 'fieldset', 'grid', 'group', 'section', 'split', 'step', 'tab', 'tabs', 'wizard'].includes(String(component.kind))
     && typeof component.type === 'string'
     && typeof component.visible === 'boolean'
     && typeof component.dynamicVisibility === 'boolean'
@@ -135,13 +137,14 @@ function humanizePath(path: string): string {
     .replace(/^\w/u, character => character.toUpperCase())
 }
 
-function fieldDefinition(value: JsonValue): SvelteFieldDefinition | null {
+export function resourceFieldDefinition(value: JsonValue): SvelteFieldDefinition | null {
   const field = objectValue(value)
   const type = stringValue(field?.type)
   const path = stringValue(field?.path)
   const label = stringValue(field?.label) ?? (path ? humanizePath(path) : null)
   if (!field || !type || !path || !label) return null
   return {
+    ...(typeof field.debounceMilliseconds === 'number' ? { debounceMilliseconds: field.debounceMilliseconds } : {}),
     ...(typeof field.disabled === 'boolean' ? { disabled: field.disabled } : {}),
     ...(typeof field.helperText === 'string' ? { helperText: field.helperText } : {}),
     ...(typeof field.hint === 'string' ? { hint: field.hint } : {}),
@@ -154,6 +157,12 @@ function fieldDefinition(value: JsonValue): SvelteFieldDefinition | null {
     type,
     ...(typeof field.visible === 'boolean' ? { visible: field.visible } : {}),
   }
+}
+
+export function resourceSchemaManifest(value: JsonValue | undefined): SchemaManifest<Record<string, unknown>> | null {
+  const schema = objectValue(value)
+  if (schema?.kind !== 'schema' || typeof schema.id !== 'string' || !Array.isArray(schema.components) || !schema.components.every(isSchemaComponent)) return null
+  return schema as unknown as SchemaManifest<Record<string, unknown>>
 }
 
 function columnDefinition(value: JsonValue): SvelteTableColumn<Record<string, unknown>> | null {
@@ -264,6 +273,26 @@ function options(value: JsonValue | undefined): Readonly<Record<string, Resource
   })))
 }
 
+export function resourceOptionsFromFields(fields: readonly JsonValue[]): Readonly<Record<string, ResourceOptions>> {
+  return options(Object.fromEntries(fields.flatMap((item) => {
+    const field = objectValue(item)
+    const path = stringValue(field?.path)
+    const properties = objectValue(field?.properties)
+    const choices = Array.isArray(properties?.options) ? properties.options : []
+    const values = choices.flatMap((choice) => {
+      const option = objectValue(choice)
+      return typeof option?.value === 'string' || typeof option?.value === 'number' ? [option.value] : []
+    })
+    const sourceKind = stringValue(properties?.optionSource)
+    return path && (values.length > 0 || !!sourceKind && sourceKind !== 'static') ? [[path, {
+      canCreate: properties?.canCreateOption === true,
+      canEdit: properties?.canEditOption === true,
+      server: !!sourceKind && sourceKind !== 'static',
+      values,
+    }]] : []
+  })) as unknown as JsonValue)
+}
+
 function tableAction(value: JsonValue): SvelteTableActionItem | null {
   const action = objectValue(value)
   const id = stringValue(action?.id)
@@ -332,24 +361,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
   if (!id || !routeKey || !recordId) return null
   const basePath = generatedBasePath(pagePath, pageType)
   const fields = Array.isArray(form.fields) ? form.fields : []
-  const fieldOptions = Object.fromEntries(fields.flatMap((item) => {
-    const field = objectValue(item)
-    const path = stringValue(field?.path)
-    const properties = objectValue(field?.properties)
-    const choices = Array.isArray(properties?.options) ? properties.options : []
-    const values = choices.flatMap((choice) => {
-      const option = objectValue(choice)
-      const optionValue = option?.value
-      return typeof optionValue === 'string' || typeof optionValue === 'number' ? [optionValue] : []
-    })
-    const sourceKind = stringValue(properties?.optionSource)
-    return path && (values.length > 0 || (!!sourceKind && sourceKind !== 'static')) ? [[path, {
-      canCreate: properties?.canCreateOption === true,
-      canEdit: properties?.canEditOption === true,
-      server: !!sourceKind && sourceKind !== 'static',
-      values,
-    }]] : []
-  }))
+  const fieldOptions = resourceOptionsFromFields(fields)
   const generatedDependencies = Array.isArray(form.dependencies) ? form.dependencies.flatMap((item) => {
     const dependency = objectValue(item)
     const id = stringValue(dependency?.id)
@@ -368,12 +380,13 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
     entries: Array.isArray(infolist?.entries) ? infolist.entries : [],
     fields,
     formActions: form.actions ?? [],
+    schema: form.schema ?? null,
     filterMode: table.filterMode === 'deferred' ? 'deferred' : 'live',
     selection: table.selection ?? {},
     filters: Array.isArray(table.filters) ? table.filters : [],
     id,
     label: labels.plural ?? id,
-    options: fieldOptions,
+    options: fieldOptions as unknown as JsonObject,
     recordId,
     recordActions: value.actions ?? [],
     routeKey,
@@ -420,7 +433,7 @@ export function resourcePageMetadata(value: JsonValue | undefined, pagePath?: st
     createLabel: stringValue(resource.createLabel) ?? `Create ${label}`,
     dependencies: Object.freeze(dependencies(resource.dependencies)),
     entries: Object.freeze(inferredEntries),
-    fields: Object.freeze(Array.isArray(resource.fields) ? resource.fields.flatMap(item => fieldDefinition(item) ?? []) : []),
+    fields: Object.freeze(Array.isArray(resource.fields) ? resource.fields.flatMap(item => resourceFieldDefinition(item) ?? []) : []),
     formActions: Object.freeze(Array.isArray(resource.formActions) ? resource.formActions.flatMap(item => actionManifest(item) ?? []) : []),
     cancelFormActions: Object.freeze(Array.isArray(resource.formActions) ? resource.formActions.flatMap(item => {
       const action = objectValue(item)
@@ -432,6 +445,15 @@ export function resourcePageMetadata(value: JsonValue | undefined, pagePath?: st
     id,
     label,
     options: options(resource.options),
+    schema: resourceSchemaManifest(resource.schema) ?? {
+      components: Array.isArray(resource.fields) ? resource.fields.flatMap((item, index) => {
+        const field = objectValue(item)
+        const path = stringValue(field?.path)
+        return path ? [{ children: [], dynamicVisibility: false, extraAttributes: {}, id: `${id}-${index}`, key: path, kind: 'field', layout: {}, properties: {}, slots: {}, statePath: path, type: 'field', visible: field?.visible !== false }] : []
+      }) : [],
+      id: `${id}-form`,
+      kind: 'schema' as const,
+    },
     recordId,
     recordActions: Object.freeze((Array.isArray(resource.recordActions) ? resource.recordActions : Array.isArray(resource.actions) ? resource.actions : []).flatMap(item => actionManifest(item) ?? [])),
     routeKey,

@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Checkbox, Input, Textarea } from '../internal-ui'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText, RadioGroup, RadioGroupItem, Switch } from '../ui'
-import { FieldFrame, property, touchField, updateField } from './shared'
+import { actionButton, FieldFrame, property, touchField, updateField } from './shared'
 import type { ReactFieldControlProps } from './types'
 
 function textValue(value: unknown): string {
@@ -91,6 +91,8 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
   }
   const prefix = stringProperty(props, 'prefix')
   const suffix = stringProperty(props, 'suffix')
+  const prefixAction = actionButton(context.definition.properties.prefixAction, context.executeAction)
+  const suffixAction = actionButton(context.definition.properties.suffixAction, context.executeAction)
   const datalistProperty = context.definition.properties.datalist
   const datalist = Array.isArray(datalistProperty)
     ? datalistProperty.filter((value): value is string => typeof value === 'string')
@@ -111,12 +113,13 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
     value: textValue(context.value),
   }
   return <FieldFrame context={context}>{controlProperties => <>
-    {prefix || suffix || revealable
+    {prefix || suffix || prefixAction || suffixAction || revealable
       ? <InputGroup>
-          {prefix ? <InputGroupAddon align="inline-start"><InputGroupText className="hp-field-prefix">{prefix}</InputGroupText></InputGroupAddon> : null}
+          {prefix || prefixAction ? <InputGroupAddon align="inline-start">{prefix ? <InputGroupText className="hp-field-prefix">{prefix}</InputGroupText> : null}{prefixAction}</InputGroupAddon> : null}
           <InputGroupInput {...inputProps} {...controlProperties} />
-          {suffix || revealable ? <InputGroupAddon align="inline-end">
+          {suffix || suffixAction || revealable ? <InputGroupAddon align="inline-end">
             {suffix ? <InputGroupText className="hp-field-suffix">{suffix}</InputGroupText> : null}
+            {suffixAction}
             {revealable ? <InputGroupButton aria-controls={context.inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onClick={() => setPasswordVisible(value => !value)}>{passwordVisible ? 'Hide' : 'Show'}</InputGroupButton> : null}
           </InputGroupAddon> : null}
         </InputGroup>

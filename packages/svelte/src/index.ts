@@ -108,6 +108,7 @@ export type {
   ClientActionManifest,
   ClientActionStoreOptions,
   TableActionExecutionRequest,
+  FormOperation,
   FormStoreOptions,
   OptionStoreOptions,
   TableStateOptions,

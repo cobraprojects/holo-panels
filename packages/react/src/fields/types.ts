@@ -6,6 +6,7 @@ export interface ReactCompiledField<
   TValues extends object,
   TPath extends FormPath<TValues> = FormPath<TValues>,
 > {
+  readonly debounceMilliseconds?: number
   readonly disabled: boolean
   readonly helperText: string | null
   readonly hint: string | null
@@ -26,6 +27,7 @@ export interface ReactFieldRenderContext<
   readonly definition: ReactCompiledField<TValues, TPath>
   readonly disabled: boolean
   readonly errors: readonly string[]
+  readonly executeAction?: (actionId: string) => void
   readonly inputId: string
   readonly readOnly: boolean
   readonly value: FormValueAtPath<TValues, TPath>
@@ -39,6 +41,7 @@ export interface ReactFieldRendererProps<
   readonly createCollectionItem?: (blockType?: string) => unknown
   readonly definition: ReactCompiledField<TValues, TPath>
   readonly editorAdapters?: EditorAdapterRegistry
+  readonly executeAction?: (actionId: string) => void
   readonly optionStore?: OptionStore<string | number>
   readonly panelId?: string
   readonly registry: ComponentRegistry

@@ -50,6 +50,18 @@ afterEach(() => {
 })
 
 describe('P6-E React field renderers', () => {
+  it('uses panel registry overrides for built-in fields without affecting other panels', () => {
+    const store = new FormStore<FormValues>({ attachment: null, sections: [], title: 'Initial' })
+    const registry = createComponentRegistry().override('editor', 'field.text',
+      ({ context }: ReactFieldControlProps<FormValues>) => createElement('output', null, `Custom ${context.value}`))
+    const render = (panelId: string): string => renderToString(createElement(FormField, {
+      definition: definition('title', 'text'), panelId, registry, store,
+    }))
+
+    expect(render('editor')).toContain('Custom Initial')
+    expect(render('admin')).toContain('value="Initial"')
+  })
+
   it('binds values, errors, required state, descriptions, disabled state, read-only state, and visibility', () => {
     const store = new FormStore<FormValues>({ attachment: null, sections: [], title: 'Initial' })
     store.batch([
@@ -117,6 +129,25 @@ describe('P6-E React field renderers', () => {
     expect(container.querySelector<HTMLInputElement>('input')?.type).toBe('time')
     render(definition('title', 'date', { mode: 'date-time' }))
     expect(container.querySelector<HTMLInputElement>('input')?.type).toBe('datetime-local')
+  })
+
+  it('renders field actions through the field execution contract', () => {
+    const executeAction = vi.fn()
+    const store = new FormStore<FormValues>({ attachment: null, sections: [], title: 'Ready' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+
+    act(() => root.render(createElement(FormField, {
+      definition: definition('title', 'text', { prefixAction: { id: 'copy-title', label: 'Copy title' } }),
+      executeAction,
+      registry: createComponentRegistry(),
+      store,
+    })))
+    act(() => container.querySelector<HTMLButtonElement>('.hp-field-action')?.click())
+
+    expect(executeAction).toHaveBeenCalledWith('copy-title')
   })
 
   it('applies textarea autosizing and renders the active toggle label', () => {

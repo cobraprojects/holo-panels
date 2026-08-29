@@ -3,6 +3,7 @@
   import { toSvelteState } from '../stores'
   import type { SvelteCustomFieldProps, SvelteFieldRendererProps } from './contracts'
   import { fieldInputId, fieldPresentation, readFieldValue, writeFieldValue } from './helpers'
+  import { fieldRendererName } from './registry'
 
   let { definition, form, optionStore, collectionStore, uploadStore, registry, panelId, requestedFrom }: SvelteFieldRendererProps = $props()
   const formState = $derived.by(() => toSvelteState(form))
@@ -11,7 +12,7 @@
   const inputId = $derived(fieldInputId(definition.path))
   const Resolved = $derived.by((): Component<SvelteCustomFieldProps> => {
     if (!registry) throw new Error(`[Holo Panels] A Svelte component registry is required for custom field "${definition.type}".`)
-    return registry.resolve<SvelteCustomFieldProps>(`field.${definition.type.replaceAll(':', '.')}`, panelId, requestedFrom ?? `field "${definition.path}"`)
+    return registry.resolve<SvelteCustomFieldProps>(fieldRendererName(definition.type), panelId, requestedFrom ?? `field "${definition.path}"`)
   })
 </script>
 
@@ -31,6 +32,6 @@
     readOnly={presentation.readOnly}
     required={presentation.required}
     {inputId}
-    setValue={(next) => writeFieldValue(form, definition.path, next)}
+    setValue={(next) => writeFieldValue(form, definition, next)}
   />
 {/if}

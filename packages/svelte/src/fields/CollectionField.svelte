@@ -33,7 +33,7 @@
   const repeaterFields = $derived(nestedFields(definition.properties?.fields))
 
   function syncCollection(): void {
-    if (collectionStore) writeFieldValue(form, definition.path, collectionStore.values)
+    if (collectionStore) writeFieldValue(form, definition, collectionStore.values)
   }
 
   function add(blockType?: string): void {
@@ -162,7 +162,7 @@
           {/if}
         </div>
       {:else}
-        <Editor value={jsonValue(value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={definition.label} {inputId} describedBy={attributes['aria-describedby']} errorMessageId={attributes['aria-errormessage']} invalid={Boolean(attributes['aria-invalid'])} setValue={(next) => writeFieldValue(form, definition.path, next)} />
+        <Editor value={jsonValue(value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={definition.label} {inputId} describedBy={attributes['aria-describedby']} errorMessageId={attributes['aria-errormessage']} invalid={Boolean(attributes['aria-invalid'])} setValue={(next) => writeFieldValue(form, definition, next)} />
       {/if}
     {/snippet}
   </FieldFrame>

@@ -32,6 +32,7 @@ export type SchemaComponentKind =
   | 'custom'
   | 'empty-state'
   | 'entry'
+  | 'field'
   | 'fieldset'
   | 'filter'
   | 'grid'
@@ -63,6 +64,9 @@ export interface SchemaCollapseProperties {
 }
 
 export interface SchemaComponentProperties {
+  readonly compact?: boolean
+  readonly contained?: boolean
+  readonly grow?: boolean
   readonly heading?: string | null
   readonly description?: string | null
   readonly icon?: string | null

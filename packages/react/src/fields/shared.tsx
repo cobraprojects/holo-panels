@@ -23,6 +23,7 @@ export function useFieldContext<TValues extends object, TPath extends FormPath<T
     definition: props.definition,
     disabled: state.disabled[path] ?? props.definition.disabled,
     errors: state.errors[path] ?? [],
+    executeAction: props.executeAction,
     inputId: `hp-field-${generatedId.replaceAll(':', '')}`,
     readOnly: state.readOnly[path] ?? props.definition.readOnly,
     value: fieldValue(state.values, path) as FormValueAtPath<TValues, TPath>,
@@ -30,7 +31,9 @@ export function useFieldContext<TValues extends object, TPath extends FormPath<T
 }
 
 export function updateField<TValues extends object>(props: ReactFieldRendererProps<TValues>, value: unknown): void {
-  props.store.batch([{ kind: 'set', path: props.definition.path, value, touch: true }])
+  const debounce = props.definition.debounceMilliseconds ?? 0
+  const reactivity = debounce < 0 ? 'blur' as const : debounce > 0 ? { debounceMilliseconds: debounce } : undefined
+  props.store.batch([{ kind: 'set', path: props.definition.path, reactivity, value, touch: true }])
 }
 
 export function touchField<TValues extends object>(props: ReactFieldRendererProps<TValues>): void {
@@ -71,11 +74,20 @@ export function FieldFrame<TValues extends object>({ after, before, children, co
   return <div className="hp-field hp:grid hp:gap-2" data-field-path={context.definition.path} data-field-type={context.definition.type}>
     {context.definition.label ? <label className="hp:text-sm hp:font-medium hp:leading-none" htmlFor={context.inputId}>{context.definition.label}{context.definition.required ? <span aria-hidden="true"> *</span> : null}</label> : null}
     {description ? <div className="hp:text-sm hp:text-muted-foreground" id={descriptionId}>{description}</div> : null}
+    {actionButton(context.definition.properties.hintAction, context.executeAction)}
     {before || after
       ? <div className="hp-field-control hp:flex hp:w-full hp:items-center">{before}{control}{after}</div>
       : control}
     {context.errors.length > 0 ? <ul id={errorId} role="alert">{context.errors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul> : null}
   </div>
+}
+
+export function actionButton(value: unknown, executeAction?: (actionId: string) => void): ReactNode {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const id = Reflect.get(value, 'id')
+  const label = Reflect.get(value, 'label')
+  if (typeof id !== 'string' || typeof label !== 'string') return null
+  return <button className="hp-field-action" onClick={() => executeAction?.(id)} type="button">{label}</button>
 }
 
 export function useStoreState<TState>(store: { readonly state: TState, subscribe(listener: () => void): () => void }): TState {

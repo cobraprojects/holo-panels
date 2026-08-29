@@ -18,7 +18,7 @@ jobs:
     environment: npm-release
     steps:
       - name: Check out compatible Holo-JS
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.HOLO_JS_REPOSITORY }}
           ref: ${{ env.HOLO_JS_REF }}
@@ -26,9 +26,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.9
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
+          package-manager-cache: false
           registry-url: https://registry.npmjs.org
       - name: Install Holo-JS
         run: |

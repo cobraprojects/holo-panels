@@ -23,13 +23,22 @@ class CommentRecord implements ResourceRecord {
 
 class PostRecord implements ResourceRecord {
   readonly comments = [new CommentRecord('comment-1', 'post-1', 'First comment')]
+  readonly relationEvents: string[] = []
 
   constructor(readonly id: string, readonly title: string) {}
 
   async delete(): Promise<void> {}
   async forceDelete(): Promise<void> {}
-  getRelation(name: string): unknown { return name === 'comments' ? this.comments : undefined }
-  async load(): Promise<this> { return this }
+  getRelation(name: string): unknown {
+    this.relationEvents.push('get')
+    return name === 'comments' ? this.comments : undefined
+  }
+  async load(relation?: unknown): Promise<this> {
+    const constraint = relation && typeof relation === 'object' ? Reflect.get(relation, 'constraint') : undefined
+    if (typeof constraint === 'function') Reflect.apply(constraint, relation, [new CommentQuery(this.comments[0]!)])
+    this.relationEvents.push('load')
+    return this
+  }
   async restore(): Promise<this> { return this }
   toJSON(): Readonly<Record<string, unknown>> { return { id: this.id, title: this.title } }
   async update(): Promise<this> { return this }
@@ -105,7 +114,16 @@ class CommentsRelationManager {
             Object.freeze({ label: 'Message', path: 'body', searchable: true, sortable: true }),
           ]),
           filters: Object.freeze([
-            Object.freeze({ defaultValue: null, id: 'body', label: 'Message', properties: {}, type: 'text' }),
+            Object.freeze({ defaultValue: null, id: 'message', label: 'Message', properties: {}, type: 'text' }),
+          ]),
+          serverFilters: Object.freeze([
+            Object.freeze({
+              manifest: Object.freeze({ id: 'message' }),
+              queryDefinitions: Object.freeze({ messageBody: Object.freeze({ column: 'body', operators: Object.freeze(['like']) }) }),
+              server: Object.freeze({
+                encode: (value: unknown) => Object.freeze({ id: 'messageBody', operator: 'like', value: `%${String(value)}%` }),
+              }),
+            }),
           ]),
         }),
       }),
@@ -259,7 +277,7 @@ describe('generated resource relation managers', () => {
       operation: 'table-data',
       panelId: 'admin',
       payload: {
-        filters: { body: 'Bravo' },
+        filters: { message: 'rav' },
         intent: 'relation',
         managerId: 'comments',
         ownerId: 'post-1',
@@ -282,5 +300,29 @@ describe('generated resource relation managers', () => {
       }),
     ])
     post.comments.splice(0, post.comments.length, new CommentRecord('comment-1', 'post-1', 'Edited comment'))
+  })
+
+  it('applies tenant scope while constructing the relation lookup', async () => {
+    post.relationEvents.splice(0)
+    const resource = new ResourceBuilder<typeof postModel, PostRecord, PostQuery>(postModel)
+      .shared()
+      .relations(CommentsRelationManager)
+
+    await executeGeneratedResourceOperation(resource, {
+      context: {
+        actor: { id: 'admin' },
+        scopeTenantQuery: (query) => {
+          post.relationEvents.push('scope')
+          return query
+        },
+        signal: new AbortController().signal,
+        tenant: { id: 'tenant-1' },
+      },
+      operation: 'table-data',
+      panelId: 'admin',
+      payload: { intent: 'relation', managerId: 'comments', ownerId: 'post-1', resourceId: 'posts' },
+    })
+
+    expect(post.relationEvents.slice(0, 3)).toEqual(['scope', 'load', 'get'])
   })
 })

@@ -183,6 +183,17 @@ async function clickRowAction(page: Page, row: Locator, name: string): Promise<v
   await page.getByRole('menuitem', { name, exact: true }).click()
 }
 
+async function markCurrentFrontToast(page: Page): Promise<void> {
+  const toast = page.locator('[data-sonner-toast][data-front="true"]')
+  if (await toast.count() > 0) await toast.evaluate(element => element.setAttribute('data-previous-toast', 'true'))
+}
+
+async function expectNewCompletedToast(page: Page): Promise<void> {
+  const toast = page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })
+  await expect(toast).toBeVisible()
+  await expect(toast).not.toHaveAttribute('data-previous-toast', 'true')
+}
+
 async function deleteRow(page: Page, rowText: string | RegExp): Promise<void> {
   const row = page.getByRole('row').filter({ hasText: rowText }).first()
   await expect(row).toBeVisible()
@@ -1267,12 +1278,13 @@ test.describe('authenticated admin journeys', () => {
     await expect.poll(() => viewMutations).toBe(0)
     page.off('request', countViewMutation)
     await clickRowAction(page, editedTagRow, 'Detach')
+    await markCurrentFrontToast(page)
     const detachResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const detached = await detachResponse
     if (!detached.ok()) throw new Error(await detached.text())
     await waitForPanelReady(page)
-    await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
+    await expectNewCompletedToast(page)
     await expectSameDocument(page, relationDocument)
     await expect(page.getByRole('row').filter({ hasText: selectedTag.label })).toHaveCount(0)
 
@@ -1345,13 +1357,14 @@ test.describe('authenticated admin journeys', () => {
     const editedCommentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(editedCommentRow).toContainText(editedCommentBody)
     await clickRowAction(page, editedCommentRow, 'Delete')
+    await markCurrentFrontToast(page)
     const deleteCommentResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const deletedComment = await deleteCommentResponse
     if (!deletedComment.ok()) throw new Error(await deletedComment.text())
     await waitForPanelReady(page)
     await expectSameDocument(page, relationDocument)
-    await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
+    await expectNewCompletedToast(page)
     await expect(page.getByRole('row').filter({ hasText: commentAuthor })).toHaveCount(0)
 
     const parentViewPath = new URL(page.url()).pathname.replace(/\/edit$/u, '')

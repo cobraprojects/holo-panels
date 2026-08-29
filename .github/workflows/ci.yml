@@ -11,7 +11,7 @@ permissions:
 
 env:
   HOLO_JS_REPOSITORY: cobraprojects/holo-js
-  HOLO_JS_REF: 3dbaa68a8e7b831f06fcb010ffa1f55a7eb07969
+  HOLO_JS_REF: f8877ac093672514be59d2cf7fe4431352eaadfe
   HOLO_JS_VERSION: 0.3.12
   NODE_OPTIONS: --max-old-space-size=8192
 

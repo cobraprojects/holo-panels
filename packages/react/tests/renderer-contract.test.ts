@@ -187,11 +187,17 @@ describe('shared React renderer contract', () => {
     })))
 
     expect(container.querySelector('[data-slot="table-container"]')).not.toBeNull()
-    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-relation-table-overflow')).toBe(true)
+    expect(container.querySelector('[data-panels-component="data-table"]')).not.toBeNull()
     expect(container.querySelector('td[data-label="Name"]')?.textContent).toBe('TypeScript')
     expect(container.querySelector('td.hp-table-row-actions[data-label="Actions"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
-    await act(async () => { container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click() })
+    act(() => {
+      const menu = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+      menu?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      menu?.click()
+    })
+    await vi.waitFor(() => expect(document.querySelector('[role="menuitem"][data-action="view"]')).not.toBeNull())
+    await act(async () => { document.querySelector<HTMLElement>('[role="menuitem"][data-action="view"]')?.click() })
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
 
     expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')?.value).toBe('TypeScript')
     expect(onOperation).not.toHaveBeenCalled()
@@ -208,8 +214,14 @@ describe('shared React renderer contract', () => {
       onOperation,
     })))
 
-    const trigger = container.querySelector<HTMLButtonElement>('[data-operation="detach"]')
-    expect(trigger?.className).toContain('hp:bg-destructive')
+    act(() => {
+      const menu = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+      menu?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      menu?.click()
+    })
+    await vi.waitFor(() => expect(document.querySelector('[role="menuitem"][data-action="detach"]')).not.toBeNull())
+    const trigger = document.querySelector<HTMLElement>('[role="menuitem"][data-action="detach"]')
+    expect(trigger?.getAttribute('data-variant')).toBe('destructive')
     expect(trigger?.querySelector('[data-icon="unlink"]')).not.toBeNull()
     await act(async () => trigger?.click())
     const dialog = document.querySelector('[role="alertdialog"]')
@@ -218,6 +230,54 @@ describe('shared React renderer contract', () => {
     expect(confirm?.className).toContain('hp:bg-destructive')
     await act(async () => confirm?.click())
     expect(onOperation).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'detach', managerId: 'tags', operation: 'detach', recordId: 'tag-typescript' }), expect.any(AbortSignal))
+  })
+
+  it('uses the shared table query, pagination, selection, and bulk action behavior', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push({ container, unmount: () => root.unmount() })
+    const onOperation = vi.fn(async () => undefined)
+    const onTableQuery = vi.fn(async () => ({
+      records: [{ id: 'comment-2', values: { body: 'Second' } }],
+      total: 2,
+    }))
+    await act(async () => root.render(createElement(ReactRelationManagerRenderer, {
+      managers: [{
+        actions: [{ badge: null, color: 'danger', confirmation: null, disabled: false, icon: 'unlink', id: 'detach-selected', kind: 'detach', label: 'Detach selected', modal: null, mount: 'bulk', size: 'medium', tooltip: null, type: 'detach', visible: true }],
+        badge: 2,
+        columns: [{ key: 'body', label: 'Body', searchable: true, sortable: true }],
+        filterMode: 'live',
+        filters: [{ defaultValue: null, id: 'body', label: 'Body', properties: {}, type: 'text' }],
+        group: null,
+        id: 'comments',
+        label: 'Comments',
+        operations: ['detach'],
+        perPage: 1,
+        presentation: 'inline',
+        records: [{ id: 'comment-1', values: { body: 'First' } }],
+        total: 2,
+        url: null,
+        visible: true,
+      }],
+      onOperation,
+      onTableQuery,
+      panelId: 'admin',
+    })))
+
+    expect(container.querySelector('[data-panels-component="table"]')).not.toBeNull()
+    expect(container.querySelector('input[placeholder="Search records…"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Table pagination"]')).not.toBeNull()
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Next page"]')?.click() })
+    await vi.waitFor(() => expect(onTableQuery).toHaveBeenCalledWith(expect.objectContaining({ managerId: 'comments', query: expect.objectContaining({ page: 2, perPage: 1 }) })))
+    await vi.waitFor(() => expect(container.querySelector('td[data-label="Body"]')?.textContent).toBe('Second'))
+    await act(async () => { container.querySelector<HTMLInputElement>('input[aria-label="Select record comment-2"]')?.click() })
+    const bulk = await vi.waitFor(() => {
+      const action = container.querySelector<HTMLButtonElement>('[data-operation="detach"]')
+      expect(action).not.toBeNull()
+      return action
+    })
+    expect(bulk?.textContent).toContain('Detach selected')
   })
 
   it('omits relation action structure when no operations are configured', async () => {
@@ -234,6 +294,6 @@ describe('shared React renderer contract', () => {
     expect(container.querySelector('[data-slot="relation-toolbar"]')).toBeNull()
     expect(table?.querySelector('th:last-child')?.textContent).toBe('Name')
     expect(table?.querySelector('td[data-label="Actions"]')).toBeNull()
-    expect(table?.querySelector('.hp-table-row-actions')).toBeNull()
+    expect(table?.querySelector('[data-action-group="row-actions"]')).toBeNull()
   })
 })

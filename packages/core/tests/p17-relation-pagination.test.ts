@@ -29,7 +29,7 @@ const context: RelationManagerContext<Owner, Actor, string> = {
   tenant: 'tenant-1',
 }
 
-function executor(list: (query: Query, request: { readonly includeTotal: boolean, readonly page: number, readonly perPage: number }) => Promise<{
+function executor(list: (query: Query, request: { readonly filters: Readonly<Record<string, unknown>>, readonly includeTotal: boolean, readonly page: number, readonly perPage: number, readonly search: string, readonly sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[] }) => Promise<{
   readonly hasMore: boolean
   readonly page: number
   readonly perPage: number
@@ -68,7 +68,7 @@ function executor(list: (query: Query, request: { readonly includeTotal: boolean
 
 describe('bounded relation record listing', () => {
   it('normalizes defaults and returns a frozen bounded page', async () => {
-    const list = vi.fn(async (_query: Query, request: { readonly includeTotal: boolean, readonly page: number, readonly perPage: number }) => ({
+    const list = vi.fn(async (_query: Query, request: { readonly filters: Readonly<Record<string, unknown>>, readonly includeTotal: boolean, readonly page: number, readonly perPage: number, readonly search: string, readonly sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[] }) => ({
       hasMore: false,
       page: request.page,
       perPage: request.perPage,
@@ -78,10 +78,37 @@ describe('bounded relation record listing', () => {
 
     const page = await executor(list).list({}, context)
 
-    expect(list).toHaveBeenCalledWith({ ownerId: 1 }, { includeTotal: true, page: 1, perPage: 25 })
+    expect(list).toHaveBeenCalledWith({ ownerId: 1 }, { filters: {}, includeTotal: true, page: 1, perPage: 25, search: '', sort: [] })
     expect(page.records).toEqual([{ id: 1 }])
     expect(Object.isFrozen(page)).toBe(true)
     expect(Object.isFrozen(page.records)).toBe(true)
+  })
+
+  it('passes normalized table search, filters, and sorting to scoped persistence', async () => {
+    const list = vi.fn(async (_query: Query, request: { readonly filters: Readonly<Record<string, unknown>>, readonly includeTotal: boolean, readonly page: number, readonly perPage: number, readonly search: string, readonly sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[] }) => ({
+      hasMore: false,
+      page: request.page,
+      perPage: request.perPage,
+      records: [{ id: 1 }],
+      total: 1,
+    }))
+
+    await executor(list).list({
+      filters: { status: 'pending' },
+      page: 2,
+      perPage: 10,
+      search: 'review',
+      sort: [{ column: 'createdAt', direction: 'desc' }],
+    }, context)
+
+    expect(list).toHaveBeenCalledWith({ ownerId: 1 }, {
+      filters: { status: 'pending' },
+      includeTotal: true,
+      page: 2,
+      perPage: 10,
+      search: 'review',
+      sort: [{ column: 'createdAt', direction: 'desc' }],
+    })
   })
 
   it('rejects unsafe requests before persistence runs', async () => {
@@ -90,6 +117,8 @@ describe('bounded relation record listing', () => {
 
     await expect(relation.list({ perPage: 101 }, context)).rejects.toBeInstanceOf(RelationListPaginationError)
     await expect(relation.list({ page: 0 }, context)).rejects.toBeInstanceOf(RelationListPaginationError)
+    await expect(relation.list({ search: 'x'.repeat(501) }, context)).rejects.toBeInstanceOf(RelationListPaginationError)
+    await expect(relation.list({ sort: [{ column: '../secret', direction: 'asc' }] }, context)).rejects.toBeInstanceOf(RelationListPaginationError)
     await expect(relation.list({ unexpected: true } as never, context)).rejects.toBeInstanceOf(RelationListPaginationError)
     expect(list).not.toHaveBeenCalled()
   })

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto'
-import { expect, test, type ConsoleMessage, type Page, type Request } from '@playwright/test'
+import { expect, test, type ConsoleMessage, type Locator, type Page, type Request } from '@playwright/test'
 
 const guardResponses = Object.freeze({
   next: { location: '/admin/login?next=%2Fadmin', status: 307 },
@@ -176,6 +176,11 @@ async function submitResourceForm(page: Page): Promise<void> {
   await page.locator('.hp-resource-form').getByRole('button', { name: /^(?:Save|Create)\b/iu }).click()
   const response = await responsePromise
   if (!response.ok()) throw new Error(await response.text())
+}
+
+async function clickRowAction(page: Page, row: Locator, name: string): Promise<void> {
+  await row.getByRole('button', { name: 'Row actions', exact: true }).click()
+  await page.getByRole('menuitem', { name, exact: true }).click()
 }
 
 async function deleteRow(page: Page, rowText: string | RegExp): Promise<void> {
@@ -424,7 +429,7 @@ test.describe('authenticated admin journeys', () => {
     await create.getByRole('button', { name: 'Create', exact: true }).click()
     expect((await createResponse).ok()).toBe(true)
     await expect(create).toHaveCount(0)
-    await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })).toBeVisible()
+    await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
     const created = page.getByRole('row').filter({ hasText: name })
     await expect(created).toBeVisible()
 
@@ -827,7 +832,7 @@ test.describe('authenticated admin journeys', () => {
       expect(await response.json()).toMatchObject({ ok: true, data: { status: 'succeeded', items: expect.arrayContaining([{ recordId: created[11], status: 'succeeded' }, expect.objectContaining({ result: { published: expect.arrayContaining([created[11]]) } })]) } })
       const body = await response.json() as { data: { items: readonly { recordId: string }[] } }
       expect(body.data.items).toHaveLength(11)
-      await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })).toBeVisible()
+      await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
       await table.getByRole('button', { name: 'Clear selection', exact: true }).click()
       await expect(table.locator('.hp-table-bulk-actions')).toHaveCount(0)
     } finally {
@@ -1119,7 +1124,7 @@ test.describe('authenticated admin journeys', () => {
     await slugInput.fill(`manual-edit-${suffix}`)
     await titleInput.fill(`${title} final`)
     await expect(slugInput).toHaveValue(`manual-edit-${suffix}`)
-    const completedToast = page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })
+    const completedToast = page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })
     if (await completedToast.count()) {
       await completedToast.getByRole('button', { name: 'Close Action completed', exact: true }).press('Enter')
       await expect(completedToast).toHaveCount(0)
@@ -1162,7 +1167,7 @@ test.describe('authenticated admin journeys', () => {
     await selectField(page, 'Category', ['Guides'])
     await selectField(page, 'City', ['Cairo'])
     await submitResourceForm(page)
-    await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Action completed' })).toBeVisible()
+    await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
     expect(errors).toEqual([])
   })
 
@@ -1214,7 +1219,7 @@ test.describe('authenticated admin journeys', () => {
     await submitResourceForm(page)
     const relationDocument = await markDocument(page)
 
-    const tags = page.getByRole('region', { name: 'Tags' })
+    const tags = page.locator('[data-relation-manager="tags"]')
     await expect(tags).toBeVisible()
     const relationOptionsResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/options'))
     await tags.getByRole('button', { name: 'Attach', exact: true }).click()
@@ -1236,7 +1241,7 @@ test.describe('authenticated admin journeys', () => {
     await expectSameDocument(page, relationDocument)
     const attachedTagRow = page.getByRole('row').filter({ hasText: selectedTag.label }).first()
     await expect(attachedTagRow).toBeVisible()
-    await attachedTagRow.getByRole('button', { name: 'Edit Pivot', exact: true }).click()
+    await clickRowAction(page, attachedTagRow, 'Edit Pivot')
     const pivotPosition = page.getByRole('dialog').getByRole('spinbutton', { name: 'Position', exact: true })
     await expect(pivotPosition).toHaveValue('2')
     await pivotPosition.fill('7')
@@ -1247,7 +1252,7 @@ test.describe('authenticated admin journeys', () => {
     await waitForPanelReady(page)
     await expectSameDocument(page, relationDocument)
     const editedTagRow = page.getByRole('row').filter({ hasText: selectedTag.label }).first()
-    await editedTagRow.getByRole('button', { name: 'Edit Pivot', exact: true }).click()
+    await clickRowAction(page, editedTagRow, 'Edit Pivot')
     await expect(page.getByRole('dialog').getByRole('spinbutton', { name: 'Position', exact: true })).toHaveValue('7')
     await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).last().click()
     let viewMutations = 0
@@ -1255,25 +1260,26 @@ test.describe('authenticated admin journeys', () => {
       if (request.method() === 'POST' && request.url().endsWith('/holo/panels/admin/action')) viewMutations++
     }
     page.on('request', countViewMutation)
-    await editedTagRow.getByRole('button', { name: 'View', exact: true }).click()
+    await clickRowAction(page, editedTagRow, 'View')
     const viewTagDialog = page.getByRole('dialog')
     await expect(viewTagDialog.locator('[data-field-path="values.name"] input')).toHaveValue(selectedTag.label)
     await viewTagDialog.getByRole('button', { name: 'Close', exact: true }).last().click()
     await expect.poll(() => viewMutations).toBe(0)
     page.off('request', countViewMutation)
-    await editedTagRow.getByRole('button', { name: 'Detach', exact: true }).click()
+    await clickRowAction(page, editedTagRow, 'Detach')
     const detachResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const detached = await detachResponse
     if (!detached.ok()) throw new Error(await detached.text())
     await waitForPanelReady(page)
+    await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
     await expectSameDocument(page, relationDocument)
     await expect(page.getByRole('row').filter({ hasText: selectedTag.label })).toHaveCount(0)
 
     const commentAuthor = `Panel reviewer ${suffix}`
     const commentBody = `Created through the ${testInfo.project.name} relation manager.`
     const editedCommentBody = `${commentBody} Edited.`
-    const comments = page.getByRole('region', { name: 'Comments' })
+    const comments = page.locator('[data-relation-manager="comments"]')
     await expect(comments).toBeVisible()
     await comments.getByRole('button', { name: 'Create', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click()
@@ -1304,7 +1310,7 @@ test.describe('authenticated admin journeys', () => {
     await expectSameDocument(page, relationDocument)
     let commentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(commentRow).toContainText(commentBody)
-    await commentRow.getByRole('button', { name: 'Dissociate', exact: true }).click()
+    await clickRowAction(page, commentRow, 'Dissociate')
     const dissociateResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const dissociatedComment = await dissociateResponse
@@ -1327,7 +1333,7 @@ test.describe('authenticated admin journeys', () => {
     await expectSameDocument(page, relationDocument)
     commentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(commentRow).toContainText(commentBody)
-    await commentRow.getByRole('button', { name: 'Edit', exact: true }).click()
+    await clickRowAction(page, commentRow, 'Edit')
     const editCommentDialog = page.getByRole('dialog')
     await editCommentDialog.getByRole('textbox', { name: 'Body', exact: true }).fill(editedCommentBody)
     const editCommentResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
@@ -1338,14 +1344,21 @@ test.describe('authenticated admin journeys', () => {
     await expectSameDocument(page, relationDocument)
     const editedCommentRow = page.getByRole('row').filter({ hasText: commentAuthor }).first()
     await expect(editedCommentRow).toContainText(editedCommentBody)
-    await editedCommentRow.getByRole('button', { name: 'Delete', exact: true }).click()
+    await clickRowAction(page, editedCommentRow, 'Delete')
     const deleteCommentResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/holo/panels/admin/action'))
     await page.getByRole('button', { name: 'Confirm', exact: true }).click()
     const deletedComment = await deleteCommentResponse
     if (!deletedComment.ok()) throw new Error(await deletedComment.text())
     await waitForPanelReady(page)
     await expectSameDocument(page, relationDocument)
+    await expect(page.locator('[data-sonner-toast][data-front="true"]').filter({ hasText: 'Action completed' })).toBeVisible()
     await expect(page.getByRole('row').filter({ hasText: commentAuthor })).toHaveCount(0)
+
+    const parentViewPath = new URL(page.url()).pathname.replace(/\/edit$/u, '')
+    await gotoPanelPage(page, parentViewPath)
+    await expect(page.locator('[data-relation-manager="tags"]')).toBeVisible()
+    await expect(page.locator('[data-relation-manager="comments"]')).toBeVisible()
+    await expect(page.locator('[data-relation-manager]').getByRole('button', { name: /^(?:Attach|Associate|Create|Delete|Detach|Dissociate|Edit|Edit Pivot)$/u })).toHaveCount(0)
 
     await gotoPanelPage(page, '/admin/posts')
     await expect(page.getByRole('row').filter({ hasText: editedTitle })).toBeVisible()

@@ -30,3 +30,33 @@ it('uses configured relation action confirmation and forwards the shared executi
   await host.store.submit([7])
   expect(execute).toHaveBeenCalledWith(expect.objectContaining({ actionId: 'remove', idempotencyKey: expect.any(String), mount: 'record', operation: 'delete', recordId: 7 }), expect.any(AbortSignal))
 })
+
+it('forwards a shared table selection to bulk relation actions', async () => {
+  const execute = vi.fn(async () => undefined)
+  const host = createRelationActionHost({
+    execute,
+    manager: {
+      actions: [{ badge: null, color: 'danger', confirmation: null, disabled: false, icon: 'unlink', id: 'detach-selected', kind: 'detach', label: 'Detach selected', modal: null, mount: 'bulk', size: 'medium', tooltip: null, type: 'detach', visible: true }],
+      badge: 2,
+      columns: [{ key: 'name', label: 'Name' }],
+      group: null,
+      id: 'tags',
+      label: 'Tags',
+      operations: ['detach'],
+      presentation: 'inline',
+      records: [],
+      url: null,
+      visible: true,
+    },
+    selection: () => ({ mode: 'explicit', recordIds: ['tag-one', 'tag-two'] }),
+  })
+
+  host.store.mount(host.actions[0]!)
+  await host.store.submit()
+
+  expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+    actionId: 'detach-selected',
+    managerId: 'tags',
+    selection: { mode: 'explicit', recordIds: ['tag-one', 'tag-two'] },
+  }), expect.any(AbortSignal))
+})

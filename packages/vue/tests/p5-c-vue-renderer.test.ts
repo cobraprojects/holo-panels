@@ -158,11 +158,14 @@ describe('Vue relation selection', () => {
 
     expect(container.querySelector('[data-slot="table-container"]')).not.toBeNull()
     expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-table-responsive')).toBe(true)
-    expect(container.querySelector('[data-panels-component="data-table"]')?.classList.contains('hp-relation-table-overflow')).toBe(true)
     expect(container.querySelector('td[data-label="Name"]')?.textContent).toBe('TypeScript')
-    expect(container.querySelector('.hp-table-row-actions [data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
-    container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
-    await nextTick()
+    expect(container.querySelector('td.hp-table-row-actions[data-label="Actions"]')).not.toBeNull()
+    const menu = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+    menu?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    menu?.click()
+    await vi.waitFor(() => expect(document.querySelector('[role="menuitem"][data-action="view"]')).not.toBeNull())
+    document.querySelector<HTMLElement>('[role="menuitem"][data-action="view"]')?.click()
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
 
     expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')?.value).toBe('TypeScript')
     expect(onOperation).not.toHaveBeenCalled()

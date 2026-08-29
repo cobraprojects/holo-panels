@@ -1,8 +1,9 @@
-import { createClientRelationLayout, createRelationActionHost, relationActionManifests, type ClientRelationManager, type ClientRelationRecord, type JsonValue } from '@holo-js/panels-client'
+import { createClientRelationLayout, createRelationActionHost, relationActionManifests, TableStateStore, type ClientRelationManager, type ClientRelationRecord, type JsonValue } from '@holo-js/panels-client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Badge, Card, CardContent, CardHeader, CardTitle, Checkbox, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Tabs, TabsContent, TabsList, TabsTrigger } from '../ui'
+import { Badge, Card, CardContent, CardHeader, CardTitle, Tabs, TabsContent, TabsList, TabsTrigger } from '../ui'
 import { ReactActionRenderer } from '../actions/renderer'
-import { TablePresentation, type TablePresentationColumn } from '../tables/presentation'
+import { ReactTableRenderer } from '../tables/renderer'
+import type { ReactTableAction, ReactTableColumn, ReactTableFilter } from '../tables/types'
 import type { ReactRelationManagerRendererProps } from './types'
 
 function display(value: JsonValue | undefined): string {
@@ -25,26 +26,67 @@ function RelationActions({ manager, record, selectedIds, props }: {
 }
 
 function RelationPanel({ manager, props }: { readonly manager: ClientRelationManager, readonly props: ReactRelationManagerRendererProps }): ReactNode {
-  const [selectedIds, setSelectedIds] = useState<readonly (number | string)[]>([])
-  const hasBulk = relationActionManifests(manager).some(action => action.mount === 'bulk')
-  const hasRows = !!props.onOperation && manager.records.some(record => relationActionManifests(manager, record).length > 0)
-  const columns: readonly TablePresentationColumn<ClientRelationRecord>[] = [
-    ...(hasBulk ? [{
-      header: 'Select', key: 'selection', label: 'Select',
-      render: (record: ClientRelationRecord) => <Checkbox aria-label={`Select record ${record.id}`} checked={selectedIds.includes(record.id)} onCheckedChange={checked => setSelectedIds(current => checked ? [...current.filter(id => id !== record.id), record.id] : current.filter(id => id !== record.id))} />,
-    }] : []),
-    ...manager.columns.map(column => ({ header: column.label, key: column.key, label: column.label, render: (record: ClientRelationRecord) => display(record.values[column.key]) })),
-  ]
+  const [pageActions, setPageActions] = useState(manager.records.map(record => ({ actions: relationActionManifests(manager, record), recordId: record.id })))
+  useEffect(() => setPageActions(manager.records.map(record => ({ actions: relationActionManifests(manager, record), recordId: record.id }))), [manager])
+  const columns = useMemo<readonly ReactTableColumn<ClientRelationRecord>[]>(() => manager.columns.map(column => ({
+    manifest: { alignment: 'start', copyable: false, hidden: false, inlineEditor: null, label: column.label, path: column.key, searchable: column.searchable, sortable: column.sortable === true, toggleable: true, type: 'text', width: null, wrap: false },
+    render: (_value, record) => display(record.values[column.key]),
+  })), [manager.columns])
+  const actions = useMemo<readonly ReactTableAction[]>(() => {
+    const bulk = (manager.actions ?? []).filter(action => action.mount === 'bulk').map(action => ({ id: action.id, label: action.label, scope: 'bulk' as const, resolveManifest: () => action }))
+    const rowIds = [...new Set(pageActions.flatMap(item => item.actions.map(action => action.id)))]
+    const rows = rowIds.map(id => ({
+      id,
+      label: pageActions.flatMap(item => item.actions).find(action => action.id === id)?.label ?? id,
+      resolveManifest: (recordId?: number | string) => pageActions.find(item => String(item.recordId) === String(recordId))?.actions.find(action => action.id === id) ?? null,
+      scope: 'row' as const,
+    }))
+    return [...bulk, ...rows]
+  }, [manager.actions, pageActions])
+  const filters = useMemo<readonly ReactTableFilter[]>(() => (manager.filters ?? []).map(filter => ({ manifest: filter })), [manager.filters])
+  const store = useMemo(() => new TableStateStore<ClientRelationRecord, number | string>({
+    filterMode: manager.filterMode,
+    panelId: props.panelId ?? 'default',
+    perPage: manager.perPage,
+    records: manager.records,
+    selection: manager.selection,
+    tableId: manager.id,
+    total: manager.total ?? manager.records.length,
+    visibleColumns: manager.columns.map(column => column.key),
+  }), [manager, props.panelId])
+  const refresh = (): void => {
+    if (!props.onTableQuery) return
+    const query = store.query
+    void props.onTableQuery({ managerId: manager.id, query, selection: store.selectionPayload() }).then(page => {
+      const pageManager = { ...manager, recordActions: page.recordActions, records: page.records }
+      setPageActions(page.records.map(record => ({ actions: relationActionManifests(pageManager, record), recordId: record.id })))
+      store.applyData({ queryVersion: query.queryVersion, records: page.records, selection: page.selection, total: page.total })
+    }).catch(() => store.applyError(query.queryVersion, { code: 'relation-table-failed', message: 'Unable to load related records.' }))
+  }
   return <Card aria-label={manager.label} className="hp-relation-manager" data-empty={manager.records.length === 0 || undefined} data-relation-manager={manager.id} role="region">
     <CardHeader className="hp:flex hp:flex-row hp:items-center hp:justify-between">
       <div className="hp:flex hp:items-center hp:gap-2"><CardTitle className="hp-relation-manager-title">{manager.label}</CardTitle>{manager.badge !== null ? <Badge aria-label={`${manager.badge} ${manager.label.toLocaleLowerCase()}`} className="hp-relation-manager-count" variant="secondary">{manager.badge}</Badge> : null}</div>
-      {props.onOperation ? <div aria-label={`${manager.label} actions`} className="hp-relation-actions" data-slot="relation-toolbar" role="group"><RelationActions manager={manager} props={props} selectedIds={selectedIds} /></div> : null}
+      {props.onOperation ? <div aria-label={`${manager.label} actions`} className="hp-relation-actions" data-slot="relation-toolbar" role="group"><RelationActions manager={manager} props={props} /></div> : null}
     </CardHeader>
-    <CardContent>{manager.records.length === 0
-      ? <Empty className="hp:min-h-40 hp:border" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{manager.emptyMessage ?? `No ${manager.label.toLocaleLowerCase()} found.`}</EmptyDescription></EmptyHeader></Empty>
-      : <TablePresentation regionLabel={`${manager.label} data`} caption={manager.label} columns={columns} containerClassName="hp-relation-table-overflow" getRowKey={record => record.id} records={manager.records} trailing={hasRows ? {
-          header: 'Actions', label: 'Actions', render: record => <div aria-label={`Actions for ${manager.label.toLocaleLowerCase()} record ${record.id}`} className="hp-relation-row-actions" data-slot="relation-row-actions" role="group"><RelationActions manager={manager} props={props} record={record} /></div>,
-        } : undefined} />}
+    <CardContent><ReactTableRenderer
+      actionTransport={props.onOperation ? { execute: async (request, signal) => {
+        const manifest = request.recordId === undefined
+          ? manager.actions?.find(action => action.id === request.actionId && action.mount === 'bulk')
+          : pageActions.find(item => String(item.recordId) === String(request.recordId))?.actions.find(action => action.id === request.actionId)
+        if (!manifest) throw new Error('The relation action is not available')
+        await props.onOperation?.({ actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, managerId: manager.id, mount: request.mount, operation: manifest.kind as Parameters<NonNullable<ReactRelationManagerRendererProps['onOperation']>>[0]['operation'], ...(request.recordId === undefined ? {} : { recordId: request.recordId }), ...(request.selection ? { selection: request.selection } : {}) }, signal)
+      } } : undefined}
+      actions={actions}
+      caption={manager.label}
+      columns={columns}
+      emptyMessage={manager.emptyMessage ?? `No ${manager.label.toLocaleLowerCase()} found.`}
+      filters={filters}
+      getRecordId={record => record.id}
+      onQueryChange={props.onTableQuery ? refresh : undefined}
+      panelId={props.panelId}
+      registry={props.registry}
+      store={store}
+    />
     </CardContent>
   </Card>
 }
@@ -57,8 +99,8 @@ export function ReactRelationManagerRenderer(props: ReactRelationManagerRenderer
     props.onSelectionChange?.(groupId, managerId)
   }
   return <div className="hp-relations hp:space-y-6" data-panels-component="relation-managers">
-    {layout.inline.map(manager => <RelationPanel key={manager.id} manager={manager} props={props} />)}
-    {layout.tabGroups.map(group => <Tabs className="hp-relation-tabs" key={group.id} onValueChange={managerId => select(group.id, managerId)} value={group.activeId}>{group.label ? <h2>{group.label}</h2> : null}<TabsList>{group.managers.map(manager => <TabsTrigger key={manager.id} value={manager.id}>{manager.label}{manager.badge !== null ? ` (${manager.badge})` : ''}</TabsTrigger>)}</TabsList>{group.managers.map(manager => <TabsContent key={manager.id} value={manager.id}><RelationPanel manager={manager} props={props} /></TabsContent>)}</Tabs>)}
+    {layout.inline.map(manager => <RelationPanel key={`${manager.id}:${JSON.stringify(manager.records)}`} manager={manager} props={props} />)}
+    {layout.tabGroups.map(group => <Tabs className="hp-relation-tabs" key={group.id} onValueChange={managerId => select(group.id, managerId)} value={group.activeId}>{group.label ? <h2>{group.label}</h2> : null}<TabsList>{group.managers.map(manager => <TabsTrigger key={manager.id} value={manager.id}>{manager.label}{manager.badge !== null ? ` (${manager.badge})` : ''}</TabsTrigger>)}</TabsList>{group.managers.map(manager => <TabsContent key={manager.id} value={manager.id}><RelationPanel key={`${manager.id}:${JSON.stringify(manager.records)}`} manager={manager} props={props} /></TabsContent>)}</Tabs>)}
     {layout.pages.length > 0 ? <nav aria-label="Related record pages" className="hp-relation-pages">{layout.pages.map(manager => <a href={manager.url!} key={manager.id}>{manager.label}{manager.badge !== null ? ` (${manager.badge})` : ''}</a>)}</nav> : null}
   </div>
 }

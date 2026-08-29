@@ -173,7 +173,7 @@ describe('P10 relation-manager phase gate', () => {
       expect(report.render.markup).toContain('data-panels-component="relation-managers"')
       expect(report.render.markup).toContain('data-panels-component="data-table"')
       expect(report.render.markup).toContain('hp-table-responsive')
-      expect(report.render.markup).toContain('hp-relation-table-overflow')
+      expect(report.render.markup).toContain('data-panels-component="table"')
       expect(report.render.markup).toContain('hp-table-row-actions')
       expect(report.render.markup).toContain('data-label="Comment"')
       expect(report.render.markup).toContain('First comment')
@@ -182,7 +182,6 @@ describe('P10 relation-manager phase gate', () => {
       expect(report.render.markup).toContain('role="tabpanel"')
       expect(report.render.markup).toContain('Editorial')
       expect(report.render.markup).toContain('/admin/posts/1/relations/audit')
-      expect(report.render.markup).toContain('Edit pivot')
       expect(report.render.markup).not.toContain('Private notes')
       expect(events).toEqual(expect.arrayContaining(['associate:11', 'dissociate:10', 'attach:21', 'pivot:20:3', 'detach:20']))
     }

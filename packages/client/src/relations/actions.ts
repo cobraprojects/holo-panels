@@ -1,9 +1,10 @@
-import { builtInActionPresentation, type ActionManifest, type JsonObject, type JsonValue } from '@holo-js/panels-core'
+import { builtInActionPresentation, toJsonValue, type ActionManifest, type JsonObject, type JsonValue } from '@holo-js/panels-core'
 import { ClientActionStore } from '../actions/store'
 import { actionManifestCollection, isActionManifest } from '../actions/manifest'
 import { OptionStore } from '../options/store'
 import { publishPanelActionFailure } from '../notifications/feedback'
 import { formValidationErrors } from '../forms/validation'
+import type { TableSelectionPayload } from '../tables/contracts'
 import type { ClientRelationActionRequest, ClientRelationManager, ClientRelationOption, ClientRelationRecord } from './contracts'
 
 function object(value: JsonValue | undefined): JsonObject {
@@ -32,6 +33,7 @@ export function relationActionPayload(request: ClientRelationActionRequest): Jso
     ...(request.input ? { input: request.input } : {}),
     ...(request.mount ? { mount: request.mount } : {}),
     ...(request.recordIds ? { relatedIds: [...request.recordIds] } : {}),
+    ...(request.selection ? { selection: toJsonValue(request.selection) } : {}),
     ...(request.recordId === undefined ? {} : { relatedId: request.recordId }),
     ...(request.pivot ? { pivot: { ...request.pivot } } : {}),
     ...(request.values ? { values: { ...request.values } } : {}),
@@ -77,8 +79,9 @@ export function createRelationActionHost(options: {
   readonly panelId?: string
   readonly record?: ClientRelationRecord
   readonly selectedIds?: readonly (number | string)[]
+  readonly selection?: () => TableSelectionPayload<number | string>
 }) {
-  const actions = relationActionManifests(options.manager, options.record, !!options.loadOptions).map(action => action.mount === 'bulk' && !options.selectedIds?.length ? { ...action, disabled: true } : action)
+  const actions = relationActionManifests(options.manager, options.record, !!options.loadOptions).map(action => action.mount === 'bulk' && !options.selection && !options.selectedIds?.length ? { ...action, disabled: true } : action)
   const store = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
     createOptionStore: (field, actionId) => field.path === 'relatedId' && options.loadOptions ? new OptionStore({
@@ -98,7 +101,7 @@ export function createRelationActionHost(options: {
           await options.execute({
             actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, managerId: options.manager.id, mount: request.mount, operation: action.kind as ClientRelationActionRequest['operation'],
             ...(typeof relatedId === 'string' || typeof relatedId === 'number' ? { recordId: relatedId } : {}),
-            ...(action.mount === 'bulk' ? { recordIds: options.selectedIds ?? [] } : {}),
+            ...(action.mount === 'bulk' ? options.selection ? { selection: options.selection() } : { recordIds: options.selectedIds ?? [] } : {}),
             ...(request.input.pivot ? { pivot: object(request.input.pivot) } : {}),
             ...(request.input.values ? { values: object(request.input.values) } : {}),
           }, signal)

@@ -158,15 +158,21 @@ function relationManagers(value: JsonValue | undefined): ReactRelationManagerRen
     return [{
       ...relationActionPresentation(manager),
       badge: typeof manager.badge === 'number' || typeof manager.badge === 'string' ? manager.badge : null,
-      columns: objects(manager.columns).flatMap(column => text(column.key) ? [{ key: text(column.key), label: text(column.label) || text(column.key) }] : []),
+      columns: objects(manager.columns).flatMap(column => text(column.key) ? [{ key: text(column.key), label: text(column.label) || text(column.key), searchable: column.searchable === true, sortable: column.sortable === true }] : []),
       fields: relationFields(manager.fields),
+      filterMode: manager.filterMode === 'deferred' ? 'deferred' : 'live',
+      filters: objects(manager.filters).flatMap(filter => text(filter.id) && text(filter.type) ? [{ defaultValue: filter.defaultValue ?? null, id: text(filter.id), label: typeof filter.label === 'string' ? filter.label : null, properties: object(filter.properties), type: text(filter.type) }] : []),
       group: typeof manager.group === 'string' ? manager.group : null,
       id,
       label: text(manager.label) || id,
       operations: Array.isArray(manager.operations) ? manager.operations.filter(operation => typeof operation === 'string') as ReactRelationManagerRendererProps['managers'][number]['operations'] : [],
+      page: typeof manager.page === 'number' ? manager.page : 1,
+      perPage: typeof manager.perPage === 'number' ? manager.perPage : 25,
       presentation: presentation as ReactRelationManagerRendererProps['managers'][number]['presentation'],
       pivotFields: relationFields(manager.pivotFields),
       records,
+      selection: { currentPageOnly: object(manager.selection).currentPageOnly === true, groupsOnly: object(manager.selection).groupsOnly === true, maximum: typeof object(manager.selection).maximum === 'number' ? Number(object(manager.selection).maximum) : null },
+      total: typeof manager.total === 'number' ? manager.total : records.length,
       url: typeof manager.url === 'string' ? manager.url : null,
       visible: manager.visible !== false,
     }]
@@ -898,6 +904,25 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     if (!result.ok || result.data?.status === 'partial') throw result.failure ?? new Error(result.error ?? 'The relation operation could not be completed.')
     setRelations(relationManagers(result.data?.relations))
   }
+  const loadRelationTable: NonNullable<ReactRelationManagerRendererProps['onTableQuery']> = async (request, signal) => {
+    const result = await operation.execute('table-data', {
+      editable: true,
+      filters: toJsonValue(request.query.filters),
+      intent: 'relation',
+      managerId: request.managerId,
+      ownerId: record[routeKey] ?? null,
+      page: request.query.page,
+      perPage: request.query.perPage,
+      resourceId,
+      search: request.query.search,
+      selection: toJsonValue(request.selection),
+      sort: toJsonValue(request.query.sort),
+    }, signal)
+    if (!result.ok) throw new Error(result.error ?? 'Related records could not be loaded.')
+    const manager = relationManagers(result.data?.relations).find(item => item.id === request.managerId)
+    if (!manager) throw new Error('The relation manager is not available.')
+    return { recordActions: manager.recordActions, records: manager.records, selection: manager.selection, total: manager.total ?? manager.records.length }
+  }
   const formActions = useMemo(() => objects(formManifest.actions).map(actionManifest).filter((action): action is ClientActionManifest => action !== null), [formManifest])
   const formActionStore = useMemo(() => new ClientActionStore({
     createIdempotencyKey: () => globalThis.crypto.randomUUID(),
@@ -965,7 +990,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
       </Card>
       {state.errors._root?.length ? <ul data-form-errors="" role="alert">{state.errors._root.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
     </form>
-    {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
+    {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} onTableQuery={loadRelationTable} /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
   </>
 }
 
@@ -1153,12 +1178,19 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
     if (!result.ok || result.data?.status === 'partial') throw new Error(result.error ?? 'The relation operation could not be completed.')
     setRelations(relationManagers(result.data?.relations))
   }
+  const loadRelationTable: NonNullable<ReactRelationManagerRendererProps['onTableQuery']> = async (request, signal) => {
+    const result = await operation.execute('table-data', { editable: !readOnlyRelations, filters: toJsonValue(request.query.filters), intent: 'relation', managerId: request.managerId, ownerId: record[routeKey] ?? null, page: request.query.page, perPage: request.query.perPage, resourceId, search: request.query.search, selection: toJsonValue(request.selection), sort: toJsonValue(request.query.sort) }, signal)
+    if (!result.ok) throw new Error(result.error ?? 'Related records could not be loaded.')
+    const manager = relationManagers(result.data?.relations).find(item => item.id === request.managerId)
+    if (!manager) throw new Error('The relation manager is not available.')
+    return { recordActions: manager.recordActions, records: manager.records, selection: manager.selection, total: manager.total ?? manager.records.length }
+  }
   return <article className="hp-resource-view"><h2>{text(record[recordTitle])}</h2>
     <ResourcePageActions basePath={basePath} operation={operation} panelId={panelId} recordId={text(record[routeKey])} registry={registry} resource={resource} source="view" />
     <div className="hp-infolist">{entries.map(definition => <ResourceEntry definition={definition} key={text(definition.id) || text(definition.path)} operation={operation} panelId={panelId} record={record} recordId={text(record[routeKey])} registry={registry} resourceId={resourceId} />)}</div>
     {relations.length > 0 ? <><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} />{readOnlyRelations
-      ? <ReactRelationManagerRenderer panelId={panelId} registry={registry} managers={relations} />
-      : <ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} />}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
+      ? <ReactRelationManagerRenderer panelId={panelId} registry={registry} managers={relations} onTableQuery={loadRelationTable} />
+      : <ReactRelationManagerRenderer panelId={panelId} registry={registry} loadOptions={loadRelationOptions} managers={relations} onOperation={runRelationOperation} onTableQuery={loadRelationTable} />}<ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /></> : null}
   </article>
 }
 

@@ -4,6 +4,8 @@ import type {
   ClientRelationOption,
   ClientRelationSelection,
   ClientRelationActionRequest,
+  ClientRelationTablePage,
+  ClientRelationTableRequest,
 } from '@holo-js/panels-client'
 
 export type ReactRelationOperationRequest = ClientRelationActionRequest
@@ -12,6 +14,7 @@ export interface ReactRelationManagerRendererProps {
   readonly loadOptions?: (managerId: string, search: string) => Promise<readonly ClientRelationOption[]>
   readonly managers: readonly ClientRelationManager[]
   readonly onOperation?: (request: ReactRelationOperationRequest, signal?: AbortSignal) => void | Promise<void>
+  readonly onTableQuery?: (request: ClientRelationTableRequest, signal?: AbortSignal) => Promise<ClientRelationTablePage>
   readonly registry?: ComponentRegistry
   readonly panelId?: string
   readonly onSelectionChange?: (groupId: string, managerId: string) => void

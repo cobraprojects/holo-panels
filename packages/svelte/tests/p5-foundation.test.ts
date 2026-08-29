@@ -98,7 +98,7 @@ describe('Svelte renderer foundation', () => {
     await vi.waitFor(() => expect(onOperation).toHaveBeenCalledWith(expect.objectContaining({ managerId: 'tags', operation: 'attach', pivot: { position: 3 }, recordId: 'tag-typescript' }), expect.any(AbortSignal)))
   })
 
-  it('views a related record without sending a mutation', async () => {
+  it('presents related record view through the shared row-action menu without eagerly mutating', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     const onOperation = vi.fn(async () => undefined)
@@ -108,11 +108,10 @@ describe('Svelte renderer foundation', () => {
     const table = container.querySelector('[data-panels-component="data-table"]')
     expect(table).not.toBeNull()
     expect(table?.classList.contains('hp-table-responsive')).toBe(true)
-    expect(table?.classList.contains('hp-relation-table-overflow')).toBe(true)
     expect(table?.querySelector('td[data-label="Name"]')?.textContent).toContain('TypeScript')
-    expect(table?.querySelector('.hp-table-row-actions [data-slot="relation-row-actions"]')?.getAttribute('role')).toBe('group')
-    container.querySelector<HTMLButtonElement>('[data-operation="view"]')?.click()
-    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')?.value).toBe('TypeScript'))
+    expect(table?.querySelector('td.hp-table-row-actions[data-label="Actions"]')).not.toBeNull()
+    const menu = container.querySelector<HTMLButtonElement>('[aria-label="Row actions"]')
+    expect(menu).not.toBeNull()
 
     expect(onOperation).not.toHaveBeenCalled()
   })

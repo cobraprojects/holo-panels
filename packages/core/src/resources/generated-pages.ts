@@ -590,7 +590,12 @@ function relationColumns(
     const path = Reflect.get(column, 'path')
     if (typeof path !== 'string' || !path) return []
     const configuredLabel = Reflect.get(column, 'label')
-    return [{ key: path, label: typeof configuredLabel === 'string' && configuredLabel ? configuredLabel : label(path) }]
+    return [{
+      key: path,
+      label: typeof configuredLabel === 'string' && configuredLabel ? configuredLabel : label(path),
+      searchable: Reflect.get(column, 'searchable') === true,
+      sortable: Reflect.get(column, 'sortable') === true,
+    }]
   })
   if (configured.length > 0) return Object.freeze(configured)
   const definition = relatedDefinition(relation)
@@ -682,11 +687,85 @@ async function automaticRelationRecords(
   return Object.freeze(authorized)
 }
 
+interface RelationTableRequest {
+  readonly filters: Readonly<Record<string, JsonValue>>
+  readonly managerId: string
+  readonly page: number
+  readonly perPage: number
+  readonly search: string
+  readonly sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[]
+}
+
+function relationTableRequest(manager: object, payload: JsonObject): RelationTableRequest {
+  const table = compiledObjectMember(manager, 'table')
+  const columns = new Map(arrayMember(table, 'columns').flatMap((column) => {
+    const path = Reflect.get(column, 'path')
+    return typeof path === 'string' ? [[path, column] as const] : []
+  }))
+  const filterIds = new Set(arrayMember(table, 'filters').flatMap((filter) => typeof Reflect.get(filter, 'id') === 'string' ? [String(Reflect.get(filter, 'id'))] : []))
+  const filtersValue = payload.filters && typeof payload.filters === 'object' && !Array.isArray(payload.filters) ? payload.filters : {}
+  const filters = Object.freeze(Object.fromEntries(Object.entries(filtersValue).flatMap(([id, value]) => {
+    if (value === '' || typeof value === 'undefined') return []
+    if (!filterIds.has(id)) throw new Error(`[Holo Panels] Relation table filter "${id}" is not registered.`)
+    return [[id, toJsonValue(value)]]
+  })))
+  const sort = Object.freeze(Array.isArray(payload.sort) ? payload.sort.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('[Holo Panels] Relation table sort is invalid.')
+    const column = Reflect.get(item, 'column')
+    const direction = Reflect.get(item, 'direction')
+    const definition = typeof column === 'string' ? columns.get(column) : undefined
+    if (typeof column !== 'string' || !definition || Reflect.get(definition, 'sortable') !== true || direction !== 'asc' && direction !== 'desc') {
+      throw new Error('[Holo Panels] Relation table sort is not registered.')
+    }
+    return Object.freeze({ column, direction })
+  }) : [])
+  const search = typeof payload.search === 'string' ? payload.search.trim().slice(0, 500) : ''
+  return Object.freeze({
+    filters,
+    managerId: typeof payload.managerId === 'string' ? payload.managerId : '',
+    page: typeof payload.page === 'number' ? payload.page : 1,
+    perPage: typeof payload.perPage === 'number' ? payload.perPage : 25,
+    search,
+    sort,
+  })
+}
+
+async function automaticRelationPage(
+  owner: RuntimeRecord,
+  relationName: string,
+  manager: object,
+  request: RelationTableRequest,
+  context: GeneratedResourceOperationInput['context'],
+): Promise<Readonly<{ hasMore: boolean, page: number, perPage: number, records: readonly unknown[], total: number }>> {
+  const table = compiledObjectMember(manager, 'table')
+  const searchable = arrayMember(table, 'columns').flatMap((column) => Reflect.get(column, 'searchable') === true && typeof Reflect.get(column, 'path') === 'string' ? [String(Reflect.get(column, 'path'))] : [])
+  let records = (await automaticRelationRecords(owner, relationName, context)).map(record => ({ record, values: relationRecord(record) }))
+  for (const [path, expected] of Object.entries(request.filters)) records = records.filter(item => valueAtPath(item.values, path) === expected)
+  if (request.search && searchable.length > 0) {
+    const term = request.search.toLocaleLowerCase()
+    records = records.filter(item => searchable.some(path => String(valueAtPath(item.values, path) ?? '').toLocaleLowerCase().includes(term)))
+  }
+  for (const item of [...request.sort].reverse()) records.sort((left, right) => {
+    const comparison = String(valueAtPath(left.values, item.column) ?? '').localeCompare(String(valueAtPath(right.values, item.column) ?? ''), undefined, { numeric: true })
+    return item.direction === 'asc' ? comparison : -comparison
+  })
+  const total = records.length
+  const offset = (request.page - 1) * request.perPage
+  return Object.freeze({
+    hasMore: offset + request.perPage < total,
+    page: request.page,
+    perPage: request.perPage,
+    records: Object.freeze(records.slice(offset, offset + request.perPage).map(item => item.record)),
+    total,
+  })
+}
+
 async function resourceRelations(
   definition: RuntimeDefinition,
   owner: RuntimeRecord,
   context: GeneratedResourceOperationInput['context'],
   editable: boolean,
+  tableRequest?: RelationTableRequest,
 ): Promise<readonly object[]> {
   const managers = await Promise.all(compositionArrayMember(definition, 'relations').map(async (manager) => {
     const compiled = 'compile' in manager && typeof manager.compile === 'function' ? manager.compile() : manager
@@ -699,9 +778,12 @@ async function resourceRelations(
     const managerContext = { actor: context.actor, owner, signal: context.signal, tenant: context.tenant }
     const visible = runtime ? await runtime.visible(managerContext) : true
     const badge = runtime ? await runtime.badge?.(managerContext) ?? null : null
+    const requested = tableRequest?.managerId === String(Reflect.get(compiled, 'id') ?? relationName)
+      ? tableRequest
+      : relationTableRequest(compiled, {})
     const page = runtime
-      ? await new RelationManagerExecutor(runtime).list({ includeTotal: true, page: 1, perPage: 25 }, managerContext)
-      : { records: await automaticRelationRecords(owner, relationName, context) }
+      ? await new RelationManagerExecutor(runtime).list({ filters: requested.filters, includeTotal: true, page: requested.page, perPage: requested.perPage, search: requested.search, sort: requested.sort }, managerContext)
+      : await automaticRelationPage(owner, relationName, compiled, requested, context)
     const records = page.records.map(relationRecord)
     const related = relatedDefinition(relation)
     const primaryKey = related && typeof Reflect.get(related, 'primaryKey') === 'string' ? String(Reflect.get(related, 'primaryKey')) : 'id'
@@ -714,17 +796,23 @@ async function resourceRelations(
     const actions = relationActions(compiled, relation as RelationDefinition)
     const writableFields = runtime?.writableInputFields ?? relationWritableFields(relation)
     const writablePivotFields = runtime?.writablePivotFields ?? automaticPivotFields(relation as RelationDefinition, context).writable
+    const table = compiledObjectMember(compiled, 'table')
     return Object.freeze({
       actions: await relationActionManifests(actions, context, null, editable, owner),
       badge,
       columns: relationColumns(compiled, relation, records),
       fields: relationFields(relation, writableFields),
+      filterMode: table && Reflect.get(table, 'filterMode') === 'deferred' ? 'deferred' : 'live',
+      filters: resourceFilters(table),
       group: runtime?.group ?? null,
+      hasMore: page.hasMore,
       id: String(Reflect.get(compiled, 'id') ?? relationName),
       label: label(String(Reflect.get(compiled, 'id') ?? relationName)),
       operations: editable ? operations : operations.filter(operation => operation === 'list' || operation === 'view'),
       pivotFields: relationPivotFields(relation, writablePivotFields),
       presentation: runtime?.presentation ?? 'inline',
+      page: page.page,
+      perPage: page.perPage,
       records: serializedRecords,
       recordActions: await Promise.all(page.records.map(async (record, index) => ({
         actions: await relationActionManifests(actions, context, record as RuntimeRecord, editable, owner),
@@ -732,6 +820,8 @@ async function resourceRelations(
       }))),
       url: null,
       visible,
+      selection: objectMember(table, 'selection') ?? {},
+      total: page.total ?? serializedRecords.length,
     })
   }))
   return Object.freeze(managers)
@@ -1971,7 +2061,45 @@ async function executeRelationOperation(
   if (!action) throw new Error('[Holo Panels] The relation operation is not registered for this relation manager.')
   if (input.payload.mount !== undefined && input.payload.mount !== action.mount) throw new Error('The relation action mount does not match its registration')
   if (input.panel) await authorizePanelActionPermissions(input.panel, { ...input.context, panelId: input.panelId }, actionExecutionPermissions(action))
-  const recordIds = action.mount === 'page' ? [] : Array.isArray(input.payload.relatedIds) ? actionRecordIds({ recordIds: input.payload.relatedIds }) : [relationIdentifier(input.payload, 'relatedId')]
+  let recordIds = action.mount === 'page' || action.mount === 'bulk' ? [] : Array.isArray(input.payload.relatedIds) ? actionRecordIds({ recordIds: input.payload.relatedIds }) : [relationIdentifier(input.payload, 'relatedId')]
+  if (action.mount === 'bulk') {
+    const selection = input.payload.selection
+    if (!selection || typeof selection !== 'object' || Array.isArray(selection)) throw new Error('The relation table selection is invalid')
+    const table = compiledObjectMember(manager.compiled, 'table')
+    const settings = objectMember(table, 'selection') ?? {}
+    const maximum = typeof Reflect.get(settings, 'maximum') === 'number' ? Number(Reflect.get(settings, 'maximum')) : 10_000
+    if (selection.mode === 'explicit') {
+      if (!Array.isArray(selection.recordIds)) throw new Error('The relation table selection is invalid')
+      recordIds = actionRecordIds({ recordIds: selection.recordIds })
+    } else if (selection.mode === 'all-matching') {
+      if (Reflect.get(settings, 'currentPageOnly') === true || Reflect.get(settings, 'groupsOnly') === true) throw new Error('All-matching selection is disabled for this relation table')
+      const query = selection.query
+      if (!query || typeof query !== 'object' || Array.isArray(query) || query.panelId !== undefined && query.panelId !== input.panelId || query.tableId !== undefined && query.tableId !== managerId) throw new Error('The selection belongs to another relation table')
+      if (!Array.isArray(selection.excludedRecordIds)) throw new Error('The relation table selection is invalid')
+      const excluded = new Set(actionRecordIds({ recordIds: selection.excludedRecordIds }).map(String))
+      const included = selection.recordIds === undefined ? [] : actionRecordIds({ recordIds: selection.recordIds })
+      const request = relationTableRequest(manager.compiled, { ...query, managerId, page: 1, perPage: Math.min(maximum, 250) })
+      const matching: (number | string)[] = []
+      for (let pageNumber = 1; matching.length <= maximum; pageNumber += 1) {
+        const pageRequest = { ...request, page: pageNumber }
+        const page = manager.runtime
+          ? await new RelationManagerExecutor(manager.runtime).list(pageRequest, { actor: input.context.actor, owner, signal: input.context.signal, tenant: input.context.tenant })
+          : await automaticRelationPage(owner, manager.relationName, manager.compiled, pageRequest, input.context)
+        const related = relatedDefinition(manager.relation)
+        const primaryKey = related && typeof Reflect.get(related, 'primaryKey') === 'string' ? String(Reflect.get(related, 'primaryKey')) : 'id'
+        for (const record of page.records) {
+          const identifier = relationRecord(record)[primaryKey]
+          if ((typeof identifier === 'number' || typeof identifier === 'string') && !excluded.has(String(identifier))) matching.push(identifier)
+        }
+        if (!page.hasMore) break
+      }
+      recordIds = [...new Map([...matching, ...included].map(identifier => [String(identifier), identifier])).values()]
+    } else {
+      throw new Error('The relation table selection is invalid')
+    }
+    if (recordIds.length === 0) throw new Error('Bulk relation actions require selected records')
+    if (recordIds.length > maximum) throw new Error('The relation table selection limit was exceeded')
+  }
   const engine = new ActionEngine<RuntimeRecord, number | string, object, unknown, undefined>({
     identity: scope => {
       const actor = actionCacheIdentity(scope.actor)
@@ -2277,6 +2405,14 @@ export async function executeGeneratedResourceOperation(
   if (input.operation === 'options') {
     data = await executeOptions(definition, input)
   } else if (input.operation === 'table-data') {
+    if (intent === 'relation') {
+      const ownerId = relationIdentifier(input.payload, 'ownerId')
+      const owner = await executor.resolveActionRecord(ownerId, input.context)
+      if (!owner) throw new Error('[Holo Panels] The relation owner was not found.')
+      const request = relationTableRequest(relationManager(definition, typeof input.payload.managerId === 'string' ? input.payload.managerId : '').compiled, input.payload)
+      data = jsonObject({ relations: await resourceRelations(definition, owner, input.context, input.payload.editable === true, request), resourceId: definition.id })
+      return Object.freeze({ data, effects: Object.freeze([]) })
+    }
     const tableState = await tableQueryState(definition, input)
     const result = await executor.table(tableState, input.context, record => resolveGeneratedRowActions(definition, input.context, record))
     const presentation = await tablePresentation(definition, result.records, input.context)

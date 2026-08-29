@@ -1,3 +1,5 @@
+import type { JsonValue } from '../protocol/json'
+
 export type RelationOperation =
   | 'associate'
   | 'attach'
@@ -14,15 +16,26 @@ export type RelationOperation =
 export type RelationPresentation = 'groupedTabs' | 'inline' | 'page' | 'tabs'
 
 export interface RelationListRequest {
+  readonly filters?: Readonly<Record<string, JsonValue>>
   readonly includeTotal?: boolean
   readonly page?: number
   readonly perPage?: number
+  readonly search?: string
+  readonly sort?: readonly RelationListSort[]
 }
 
 export interface NormalizedRelationListRequest {
+  readonly filters: Readonly<Record<string, JsonValue>>
   readonly includeTotal: boolean
   readonly page: number
   readonly perPage: number
+  readonly search: string
+  readonly sort: readonly RelationListSort[]
+}
+
+export interface RelationListSort {
+  readonly column: string
+  readonly direction: 'asc' | 'desc'
 }
 
 export interface RelationRecordPage<TRelated> {

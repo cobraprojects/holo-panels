@@ -430,15 +430,21 @@
       return [{
         ...relationActionPresentation(manager),
         badge: typeof manager.badge === 'number' || typeof manager.badge === 'string' ? manager.badge : null,
-        columns: Array.isArray(manager.columns) ? manager.columns.flatMap(column => column && typeof column === 'object' && !Array.isArray(column) && typeof column.key === 'string' ? [{ key: column.key, label: typeof column.label === 'string' ? column.label : column.key }] : []) : [],
+        columns: Array.isArray(manager.columns) ? manager.columns.flatMap(column => column && typeof column === 'object' && !Array.isArray(column) && typeof column.key === 'string' ? [{ key: column.key, label: typeof column.label === 'string' ? column.label : column.key, searchable: column.searchable === true, sortable: column.sortable === true }] : []) : [],
         fields: relationFields(manager.fields),
+        filterMode: manager.filterMode === 'deferred' ? 'deferred' : 'live',
+        filters: Array.isArray(manager.filters) ? manager.filters.flatMap(filter => filter && typeof filter === 'object' && !Array.isArray(filter) && typeof filter.id === 'string' && typeof filter.type === 'string' ? [{ defaultValue: filter.defaultValue ?? null, id: filter.id, label: typeof filter.label === 'string' ? filter.label : null, properties: filter.properties && typeof filter.properties === 'object' && !Array.isArray(filter.properties) ? filter.properties : {}, type: filter.type }] : []) : [],
         group: typeof manager.group === 'string' ? manager.group : null,
         id: manager.id,
         label: manager.label,
         operations: Array.isArray(manager.operations) ? manager.operations.filter(operation => typeof operation === 'string') as SvelteRelationManagerRendererProps['managers'][number]['operations'] : [],
+        page: typeof manager.page === 'number' ? manager.page : 1,
+        perPage: typeof manager.perPage === 'number' ? manager.perPage : 25,
         presentation: presentation as SvelteRelationManagerRendererProps['managers'][number]['presentation'],
         pivotFields: relationFields(manager.pivotFields),
         records: relationRecords,
+        selection: { currentPageOnly: !!manager.selection && typeof manager.selection === 'object' && !Array.isArray(manager.selection) && manager.selection.currentPageOnly === true, groupsOnly: !!manager.selection && typeof manager.selection === 'object' && !Array.isArray(manager.selection) && manager.selection.groupsOnly === true, maximum: manager.selection && typeof manager.selection === 'object' && !Array.isArray(manager.selection) && typeof manager.selection.maximum === 'number' ? manager.selection.maximum : null },
+        total: typeof manager.total === 'number' ? manager.total : relationRecords.length,
         url: typeof manager.url === 'string' ? manager.url : null,
         visible: manager.visible !== false,
       }]
@@ -698,6 +704,20 @@
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => option && typeof option === 'object' && !Array.isArray(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
 
+  const loadRelationTable: NonNullable<SvelteRelationManagerRendererProps['onTableQuery']> = async (request, signal) => {
+    if (!resource) throw new Error('Relation tables require resource metadata')
+    const ownerId = currentRouteIdentifier
+    if (ownerId === '') throw new Error('Relation tables require a persisted owner record')
+    const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {
+      endpoint: `${endpoint}/table-data`, panelId: data.panel.manifest.id, payload: toJsonValue({ editable: pageType !== 'view' || !readOnlyRelations, filters: request.query.filters, intent: 'relation', managerId: request.managerId, ownerId, page: request.query.page, perPage: request.query.perPage, resourceId: resource.id, search: request.query.search, selection: request.selection, sort: request.query.sort }) as JsonObject, signal: requestSignal(requestController.signal, signal),
+    })
+    await effects.apply(response)
+    if (!response.ok) throw new PanelsTransportError(response.error)
+    const manager = relationManagers(response.data.relations).find(item => item.id === request.managerId)
+    if (!manager) throw new Error('The relation manager is not available')
+    return { recordActions: manager.recordActions, records: manager.records, selection: manager.selection, total: manager.total ?? manager.records.length }
+  }
+
   async function refreshTable(): Promise<void> {
     if (!resource) return
     const query = table.query
@@ -812,7 +832,7 @@
     </Card>
     {#if $formState.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}
   </form>
-  {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId: data.panel.manifest.id, registry }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
+  {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={{ loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, onTableQuery: loadRelationTable, panelId: data.panel.manifest.id, registry }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
 {:else if pageType === 'view' && record}
   <article class="hp-resource-view"><div class="hp-infolist">
     {#each entryHosts as entry (String(entry.definition.id ?? entry.definition.path))}
@@ -823,6 +843,6 @@
     {@const actions = resource.recordActions.filter(action => action.visible && action.mount === 'record')}
     {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} {registry} store={actionStore} />{/if}
   </PanelsPageActions>
-  {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations, panelId: data.panel.manifest.id } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId: data.panel.manifest.id, registry }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
+  {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations, onTableQuery: loadRelationTable, panelId: data.panel.manifest.id } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, onTableQuery: loadRelationTable, panelId: data.panel.manifest.id, registry }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
   </article>
 {/if}

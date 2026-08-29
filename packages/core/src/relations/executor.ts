@@ -7,6 +7,9 @@ import type {
   RelationOperation,
   RelationRecordPage,
 } from './contracts'
+import { toJsonValue } from '../protocol/serialization'
+
+const columnPattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*$/u
 
 export class RelationRecordNotFoundError extends Error {
   constructor() {
@@ -52,25 +55,50 @@ function boundedInteger(value: unknown, fallback: number, maximum: number, name:
 }
 
 function normalizeListRequest(request: RelationListRequest): Readonly<{
+  filters: Readonly<Record<string, ReturnType<typeof toJsonValue>>>
   includeTotal: boolean
   page: number
   perPage: number
+  search: string
+  sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[]
 }> {
   if (request === null || Array.isArray(request) || typeof request !== 'object') {
     throw new RelationListPaginationError('Relation list request must be an object.')
   }
   for (const key of Object.keys(request)) {
-    if (key !== 'includeTotal' && key !== 'page' && key !== 'perPage') {
+    if (!['filters', 'includeTotal', 'page', 'perPage', 'search', 'sort'].includes(key)) {
       throw new RelationListPaginationError(`Relation list request property "${key}" is not allowed.`)
     }
   }
   if (typeof request.includeTotal !== 'undefined' && typeof request.includeTotal !== 'boolean') {
     throw new RelationListPaginationError('includeTotal must be a boolean.')
   }
+  if (typeof request.search !== 'undefined' && typeof request.search !== 'string') throw new RelationListPaginationError('search must be a string.')
+  const search = request.search?.trim() ?? ''
+  if (search.length > 500) throw new RelationListPaginationError('search must not exceed 500 characters.')
+  if (request.filters !== undefined && (!request.filters || Array.isArray(request.filters) || typeof request.filters !== 'object')) {
+    throw new RelationListPaginationError('filters must be an object.')
+  }
+  const filters = Object.freeze(Object.fromEntries(Object.entries(request.filters ?? {}).map(([key, value]) => {
+    if (!columnPattern.test(key)) throw new RelationListPaginationError(`Invalid relation filter "${key}".`)
+    return [key, toJsonValue(value)]
+  })))
+  if (request.sort !== undefined && !Array.isArray(request.sort)) throw new RelationListPaginationError('sort must be an array.')
+  const sortColumns = new Set<string>()
+  const sort = Object.freeze((request.sort ?? []).map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || !columnPattern.test(item.column) || !['asc', 'desc'].includes(item.direction) || sortColumns.has(item.column)) {
+      throw new RelationListPaginationError('Relation sorting must use unique valid columns and directions.')
+    }
+    sortColumns.add(item.column)
+    return Object.freeze({ column: item.column, direction: item.direction })
+  }))
   return Object.freeze({
+    filters,
     includeTotal: request.includeTotal ?? true,
     page: boundedInteger(request.page, 1, 1_000_000, 'page'),
     perPage: boundedInteger(request.perPage, 25, 100, 'perPage'),
+    search,
+    sort,
   })
 }
 

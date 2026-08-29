@@ -15,7 +15,7 @@
 </script>
 
 <div class="hp-relations" data-panels-component="relation-managers">
-  {#each layout.inline as manager (manager.id)}<RelationPanel {manager} {relations} />{/each}
+  {#each layout.inline as manager (`${manager.id}:${JSON.stringify(manager.records)}`)}<RelationPanel {manager} {relations} />{/each}
   {#each layout.tabGroups as group (group.id)}
     <section aria-label={group.label ?? 'Related records'} class="hp-relation-tabs">
       {#if group.label}<h2>{group.label}</h2>{/if}
@@ -25,7 +25,7 @@
             <Tabs.Trigger value={manager.id}>{manager.label}{#if manager.badge !== null}<Badge class="hp:ml-2" variant="secondary">{manager.badge}</Badge>{/if}</Tabs.Trigger>
           {/each}
         </Tabs.List>
-        {#each group.managers as manager (manager.id)}<Tabs.Content value={manager.id}><RelationPanel {manager} {relations} /></Tabs.Content>{/each}
+        {#each group.managers as manager (manager.id)}<Tabs.Content value={manager.id}>{#key JSON.stringify(manager.records)}<RelationPanel {manager} {relations} />{/key}</Tabs.Content>{/each}
       </Tabs.Root>
     </section>
   {/each}

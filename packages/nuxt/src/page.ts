@@ -267,15 +267,21 @@ function relationManagers(value: unknown): VueRelationManagerRendererProps['mana
     return [{
       ...relationActionPresentation(mutationPayload(manager)),
       badge: typeof manager.badge === 'number' || typeof manager.badge === 'string' ? manager.badge : null,
-      columns: Array.isArray(manager.columns) ? manager.columns.flatMap(column => isObject(column) && typeof column.key === 'string' ? [{ key: column.key, label: typeof column.label === 'string' ? column.label : column.key }] : []) : [],
+      columns: Array.isArray(manager.columns) ? manager.columns.flatMap(column => isObject(column) && typeof column.key === 'string' ? [{ key: column.key, label: typeof column.label === 'string' ? column.label : column.key, searchable: column.searchable === true, sortable: column.sortable === true }] : []) : [],
       fields: relationFields(manager.fields),
+      filterMode: manager.filterMode === 'deferred' ? 'deferred' : 'live',
+      filters: Array.isArray(manager.filters) ? manager.filters.flatMap(filter => isObject(filter) && typeof filter.id === 'string' && typeof filter.type === 'string' ? [{ defaultValue: toJsonValue(filter.defaultValue ?? null), id: filter.id, label: typeof filter.label === 'string' ? filter.label : null, properties: isObject(filter.properties) ? mutationPayload(filter.properties) : {}, type: filter.type }] : []) : [],
       group: typeof manager.group === 'string' ? manager.group : null,
       id: manager.id,
       label: manager.label,
       operations: Array.isArray(manager.operations) ? manager.operations.filter(operation => typeof operation === 'string') as VueRelationManagerRendererProps['managers'][number]['operations'] : [],
+      page: typeof manager.page === 'number' ? manager.page : 1,
+      perPage: typeof manager.perPage === 'number' ? manager.perPage : 25,
       presentation: presentation as VueRelationManagerRendererProps['managers'][number]['presentation'],
       pivotFields: relationFields(manager.pivotFields),
       records,
+      selection: { currentPageOnly: isObject(manager.selection) && manager.selection.currentPageOnly === true, groupsOnly: isObject(manager.selection) && manager.selection.groupsOnly === true, maximum: isObject(manager.selection) && typeof manager.selection.maximum === 'number' ? manager.selection.maximum : null },
+      total: typeof manager.total === 'number' ? manager.total : records.length,
       url: typeof manager.url === 'string' ? manager.url : null,
       visible: manager.visible !== false,
     }]
@@ -934,6 +940,16 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     if (!response.ok) throw new Error(response.error.message)
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
+  const loadRelationTable: NonNullable<VueRelationManagerRendererProps['onTableQuery']> = async (request, signal) => {
+    if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Relation tables require a persisted owner record')
+    const response = await runtime.transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {
+      endpoint: `/holo/panels/${encodeURIComponent(panelId)}/table-data`, panelId, payload: mutationPayload({ editable: true, filters: request.query.filters, intent: 'relation', managerId: request.managerId, ownerId: routeValue, page: request.query.page, perPage: request.query.perPage, resourceId: schema.resourceId, search: request.query.search, selection: request.selection, sort: request.query.sort }), signal,
+    })
+    if (!response.ok) throw new Error(response.error.message)
+    const manager = relationManagers(response.data.relations).find(item => item.id === request.managerId)
+    if (!manager) throw new Error('The relation manager is not available')
+    return { recordActions: manager.recordActions, records: manager.records, selection: manager.selection, total: manager.total ?? manager.records.length }
+  }
   const renderFormContent = ({ component }: { readonly component: { readonly kind: string, readonly statePath?: string } }): VNode | null => {
     const definition = component.kind === 'field' ? renderedFields.find(field => field.path === component.statePath) : undefined
     if (!definition) return null
@@ -966,7 +982,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       ]),
       formState.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, formState.errors._root.map(message => h('li', message))) : null,
     ]),
-    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
+    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, onTableQuery: loadRelationTable, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])
 }
 
@@ -1141,6 +1157,16 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
     if (!response.ok) throw new Error(response.error.message)
     return Array.isArray(response.data.options) ? response.data.options.flatMap(option => isObject(option) && typeof option.label === 'string' && (typeof option.value === 'number' || typeof option.value === 'string') ? [{ label: option.label, value: option.value }] : []) : []
   }
+  const loadRelationTable: NonNullable<VueRelationManagerRendererProps['onTableQuery']> = async (request, signal) => {
+    if (routeValue === null) throw new Error('Relation tables require a persisted owner record')
+    const response = await runtime.transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'table-data' }, {
+      endpoint: `/holo/panels/${encodeURIComponent(panelId)}/table-data`, panelId, payload: mutationPayload({ editable: !readOnlyRelations, filters: request.query.filters, intent: 'relation', managerId: request.managerId, ownerId: routeValue, page: request.query.page, perPage: request.query.perPage, resourceId: schema.resourceId, search: request.query.search, selection: request.selection, sort: request.query.sort }), signal,
+    })
+    if (!response.ok) throw new Error(response.error.message)
+    const manager = relationManagers(response.data.relations).find(item => item.id === request.managerId)
+    if (!manager) throw new Error('The relation manager is not available')
+    return { recordActions: manager.recordActions, records: manager.records, selection: manager.selection, total: manager.total ?? manager.records.length }
+  }
   return h('section', { class: 'hp-resource-view', 'data-resource-crud': 'view' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
       actions[0] ? h(VueActionRenderer, { action: actions[0], actions, panelId, recordIds: routeValue === null ? [] : [routeValue], registry, store }) : null,
@@ -1155,7 +1181,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
       runtime,
       source: `infolist:${entry.path}`,
     })) : []),
-    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations, panelId } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
+    relations.length > 0 ? [resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE, page.data), h(VueRelationManagerRenderer, { relations: readOnlyRelations ? { managers: relations, onTableQuery: loadRelationTable, panelId } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, onTableQuery: loadRelationTable, panelId, registry } }), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER, page.data)] : null,
   ])
 }
 

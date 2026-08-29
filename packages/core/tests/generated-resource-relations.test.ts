@@ -102,7 +102,10 @@ class CommentsRelationManager {
       table: Object.freeze({
         compile: () => Object.freeze({
           columns: Object.freeze([
-            Object.freeze({ label: 'Message', path: 'body' }),
+            Object.freeze({ label: 'Message', path: 'body', searchable: true, sortable: true }),
+          ]),
+          filters: Object.freeze([
+            Object.freeze({ defaultValue: null, id: 'body', label: 'Message', properties: {}, type: 'text' }),
           ]),
         }),
       }),
@@ -111,6 +114,46 @@ class CommentsRelationManager {
 }
 
 describe('generated resource relation managers', () => {
+  it('executes registered bulk relation actions with the shared explicit selection payload', async () => {
+    post.comments.splice(0, post.comments.length,
+      new CommentRecord('comment-1', 'post-1', 'Alpha'),
+      new CommentRecord('comment-2', 'post-1', 'Bravo'),
+    )
+    const selected: string[][] = []
+    class BulkComments extends CommentsRelationManager {
+      static override compile(): object {
+        const compiled = super.compile()
+        const table = Reflect.get(compiled, 'table') as { readonly compile: () => object }
+        return {
+          ...compiled,
+          actions: [{
+            authorize: () => true,
+            handle: (_input: object, context: { readonly selectedRecords: readonly CommentRecord[] }) => selected.push(context.selectedRecords.map(record => record.id)),
+            id: 'review-selected',
+            kind: 'custom',
+            label: 'Review selected',
+            mount: 'bulk',
+            transactional: false,
+            usesDefaultHandler: false,
+          }],
+          table: { compile: () => ({ ...table.compile(), selection: { currentPageOnly: false, groupsOnly: false, maximum: 10 } }) },
+        }
+      }
+    }
+    const resource = new ResourceBuilder<typeof postModel, PostRecord, PostQuery>(postModel).shared().relations(BulkComments)
+
+    const result = await executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'review-selected', idempotencyKey: 'bulk-comments', intent: 'relation', managerId: 'comments', mount: 'bulk', ownerId: 'post-1', relationOperation: 'custom', resourceId: 'posts', selection: { mode: 'explicit', recordIds: ['comment-1', 'comment-2'] } },
+    })
+
+    expect(result.data.status).toBe('succeeded')
+    expect(selected).toEqual([['comment-1', 'comment-2']])
+    post.comments.splice(0, post.comments.length, new CommentRecord('comment-1', 'post-1', 'First comment'))
+  })
+
   it('preserves relation action overrides and reauthorizes their execution', async () => {
     let allowed = true
     const saved: string[] = []
@@ -157,7 +200,7 @@ describe('generated resource relation managers', () => {
 
     expect(data.relations).toEqual([
       expect.objectContaining({
-        columns: [{ key: 'body', label: 'Message' }],
+        columns: [{ key: 'body', label: 'Message', searchable: true, sortable: true }],
         id: 'comments',
         label: 'Comments',
         operations: ['edit', 'delete'],
@@ -199,5 +242,45 @@ describe('generated resource relation managers', () => {
         resourceId: 'posts',
       },
     })).rejects.toThrow('The relation operation is not registered for this relation manager.')
+  })
+
+  it('loads an authorized relation table page through the shared table-data operation', async () => {
+    post.comments.splice(0, post.comments.length,
+      new CommentRecord('comment-1', 'post-1', 'Alpha'),
+      new CommentRecord('comment-2', 'post-1', 'Bravo'),
+      new CommentRecord('comment-3', 'post-1', 'Beta'),
+    )
+    const resource = new ResourceBuilder<typeof postModel, PostRecord, PostQuery>(postModel)
+      .shared()
+      .relations(CommentsRelationManager)
+
+    const result = await executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'table-data',
+      panelId: 'admin',
+      payload: {
+        filters: { body: 'Bravo' },
+        intent: 'relation',
+        managerId: 'comments',
+        ownerId: 'post-1',
+        page: 1,
+        perPage: 1,
+        resourceId: 'posts',
+        search: 'brav',
+        sort: [{ column: 'body', direction: 'desc' }],
+      },
+    })
+
+    expect(result.data.relations).toEqual([
+      expect.objectContaining({
+        hasMore: false,
+        id: 'comments',
+        page: 1,
+        perPage: 1,
+        records: [{ id: 'comment-2', values: { body: 'Bravo', id: 'comment-2', postId: 'post-1' } }],
+        total: 1,
+      }),
+    ])
+    post.comments.splice(0, post.comments.length, new CommentRecord('comment-1', 'post-1', 'Edited comment'))
   })
 })

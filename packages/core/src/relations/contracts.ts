@@ -10,6 +10,7 @@ import type {
 export type {
   NormalizedRelationListRequest,
   RelationListRequest,
+  RelationListSort,
   RelationOperation,
   RelationPresentation,
   RelationRecordPage,

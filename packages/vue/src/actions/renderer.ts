@@ -114,7 +114,7 @@ export const VueActionRenderer = defineComponent({
             }), renderHook(ActionsRenderHook.MODAL_SCHEMA_AFTER)]
           : null,
         props.store.activeForm?.state.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, props.store.activeForm.state.errors._root.map(message => h('li', message))) : null,
-        h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action')]),
+        frame.manifest.kind === 'view' ? null : h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action')]),
       ])
     }
 

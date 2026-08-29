@@ -1034,7 +1034,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
   }
   return h('div', { class: 'hp-resource-page' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
-      h(VueResourceActions, { actions: schema.recordActions.filter(action => action.mount === 'page'), panelId, resourceId: schema.resourceId, runtime, source: 'list' }),
+      h(VueResourceActions, { actions: schema.recordActions.filter(action => action.mount === 'page'), onCompleted: refresh, panelId, resourceId: schema.resourceId, runtime, source: 'list' }),
     ]), resourceRenderHook(runtime, PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE, page.data), h(VueTableRenderer, {
     table: {
       actionTransport: {
@@ -1076,6 +1076,7 @@ const VueResourceActions = defineComponent({
   props: {
     actions: { type: Array as PropType<readonly ClientActionManifest[]>, required: true },
     entry: { type: Object as PropType<VueEntryStore>, default: undefined },
+    onCompleted: { type: Function as PropType<() => void>, default: undefined },
     panelId: { type: String, required: true },
     recordIds: { type: Array as PropType<readonly (number | string)[]>, default: () => [] },
     resourceId: { type: String, required: true },
@@ -1090,6 +1091,7 @@ const VueResourceActions = defineComponent({
           if (!actionManifestCollection(props.actions).some(action => action.id === request.actionId)) throw new Error('Resource action is unavailable')
           const result = await mutate(props.runtime, props.panelId, 'action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey, input: request.input, mount: request.mount, recordIds: [...props.recordIds], resourceId: props.resourceId, source: props.source }, signal)
           if (isObject(result) && result.status === 'partial') throw new Error('The action could not be completed for every record.')
+          props.onCompleted?.()
           return { effects: [], items: [], status: 'succeeded' }
         },
       },

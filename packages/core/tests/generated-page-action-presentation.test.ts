@@ -164,6 +164,41 @@ describe('generated page action presentation', () => {
     expect(result.data.tableActions).toMatchObject([{ id: 'create', modal: { schema: { fields: [{ kind: 'field', path: 'title', required: true }] } } }, { id: 'edit' }])
     expect(result.data.rowActions).toMatchObject([{ actions: [{ id: 'create' }, { id: 'edit', modal: { schema: { fields: [{ defaultValue: 'Draft', path: 'title' }] } } }], recordId: 7 }])
   })
+
+  it('keeps a Manage Records table on its only page and opens CRUD actions in modals', async () => {
+    const record = { id: 7, title: 'Draft', toJSON: () => ({ id: 7, title: 'Draft' }) }
+    const query = { orderBy: () => query, paginate: async () => ({ data: [record], meta: { currentPage: 1, hasMorePages: false, lastPage: 1, perPage: 25, total: 1 } }) }
+    const resource = {
+      actions: [
+        { authorize: () => true, handle: () => undefined, id: 'create', kind: 'create', label: 'Create', mount: 'page', source: 'table' },
+        ...['view', 'edit'].map(kind => ({ authorize: () => true, handle: () => undefined, id: kind, kind, label: kind, mount: 'record', source: 'table' })),
+      ],
+      baseQuery: (value: typeof query) => value,
+      form: { fields: [{ kind: 'field', label: 'Title', path: 'title', properties: {}, required: true, type: 'text' }] },
+      id: 'posts',
+      infolist: { entries: [{ label: 'Post title', path: 'title', properties: {}, type: 'text' }] },
+      kind: 'resource',
+      model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, query: () => query },
+      pages: [{ actions: [], pageType: 'manage', path: '/' }],
+      routeKey: 'id',
+      shared: true,
+      table: { actions: [{ id: 'create', scope: 'header' }, { id: 'view', scope: 'row' }, { id: 'edit', scope: 'row' }], columns: [] },
+      writableAttributes: ['title'],
+    }
+
+    const manifests = generatedResourcePageManifests({ panelPath: '/admin', resource })
+    expect(manifests).toHaveLength(1)
+    expect(manifests[0]).toMatchObject({ pageType: 'manage', path: '/admin/posts' })
+    const result = await resolvePageData(createGeneratedResourcePage(resource, manifests[0]!), { actor: {}, locale: 'en', panelId: 'admin', parameters: {}, services: {}, signal: new AbortController().signal, tenant: null })
+    expect(result.data).toMatchObject({ operation: 'list', records: [{ id: 7, title: 'Draft' }] })
+    expect(result.data.tableActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'create', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ path: 'title', readOnly: false })] }) }) }),
+    ]))
+    expect(result.data.rowActions).toMatchObject([{ actions: expect.arrayContaining([
+      expect.objectContaining({ id: 'view', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ label: 'Post title', path: 'title', readOnly: true })] }) }) }),
+      expect.objectContaining({ id: 'edit', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ defaultValue: 'Draft', path: 'title', readOnly: false })] }) }) }),
+    ]), recordId: 7 }])
+  })
   it('submits registered form actions with input and rejects omitted form actions', async () => {
     const saved: string[] = []
     const action = { authorize: (_context: object, input: { title: string }) => input.title !== 'denied', handle: (input: { title: string }) => { saved.push(input.title); return { record: { id: 9, title: input.title } } }, id: 'save', kind: 'custom', label: 'Save', mount: 'page', source: 'create:form', transactional: false }

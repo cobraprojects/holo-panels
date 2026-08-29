@@ -836,7 +836,7 @@ function jsonObject(value: object): JsonObject {
 }
 
 function explicitResourcePages(definition: RuntimeDefinition): readonly object[] {
-  return (definition.pages ?? []).filter(page => ['create', 'edit', 'list', 'view'].includes(String(Reflect.get(page, 'pageType'))))
+  return (definition.pages ?? []).filter(page => ['create', 'edit', 'list', 'manage', 'view'].includes(String(Reflect.get(page, 'pageType'))))
 }
 
 function resourcePageActions(definition: RuntimeDefinition, pageType: PageType): readonly object[] {
@@ -949,11 +949,13 @@ function resourceModalAction<TServices>(
 ): typeof action {
   if (action.url || action.modal?.schema || action.mount === 'bulk' || !['create', 'edit', 'view'].includes(action.kind) || resourceRoutes(definition, '')[action.kind] !== undefined) return action
   const values = record ? serializeResourceRecord(record) : {}
-  const fields = resourceFormFields(definition).filter(field => action.kind === 'view' || definition.writableAttributes.includes(field.path)).map(field => ({
+  const viewEntries = infolistComponents(definition.infolist).map(entry => objectMember(entry, 'manifest') ?? entry)
+  const sourceFields = action.kind === 'view' && viewEntries.length > 0 ? viewEntries : resourceFormFields(definition)
+  const fields = sourceFields.filter(field => action.kind === 'view' || definition.writableAttributes.includes(String(Reflect.get(field, 'path')))).map(field => ({
     ...field,
-    defaultValue: valueAtPath(values, field.path) ?? Reflect.get(field.properties, 'defaultValue') ?? '',
+    defaultValue: valueAtPath(values, String(Reflect.get(field, 'path'))) ?? Reflect.get(objectMember(field, 'properties') ?? {}, 'defaultValue') ?? '',
     kind: 'field',
-    readOnly: action.kind === 'view' || field.readOnly,
+    readOnly: action.kind === 'view' || Reflect.get(field, 'readOnly') === true,
   }))
   return { ...action, modal: { ...action.modal, schema: jsonObject({ fields }) } }
 }
@@ -1071,8 +1073,9 @@ function pageManifest(
 ): PageManifest {
   const slug = resourceSlug(definition)
   const listPath = `${panelPath === '/' ? '' : panelPath}/${slug}`
-  const suffix = pageType === 'create' ? '/create' : pageType === 'list' ? '' : pageType === 'edit' ? '/:record/edit' : '/:record'
-  const id = pageType === 'list' ? definition.id : `${definition.id}-${pageType}`
+  const listPage = pageType === 'list' || pageType === 'manage'
+  const suffix = pageType === 'create' ? '/create' : listPage ? '' : pageType === 'edit' ? '/:record/edit' : '/:record'
+  const id = listPage ? definition.id : `${definition.id}-${pageType}`
   const navigation = definition.navigation ?? {}
   const plural = typeof navigation.label === 'string' ? navigation.label : label(slug)
   const widgetIds = resourceWidgetIds(definition)
@@ -1083,9 +1086,9 @@ function pageManifest(
       footer: [],
       header: explicitPage ? explicitActions.map((action: object) => String(Reflect.get(action, 'id'))) : pageType === 'list' ? [`${definition.id}.create`] : [],
     },
-    body: { component: 'resource-page', properties: { ...resourceProperties(definition, pageType, listPath), operation: pageType } },
+    body: { component: 'resource-page', properties: { ...resourceProperties(definition, pageType, listPath), operation: listPage ? 'list' : pageType } },
     id,
-    navigation: pageType === 'list'
+    navigation: listPage
       ? {
           badge: null,
           group: navigation.group ?? null,
@@ -1099,7 +1102,7 @@ function pageManifest(
     path: `${listPath}${suffix}`,
     renderer: null,
     schemaId: null,
-    widgets: { footer: [], header: pageType === 'list' ? widgetIds : [] },
+    widgets: { footer: [], header: listPage ? widgetIds : [] },
   })
 }
 
@@ -1131,7 +1134,7 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
   const load = async (context: PageContext<object, unknown, unknown>): Promise<JsonObject> => {
     const executor = new ResourceExecutor(definition, { strictAuthorization: context.strictAuthorization })
     const executionContext = { actor: context.actor, signal: context.signal, strictAuthorization: context.strictAuthorization, tenant: context.tenant }
-    if (manifest.pageType === 'list') {
+    if (manifest.pageType === 'list' || manifest.pageType === 'manage') {
       const tableState = Object.freeze({ includeTotal: true, page: 1, pagination: 'page' as const, perPage: 25 })
       const table = await executor.table(tableState, executionContext, record => resolveGeneratedRowActions(definition, executionContext, record))
       const presentation = await tablePresentation(definition, table.records, executionContext)
@@ -1158,7 +1161,7 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
     server: {
       authorize: (context: PageContext<object, unknown, unknown>) => canHoloPolicy(context.actor, 'viewAny', definition.model, context.strictAuthorization),
       breadcrumbs: [{ label: plural, path: manifest.path.split('/:record')[0]! }],
-      heading: manifest.pageType === 'list' ? null : `${label(manifest.pageType)} ${label(singularize(plural))}`,
+      heading: manifest.pageType === 'list' || manifest.pageType === 'manage' ? null : `${label(manifest.pageType)} ${label(singularize(plural))}`,
       load,
       manifest: (context: PageContext<object, unknown, unknown>) => resolveGeneratedPageActions(definition, manifest, context),
       title: plural,
@@ -1597,7 +1600,10 @@ function configuredAction(
     const action = findRegisteredAction(registered, actionId)
     return action ? [{ ...action, source: Reflect.get(candidate, 'source') }] : []
   })
-  const sourcedCandidates = source ? candidates.filter(candidate => Reflect.get(candidate, 'source') === source) : candidates
+  const sourcedCandidates = source ? candidates.filter((candidate) => {
+    const candidateSource = Reflect.get(candidate, 'source')
+    return candidateSource === source || source === 'list' && candidateSource === 'manage' || source === 'manage' && candidateSource === 'list'
+  }) : candidates
   const mountedCandidates = mount ? sourcedCandidates.filter(candidate => candidate.mount === mount) : sourcedCandidates
   const action = mountedCandidates.length === 1 ? mountedCandidates[0] : undefined
   if (!action || typeof Reflect.get(action, 'authorize') !== 'function' || typeof Reflect.get(action, 'handle') !== 'function') {

@@ -113,7 +113,7 @@
               {/snippet}
             </SchemaRenderer><RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} />
           {/if}
-          <Dialog.Footer><Button onclick={() => store.close()} type="button" variant="outline">{frame.manifest.modal?.cancelActionLabel ?? 'Close'}</Button><Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button></Dialog.Footer>
+          <Dialog.Footer><Button onclick={() => store.close()} type="button" variant="outline">{frame.manifest.modal?.cancelActionLabel ?? 'Close'}</Button>{#if frame.manifest.kind !== 'view'}<Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button>{/if}</Dialog.Footer>
           {#if $formState?.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}
         </form>
       {/if}

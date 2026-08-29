@@ -2,7 +2,7 @@ import type { JsonObject } from '../protocol/json'
 import type { ExtensionTypeId } from '../plugins/type-id'
 import type { CompiledSchema, SchemaManifest } from '../schemas/contracts'
 
-export type PageType = 'create' | 'custom' | 'edit' | 'list' | 'related-record' | 'singular' | 'view'
+export type PageType = 'create' | 'custom' | 'edit' | 'list' | 'manage' | 'related-record' | 'singular' | 'view'
 
 export interface PageContext<TActor, TTenant, TServices> {
   readonly actor: TActor

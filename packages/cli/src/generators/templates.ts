@@ -10,6 +10,7 @@ type TemplateContext = {
   readonly panel: string
   readonly panelPath: string
   readonly resource?: string
+  readonly simple: boolean
   readonly split: boolean
 }
 
@@ -57,7 +58,7 @@ function resourceFiles(context: TemplateContext): readonly GeneratedFile[] {
   const getRelations = (context.model?.relations ?? []).length > 0
     ? `\n\n  static getRelations() {\n    return [${(context.model?.relations ?? []).map(relation => `${pascalCase(relation.name)}RelationManager`).join(', ')}]\n  }`
     : ''
-  const resourcePages = [
+  const standardResourcePages = [
     {
       path: `${directory}/pages/List${plural}.ts`,
       contents: `import { ListRecords } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class List${plural} extends ListRecords {\n  static override get resource() { return ${name}Resource }\n\n  protected override getHeaderActions() {\n    return ${name}Resource.actions(({ CreateAction }) => [CreateAction.make()])\n  }\n}\n`,
@@ -75,8 +76,17 @@ function resourceFiles(context: TemplateContext): readonly GeneratedFile[] {
       contents: `import { ViewRecord } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class View${name} extends ViewRecord {\n  static override get resource() { return ${name}Resource }\n\n  protected override getHeaderActions() {\n    return ${name}Resource.actions(({ EditAction }) => [EditAction.make()])\n  }\n}\n`,
     },
   ]
-  const pageImports = `import Create${name} from './pages/Create${name}'\nimport Edit${name} from './pages/Edit${name}'\nimport List${plural} from './pages/List${plural}'\nimport View${name} from './pages/View${name}'`
-  const getPages = `  static getPages() {\n    return {\n      index: List${plural}.route('/'),\n      create: Create${name}.route('/create'),\n      view: View${name}.route('/{record}'),\n      edit: Edit${name}.route('/{record}/edit'),\n    }\n  }`
+  const simpleResourcePage = {
+    path: `${directory}/pages/Manage${plural}.ts`,
+    contents: `import { ManageRecords } from '@holo-js/panels-resources'\nimport ${name}Resource from '../${name}Resource'\n\nexport default class Manage${plural} extends ManageRecords {\n  static override get resource() { return ${name}Resource }\n\n  protected override getHeaderActions() {\n    return ${name}Resource.actions(({ CreateAction }) => [CreateAction.make()])\n  }\n}\n`,
+  }
+  const resourcePages = context.simple ? [simpleResourcePage] : standardResourcePages
+  const pageImports = context.simple
+    ? `import Manage${plural} from './pages/Manage${plural}'`
+    : `import Create${name} from './pages/Create${name}'\nimport Edit${name} from './pages/Edit${name}'\nimport List${plural} from './pages/List${plural}'\nimport View${name} from './pages/View${name}'`
+  const getPages = context.simple
+    ? `  static getPages() {\n    return {\n      index: Manage${plural}.route('/'),\n    }\n  }`
+    : `  static getPages() {\n    return {\n      index: List${plural}.route('/'),\n      create: Create${name}.route('/create'),\n      view: View${name}.route('/{record}'),\n      edit: Edit${name}.route('/{record}/edit'),\n    }\n  }`
   const relationManagers = (context.model?.relations ?? []).map(relation => ({
     path: `${directory}/relation-managers/${pascalCase(relation.name)}RelationManager.ts`,
     contents: `import { RelationManager } from '@holo-js/panels-resources'\n\nexport default class ${pascalCase(relation.name)}RelationManager extends RelationManager {\n  protected static override relationship = '${relation.name}'\n\n  static table = this.configureTable(table => table.columns([]))\n}\n`,

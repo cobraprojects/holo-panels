@@ -141,9 +141,9 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
                   return definition && props.store.activeForm ? <ReactFieldRenderer definition={definition} optionStore={props.store.optionStore(definition)} panelId={props.panelId} registry={props.registry ?? emptyRegistry} store={props.store.activeForm} /> : null
                 }} schema={schema} /><ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} /></>
               : null}
-            <DialogFooter>
+            {frame.manifest.kind === 'view' ? null : <DialogFooter>
               <Button className="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} disabled={frame.phase === 'submitting'} type="submit" variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button>
-            </DialogFooter>
+            </DialogFooter>}
             {props.store.activeForm?.state.errors._root?.length ? <ul data-form-errors="" role="alert">{props.store.activeForm.state.errors._root.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
           </form>}
         {frame.manifest.modal?.nestedActions.map(id => {

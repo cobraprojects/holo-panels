@@ -530,7 +530,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
       store.applyData({ queryVersion: query.queryVersion, records: nextRecords, total, selection: object(result.data.selection) })
     }).catch(() => store.applyError(query.queryVersion, { code: 'table-data-failed', message: 'Unable to load table data.' }))
   }
-  return <div className="hp-resource-page"><ResourcePageActions basePath="" operation={operation} panelId={panelId} registry={registry} resource={resource} source="list" /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
+  return <div className="hp-resource-page"><ResourcePageActions basePath="" onCompleted={refresh} operation={operation} panelId={panelId} registry={registry} resource={resource} source="list" /><ReactPanelsRenderHook data={data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={panelManifest} registry={registry} scopes={renderHookScopes} /><ReactTableRenderer
     panelId={panelId}
     registry={registry}
     actions={actions}
@@ -546,7 +546,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
         const result = await operation.execute('action', { actionId: request.actionId, idempotencyKey: request.idempotencyKey ?? globalThis.crypto.randomUUID(), input: request.input ?? {}, intent: text(manifest.kind) || request.actionId, mount: request.mount ?? (manifest.scope === 'bulk' ? 'bulk' : manifest.scope === 'header' ? 'page' : 'record'), ...(request.selection?.mode === 'all-matching' ? { selection: toJsonValue(request.selection) } : {}), recordIds: [...recordIds], resourceId, source: 'table', tableQuery: toJsonValue(store.query) }, signal)
         if (!result.ok) throw new Error(result.error ?? 'The action could not be completed.')
         if (result.data?.status === 'partial') throw new Error('One or more records could not be updated.')
-        if (manifest.mount === 'bulk' || manifest.scope === 'bulk') refresh()
+        if (manifest.mount === 'bulk' || manifest.scope === 'bulk' || manifest.kind === 'create' || manifest.kind === 'edit') refresh()
         if ((manifest.removesRecord === true || manifest.kind === 'delete' || manifest.kind === 'force-delete') && request.recordId !== undefined) {
           const remaining = store.snapshot.records.filter(record => text(record[routeKey]) !== String(request.recordId))
           setGroups(current => current.map(group => ({
@@ -1023,8 +1023,9 @@ function fieldActionManifests(properties: JsonObject, pageOperation: string): re
   })
 }
 
-function ResourcePageActions({ basePath, operation, panelId, recordId, registry, resource, source }: {
+function ResourcePageActions({ basePath, onCompleted, operation, panelId, recordId, registry, resource, source }: {
   readonly basePath: string
+  readonly onCompleted?: () => void
   readonly operation: NextResourceOperationTransport
   readonly panelId: string
   readonly recordId?: string | number
@@ -1070,10 +1071,11 @@ function ResourcePageActions({ basePath, operation, panelId, recordId, registry,
           throw new Error('The record could not be updated.')
         }
         if (recordId !== undefined && (kind === 'delete' || kind === 'force-delete')) router.push(basePath)
+        onCompleted?.()
         return { effects: [], items: recordId === undefined ? [] : [{ recordId, status: 'succeeded' as const }], status: 'succeeded' as const }
       },
     },
-  }), [actionKinds, basePath, operation, recordId, resourceId, source])
+  }), [actionKinds, basePath, onCompleted, operation, recordId, resourceId, source])
   useEffect(() => () => {
     while (store.activeFrame) store.close()
   }, [store])

@@ -300,6 +300,7 @@
           publishPanelActionFailure(data.panel.manifest.id, response.effects)
           throw new Error(response.ok ? 'The action could not be completed for every record.' : response.error.message)
         }
+        if (source === 'list') await refreshTable()
         return { effects: [], items: [], result: response.data, status: 'succeeded' }
       },
     },

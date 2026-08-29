@@ -210,6 +210,28 @@ describe('Holo Panels generators', () => {
     expect(listPage).toContain('return PostResource.actions(({ CreateAction }) => [CreateAction.make()])')
   })
 
+  it.each(['next', 'nuxt', 'sveltekit'] as const)('generates a simple resource with one Manage Records page for %s applications', async (framework) => {
+    const projectRoot = await fixture(framework)
+
+    const files = await run(projectRoot, 'resource', ['Post'], { panel: 'admin', generate: true, simple: true }, project(framework))
+
+    expect(files).toEqual([
+      'server/admin/resources/posts/PostResource.ts',
+      'server/admin/resources/posts/pages/ManagePosts.ts',
+      'server/admin/resources/posts/relation-managers/CommentsRelationManager.ts',
+    ])
+    const resource = await readFile(join(projectRoot, files[0]!), 'utf8')
+    const managePage = await readFile(join(projectRoot, files[1]!), 'utf8')
+    expect(resource).toContain("import ManagePosts from './pages/ManagePosts'")
+    expect(resource).toContain("index: ManagePosts.route('/')")
+    expect(resource).not.toContain('CreatePost')
+    expect(resource).not.toContain('EditPost')
+    expect(resource).not.toContain('ViewPost')
+    expect(managePage).toContain("import { ManageRecords } from '@holo-js/panels-resources'")
+    expect(managePage).toContain('return PostResource.actions(({ CreateAction }) => [CreateAction.make()])')
+    await expectGeneratedResourcesToTypecheck(projectRoot, files)
+  })
+
   it('generates an empty type-safe resource when metadata generation is not requested', async () => {
     const projectRoot = await fixture()
 

@@ -54,7 +54,7 @@ function command(kind: GeneratorKind, usage: string): GeneratorCommand {
 
 export const generatorCommands: readonly GeneratorCommand[] = Object.freeze([
   command('panel', 'holo make:panel <panel> [--path /admin] [--guard admin] [--default]'),
-  command('resource', 'holo make:resource <Model> [--panel admin] [--split] [--generate]'),
+  command('resource', 'holo make:resource <Model> [--panel admin] [--split] [--generate] [--simple]'),
   command('page', 'holo make:page <Name> [--panel admin]'),
   command('resource-page', 'holo make:resource-page <Name> --resource <Resource> [--panel admin]'),
   command('relation-manager', 'holo make:relation-manager <Name> --resource <Resource> [--panel admin]'),

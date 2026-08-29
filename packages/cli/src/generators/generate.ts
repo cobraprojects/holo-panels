@@ -316,6 +316,7 @@ async function createFiles(request: GeneratorRequest): Promise<readonly Generate
     panel,
     panelPath: assertPanelPath(flag(request, 'path'), panel),
     resource,
+    simple: booleanFlag(request, 'simple'),
     split,
   })
 }

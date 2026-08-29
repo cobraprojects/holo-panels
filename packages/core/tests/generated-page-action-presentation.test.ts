@@ -217,6 +217,22 @@ describe('generated page action presentation', () => {
       }) }),
       expect.objectContaining({ id: 'edit', modal: expect.objectContaining({ schema: expect.objectContaining({ fields: [expect.objectContaining({ defaultValue: 'Draft', path: 'title', readOnly: false })] }) }) }),
     ]), recordId: 7 }])
+
+    const computedEntry = resource.infolist.entries[1]!
+    for (const [name, invalidResolver] of [
+      ['visibility', () => 'visible'],
+      ['tooltip', () => 7],
+      ['url', () => false],
+    ] as const) {
+      const invalidResource = {
+        ...resource,
+        infolist: {
+          entries: [resource.infolist.entries[0]!, { ...computedEntry, server: { ...computedEntry.server, [name]: invalidResolver } }],
+        },
+      }
+      const invalidManifest = generatedResourcePageManifests({ panelPath: '/admin', resource: invalidResource })[0]!
+      await expect(resolvePageData(createGeneratedResourcePage(invalidResource, invalidManifest), { actor: {}, locale: 'en', panelId: 'admin', parameters: {}, services: {}, signal: new AbortController().signal, tenant: null })).rejects.toThrow('must return')
+    }
   })
   it('submits registered form actions with input and rejects omitted form actions', async () => {
     const saved: string[] = []

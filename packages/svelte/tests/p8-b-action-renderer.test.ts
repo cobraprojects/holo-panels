@@ -112,7 +112,7 @@ afterEach(async () => {
 describe('P8-B Svelte action renderer', () => {
   it('renders view modals through the shared read-only entry presentation', () => {
     const store = createStore()
-    const view = { ...manifest, confirmation: null, kind: 'view' as const, modal: { ...manifest.modal!, readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, extraAttributes: {}, id: 'posts-published', inlineLabel: false, label: 'Published', layout: {}, path: 'published', placeholder: null, properties: {}, slots: {}, type: 'boolean', visible: true }], kind: 'infolist' as const }, schema: null } }
+    const view = { ...manifest, confirmation: null, kind: 'view' as const, modal: { ...manifest.modal!, readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, extraAttributes: {}, id: 'posts-published', inlineLabel: false, label: 'Published', layout: {}, path: 'published', placeholder: null, properties: {}, slots: {}, tooltip: null, type: 'boolean', url: null, visible: true }], kind: 'infolist' as const }, schema: null } }
     const container = document.createElement('div')
     document.body.append(container)
     const component = mountClient(P8BActionFixture, { props: { action: { action: view, store } }, target: container })

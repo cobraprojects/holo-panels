@@ -17,7 +17,9 @@ describe('read-only presentation', () => {
         placeholder: null,
         properties: { badge: true },
         slots: {},
+        tooltip: 'Current title',
         type: 'text',
+        url: '/posts/draft',
         visible: true,
       }],
       kind: 'infolist',
@@ -32,13 +34,15 @@ describe('read-only presentation', () => {
       layout: { columnSpan: { default: 2 } },
       properties: { badge: true },
       state: 'Draft',
+      tooltip: 'Current title',
       type: 'text',
+      url: '/posts/draft',
     })
   })
 
   it('rejects malformed modal presentations', () => {
     expect(() => readOnlyPresentationStores({
-      entries: [{ actions: [], copyable: false, defaultValue: null, extraAttributes: {}, id: '../title', inlineLabel: false, label: null, layout: {}, path: null, placeholder: null, properties: {}, slots: {}, type: 'text', visible: true }],
+      entries: [{ actions: [], copyable: false, defaultValue: null, extraAttributes: {}, id: '../title', inlineLabel: false, label: null, layout: {}, path: null, placeholder: null, properties: {}, slots: {}, tooltip: null, type: 'text', url: null, visible: true }],
       kind: 'infolist',
     })).toThrow('Invalid read-only presentation entry')
   })

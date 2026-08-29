@@ -1,7 +1,7 @@
-import type { JsonObject, JsonValue } from '../protocol/json'
+import type { JsonObject } from '../protocol/json'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
 import type { Effect } from '../protocol/effects'
-import type { CompiledSchema, RenderSlotReference } from '../schemas/contracts'
+import type { CompiledSchema, RenderSlotReference, SchemaJsonValue, SchemaLayoutProperties, SchemaRenderSlots } from '../schemas/contracts'
 import type { ExtensionTypeId } from '../plugins/type-id'
 
 export type ActionKind = 'associate' | 'attach' | 'create' | 'custom' | 'delete' | 'detach' | 'dissociate' | 'edit' | 'editPivot' | 'force-delete' | 'replicate' | 'restore' | 'view'
@@ -44,26 +44,28 @@ export interface ActionResolvedState {
 export type ActionModalWidth = 'small' | 'medium' | 'large' | 'extra-large' | 'screen'
 export type ActionSize = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large'
 
-export interface ActionReadOnlyEntryManifest extends JsonObject {
-  actions: string[]
-  copyable: boolean
-  defaultValue: JsonValue
-  extraAttributes: JsonObject
-  id: string
-  inlineLabel: boolean
-  label: string | null
-  layout: JsonObject
-  path: string | null
-  placeholder: string | null
-  properties: JsonObject
-  slots: JsonObject
-  type: string
-  visible: boolean
+export interface ActionReadOnlyEntryManifest {
+  readonly actions: readonly string[]
+  readonly copyable: boolean
+  readonly defaultValue: SchemaJsonValue
+  readonly extraAttributes: JsonObject
+  readonly id: string
+  readonly inlineLabel: boolean
+  readonly label: string | null
+  readonly layout: SchemaLayoutProperties
+  readonly path: string | null
+  readonly placeholder: string | null
+  readonly properties: JsonObject
+  readonly slots: SchemaRenderSlots
+  readonly tooltip: string | null
+  readonly type: string
+  readonly url: string | null
+  readonly visible: boolean
 }
 
-export interface ActionReadOnlyInfolistManifest extends JsonObject {
-  entries: ActionReadOnlyEntryManifest[]
-  kind: 'infolist'
+export interface ActionReadOnlyInfolistManifest {
+  readonly entries: readonly ActionReadOnlyEntryManifest[]
+  readonly kind: 'infolist'
 }
 
 export type ActionReadOnlyPresentationManifest = ActionReadOnlyInfolistManifest

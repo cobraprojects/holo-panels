@@ -31,8 +31,10 @@ import { RelationManagerExecutor, RelationRecordNotFoundError } from '../relatio
 import { allowedRelationOperations } from '../relations/metadata'
 import type { RelationManagerDefinition, RelationOperation } from '../relations/contracts'
 import { resolveResourceForm, resourceFormSchema, resourceSchemaFields } from './form-schema'
-import { resolveEntry } from '../infolists/entries/resolution'
-import type { EntryStateSource } from '../infolists/entries/types'
+import { resolveEntry, resolveEntrySource } from '../infolists/entries/resolution'
+import type { EntryResolverContext, EntryStateSource } from '../infolists/entries/types'
+import { SCHEMA_BREAKPOINTS, type SchemaBreakpoint, type SchemaColumnSpan, type SchemaLayoutProperties, type SchemaRenderSlot, type SchemaRenderSlots } from '../schemas/contracts'
+import type { RenderSlotSource, ScopedRenderSlotManifest } from '../panels/render-slots'
 
 interface RuntimeRecord extends ResourceRecord {
   toJSON(): Readonly<Record<string, unknown>>
@@ -942,15 +944,84 @@ function resourceInfolistEntries(definition: RuntimeDefinition): ActionReadOnlyE
       id: `${definition.id}-${identifier.replaceAll('.', '-')}`,
       inlineLabel: Reflect.get(entry, 'inlineLabel') === true,
       label: typeof Reflect.get(entry, 'label') === 'string' ? Reflect.get(entry, 'label') : label(identifier),
-      layout: jsonObject(objectMember(entry, 'layout') ?? {}),
+      layout: entryLayout(objectMember(entry, 'layout')),
       path,
       placeholder: typeof Reflect.get(entry, 'placeholder') === 'string' ? Reflect.get(entry, 'placeholder') : null,
       properties: jsonObject(formatters.length > 0 ? { ...entryProperties, formats: formatters } : entryProperties),
-      slots: jsonObject(objectMember(entry, 'slots') ?? {}),
+      slots: entryRenderSlots(objectMember(entry, 'slots')),
+      tooltip: entryFormatterValue(formatters, 'tooltip'),
       type: String(Reflect.get(entry, 'type') ?? 'text'),
+      url: entryFormatterValue(formatters, 'url'),
       visible: Reflect.get(entry, 'visible') !== false,
     }
   })
+}
+
+function entryFormatterValue(formatters: readonly object[], kind: 'tooltip' | 'url'): string | null {
+  const value = Reflect.get(formatters.find(formatter => Reflect.get(formatter, 'kind') === kind) ?? {}, 'value')
+  return typeof value === 'string' ? value : null
+}
+
+function isSchemaBreakpoint(value: string): value is SchemaBreakpoint {
+  return SCHEMA_BREAKPOINTS.some(breakpoint => breakpoint === value)
+}
+
+function numericLayout(value: object | undefined, positive: boolean): Partial<Record<SchemaBreakpoint, number>> | undefined {
+  if (!value) return undefined
+  const result: Partial<Record<SchemaBreakpoint, number>> = {}
+  for (const breakpoint of Object.keys(value)) {
+    if (!isSchemaBreakpoint(breakpoint)) throw new TypeError('[Holo Panels] Invalid read-only entry layout.')
+    const item = Reflect.get(value, breakpoint)
+    if (typeof item !== 'number' || !Number.isSafeInteger(item) || positive && item <= 0) throw new TypeError('[Holo Panels] Invalid read-only entry layout.')
+    result[breakpoint] = item
+  }
+  return result
+}
+
+function spanLayout(value: object | undefined): Partial<Record<SchemaBreakpoint, SchemaColumnSpan>> | undefined {
+  if (!value) return undefined
+  const result: Partial<Record<SchemaBreakpoint, SchemaColumnSpan>> = {}
+  for (const breakpoint of Object.keys(value)) {
+    if (!isSchemaBreakpoint(breakpoint)) throw new TypeError('[Holo Panels] Invalid read-only entry layout.')
+    const item = Reflect.get(value, breakpoint)
+    if (item !== 'full' && (typeof item !== 'number' || !Number.isSafeInteger(item) || item <= 0)) throw new TypeError('[Holo Panels] Invalid read-only entry layout.')
+    result[breakpoint] = item
+  }
+  return result
+}
+
+function entryLayout(value: object | undefined): SchemaLayoutProperties {
+  if (!value) return {}
+  const columns = numericLayout(objectMember(value, 'columns'), true)
+  const columnSpan = spanLayout(objectMember(value, 'columnSpan'))
+  const columnStart = numericLayout(objectMember(value, 'columnStart'), true)
+  const order = numericLayout(objectMember(value, 'order'), false)
+  return { ...(columns ? { columns } : {}), ...(columnSpan ? { columnSpan } : {}), ...(columnStart ? { columnStart } : {}), ...(order ? { order } : {}) }
+}
+
+function isRenderSlotSource(value: unknown): value is RenderSlotSource {
+  return typeof value === 'string' && ['application', 'component', 'panel', 'plugin'].includes(value)
+}
+
+function entryRenderSlots(value: object | undefined): SchemaRenderSlots {
+  if (!value) return {}
+  const slots: Partial<Record<SchemaRenderSlot, readonly ScopedRenderSlotManifest[]>> = {}
+  for (const slot of ['above', 'after', 'before', 'below'] as const) {
+    const entries = Reflect.get(value, slot)
+    if (entries === undefined) continue
+    if (!Array.isArray(entries)) throw new TypeError('[Holo Panels] Invalid read-only entry slots.')
+    slots[slot] = entries.map((entry): ScopedRenderSlotManifest => {
+      if (!entry || typeof entry !== 'object') throw new TypeError('[Holo Panels] Invalid read-only entry slot.')
+      const component = Reflect.get(entry, 'component')
+      const order = Reflect.get(entry, 'order')
+      const source = Reflect.get(entry, 'source')
+      if (typeof component !== 'string' || typeof order !== 'number' || !Number.isSafeInteger(order) || !isRenderSlotSource(source)) {
+        throw new TypeError('[Holo Panels] Invalid read-only entry slot.')
+      }
+      return { component, order, properties: jsonObject(objectMember(entry, 'properties') ?? {}), source }
+    })
+  }
+  return slots
 }
 
 function entryStateSource(value: object | undefined, path: string | null): EntryStateSource {
@@ -961,6 +1032,20 @@ function entryStateSource(value: object | undefined, path: string | null): Entry
     return { kind, path: Reflect.get(value ?? {}, 'path'), titlePath: Reflect.get(value ?? {}, 'titlePath') }
   }
   return { kind: 'path', path: path ?? '' }
+}
+
+async function resolvedEntryVisibility(resolver: unknown, context: EntryResolverContext<RuntimeRecord, unknown>, fallback: boolean): Promise<boolean> {
+  if (typeof resolver !== 'function') return fallback
+  const value: unknown = await Reflect.apply(resolver, undefined, [context])
+  if (typeof value !== 'boolean') throw new TypeError('[Holo Panels] Entry visibility resolvers must return a boolean.')
+  return value
+}
+
+async function resolvedEntryString(resolver: unknown, context: EntryResolverContext<RuntimeRecord, unknown>, fallback: string | null, name: string): Promise<string | null> {
+  if (typeof resolver !== 'function') return fallback
+  const value: unknown = await Reflect.apply(resolver, undefined, [context])
+  if (value !== null && typeof value !== 'string') throw new TypeError(`[Holo Panels] Entry ${name} resolvers must return a string or null.`)
+  return value
 }
 
 async function resolvedResourceInfolistEntries(definition: RuntimeDefinition, record: RuntimeRecord, locale: string): Promise<ActionReadOnlyEntryManifest[]> {
@@ -975,15 +1060,22 @@ async function resolvedResourceInfolistEntries(definition: RuntimeDefinition, re
       const state = entry.path === null ? entry.defaultValue : toJsonValue(valueAtPath(serialized, entry.path))
       return { ...entry, defaultValue: state ?? entry.defaultValue }
     }
+    const source = entryStateSource(objectMember(manifest, 'source'), entry.path)
+    const context = { locale, record, value: resolveEntrySource(record, source) }
     const defaultValue = await resolveEntry({
       manifest: {
         defaultValue: entry.defaultValue,
         placeholder: entry.placeholder,
-        source: entryStateSource(objectMember(manifest, 'source'), entry.path),
+        source,
       },
       server: { state: Reflect.get(server, 'state') },
     }, record, locale)
-    return { ...entry, defaultValue }
+    const [visible, tooltip, url] = await Promise.all([
+      resolvedEntryVisibility(Reflect.get(server, 'visibility'), context, entry.visible),
+      resolvedEntryString(Reflect.get(server, 'tooltip'), context, entry.tooltip, 'tooltip'),
+      resolvedEntryString(Reflect.get(server, 'url'), context, entry.url, 'URL'),
+    ])
+    return { ...entry, defaultValue, tooltip, url, visible }
   }))
 }
 
@@ -1023,7 +1115,7 @@ async function resourceModalAction<TServices>(
   if (action.url || action.modal?.schema || action.mount === 'bulk' || !['create', 'edit', 'view'].includes(action.kind) || resourceRoutes(definition, '')[action.kind] !== undefined) return action
   const values = record ? serializeResourceRecord(record) : {}
   if (action.kind === 'view') {
-    const entries = (record ? await resolvedResourceInfolistEntries(definition, record, locale) : resourceInfolistEntries(definition)).map(entry => ({
+    const entries = (record ? await resolvedResourceInfolistEntries(definition, record, locale) : resourceInfolistEntries(definition)).filter(entry => entry.visible).map(entry => ({
       ...entry,
       actions: [],
     }))

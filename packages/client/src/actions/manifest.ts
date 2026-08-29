@@ -1,4 +1,8 @@
-import type { ActionManifest, ActionReadOnlyEntryManifest, ActionReadOnlyPresentationManifest, JsonObject, JsonValue } from '@holo-js/panels-core'
+import type { ActionManifest, ActionReadOnlyEntryManifest, ActionReadOnlyPresentationManifest, JsonObject, JsonValue, SchemaLayoutProperties, SchemaRenderSlots, ScopedRenderSlotManifest } from '@holo-js/panels-core'
+
+const breakpoints = new Set(['default', 'sm', 'md', 'lg', 'xl', '2xl'])
+const entrySlots = new Set(['above', 'after', 'before', 'below'])
+const slotSources = new Set(['application', 'component', 'panel', 'plugin'])
 
 function object(value: JsonValue | undefined): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -8,16 +12,46 @@ function nullableStrings(value: JsonObject, keys: readonly string[]): boolean {
   return keys.every(key => value[key] === null || typeof value[key] === 'string')
 }
 
-function readOnlyEntry(value: JsonValue): value is ActionReadOnlyEntryManifest {
+function responsive(value: JsonValue | undefined, allowFull: boolean, positive: boolean): boolean {
+  return value === undefined || object(value) && Object.entries(value).every(([key, item]) => breakpoints.has(key)
+    && (allowFull && item === 'full' || typeof item === 'number' && Number.isSafeInteger(item) && (!positive || item > 0)))
+}
+
+function entryLayout(value: JsonValue | undefined): value is JsonObject & SchemaLayoutProperties {
+  return object(value)
+    && Object.keys(value).every(key => ['columns', 'columnSpan', 'columnStart', 'order'].includes(key))
+    && responsive(value.columns, false, true)
+    && responsive(value.columnSpan, true, true)
+    && responsive(value.columnStart, false, true)
+    && responsive(value.order, false, false)
+}
+
+function scopedSlot(value: JsonValue): value is JsonObject & ScopedRenderSlotManifest {
+  return object(value)
+    && typeof value.component === 'string'
+    && typeof value.order === 'number'
+    && Number.isSafeInteger(value.order)
+    && object(value.properties)
+    && typeof value.source === 'string'
+    && slotSources.has(value.source)
+}
+
+function renderSlots(value: JsonValue | undefined): value is JsonObject & SchemaRenderSlots {
+  return object(value) && Object.entries(value).every(([key, entries]) => entrySlots.has(key) && Array.isArray(entries) && entries.every(scopedSlot))
+}
+
+function readOnlyEntry(value: JsonValue): value is JsonObject & ActionReadOnlyEntryManifest {
   if (!object(value) || typeof value.id !== 'string' || typeof value.type !== 'string') return false
   return Array.isArray(value.actions) && value.actions.every(action => typeof action === 'string')
     && ['copyable', 'inlineLabel', 'visible'].every(key => typeof value[key] === 'boolean')
-    && ['label', 'path', 'placeholder'].every(key => value[key] === null || typeof value[key] === 'string')
-    && ['extraAttributes', 'layout', 'properties', 'slots'].every(key => object(value[key]))
+    && ['label', 'path', 'placeholder', 'tooltip', 'url'].every(key => value[key] === null || typeof value[key] === 'string')
+    && ['extraAttributes', 'properties'].every(key => object(value[key]))
+    && entryLayout(value.layout)
+    && renderSlots(value.slots)
     && Object.hasOwn(value, 'defaultValue')
 }
 
-function readOnlyPresentation(value: JsonValue | undefined): value is ActionReadOnlyPresentationManifest | null | undefined {
+function readOnlyPresentation(value: JsonValue | undefined): value is (JsonObject & ActionReadOnlyPresentationManifest) | null | undefined {
   return value === undefined || value === null || object(value)
     && value.kind === 'infolist'
     && Array.isArray(value.entries)

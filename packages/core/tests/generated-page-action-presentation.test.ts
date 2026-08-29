@@ -180,7 +180,11 @@ describe('generated page action presentation', () => {
         { label: 'Post title', path: 'title', properties: {}, type: 'text' },
         {
           manifest: { actions: [], copyable: false, defaultValue: null, dynamicVisibility: false, extraAttributes: { 'data-computed': 'summary' }, formatters: [], inlineLabel: false, label: 'Computed summary', layout: { columnSpan: { default: 2 } }, path: null, placeholder: null, properties: {}, slots: {}, source: { id: 'summary', kind: 'computed' }, type: 'text', visible: true },
-          server: { state: ({ record: current }: { record: typeof record }) => `${current.title} summary` },
+          server: { state: ({ record: current }: { record: typeof record }) => `${current.title} summary`, tooltip: () => 'Computed securely', url: () => '/posts/7' },
+        },
+        {
+          manifest: { actions: [], copyable: false, defaultValue: null, dynamicVisibility: true, extraAttributes: {}, formatters: [], inlineLabel: false, label: 'Secret', layout: {}, path: null, placeholder: null, properties: {}, slots: {}, source: { id: 'secret', kind: 'computed' }, type: 'text', visible: true },
+          server: { state: () => 'hidden value', visibility: () => false },
         },
       ] },
       kind: 'resource',
@@ -205,7 +209,7 @@ describe('generated page action presentation', () => {
         readOnlyPresentation: {
           entries: [
             expect.objectContaining({ defaultValue: 'Draft', label: 'Post title', path: 'title', type: 'text' }),
-            expect.objectContaining({ defaultValue: 'Draft summary', extraAttributes: { 'data-computed': 'summary' }, label: 'Computed summary', layout: { columnSpan: { default: 2 } }, path: null, type: 'text' }),
+            expect.objectContaining({ defaultValue: 'Draft summary', extraAttributes: { 'data-computed': 'summary' }, label: 'Computed summary', layout: { columnSpan: { default: 2 } }, path: null, tooltip: 'Computed securely', type: 'text', url: '/posts/7' }),
           ],
           kind: 'infolist',
         },

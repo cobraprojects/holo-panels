@@ -67,7 +67,7 @@ afterEach(() => {
 describe('P8-B Vue action renderer', () => {
   it('renders view modals through the shared read-only entry presentation', async () => {
     const store = createStore()
-    const action = { ...manifest, confirmation: null, kind: 'view' as const, modal: { ...manifest.modal!, readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, extraAttributes: {}, id: 'posts-published', inlineLabel: false, label: 'Published', layout: {}, path: 'published', placeholder: null, properties: {}, slots: {}, type: 'boolean', visible: true }], kind: 'infolist' as const }, schema: null } }
+    const action = { ...manifest, confirmation: null, kind: 'view' as const, modal: { ...manifest.modal!, readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, extraAttributes: {}, id: 'posts-published', inlineLabel: false, label: 'Published', layout: {}, path: 'published', placeholder: null, properties: {}, slots: {}, tooltip: null, type: 'boolean', url: null, visible: true }], kind: 'infolist' as const }, schema: null } }
     const container = document.createElement('div')
     document.body.append(container)
     const app = createApp(defineComponent(() => () => h(VueActionRenderer, { action, store })))

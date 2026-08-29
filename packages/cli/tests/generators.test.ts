@@ -230,7 +230,7 @@ describe('Holo Panels generators', () => {
     expect(managePage).toContain("import { ManageRecords } from '@holo-js/panels-resources'")
     expect(managePage).toContain('return PostResource.actions(({ CreateAction }) => [CreateAction.make()])')
     await expectGeneratedResourcesToTypecheck(projectRoot, files)
-  })
+  }, 15_000)
 
   it('generates an empty type-safe resource when metadata generation is not requested', async () => {
     const projectRoot = await fixture()

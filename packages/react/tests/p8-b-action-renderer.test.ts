@@ -72,7 +72,7 @@ describe('P8-B React action renderer', () => {
       kind: 'view' as const,
       modal: {
         ...manifest.modal!,
-        readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, id: 'posts-published', inlineLabel: false, label: 'Published', path: 'published', placeholder: null, properties: {}, type: 'boolean' }], kind: 'infolist' },
+        readOnlyPresentation: { entries: [{ actions: [], copyable: false, defaultValue: true, extraAttributes: {}, id: 'posts-published', inlineLabel: false, label: 'Published', layout: {}, path: 'published', placeholder: null, properties: {}, slots: {}, type: 'boolean', visible: true }], kind: 'infolist' as const },
         schema: null,
       },
     }

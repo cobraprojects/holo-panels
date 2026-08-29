@@ -1,4 +1,4 @@
-import type { ActionManifest, JsonObject, JsonValue } from '@holo-js/panels-core'
+import type { ActionManifest, ActionReadOnlyEntryManifest, ActionReadOnlyPresentationManifest, JsonObject, JsonValue } from '@holo-js/panels-core'
 
 function object(value: JsonValue | undefined): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -8,6 +8,22 @@ function nullableStrings(value: JsonObject, keys: readonly string[]): boolean {
   return keys.every(key => value[key] === null || typeof value[key] === 'string')
 }
 
+function readOnlyEntry(value: JsonValue): value is ActionReadOnlyEntryManifest {
+  if (!object(value) || typeof value.id !== 'string' || typeof value.type !== 'string') return false
+  return Array.isArray(value.actions) && value.actions.every(action => typeof action === 'string')
+    && ['copyable', 'inlineLabel', 'visible'].every(key => typeof value[key] === 'boolean')
+    && ['label', 'path', 'placeholder'].every(key => value[key] === null || typeof value[key] === 'string')
+    && ['extraAttributes', 'layout', 'properties', 'slots'].every(key => object(value[key]))
+    && Object.hasOwn(value, 'defaultValue')
+}
+
+function readOnlyPresentation(value: JsonValue | undefined): value is ActionReadOnlyPresentationManifest | null | undefined {
+  return value === undefined || value === null || object(value)
+    && value.kind === 'infolist'
+    && Array.isArray(value.entries)
+    && value.entries.every(readOnlyEntry)
+}
+
 function modal(value: JsonValue | undefined): boolean {
   if (value === null) return true
   if (!object(value)) return false
@@ -15,7 +31,8 @@ function modal(value: JsonValue | undefined): boolean {
     && typeof value.width === 'string' && ['small', 'medium', 'large', 'extra-large', 'screen'].includes(value.width)
     && ['autofocus', 'closeByClickingAway', 'closeByEscaping', 'slideOver', 'stickyFooter', 'stickyHeader'].every(key => typeof value[key] === 'boolean')
     && nullableStrings(value, ['cancelActionLabel', 'description', 'heading', 'icon', 'iconColor', 'submitActionLabel'])
-    && ['content', 'footer', 'readOnlyPresentation', 'schema'].every(key => value[key] === undefined || value[key] === null || object(value[key]))
+    && ['content', 'footer', 'schema'].every(key => value[key] === undefined || value[key] === null || object(value[key]))
+    && readOnlyPresentation(value.readOnlyPresentation)
     && Array.isArray(value.nestedActions) && value.nestedActions.every(id => typeof id === 'string')
 }
 

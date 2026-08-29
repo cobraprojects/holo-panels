@@ -1,4 +1,4 @@
-import type { JsonObject } from '../protocol/json'
+import type { JsonObject, JsonValue } from '../protocol/json'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
 import type { Effect } from '../protocol/effects'
 import type { CompiledSchema, RenderSlotReference } from '../schemas/contracts'
@@ -44,6 +44,30 @@ export interface ActionResolvedState {
 export type ActionModalWidth = 'small' | 'medium' | 'large' | 'extra-large' | 'screen'
 export type ActionSize = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large'
 
+export interface ActionReadOnlyEntryManifest extends JsonObject {
+  actions: string[]
+  copyable: boolean
+  defaultValue: JsonValue
+  extraAttributes: JsonObject
+  id: string
+  inlineLabel: boolean
+  label: string | null
+  layout: JsonObject
+  path: string | null
+  placeholder: string | null
+  properties: JsonObject
+  slots: JsonObject
+  type: string
+  visible: boolean
+}
+
+export interface ActionReadOnlyInfolistManifest extends JsonObject {
+  entries: ActionReadOnlyEntryManifest[]
+  kind: 'infolist'
+}
+
+export type ActionReadOnlyPresentationManifest = ActionReadOnlyInfolistManifest
+
 export interface ActionModalOptions<TContext> {
   readonly alignment?: 'center' | 'end' | 'start'
   readonly autofocus?: boolean
@@ -57,7 +81,7 @@ export interface ActionModalOptions<TContext> {
   readonly icon?: string | null
   readonly iconColor?: string | null
   readonly nestedActions?: readonly string[]
-  readonly readOnlyPresentation?: JsonObject
+  readonly readOnlyPresentation?: ActionReadOnlyPresentationManifest
   readonly schema?: CompiledSchema<JsonObject, TContext> | JsonObject
   readonly slideOver?: boolean
   readonly stickyFooter?: boolean
@@ -80,7 +104,7 @@ export interface ActionModalManifest {
   readonly icon: string | null
   readonly iconColor: string | null
   readonly nestedActions: readonly string[]
-  readonly readOnlyPresentation?: JsonObject | null
+  readonly readOnlyPresentation?: ActionReadOnlyPresentationManifest | null
   readonly schema: JsonObject | null
   readonly slideOver: boolean
   readonly stickyFooter: boolean

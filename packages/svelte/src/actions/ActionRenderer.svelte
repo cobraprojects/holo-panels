@@ -105,7 +105,7 @@
       <RenderHook hook={ActionsRenderHook.MODAL_CUSTOM_CONTENT_AFTER} />
       {#if Custom}
         <Custom {frame} setInput={(input: JsonObject) => store.setInput(input)} {submit} />
-      {:else if readOnlyStores.length > 0}
+      {:else if frame.manifest.modal?.readOnlyPresentation}
         <div class="hp:grid hp:gap-4" data-read-only-presentation="infolist">
           {#each readOnlyStores as entryStore (entryStore.snapshot.id)}
             <EntryRenderer store={entryStore} {panelId} {registry} />

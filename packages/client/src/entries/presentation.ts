@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue } from '@holo-js/panels-core'
+import type { ActionReadOnlyEntryManifest, ActionReadOnlyPresentationManifest, JsonObject, JsonValue, SchemaLayoutProperties, SchemaRenderSlots } from '@holo-js/panels-core'
 import type { EntryClientManifest, EntryClientObject } from './contracts'
 import { EntryStateStore } from './store'
 
@@ -14,7 +14,7 @@ function objects(value: JsonValue | undefined): readonly EntryClientObject[] {
   return Array.isArray(value) ? value.filter(object) : []
 }
 
-function entryManifest(entry: JsonObject): EntryClientManifest {
+function entryManifest(entry: ActionReadOnlyEntryManifest): EntryClientManifest {
   const properties = object(entry.properties) ? entry.properties : {}
   return {
     actions: strings(entry.actions),
@@ -24,17 +24,17 @@ function entryManifest(entry: JsonObject): EntryClientManifest {
     formatters: objects(properties.formats),
     inlineLabel: entry.inlineLabel === true,
     label: typeof entry.label === 'string' ? entry.label : null,
-    layout: {},
+    layout: entry.layout as SchemaLayoutProperties,
     path: typeof entry.path === 'string' ? entry.path : null,
     placeholder: typeof entry.placeholder === 'string' ? entry.placeholder : null,
     properties,
-    slots: {},
+    slots: entry.slots as SchemaRenderSlots,
     type: typeof entry.type === 'string' ? entry.type : 'text',
     visible: entry.visible !== false,
   }
 }
 
-export function readOnlyPresentationStores(presentation: JsonObject | null | undefined): readonly EntryStateStore[] {
+export function readOnlyPresentationStores(presentation: ActionReadOnlyPresentationManifest | null | undefined): readonly EntryStateStore[] {
   if (!presentation) return []
   if (presentation.kind !== 'infolist' || !Array.isArray(presentation.entries)) throw new TypeError('[Holo Panels] Invalid read-only presentation.')
   return Object.freeze(presentation.entries.map((value) => {

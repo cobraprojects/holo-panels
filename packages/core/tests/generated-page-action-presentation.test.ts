@@ -176,7 +176,13 @@ describe('generated page action presentation', () => {
       baseQuery: (value: typeof query) => value,
       form: { fields: [{ kind: 'field', label: 'Title', path: 'title', properties: {}, required: true, type: 'text' }] },
       id: 'posts',
-      infolist: { entries: [{ label: 'Post title', path: 'title', properties: {}, type: 'text' }] },
+      infolist: { entries: [
+        { label: 'Post title', path: 'title', properties: {}, type: 'text' },
+        {
+          manifest: { actions: [], copyable: false, defaultValue: null, dynamicVisibility: false, extraAttributes: { 'data-computed': 'summary' }, formatters: [], inlineLabel: false, label: 'Computed summary', layout: { columnSpan: { default: 2 } }, path: null, placeholder: null, properties: {}, slots: {}, source: { id: 'summary', kind: 'computed' }, type: 'text', visible: true },
+          server: { state: ({ record: current }: { record: typeof record }) => `${current.title} summary` },
+        },
+      ] },
       kind: 'resource',
       model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, query: () => query },
       pages: [{ actions: [], pageType: 'manage', path: '/' }],
@@ -197,7 +203,10 @@ describe('generated page action presentation', () => {
     expect(result.data.rowActions).toMatchObject([{ actions: expect.arrayContaining([
       expect.objectContaining({ id: 'view', modal: expect.objectContaining({
         readOnlyPresentation: {
-          entries: [expect.objectContaining({ defaultValue: 'Draft', label: 'Post title', path: 'title', type: 'text' })],
+          entries: [
+            expect.objectContaining({ defaultValue: 'Draft', label: 'Post title', path: 'title', type: 'text' }),
+            expect.objectContaining({ defaultValue: 'Draft summary', extraAttributes: { 'data-computed': 'summary' }, label: 'Computed summary', layout: { columnSpan: { default: 2 } }, path: null, type: 'text' }),
+          ],
           kind: 'infolist',
         },
         schema: null,

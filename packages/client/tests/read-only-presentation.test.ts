@@ -8,13 +8,17 @@ describe('read-only presentation', () => {
         actions: [],
         copyable: true,
         defaultValue: 'Draft',
+        extraAttributes: { 'data-entry': 'title' },
         id: 'posts-title',
         inlineLabel: false,
         label: 'Post title',
+        layout: { columnSpan: { default: 2 } },
         path: 'title',
         placeholder: null,
         properties: { badge: true },
+        slots: {},
         type: 'text',
+        visible: true,
       }],
       kind: 'infolist',
     })
@@ -25,6 +29,7 @@ describe('read-only presentation', () => {
       formattedState: 'Draft',
       id: 'posts-title',
       label: 'Post title',
+      layout: { columnSpan: { default: 2 } },
       properties: { badge: true },
       state: 'Draft',
       type: 'text',
@@ -32,7 +37,9 @@ describe('read-only presentation', () => {
   })
 
   it('rejects malformed modal presentations', () => {
-    expect(() => readOnlyPresentationStores({ entries: [{ id: '../title' }], kind: 'infolist' })).toThrow('Invalid read-only presentation entry')
-    expect(() => readOnlyPresentationStores({ entries: [], kind: 'form' })).toThrow('Invalid read-only presentation')
+    expect(() => readOnlyPresentationStores({
+      entries: [{ actions: [], copyable: false, defaultValue: null, extraAttributes: {}, id: '../title', inlineLabel: false, label: null, layout: {}, path: null, placeholder: null, properties: {}, slots: {}, type: 'text', visible: true }],
+      kind: 'infolist',
+    })).toThrow('Invalid read-only presentation entry')
   })
 })

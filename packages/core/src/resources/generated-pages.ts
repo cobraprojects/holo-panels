@@ -3,7 +3,7 @@ import { ValidationException } from '@holo-js/forms/schema'
 import { validateFormFields } from '../fields/validation'
 import { toJsonValue } from '../protocol/serialization'
 import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/db'
-import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionSize } from '../actions'
+import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionReadOnlyEntryManifest, type ActionReadOnlyPresentationManifest, type ActionSize } from '../actions'
 import type { Effect } from '../protocol/effects'
 import type { CompiledPanelDefinition } from '../panels/contracts'
 import { actionExecutionPermissions, resourceActionPermissions, authorizePanelActionPermissions } from '../actions/authorization'
@@ -31,6 +31,8 @@ import { RelationManagerExecutor, RelationRecordNotFoundError } from '../relatio
 import { allowedRelationOperations } from '../relations/metadata'
 import type { RelationManagerDefinition, RelationOperation } from '../relations/contracts'
 import { resolveResourceForm, resourceFormSchema, resourceSchemaFields } from './form-schema'
+import { resolveEntry } from '../infolists/entries/resolution'
+import type { EntryStateSource } from '../infolists/entries/types'
 
 interface RuntimeRecord extends ResourceRecord {
   toJSON(): Readonly<Record<string, unknown>>
@@ -70,6 +72,11 @@ function resourceActionState(model: object, scope: string): ActionEngineState<nu
   }
   resourceActionStates.set(model, states)
   return state
+}
+
+function contextLocale(context: object): string {
+  const locale = Reflect.get(context, 'locale')
+  return typeof locale === 'string' && locale ? locale : 'en'
 }
 
 interface GeneratedResourcePageOptions {
@@ -915,27 +922,69 @@ function resourceFormFields(definition: RuntimeDefinition) {
   })
 }
 
-function resourceInfolistEntries(definition: RuntimeDefinition) {
+function resourceInfolistEntries(definition: RuntimeDefinition): ActionReadOnlyEntryManifest[] {
   const fields = resourceFormFields(definition)
   const configuredEntries = infolistComponents(definition.infolist).map(entry => objectMember(entry, 'manifest') ?? entry)
   return (configuredEntries.length > 0 ? configuredEntries : fields).map((entry, index) => {
     const source = objectMember(entry, 'source')
     const pathValue = Reflect.get(entry, 'path') ?? Reflect.get(source ?? {}, 'path')
-    const path = typeof pathValue === 'string' ? pathValue : String(index)
+    const path = Reflect.get(source ?? {}, 'kind') === 'computed' ? null : typeof pathValue === 'string' ? pathValue : String(index)
+    const identifier = path ?? String(index)
     const entryProperties = objectMember(entry, 'properties') ?? {}
     const formatters = arrayMember(entry, 'formatters')
+    const actions = Reflect.get(entry, 'actions')
+    const defaultValue = Reflect.get(entry, 'defaultValue')
     return {
-      actions: Array.isArray(Reflect.get(entry, 'actions')) ? Reflect.get(entry, 'actions') : [],
+      actions: Array.isArray(actions) ? actions.filter((action): action is string => typeof action === 'string') : [],
       copyable: Reflect.get(entry, 'copyable') === true,
-      id: `${definition.id}-${path.replaceAll('.', '-')}`,
+      defaultValue: defaultValue === undefined ? null : toJsonValue(defaultValue),
+      extraAttributes: jsonObject(objectMember(entry, 'extraAttributes') ?? {}),
+      id: `${definition.id}-${identifier.replaceAll('.', '-')}`,
       inlineLabel: Reflect.get(entry, 'inlineLabel') === true,
-      label: typeof Reflect.get(entry, 'label') === 'string' ? Reflect.get(entry, 'label') : label(path),
+      label: typeof Reflect.get(entry, 'label') === 'string' ? Reflect.get(entry, 'label') : label(identifier),
+      layout: jsonObject(objectMember(entry, 'layout') ?? {}),
       path,
       placeholder: typeof Reflect.get(entry, 'placeholder') === 'string' ? Reflect.get(entry, 'placeholder') : null,
-      properties: formatters.length > 0 ? { ...entryProperties, formats: formatters } : entryProperties,
+      properties: jsonObject(formatters.length > 0 ? { ...entryProperties, formats: formatters } : entryProperties),
+      slots: jsonObject(objectMember(entry, 'slots') ?? {}),
       type: String(Reflect.get(entry, 'type') ?? 'text'),
+      visible: Reflect.get(entry, 'visible') !== false,
     }
   })
+}
+
+function entryStateSource(value: object | undefined, path: string | null): EntryStateSource {
+  const kind = Reflect.get(value ?? {}, 'kind')
+  if (kind === 'computed' && typeof Reflect.get(value ?? {}, 'id') === 'string') return { id: Reflect.get(value ?? {}, 'id'), kind }
+  if ((kind === 'json' || kind === 'path') && typeof Reflect.get(value ?? {}, 'path') === 'string') return { kind, path: Reflect.get(value ?? {}, 'path') }
+  if (kind === 'relationship' && typeof Reflect.get(value ?? {}, 'path') === 'string' && typeof Reflect.get(value ?? {}, 'titlePath') === 'string') {
+    return { kind, path: Reflect.get(value ?? {}, 'path'), titlePath: Reflect.get(value ?? {}, 'titlePath') }
+  }
+  return { kind: 'path', path: path ?? '' }
+}
+
+async function resolvedResourceInfolistEntries(definition: RuntimeDefinition, record: RuntimeRecord, locale: string): Promise<ActionReadOnlyEntryManifest[]> {
+  const entries = resourceInfolistEntries(definition)
+  const configuredEntries = infolistComponents(definition.infolist)
+  const serialized = record.toJSON()
+  return Promise.all(entries.map(async (entry, index) => {
+    const configured = configuredEntries[index]
+    const manifest = objectMember(configured, 'manifest')
+    const server = objectMember(configured, 'server')
+    if (!manifest || !server) {
+      const state = entry.path === null ? entry.defaultValue : toJsonValue(valueAtPath(serialized, entry.path))
+      return { ...entry, defaultValue: state ?? entry.defaultValue }
+    }
+    const defaultValue = await resolveEntry({
+      manifest: {
+        defaultValue: entry.defaultValue,
+        placeholder: entry.placeholder,
+        source: entryStateSource(objectMember(manifest, 'source'), entry.path),
+      },
+      server: { state: Reflect.get(server, 'state') },
+    }, record, locale)
+    return { ...entry, defaultValue }
+  }))
 }
 
 async function resolvedResourceFormFields(
@@ -965,20 +1014,21 @@ async function resolvedResourceFormFields(
   }))
 }
 
-function resourceModalAction<TServices>(
+async function resourceModalAction<TServices>(
   action: ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, TServices>,
   definition: RuntimeDefinition,
   record: RuntimeRecord | null,
-): typeof action {
+  locale: string,
+): Promise<typeof action> {
   if (action.url || action.modal?.schema || action.mount === 'bulk' || !['create', 'edit', 'view'].includes(action.kind) || resourceRoutes(definition, '')[action.kind] !== undefined) return action
   const values = record ? serializeResourceRecord(record) : {}
   if (action.kind === 'view') {
-    const entries = resourceInfolistEntries(definition).map(entry => ({
+    const entries = (record ? await resolvedResourceInfolistEntries(definition, record, locale) : resourceInfolistEntries(definition)).map(entry => ({
       ...entry,
       actions: [],
-      defaultValue: valueAtPath(values, entry.path) ?? null,
     }))
-    return { ...action, modal: { ...action.modal, readOnlyPresentation: jsonObject({ entries, kind: 'infolist' }) } }
+    const readOnlyPresentation: ActionReadOnlyPresentationManifest = { entries, kind: 'infolist' }
+    return { ...action, modal: { ...action.modal, readOnlyPresentation } }
   }
   const fields = resourceFormFields(definition).filter(field => definition.writableAttributes.includes(String(Reflect.get(field, 'path')))).map(field => ({
     ...field,
@@ -1196,7 +1246,7 @@ async function resolveGeneratedTableActions(definition: RuntimeDefinition, conte
     if (!action) return entry
     const scope = { ...context, mount, record, selectedRecords: record ? [record] : [], services: undefined }
     const state = await resolveActionState(action, scope)
-    return { ...entry, ...await compileActionManifest(resourceModalAction(action, definition, record), state.label, scope, state) }
+    return { ...entry, ...await compileActionManifest(await resourceModalAction(action, definition, record, contextLocale(context)), state.label, scope, state) }
   }))
   return resolve(arrayMember(definition.table, 'actions'))
 }
@@ -1228,7 +1278,7 @@ async function resolveGeneratedPageActions(
   const record = recordId ? await executor.resolveActionRecord(recordId, context) : null
   const actions = await Promise.all(entries.map(async (entry) => {
     if (!entry.definition) return entry.manifest
-    const compiled = resourceModalAction(entry.definition as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>, definition, record)
+    const compiled = await resourceModalAction(entry.definition as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>, definition, record, contextLocale(context))
     const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
     const state = await resolveActionState(compiled, scope)
     return { ...entry.manifest, ...await compileActionManifest(compiled, state.label, scope, state) }

@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
-import { ClientToastStore } from '@holo-js/panels-svelte'
+import { ClientToastStore, type JsonObject } from '@holo-js/panels-svelte'
 import PanelPage from '../src/PanelPage.svelte'
 import type { PanelPageData } from '../src/contracts'
 import { configureSvelteKitNavigation } from './sveltekit-navigation'
@@ -107,7 +107,10 @@ describe('SvelteKit panel SPA navigation', () => {
     }> = []
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const fields = new URLSearchParams(String(init?.body ?? ''))
-      const envelope = JSON.parse(fields.get('request') ?? '{}') as { readonly id: string }
+      const envelope = JSON.parse(fields.get('request') ?? '{}') as { readonly id: string, readonly operation?: string }
+      if (envelope.operation === 'options') {
+        return Response.json({ data: { fields: [{ label: 'Title', path: 'title', properties: {}, required: false, type: 'text' }], operations: [], schema: { components: [{ children: [], dynamicVisibility: false, extraAttributes: {}, id: 'articles-title', key: 'title', kind: 'field', layout: {}, properties: {}, slots: {}, statePath: 'title', type: 'field', visible: true }], id: 'articles-create-form', kind: 'schema' } }, effects: [], id: envelope.id, ok: true, protocolVersion: '1.0' })
+      }
       return await new Promise<Response>(resolve => pending.push({ id: envelope.id, resolve, signal: init?.signal ?? null }))
     }))
     const firstContainer = document.createElement('div')
@@ -133,6 +136,55 @@ describe('SvelteKit panel SPA navigation', () => {
     expect(push.mock.calls[0]?.[0]).toMatchObject({ title: 'Current response' })
 
     await unmount(replacement)
+    vi.unstubAllGlobals()
+  })
+
+  it('hydrates the form schema once and refreshes dependent options after the field debounce', async () => {
+    document.cookie = 'XSRF-TOKEN=signed; path=/'
+    const configured = createResourcePageData()
+    const resource = configured.page.data.resource
+    if (!resource || typeof resource !== 'object' || Array.isArray(resource)) throw new Error('Resource metadata is unavailable')
+    const fields: JsonObject[] = [
+      { debounceMilliseconds: 20, label: 'Category', path: 'category', properties: { options: [{ label: 'Engineering', value: 'engineering' }, { label: 'News', value: 'news' }] }, required: false, type: 'select' },
+      { label: 'City', path: 'city', properties: { options: [] }, required: false, type: 'select' },
+    ]
+    resource.fields = fields
+    resource.options = {
+      category: { values: ['engineering', 'news'] },
+      city: { dependsOn: 'category', valuesByDependency: { engineering: ['Cairo'], news: ['Lisbon'] } },
+    }
+    const schema: JsonObject = {
+      components: ['category', 'city'].map(path => ({ children: [], dynamicVisibility: false, extraAttributes: {}, id: `articles-${path}`, key: path, kind: 'field', layout: {}, properties: {}, slots: {}, statePath: path, type: 'field', visible: true })),
+      id: 'articles-create-form',
+      kind: 'schema',
+    }
+    resource.schema = schema
+    const requests: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const parameters = new URLSearchParams(String(init?.body ?? ''))
+      const envelope = JSON.parse(parameters.get('request') ?? '{}') as { readonly id?: string, readonly payload?: Record<string, unknown> }
+      if (envelope.payload) requests.push(envelope.payload)
+      const values = envelope.payload?.values
+      const category = values && typeof values === 'object' && !Array.isArray(values) ? Reflect.get(values, 'category') : undefined
+      const responseFields: JsonObject[] = [fields[0]!, { ...fields[1]!, properties: { options: category === 'news' ? [{ label: 'Lisbon', value: 'Lisbon' }] : [] } }]
+      return Response.json({ data: { fields: responseFields, operations: [], schema }, effects: [], id: envelope.id, ok: true, protocolVersion: '1.0' })
+    }))
+    const container = document.createElement('div')
+    document.body.append(container)
+    const component = mount(PanelPage, { props: { data: configured }, target: container })
+
+    await vi.waitFor(() => expect(requests).toContainEqual(expect.objectContaining({ action: 'schema', lifecycle: 'hydrate' })))
+    const category = container.querySelector<HTMLSelectElement>('[data-field-path="category"] select')
+    if (!category) throw new Error('Category field did not render')
+    await vi.waitFor(() => expect(Array.from(category.options).map(option => option.value)).toContain('news'))
+    category.value = 'news'
+    category.dispatchEvent(new Event('change', { bubbles: true }))
+    await tick()
+    expect(Array.from(container.querySelectorAll<HTMLOptionElement>('[data-field-path="city"] option')).map(option => option.value)).not.toContain('Lisbon')
+    await vi.waitFor(() => expect(Array.from(container.querySelectorAll<HTMLOptionElement>('[data-field-path="city"] option')).map(option => option.value)).toContain('Lisbon'))
+
+    await unmount(component)
+    container.remove()
     vi.unstubAllGlobals()
   })
 

@@ -91,8 +91,8 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
   }
   const prefix = stringProperty(props, 'prefix')
   const suffix = stringProperty(props, 'suffix')
-  const prefixAction = actionButton(context.definition.properties.prefixAction, context.executeAction)
-  const suffixAction = actionButton(context.definition.properties.suffixAction, context.executeAction)
+  const prefixAction = actionButton(context.definition.properties.prefixAction, context.executeAction, context.actionPending)
+  const suffixAction = actionButton(context.definition.properties.suffixAction, context.executeAction, context.actionPending)
   const datalistProperty = context.definition.properties.datalist
   const datalist = Array.isArray(datalistProperty)
     ? datalistProperty.filter((value): value is string => typeof value === 'string')

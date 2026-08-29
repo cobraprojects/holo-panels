@@ -8,6 +8,9 @@ import {
   relationActionPresentation,
   CollectionStore,
   createBrowserUploadAdapter,
+  decodeFormOperationPaths,
+  decodeFormSetOperations,
+  decodeSchemaManifest,
   bindUploadStore,
   uploadFormPatch,
   createUploadStore,
@@ -52,9 +55,8 @@ import {
   type ReactTableSummary,
   type UploadPolicy,
 } from '@holo-js/panels-react'
-import type { SchemaManifest } from '@holo-js/panels-client'
 import { useRouter } from 'next/navigation.js'
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Card, CardContent, CardFooter } from './internal-ui'
 import { useClientRequestController } from './client-lifecycle'
 
@@ -629,8 +631,9 @@ function useStructurallyStableValue<TValue>(value: TValue): TValue {
   return stable.current
 }
 
-function ResourceField({ definition, form, operation, pageOperation, panelId, recordId, registry, resourceId, values }: {
+function ResourceField({ definition, dependencyValues, form, operation, pageOperation, panelId, recordId, registry, resourceId, values }: {
   readonly definition: ReactCompiledField<ResourceValues>
+  readonly dependencyValues: Readonly<ResourceValues>
   readonly form: FormStore<ResourceValues>
   readonly operation: NextResourceOperationTransport
   readonly pageOperation: string
@@ -642,10 +645,35 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
 }): ReactNode {
   const ownerSignal = useContext(ClientRequestSignalContext)
   if (!ownerSignal) throw new Error('Resource fields require a client request owner')
-  const dynamic = dependentOptions(definition.properties as JsonObject, values)
+  const dynamic = dependentOptions(definition.properties as JsonObject, dependencyValues)
   const inlineOptions = useMemo(() => staticOptions(definition.properties as JsonObject), [definition.properties])
   const sourceKind = text(Reflect.get(definition.properties, 'optionSource'))
   const serverOptions = !!sourceKind && sourceKind !== 'static'
+  const fieldActions = useMemo(() => fieldActionManifests(definition.properties as JsonObject, pageOperation), [definition.properties, pageOperation])
+  const fieldActionStore = useMemo(() => new ClientActionStore<JsonObject>({
+    createIdempotencyKey: () => globalThis.crypto.randomUUID(),
+    transport: {
+      async execute(request, signal) {
+        if (!fieldActions.some(action => action.id === request.actionId)) throw new Error('The field action is not available.')
+        const result = await operation.execute('action', {
+          actionId: request.actionId,
+          idempotencyKey: request.idempotencyKey,
+          input: request.input,
+          mount: request.mount,
+          recordIds: request.recordIds ? [...request.recordIds] : [],
+          resourceId,
+          source: `form-field:${definition.path}`,
+        }, signal)
+        if (!result.ok || result.data?.status === 'partial') {
+          publishPanelActionFailure(panelId, result.effects)
+          throw result.failure ?? new Error(result.error ?? 'The field action could not be completed.')
+        }
+        return { effects: [], items: [], result: result.data, status: 'succeeded' }
+      },
+    },
+  }), [definition.path, fieldActions, operation, panelId, resourceId])
+  const fieldActionState = useSyncExternalStore(listener => fieldActionStore.subscribe(listener), () => fieldActionStore.state, () => fieldActionStore.state)
+  useEffect(() => () => fieldActionStore.dispose(), [fieldActionStore])
   const collection = ['builder', 'key-value', 'repeater'].includes(definition.type)
   const collectionStore = useMemo(() => collection ? new CollectionStore(collectionValues(valueAtPath(values, definition.path)), 'resource-item') : undefined, [collection, definition.path, values])
   const uploadPolicy = useStructurallyStableValue(definition.type === 'panels:field:upload' ? Reflect.get(definition.properties, 'uploadPolicy') as UploadPolicy | undefined : undefined)
@@ -669,7 +697,7 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
     }
   }, [definition.path, form, uploadPolicy?.maximumFiles, uploadStore])
   const optionStore = useMemo(() => dynamic || inlineOptions.length > 0 || serverOptions ? new OptionStore<string | number>({
-    dependencies: dynamic ? { [dynamic.dependency]: valueAtPath(values, dynamic.dependency) ?? null } : {},
+    dependencies: dynamic ? { [dynamic.dependency]: valueAtPath(dependencyValues, dynamic.dependency) ?? null } : {},
     fieldId: definition.path,
     locale: 'en',
     panelId,
@@ -729,33 +757,32 @@ function ResourceField({ definition, form, operation, pageOperation, panelId, re
   }) : undefined, [definition.path, dynamic, inlineOptions, operation, panelId, resourceId, serverOptions, values])
   useEffect(() => {
     if (!dynamic || !optionStore) return
-    void optionStore.updateDependencies({ [dynamic.dependency]: values[dynamic.dependency] ?? null }, optionValue(values[definition.path])).then(async result => {
+    void optionStore.updateDependencies({ [dynamic.dependency]: dependencyValues[dynamic.dependency] ?? null }, optionValue(values[definition.path])).then(async result => {
       if (result.status === 'cleared' && values[definition.path] !== '') form.set(definition.path, '')
-      if (values[dynamic.dependency] !== null && typeof values[dynamic.dependency] !== 'undefined' && values[dynamic.dependency] !== '') await optionStore.preload()
+      if (dependencyValues[dynamic.dependency] !== null && typeof dependencyValues[dynamic.dependency] !== 'undefined' && dependencyValues[dynamic.dependency] !== '') await optionStore.preload()
     })
-  }, [definition.path, dynamic, form, optionStore, values])
-  return <ReactFieldRenderer
-    collectionStore={collectionStore}
-    createCollectionItem={definition.type === 'builder' ? blockType => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined}
-    definition={definition}
-    executeAction={(actionId) => {
-      const idempotencyKey = crypto.randomUUID()
-      void operation.execute('action', {
-        actionId,
-        idempotencyKey,
-        input: {},
-        mount: pageOperation === 'create' ? 'page' : 'record',
-        recordIds: pageOperation === 'create' || typeof recordId !== 'string' && typeof recordId !== 'number' ? [] : [recordId],
-        resourceId,
-        source: `form-field:${definition.path}`,
-      }).catch(() => undefined)
-    }}
-    optionStore={optionStore}
-    panelId={panelId}
-    registry={registry}
-    store={form}
-    uploadStore={uploadStore}
-  />
+  }, [definition.path, dependencyValues, dynamic, form, optionStore, values])
+  const recordIds = pageOperation === 'create' || typeof recordId !== 'string' && typeof recordId !== 'number' ? [] : [recordId]
+  return <>
+    <ReactFieldRenderer
+      collectionStore={collectionStore}
+      createCollectionItem={definition.type === 'builder' ? blockType => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined}
+      definition={definition}
+      actionPending={actionId => fieldActionState.frames.some(frame => frame.manifest.id === actionId)}
+      executeAction={(actionId) => {
+        const action = fieldActions.find(candidate => candidate.id === actionId)
+        if (!action || fieldActionStore.state.frames.some(frame => frame.manifest.id === actionId)) return
+        fieldActionStore.mount(action, { ...values })
+        if (!action.confirmation && !action.modal) void fieldActionStore.submit(recordIds).catch(() => undefined)
+      }}
+      optionStore={optionStore}
+      panelId={panelId}
+      registry={registry}
+      store={form}
+      uploadStore={uploadStore}
+    />
+    {fieldActions[0] ? <ReactActionRenderer actions={fieldActions} input={{ ...values }} manifest={fieldActions[0]} panelId={panelId} recordIds={recordIds} registry={registry} showTriggers={false} store={fieldActionStore} /> : null}
+  </>
 }
 
 function ResourceForm({ basePath, createRedirect, data, editRedirect, operation, pageOperation, panelId, panelManifest, registry, renderHookScopes, resource, unsavedChangesAlerts }: {
@@ -778,7 +805,10 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   const resourceId = text(resource.id)
   const routeKey = propertyPath(text(resource.routeKey))
   const configuredFields = useMemo(() => objects(formManifest.fields).map(fieldDefinition), [formManifest])
-  const configuredSchema = object(formManifest.schema) as unknown as SchemaManifest<ResourceValues>
+  const configuredSchema = useMemo(
+    () => decodeSchemaManifest<ResourceValues>(formManifest.schema) ?? { components: [], id: `${resourceId}-${pageOperation}-form`, kind: 'schema' as const },
+    [formManifest.schema, pageOperation, resourceId],
+  )
   const [fields, setFields] = useState(configuredFields)
   const [formSchema, setFormSchema] = useState(configuredSchema)
   useEffect(() => {
@@ -795,32 +825,44 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
   }, [configuredFields, formManifest, record])
   const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest), fields: configuredFields }), [configuredFields, formManifest, initialValues])
   const state = useFormStore<ResourceValues>(form)
-  const previousLifecycleValues = useRef<ResourceValues | null>(null)
+  const [reactiveValues, setReactiveValues] = useState<ResourceValues | null>(null)
+  const previousLifecycleValues = useRef(new WeakMap<FormStore<ResourceValues>, ResourceValues>())
   useEffect(() => {
+    setReactiveValues(null)
+    return form.subscribeReactivity(next => setReactiveValues(next.values))
+  }, [form])
+  useEffect(() => {
+    const lifecycle = reactiveValues ? 'update' : 'hydrate'
     const controller = new AbortController()
-    const previousValues = previousLifecycleValues.current
-    previousLifecycleValues.current = state.values
+    const values = reactiveValues ?? form.state.values
+    const previousValues = previousLifecycleValues.current.get(form) ?? form.state.values
+    previousLifecycleValues.current.set(form, values)
     void operation.execute('options', {
       action: 'schema',
       formOperation: pageOperation,
-      lifecycle: previousValues ? 'update' : 'hydrate',
-      ...(previousValues ? { previousValues } : {}),
+      lifecycle,
+      ...(lifecycle === 'update' ? { previousValues } : {}),
       recordId: record[routeKey] ?? null,
       resourceId,
-      values: { ...state.values },
+      values: { ...values },
     }, controller.signal).then((result) => {
       if (!result.ok || !result.data || controller.signal.aborted) return
       const nextFields = objects(result.data.fields).map(fieldDefinition)
-      const nextSchema = object(result.data.schema) as unknown as SchemaManifest<ResourceValues>
+      const nextSchema = decodeSchemaManifest<ResourceValues>(result.data.schema)
+      const operationPaths = decodeFormOperationPaths(result.data.operationPaths)
+      const operations = decodeFormSetOperations(result.data.operations, operationPaths ?? new Set([...configuredFields, ...nextFields].map(field => field.path)))
+      if (!nextSchema || !operations) return
       if (nextFields.length > 0 || nextSchema.components.length > 0) {
         setFields(current => JSON.stringify(current) === JSON.stringify(nextFields) ? current : nextFields)
         setFormSchema(current => JSON.stringify(current) === JSON.stringify(nextSchema) ? current : nextSchema)
       }
-      const operations = objects(result.data.operations).flatMap(operation => typeof operation.path === 'string' && operation.kind === 'set' ? [{ kind: 'set' as const, path: operation.path, value: operation.value }] : [])
-      if (operations.length > 0) form.batch(operations)
+      if (operations.length > 0) form.batch(operations, { notifyReactivity: false })
+      previousLifecycleValues.current.set(form, form.state.values)
+    }).catch(() => {
+      if (!controller.signal.aborted) publishPanelActionFailure(panelId)
     })
     return () => controller.abort()
-  }, [form, operation, pageOperation, record, resourceId, routeKey, state.values])
+  }, [configuredFields, form, operation, pageOperation, panelId, reactiveValues, record, resourceId, routeKey])
   useEffect(() => () => form.cancelRequests(), [form])
   useEffect(() => {
     if (!unsavedChangesAlerts || state.dirtyPaths.length === 0) return
@@ -915,7 +957,7 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
           renderContent={({ component }) => {
             if (component.kind !== 'field' || !component.statePath) return null
             const definition = fields.find(field => field.path === component.statePath)
-            return definition ? <ResourceField definition={definition} form={form} key={definition.path} operation={operation} pageOperation={pageOperation} panelId={panelId} recordId={record[routeKey]} registry={registry} resourceId={resourceId} values={state.values} /> : null
+            return definition ? <ResourceField definition={definition} dependencyValues={reactiveValues ?? form.state.values} form={form} key={definition.path} operation={operation} pageOperation={pageOperation} panelId={panelId} recordId={record[routeKey]} registry={registry} resourceId={resourceId} values={state.values} /> : null
           }}
           schema={formSchema}
         /></CardContent>
@@ -970,6 +1012,15 @@ function actionManifest(value: JsonObject): ClientActionManifest | null {
     type: text(value.type) || `core:action:${text(kind)}`,
     visible: boolean(value.visible, true),
   }
+}
+
+function fieldActionManifests(properties: JsonObject, pageOperation: string): readonly ClientActionManifest[] {
+  const mount = pageOperation === 'create' ? 'page' : 'record'
+  return ['hintAction', 'prefixAction', 'suffixAction'].flatMap((property) => {
+    const candidate = object(properties[property])
+    const manifest = actionManifest({ ...candidate, mount })
+    return manifest ? [manifest] : []
+  })
 }
 
 function ResourcePageActions({ basePath, operation, panelId, recordId, registry, resource, source }: {

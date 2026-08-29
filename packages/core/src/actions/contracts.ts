@@ -7,6 +7,13 @@ import type { ExtensionTypeId } from '../plugins/type-id'
 export type ActionKind = 'associate' | 'attach' | 'create' | 'custom' | 'delete' | 'detach' | 'dissociate' | 'edit' | 'editPivot' | 'force-delete' | 'replicate' | 'restore' | 'view'
 export type ActionMount = 'bulk' | 'modal' | 'notification' | 'page' | 'record'
 
+export interface ActionContract<TRecord extends object = object> {
+  readonly id: string
+  readonly resourceRecordType: TRecord
+  compile(): object
+  manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): JsonObject
+}
+
 export interface ActionContext<TRecord, TActor, TTenant, TServices> {
   readonly actor: TActor
   readonly owner?: object

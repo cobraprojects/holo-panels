@@ -109,3 +109,8 @@ export type FormStateListener<TValues> = (
   state: FormState<TValues>,
   previous: FormState<TValues>,
 ) => void
+
+export type FormReactivityListener<TValues> = (
+  state: FormState<TValues>,
+  changedPaths: ReadonlySet<string>,
+) => void

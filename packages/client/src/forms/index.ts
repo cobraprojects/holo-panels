@@ -1,4 +1,5 @@
 export { FormStore } from './store'
+export { decodeFormOperationPaths, decodeFormSetOperations, decodeSchemaManifest } from './decoders'
 export { formValidationErrors, formValidationFailure } from './validation'
 export {
   cloneFormValue,
@@ -19,6 +20,7 @@ export type {
   FormPath,
   FormRequestContext,
   FormRequestResult,
+  FormReactivityListener,
   FormServerPatch,
   FormState,
   FormStateListener,

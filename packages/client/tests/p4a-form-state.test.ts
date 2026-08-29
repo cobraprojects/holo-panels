@@ -1,6 +1,7 @@
 import { defineSchema, schemaComponentsFor } from '@holo-js/panels-core'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { FormStore } from '../src/forms/store'
+import { decodeFormOperationPaths, decodeFormSetOperations, decodeSchemaManifest } from '../src/forms/decoders'
 import { formValidationFailure } from '../src/forms/validation'
 import type {
   FormPath,
@@ -49,6 +50,23 @@ function deferred<TValue>(): {
 }
 
 describe('P4-A form state engine', () => {
+  it('decodes allow-listed schema refresh payloads and rejects unsafe operations', () => {
+    const components = schemaComponentsFor(FormValueSource)
+    const schema = defineSchema('form-refresh', FormValueSource).components([
+      components.custom('app:input').key('name').statePath('account.name'),
+    ]).compile()
+
+    expect(decodeSchemaManifest(schema)).toEqual(schema)
+    expect(decodeFormSetOperations([{ kind: 'set', path: 'account.name', value: 'Grace' }], new Set(['account.name']))).toEqual([
+      { kind: 'set', path: 'account.name', value: 'Grace' },
+    ])
+    expect(decodeFormSetOperations([{ kind: 'disabled', path: 'account.name', value: true }], new Set(['account.name']))).toBeNull()
+    expect(decodeFormSetOperations([{ kind: 'set', path: 'account.type', value: 'business' }], new Set(['account.name']))).toBeNull()
+    expect(decodeFormOperationPaths(['account.name', 'notes'])).toEqual(new Set(['account.name', 'notes']))
+    expect(decodeFormSetOperations([{ kind: 'set', path: 'notes', value: 'Hydrated' }], decodeFormOperationPaths(['account.name', 'notes']) ?? new Set())).toEqual([{ kind: 'set', path: 'notes', value: 'Hydrated' }])
+    expect(decodeFormOperationPaths(['account.name', '../secret'])).toBeNull()
+  })
+
   it('updates values immediately while honoring blur and debounce dependency modes', async () => {
     vi.useFakeTimers()
     const store = new FormStore({ source: '', result: '' }, { dependencies: [{
@@ -56,18 +74,56 @@ describe('P4-A form state engine', () => {
       paths: ['source'],
       recompute: context => [{ kind: 'set', path: 'result', value: context.get('source') }],
     }] })
+    const refresh = vi.fn()
+    store.subscribeReactivity(refresh)
 
     store.batch([{ kind: 'set', path: 'source', value: 'blurred', reactivity: 'blur' }])
     expect(store.state.values).toEqual({ source: 'blurred', result: '' })
+    expect(refresh).not.toHaveBeenCalled()
     store.touch('source')
     expect(store.state.values.result).toBe('blurred')
+    expect(refresh).toHaveBeenCalledTimes(1)
 
     store.batch([{ kind: 'set', path: 'source', value: 'debounced', reactivity: { debounceMilliseconds: 200 } }])
     expect(store.state.values.result).toBe('blurred')
     await vi.advanceTimersByTimeAsync(199)
     expect(store.state.values.result).toBe('blurred')
+    expect(refresh).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(store.state.values.result).toBe('debounced')
+    expect(refresh).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
+  it('applies server lifecycle operations without starting another reactivity cycle', () => {
+    const store = new FormStore({ source: '' })
+    const updates: string[] = []
+    store.subscribeReactivity(state => updates.push(state.values.source))
+
+    store.set('source', 'client')
+    store.batch([{ kind: 'set', path: 'source', value: 'server' }], { notifyReactivity: false })
+
+    expect(store.state.values.source).toBe('server')
+    expect(updates).toEqual(['client'])
+  })
+
+  it('cancels deferred dependency work when forms reset or dispose', () => {
+    vi.useFakeTimers()
+    const recompute = vi.fn(() => [{ kind: 'set' as const, path: 'result', value: 'updated' }])
+    const store = new FormStore({ result: '', source: '' }, {
+      dependencies: [{ id: 'deferred-result', paths: ['source'], recompute }],
+    })
+
+    store.batch([{ kind: 'set', path: 'source', value: 'reset', reactivity: { debounceMilliseconds: 200 } }])
+    store.reset()
+    recompute.mockClear()
+    vi.advanceTimersByTime(200)
+    expect(recompute).not.toHaveBeenCalled()
+
+    store.batch([{ kind: 'set', path: 'source', value: 'disposed', reactivity: { debounceMilliseconds: 200 } }])
+    store.cancelRequests()
+    vi.advanceTimersByTime(200)
+    expect(recompute).not.toHaveBeenCalled()
     vi.useRealTimers()
   })
 

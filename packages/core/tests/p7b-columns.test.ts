@@ -404,20 +404,25 @@ describe('P7-B text formatting and manifest security', () => {
   })
 
   it('runs form lifecycle hooks while resolving dependent schemas', async () => {
-    const hydrated = vi.fn((_state: unknown, context: { set(path: string, value: unknown): void }) => context.set('status', 'draft'))
+    const hydrated = vi.fn((_state: unknown, context: { set(path: string, value: unknown): void }) => {
+      context.set('status', 'draft')
+      context.set('notes', 'Hydrated note')
+    })
+    const revealedHydrated = vi.fn((_state: unknown, context: { set(path: string, value: unknown): void }) => context.set('title', 'Hydrated title'))
     const updated = vi.fn((_state: unknown, _previous: unknown, context: { set(path: string, value: unknown): void }) => context.set('title', 'Updated title'))
     const resource = {
       capabilities: { delete: true, forceDelete: false, restore: false },
-      form: { fields: [
+      form: { fields: [{ kind: 'grid', server: { resolveChildren: (context: { get(path: string): unknown }) => [
         { path: 'status', server: { afterStateHydrated: hydrated }, type: 'select' },
-        { path: 'title', server: { afterStateUpdated: updated }, type: 'text' },
-      ] },
+        ...(context.get('status') === 'draft' ? [{ path: 'title', server: { afterStateHydrated: revealedHydrated, afterStateUpdated: updated }, type: 'text' }] : []),
+      ] } }] },
       id: 'posts',
       kind: 'resource',
       model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, getConnectionName: () => undefined },
       shared: true,
       singular: null,
       table: { columns: [] },
+      writableAttributes: ['notes'],
     }
     const request = (payload: Readonly<Record<string, unknown>>) => executeGeneratedResourceOperation(resource, {
       context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
@@ -430,11 +435,89 @@ describe('P7-B text formatting and manifest security', () => {
     const update = await request({ lifecycle: 'update', previousValues: { status: 'draft', title: 'Old title' }, values: { status: 'draft', title: 'New title' } })
 
     expect(hydrated).toHaveBeenCalledOnce()
+    expect(revealedHydrated).toHaveBeenCalledOnce()
     expect(updated).toHaveBeenCalledOnce()
     expect(hydration.data.schema).toMatchObject({ id: 'posts-create-form' })
+    expect(hydration.data.fields).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'title' })]))
+    expect(hydration.data.operationPaths).toEqual(expect.arrayContaining(['notes', 'status', 'title']))
     expect(update.data.schema).toMatchObject({ id: 'posts-create-form' })
-    expect(hydration.data.operations).toEqual([{ kind: 'set', path: 'status', value: 'draft' }])
+    expect(hydration.data.operations).toEqual([{ kind: 'set', path: 'status', value: 'draft' }, { kind: 'set', path: 'notes', value: 'Hydrated note' }, { kind: 'set', path: 'title', value: 'Hydrated title' }])
     expect(update.data.operations).toEqual([{ kind: 'set', path: 'title', value: 'Updated title' }])
+  })
+
+  it('executes field actions only when the current dynamic form schema registers them', async () => {
+    const handle = vi.fn((input: Readonly<Record<string, unknown>>) => ({ title: input.title }))
+    let actionAllowed = true
+    const dynamicAction = { authorize: () => actionAllowed, color: 'primary', handle, icon: 'copy', id: 'copy-title', kind: 'custom', label: ({ actor }: { actor: { id: string } }) => `${actor.id} copy`, mount: 'record', position: 'prefix', transactional: false }
+    const resource = {
+      actions: [],
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [{
+        kind: 'grid',
+        server: {
+          resolveChildren: (context: { get(path: string): unknown }) => context.get('mode') === 'advanced'
+            ? [{ path: 'title', server: { actions: [dynamicAction] }, type: 'text' }]
+            : [],
+        },
+      }] },
+      id: 'posts',
+      kind: 'resource',
+      model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, getConnectionName: () => undefined },
+      shared: true,
+      singular: null,
+      table: { columns: [] },
+    }
+    const request = (input: Readonly<{ mode: string, title: string }>) => executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action',
+      panelId: 'admin',
+      payload: { actionId: 'copy-title', input, mount: 'page', resourceId: 'posts', source: 'form-field:title' },
+    })
+
+    const result = await request({ mode: 'advanced', title: 'Ready' })
+    const presentation = await executeGeneratedResourceOperation(resource, {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'options',
+      panelId: 'admin',
+      payload: { action: 'schema', formOperation: 'create', lifecycle: 'hydrate', resourceId: 'posts', values: { mode: 'advanced', title: 'Ready' } },
+    })
+
+    expect(handle).toHaveBeenCalledWith({ mode: 'advanced', title: 'Ready' }, expect.objectContaining({ actor: { id: 'admin' }, mount: 'page' }))
+    expect(result.data).toMatchObject({ result: { title: 'Ready' }, status: 'succeeded' })
+    expect(presentation.data.fields).toEqual(expect.arrayContaining([expect.objectContaining({ properties: { prefixAction: expect.objectContaining({ color: 'primary', icon: 'copy', label: 'admin copy', mount: 'page' }) } })]))
+    await expect(request({ mode: 'basic', title: 'Hidden' })).rejects.toThrow('not registered')
+    actionAllowed = false
+    await expect(request({ mode: 'advanced', title: 'Denied' })).rejects.toThrow('not authorized')
+    expect(handle).toHaveBeenCalledOnce()
+  })
+
+  it('rejects stale and tenant-unscoped records before executing dynamic field actions', async () => {
+    const handle = vi.fn()
+    const action = { authorize: () => true, handle, id: 'copy-title', kind: 'custom', label: 'Copy title', mount: 'record', position: 'prefix', transactional: false }
+    const query = { first: async () => null, where: () => query }
+    const resource = {
+      actions: [],
+      baseQuery: (value: typeof query) => value,
+      capabilities: { delete: true, forceDelete: false, restore: false },
+      form: { fields: [{ path: 'title', server: { actions: [action] }, type: 'text' }] },
+      id: 'posts',
+      kind: 'resource',
+      model: { definition: { name: 'Post', primaryKey: 'id', softDeletes: false }, query: () => query },
+      routeKey: 'id',
+      shared: true,
+      singular: null,
+      table: { columns: [] },
+    }
+    const input = {
+      context: { actor: { id: 'admin' }, signal: new AbortController().signal, tenant: null },
+      operation: 'action' as const,
+      panelId: 'admin',
+      payload: { actionId: 'copy-title', input: { title: 'Ready' }, mount: 'record', recordIds: [404], resourceId: 'posts', source: 'form-field:title' },
+    }
+
+    await expect(executeGeneratedResourceOperation(resource, input)).rejects.toThrow()
+    await expect(executeGeneratedResourceOperation({ ...resource, shared: false }, { ...input, context: { ...input.context, tenant: { id: 'tenant-b' } } })).rejects.toThrow('tenant scope')
+    expect(handle).not.toHaveBeenCalled()
   })
 
   it('selects the registered action by both ID and mount', async () => {

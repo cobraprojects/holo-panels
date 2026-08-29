@@ -15,6 +15,7 @@ export interface SvelteActionRendererProps<TResult = unknown> {
   readonly panelId?: string
   readonly recordIds?: readonly (number | string)[]
   readonly registry?: SvelteComponentRegistry
+  readonly showTriggers?: boolean
   readonly store: ClientActionStore<TResult>
 }
 

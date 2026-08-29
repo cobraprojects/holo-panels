@@ -27,6 +27,7 @@ export interface ReactFieldRenderContext<
   readonly definition: ReactCompiledField<TValues, TPath>
   readonly disabled: boolean
   readonly errors: readonly string[]
+  readonly actionPending?: (actionId: string) => boolean
   readonly executeAction?: (actionId: string) => void
   readonly inputId: string
   readonly readOnly: boolean
@@ -41,6 +42,7 @@ export interface ReactFieldRendererProps<
   readonly createCollectionItem?: (blockType?: string) => unknown
   readonly definition: ReactCompiledField<TValues, TPath>
   readonly editorAdapters?: EditorAdapterRegistry
+  readonly actionPending?: (actionId: string) => boolean
   readonly executeAction?: (actionId: string) => void
   readonly optionStore?: OptionStore<string | number>
   readonly panelId?: string

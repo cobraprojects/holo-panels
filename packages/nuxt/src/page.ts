@@ -8,6 +8,9 @@ import {
   createWidgetActionStore,
   CollectionStore,
   createBrowserUploadAdapter,
+  decodeFormOperationPaths,
+  decodeFormSetOperations,
+  decodeSchemaManifest,
   bindUploadStore,
   uploadFormPatch,
   createUploadStore,
@@ -53,7 +56,6 @@ import {
   renderPanelsHook,
   toJsonValue,
   type ClientActionManifest,
-  type FormOperation,
   type ClientNotificationRealtime,
   type ClientSearchResponse,
   type ComponentRegistry,
@@ -75,7 +77,7 @@ import {
   type UploadPolicy,
 } from '@holo-js/panels-vue'
 import { useRouter } from '#imports'
-import { defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, shallowReactive, watch, type Component, type PropType, type VNode } from 'vue'
+import { defineAsyncComponent, defineComponent, Fragment, h, onMounted, onUnmounted, ref, shallowReactive, watch, type Component, type PropType, type VNode } from 'vue'
 import type { NuxtPanelPage, NuxtPanelPageData, PanelPageProps } from './contracts'
 import {
   Avatar,
@@ -326,6 +328,15 @@ function clientAction(value: unknown): ClientActionManifest | null {
   }
 }
 
+function fieldActionManifests(field: ResourceField, pageType: string): readonly ClientActionManifest[] {
+  const mount = pageType === 'create' ? 'page' : 'record'
+  return ['hintAction', 'prefixAction', 'suffixAction'].flatMap((property) => {
+    const value = field.properties[property]
+    const action = clientAction(isObject(value) ? { ...value, mount } : null)
+    return action ? [action] : []
+  })
+}
+
 function resourceFilterOptions(manifest: unknown): VueTableFilter['options'] {
   if (!isObject(manifest) || !isObject(manifest.properties) || !Array.isArray(manifest.properties.options)) return undefined
   return manifest.properties.options.flatMap(option => {
@@ -360,7 +371,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
         resourceId: generated.id,
         routeKey: generated.routeKey,
         routes: isObject(generated.routes) ? generated.routes : {},
-        schema: generatedForm.schema as unknown as SchemaManifest<ResourceValues>,
+        schema: decodeSchemaManifest<ResourceValues>(generatedForm.schema),
       }
     : page.schema
   if (!isObject(schema) || schema.kind !== 'resource' || typeof schema.resourceId !== 'string' || typeof schema.basePath !== 'string' || !schema.basePath.startsWith('/') || !isPath(schema.routeKey) || !isPath(schema.recordTitle)) {
@@ -372,6 +383,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
   if (!schema.fields.every(item => isObject(item) && isPath(item.path) && typeof item.type === 'string')) throw new Error('Resource render schema fields are invalid')
   if (!schema.columns.every(item => isObject(item) && isObject(item.manifest) && isPath(item.manifest.path) && typeof item.manifest.type === 'string')) throw new Error('Resource render schema columns are invalid')
   const routes = isObject(schema.routes) ? schema.routes : {}
+  const formSchema = decodeSchemaManifest<ResourceValues>(schema.schema)
   return {
     actions: (schema.actions as unknown as readonly JsonObject[]).flatMap((action) => {
       const normalized = resourceTableAction(action, routes)
@@ -395,7 +407,7 @@ function resourceSchema(page: NuxtPanelPageData): ResourceRenderSchema {
       edit: typeof routes.edit === 'string' ? routes.edit : null,
       view: typeof routes.view === 'string' ? routes.view : null,
     },
-    ...(isObject(schema.schema) ? { schema: schema.schema as unknown as SchemaManifest<ResourceValues> } : {}),
+    ...(formSchema ? { schema: formSchema } : {}),
   }
 }
 
@@ -731,6 +743,10 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     store.cancelRequests()
     while (actionStore.activeFrame) actionStore.close()
     while (formActionStore.activeFrame) formActionStore.close()
+    for (const host of fieldActionHosts.values()) {
+      host.unsubscribe()
+      host.store.dispose()
+    }
     for (const upload of uploadStores.values()) upload.reset()
   })
   const optionStores = new Map(schema.fields.flatMap(field => {
@@ -783,6 +799,10 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     }).then((response) => {
       if (!response.ok) throw new Error(response.error.message)
       const fields = Array.isArray(response.data.fields) ? response.data.fields.map(resourceField) : renderedFields
+      const nextSchema = decodeSchemaManifest<ResourceValues>(response.data.schema)
+      const operationPaths = decodeFormOperationPaths(response.data.operationPaths)
+      const operations = decodeFormSetOperations(response.data.operations, operationPaths ?? new Set([...schema.fields, ...fields].map(field => field.path)))
+      if (!nextSchema || !operations) throw new Error('Resolved form schema response is invalid')
       for (const field of fields) {
         if (!optionStores.has(field.path)) {
           const options = optionStore(runtime, panelId, schema.resourceId, field, store.state.values)
@@ -794,28 +814,33 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
         }
       }
       if (JSON.stringify(fields) !== JSON.stringify(renderedFields)) renderedFields.splice(0, renderedFields.length, ...fields)
-      if (isObject(response.data.schema)) formSchema.value = response.data.schema as unknown as SchemaManifest<ResourceValues>
-      if (Array.isArray(response.data.operations)) store.batch(response.data.operations as unknown as readonly FormOperation[])
+      formSchema.value = nextSchema
+      if (operations.length > 0) store.batch(operations, { notifyReactivity: false })
+      lifecycleValues = store.state.values
     }).catch(() => {
       if (!controller.signal.aborted) publishPanelActionFailure(panelId)
     })
   }
-  store.subscribe((next, previous) => {
+  store.subscribe((next) => {
     formState.values = next.values
     formState.errors = next.errors
+  })
+  let lifecycleValues = store.state.values
+  store.subscribeReactivity((next) => {
+    const previousValues = lifecycleValues
+    lifecycleValues = next.values
     for (const field of renderedFields) {
       const dependency = field.optionSource?.dependency
       const options = optionStores.get(field.path)
-      if (!dependency || !options || valueAtPath(next.values, dependency) === valueAtPath(previous.values, dependency)) continue
+      if (!dependency || !options || valueAtPath(next.values, dependency) === valueAtPath(previousValues, dependency)) continue
       const selected = valueAtPath(next.values, field.path)
       const dependencyValue = valueAtPath(next.values, dependency)
       void options.updateDependencies({ [dependency]: typeof dependencyValue === 'string' || typeof dependencyValue === 'number' ? dependencyValue : null }, typeof selected === 'string' || typeof selected === 'number' ? selected : null).then(async (result) => {
-        if (result.status === 'cleared') store.batch([{ kind: 'set', path: field.path, value: '', touch: false }])
+        if (result.status === 'cleared') store.batch([{ kind: 'set', path: field.path, value: '', touch: false }], { notifyReactivity: false })
         if (typeof dependencyValue === 'string' || typeof dependencyValue === 'number') await options.preload()
       })
     }
-    if (next.values === previous.values) return
-    refreshFormSchema(next.values, previous.values)
+    refreshFormSchema(next.values, previousValues)
   })
   refreshFormSchema(store.state.values, null)
   const formActionStore = new ClientActionStore({
@@ -857,6 +882,38 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
       },
     },
   })
+  const fieldActionVersions = shallowReactive<Record<string, number>>({})
+  const fieldActionHosts = new Map<string, Readonly<{ actions: readonly ClientActionManifest[], signature: string, store: ClientActionStore<JsonObject>, unsubscribe: () => void }>>()
+  const fieldActionHost = (field: ResourceField): Readonly<{ actions: readonly ClientActionManifest[], signature: string, store: ClientActionStore<JsonObject>, unsubscribe: () => void }> => {
+    const actions = fieldActionManifests(field, page.manifest.pageType)
+    const signature = JSON.stringify(actions)
+    const existing = fieldActionHosts.get(field.path)
+    if (existing?.signature === signature) return existing
+    existing?.unsubscribe()
+    existing?.store.dispose()
+    const store = new ClientActionStore<JsonObject>({
+      createIdempotencyKey: () => crypto.randomUUID(),
+      transport: {
+        async execute(request, signal) {
+          if (!actions.some(action => action.id === request.actionId)) throw new Error('The field action is not available')
+          await mutate(runtime, panelId, 'action', mutationPayload({
+            actionId: request.actionId,
+            idempotencyKey: request.idempotencyKey,
+            input: request.input,
+            mount: request.mount,
+            recordIds: request.recordIds ? [...request.recordIds] : [],
+            resourceId: schema.resourceId,
+            source: `form-field:${field.path}`,
+          }), signal)
+          return { effects: [], items: [], status: 'succeeded' }
+        },
+      },
+    })
+    const unsubscribe = store.subscribe(() => { fieldActionVersions[field.path] = (fieldActionVersions[field.path] ?? 0) + 1 })
+    const host = Object.freeze({ actions, signature, store, unsubscribe })
+    fieldActionHosts.set(field.path, host)
+    return host
+  }
   const runRelation: NonNullable<VueRelationManagerRendererProps['onOperation']> = async (request, signal) => {
     if (typeof routeValue !== 'string' && typeof routeValue !== 'number') throw new Error('Relation operations require a persisted owner record')
     const result = await mutate(runtime, panelId, 'action', mutationPayload({
@@ -879,7 +936,21 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   }
   const renderFormContent = ({ component }: { readonly component: { readonly kind: string, readonly statePath?: string } }): VNode | null => {
     const definition = component.kind === 'field' ? renderedFields.find(field => field.path === component.statePath) : undefined
-    return definition ? h(VueFieldRenderer, { field: { collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, executeAction: (actionId: string) => { void mutate(runtime, panelId, 'action', mutationPayload({ actionId, idempotencyKey: crypto.randomUUID(), input: {}, mount: page.manifest.pageType === 'create' ? 'page' : 'record', recordIds: page.manifest.pageType === 'create' || typeof routeValue !== 'string' && typeof routeValue !== 'number' ? [] : [routeValue], resourceId: schema.resourceId, source: `form-field:${definition.path}` })).catch(() => undefined) }, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) }, key: definition.path }) : null
+    if (!definition) return null
+    const host = fieldActionHost(definition)
+    const recordIds = page.manifest.pageType === 'create' || typeof routeValue !== 'string' && typeof routeValue !== 'number' ? [] : [routeValue]
+    return h(Fragment, { key: definition.path }, [
+      h(VueFieldRenderer, { field: { actionPending: (actionId: string) => {
+        void fieldActionVersions[definition.path]
+        return host.store.state.frames.some(frame => frame.manifest.id === actionId)
+      }, collectionStore: collectionStores.get(definition.path), createCollectionItem: definition.type === 'builder' ? (blockType?: string) => ({ data: {}, type: blockType ?? '' }) : definition.type === 'repeater' ? () => ({}) : undefined, definition, executeAction: (actionId: string) => {
+        const action = host.actions.find(candidate => candidate.id === actionId)
+        if (!action || host.store.state.frames.some(frame => frame.manifest.id === actionId)) return
+        host.store.mount(action, mutationPayload(formState.values))
+        if (!action.confirmation && !action.modal) void host.store.submit(recordIds).catch(() => undefined)
+      }, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) } }),
+      host.actions[0] ? h(VueActionRenderer, { action: host.actions[0], actions: host.actions, input: mutationPayload(formState.values), panelId, recordIds, registry, showTriggers: false, store: host.store }) : null,
+    ])
   }
   return () => h('div', { class: 'hp-resource-page' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [

@@ -50,6 +50,10 @@
     writeFieldValue(form, definition, next)
   }
 
+  function touch(): void {
+    form.batch([{ kind: 'touch', path: definition.path }])
+  }
+
   function changeSelect(event: Event): void {
     const select = event.currentTarget as HTMLSelectElement
     if (multiple) {
@@ -90,9 +94,9 @@
         <InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput aria-label="Search {definition.label}" type="search" disabled={presentation.disabled || $optionState?.disabled} oninput={search} value={$optionState?.search ?? ''} /></InputGroup>
       {/if}
       {#if kind === 'checkbox-list' || kind === 'toggle-buttons'}
-        {#if multiple}<div {...attributes} class="hp:space-y-2" role="group">{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><Checkbox checked={selected(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} onCheckedChange={(checked) => toggle(option.value, checked)} />{option.label}</label>{/each}</div>{:else}<RadioGroup {...attributes} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} onValueChange={(next) => { const option = options.find(candidate => String(candidate.value) === next); if (option) setSelection(option.value) }}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><RadioGroupItem value={String(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} />{option.label}</label>{/each}</RadioGroup>{/if}
+        {#if multiple}<div {...attributes} class="hp:space-y-2" role="group" onfocusout={touch}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><Checkbox checked={selected(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} onCheckedChange={(checked) => toggle(option.value, checked)} />{option.label}</label>{/each}</div>{:else}<RadioGroup {...attributes} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} onfocusout={touch} onValueChange={(next) => { const option = options.find(candidate => String(candidate.value) === next); if (option) setSelection(option.value) }}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><RadioGroupItem value={String(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} />{option.label}</label>{/each}</RadioGroup>{/if}
       {:else}
-        <Select {...attributes} {multiple} value={selectValue()} disabled={presentation.disabled || presentation.readOnly || $optionState?.disabled} required={presentation.required} onchange={changeSelect}>
+        <Select {...attributes} {multiple} value={selectValue()} disabled={presentation.disabled || presentation.readOnly || $optionState?.disabled} required={presentation.required} onblur={touch} onchange={changeSelect}>
           {#if !multiple}<option value="">{definition.placeholder ?? 'Select an option'}</option>{/if}
           {#each options as option (option.value)}
             <option value={String(option.value)} disabled={option.disabled}>{option.label}</option>

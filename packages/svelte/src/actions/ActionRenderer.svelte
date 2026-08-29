@@ -14,7 +14,7 @@
   import { toSvelteState } from '../stores'
   import type { SvelteActionCustomProps, SvelteActionRendererProps, SvelteActionSlotProps } from './contracts'
 
-  let { action, actions = [action], groups = [], input, panelId, recordIds, registry, store }: SvelteActionRendererProps = $props()
+  let { action, actions = [action], groups = [], input, panelId, recordIds, registry, showTriggers = true, store }: SvelteActionRendererProps = $props()
   const actionState = $derived.by(() => toSvelteState(store))
   const formState = $derived.by(() => $actionState.frames.length && store.activeForm ? toSvelteState(store.activeForm) : undefined)
   const defaultSchemaRegistry = new SvelteComponentRegistry()
@@ -65,7 +65,7 @@
 </script>
 
 <div class="hp-action" data-action-mount={action.mount}>
-  <div class="hp-action-collection">
+  {#if showTriggers}<div class="hp-action-collection">
     {#each collection.filter(candidate => !groupedActionIds.has(candidate.id) && !nestedIds.has(candidate.id)) as candidate (candidate.id)}
       {#if candidate.visible !== false}<Button class="hp-action-trigger" data-action={candidate.id} data-action-id={candidate.id} data-operation={candidate.kind} data-color={candidate.color ?? undefined} variant={candidate.color === 'danger' ? 'destructive' : 'outline'} disabled={candidate.disabled === true || $actionState.frames.some(frame => frame.manifest.id === candidate.id)} onclick={() => activate(candidate)} type="button">{#if candidate.icon}<Icon name={candidate.icon} />{/if}<span>{candidate.label}</span></Button>{/if}
     {/each}
@@ -82,7 +82,7 @@
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     {/each}
-  </div>
+  </div>{/if}
   {#each $actionState.frames.slice(-1) as frame, index (`${frame.manifest.id}-${index}`)}
     {@const dismiss = {
       onEscapeKeydown: (event: KeyboardEvent) => { if (frame.manifest.modal?.closeByEscaping === false) event.preventDefault() },

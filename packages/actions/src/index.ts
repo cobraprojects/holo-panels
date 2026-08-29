@@ -1,5 +1,6 @@
 import {
   ActionsRenderHook,
+  type ActionContract,
   type ActionContext as CoreActionContext,
   type ActionPresentationContext as CoreActionPresentationContext,
   type ActionDefinition,
@@ -16,6 +17,7 @@ import {
 } from '@holo-js/panels-core'
 
 export { ActionsRenderHook }
+export type { ActionContract }
 import { compileSchemaComponentManifest, Schema, type SchemaComponentContract, type SchemaComponentFor } from '@holo-js/panels-schemas'
 
 function actionSchema(schema: { compile(): object, getComponents(): readonly SchemaComponentContract[] } | null): JsonObject | null {
@@ -53,13 +55,6 @@ export interface ActionPresentationContext<
   readonly selectedRecords: readonly TRecord[]
 }
 type ActionHandler<TContext, TData extends object, TResult> = (data: Readonly<TData>, context: TContext) => TResult | Promise<TResult>
-
-export interface ActionContract<TRecord extends object = object> {
-  readonly id: string
-  readonly resourceRecordType: TRecord
-  compile(): object
-  manifest(scope?: 'bulk' | 'header' | 'notification' | 'record' | 'row'): JsonObject
-}
 
 interface ActionModalState<TRecord extends object, TData extends object, TActor extends object, TTenant, TServices, TSchemaFactory> {
   alignment: ActionAlignment

@@ -1,5 +1,5 @@
 import { cloneVNode, computed, getCurrentScope, h, onScopeDispose, shallowRef, useId, type ComputedRef, type VNode, type VNodeChild } from 'vue'
-import { Field, FieldDescription, FieldError, FieldLabel } from '../internal-ui'
+import { Field, FieldDescription, FieldError, FieldLabel, PanelsIcon } from '../internal-ui'
 import type { VueFieldControlProps, VueFieldPath, VueFieldRenderContext, VueFieldRendererProps, VueFieldValue } from './types'
 
 export function fieldValue(values: object, path: string): unknown {
@@ -25,6 +25,8 @@ export function useFieldContext<TValues extends object, TPath extends VueFieldPa
       definition: props.definition,
       disabled: state.value.disabled[path] ?? props.definition.disabled,
       errors: state.value.errors[path] ?? [],
+      actionPending: props.actionPending,
+      executeAction: props.executeAction,
       inputId: `hp-field-${generatedId}`,
       readOnly: state.value.readOnly[path] ?? props.definition.readOnly,
       value: fieldValue(state.value.values, path) as VueFieldValue<TValues, TPath>,
@@ -33,7 +35,9 @@ export function useFieldContext<TValues extends object, TPath extends VueFieldPa
 }
 
 export function updateField<TValues extends object>(props: VueFieldRendererProps<TValues>, value: unknown): void {
-  props.store.batch([{ kind: 'set', path: props.definition.path, value, touch: true }])
+  const debounce = props.definition.debounceMilliseconds ?? 0
+  const reactivity = debounce < 0 ? 'blur' as const : debounce > 0 ? { debounceMilliseconds: debounce } : undefined
+  props.store.batch([{ kind: 'set', path: props.definition.path, reactivity, value, touch: true }])
 }
 
 export function touchField<TValues extends object>(props: VueFieldRendererProps<TValues>): void {
@@ -68,6 +72,7 @@ export function fieldFrame<TValues extends object>(
       context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null,
     ]) : null,
     description ? h(FieldDescription, { id: descriptionId }, () => description) : null,
+    actionButton(context.definition.properties.hintAction, context.executeAction, context.actionPending),
     adornments.before,
     cloneVNode(control, {
       id: context.inputId,
@@ -78,6 +83,24 @@ export function fieldFrame<TValues extends object>(
     adornments.after,
     context.errors.length > 0 ? h(FieldError, { errors: context.errors.map(message => ({ message })), id: errorId }) : null,
   ])
+}
+
+export function actionButton(value: unknown, executeAction?: (actionId: string) => void, actionPending?: (actionId: string) => boolean): VNodeChild {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const id = Reflect.get(value, 'id')
+  const label = Reflect.get(value, 'label')
+  if (typeof id !== 'string' || typeof label !== 'string' || Reflect.get(value, 'visible') === false) return null
+  const tooltip = Reflect.get(value, 'tooltip')
+  const icon = Reflect.get(value, 'icon')
+  const color = Reflect.get(value, 'color')
+  return h('button', {
+    class: 'hp-field-action',
+    'data-color': typeof color === 'string' ? color : undefined,
+    disabled: Reflect.get(value, 'disabled') === true || actionPending?.(id) === true,
+    onClick: () => executeAction?.(id),
+    title: typeof tooltip === 'string' ? tooltip : undefined,
+    type: 'button',
+  }, [typeof icon === 'string' ? PanelsIcon(icon) : null, h('span', label)])
 }
 
 export function requireStore<TStore>(store: TStore | undefined, fieldType: string, storeName: string): TStore {

@@ -65,6 +65,7 @@ export const VueActionRenderer = defineComponent({
     panelId: String,
     recordIds: Array as PropType<readonly (number | string)[]>,
     registry: Object as PropType<VueActionRendererProps['registry']>,
+    showTriggers: { type: Boolean, default: true },
     store: { type: Object as PropType<VueActionRendererProps['store']>, required: true },
   },
   setup(props) {
@@ -145,7 +146,7 @@ export const VueActionRenderer = defineComponent({
       const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
       const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
       return h('div', { class: 'hp-action', 'data-action-mount': props.action.mount }, [
-      h('div', { class: 'hp-action-collection' }, [
+      props.showTriggers === false ? null : h('div', { class: 'hp-action-collection' }, [
         ...actions.filter(action => !grouped.has(action.id) && !nestedIds.has(action.id)).map(trigger),
         ...props.groups?.map(group => {
           const items = group.actions.flatMap(id => {

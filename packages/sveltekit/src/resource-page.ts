@@ -1,15 +1,16 @@
-import type {
-  ClientActionManifest,
-  JsonObject,
-  JsonValue,
-  SvelteFieldDefinition,
-  SvelteTableColumn,
-  SvelteTableFilter,
-  SvelteTableAction,
-  SvelteTableActionGroup,
-  SvelteTableActionItem,
+import {
+  decodeSchemaManifest,
+  type ClientActionManifest,
+  type JsonObject,
+  type JsonValue,
+  type SchemaManifest,
+  type SvelteFieldDefinition,
+  type SvelteTableColumn,
+  type SvelteTableFilter,
+  type SvelteTableAction,
+  type SvelteTableActionGroup,
+  type SvelteTableActionItem,
 } from '@holo-js/panels-svelte'
-import type { SchemaManifest } from '@holo-js/panels-client'
 
 export interface ResourceDependency {
   readonly id: string
@@ -74,23 +75,6 @@ function stringValue(value: JsonValue | undefined): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-function isSchemaComponent(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const component = value as Record<string, unknown>
-  return typeof component.id === 'string'
-    && typeof component.key === 'string'
-    && ['callout', 'custom', 'empty-state', 'field', 'fieldset', 'grid', 'group', 'section', 'split', 'step', 'tab', 'tabs', 'wizard'].includes(String(component.kind))
-    && typeof component.type === 'string'
-    && typeof component.visible === 'boolean'
-    && typeof component.dynamicVisibility === 'boolean'
-    && Array.isArray(component.children)
-    && component.children.every(isSchemaComponent)
-    && !!component.layout && typeof component.layout === 'object' && !Array.isArray(component.layout)
-    && !!component.extraAttributes && typeof component.extraAttributes === 'object' && !Array.isArray(component.extraAttributes)
-    && !!component.slots && typeof component.slots === 'object' && !Array.isArray(component.slots)
-    && !!component.properties && typeof component.properties === 'object' && !Array.isArray(component.properties)
-}
-
 function isRenderSlot(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const slot = value as Record<string, unknown>
@@ -107,8 +91,7 @@ function isActionModal(value: unknown): value is NonNullable<ClientActionManifes
   const validSchema = schema === null || Array.isArray(schemaRecord?.fields) || (
     schemaRecord?.kind === 'schema'
     && typeof schemaRecord.id === 'string'
-    && Array.isArray(schemaRecord.components)
-    && schemaRecord.components.every(isSchemaComponent)
+    && decodeSchemaManifest(schemaRecord) !== null
   )
   return (modal.content === null || isRenderSlot(modal.content))
     && (modal.description === null || typeof modal.description === 'string')
@@ -160,9 +143,7 @@ export function resourceFieldDefinition(value: JsonValue): SvelteFieldDefinition
 }
 
 export function resourceSchemaManifest(value: JsonValue | undefined): SchemaManifest<Record<string, unknown>> | null {
-  const schema = objectValue(value)
-  if (schema?.kind !== 'schema' || typeof schema.id !== 'string' || !Array.isArray(schema.components) || !schema.components.every(isSchemaComponent)) return null
-  return schema as unknown as SchemaManifest<Record<string, unknown>>
+  return decodeSchemaManifest(value)
 }
 
 function columnDefinition(value: JsonValue): SvelteTableColumn<Record<string, unknown>> | null {
@@ -274,7 +255,11 @@ function options(value: JsonValue | undefined): Readonly<Record<string, Resource
 }
 
 export function resourceOptionsFromFields(fields: readonly JsonValue[]): Readonly<Record<string, ResourceOptions>> {
-  return options(Object.fromEntries(fields.flatMap((item) => {
+  return options(resourceOptionsManifest(fields))
+}
+
+function resourceOptionsManifest(fields: readonly JsonValue[]): JsonObject {
+  return Object.fromEntries(fields.flatMap((item) => {
     const field = objectValue(item)
     const path = stringValue(field?.path)
     const properties = objectValue(field?.properties)
@@ -290,7 +275,7 @@ export function resourceOptionsFromFields(fields: readonly JsonValue[]): Readonl
       server: !!sourceKind && sourceKind !== 'static',
       values,
     }]] : []
-  })) as unknown as JsonValue)
+  }))
 }
 
 function tableAction(value: JsonValue): SvelteTableActionItem | null {
@@ -361,7 +346,6 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
   if (!id || !routeKey || !recordId) return null
   const basePath = generatedBasePath(pagePath, pageType)
   const fields = Array.isArray(form.fields) ? form.fields : []
-  const fieldOptions = resourceOptionsFromFields(fields)
   const generatedDependencies = Array.isArray(form.dependencies) ? form.dependencies.flatMap((item) => {
     const dependency = objectValue(item)
     const id = stringValue(dependency?.id)
@@ -386,7 +370,7 @@ function generatedResource(value: JsonObject, pagePath: string | undefined, page
     filters: Array.isArray(table.filters) ? table.filters : [],
     id,
     label: labels.plural ?? id,
-    options: fieldOptions as unknown as JsonObject,
+    options: resourceOptionsManifest(fields),
     recordId,
     recordActions: value.actions ?? [],
     routeKey,

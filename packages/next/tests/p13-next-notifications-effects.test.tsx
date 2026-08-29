@@ -97,11 +97,21 @@ function withNotifications(
   }
 }
 
-async function decodedRequest(input: string | URL | Request, init?: RequestInit): Promise<{ readonly id: string }> {
+async function decodedRequest(input: string | URL | Request, init?: RequestInit): Promise<{ readonly id: string, readonly operation: string, readonly payload: JsonObject }> {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
   const request = new Request(new URL(url, 'https://example.test'), init)
   const body = await request.formData()
-  return JSON.parse(String(body.get(TRANSPORT_REQUEST_FIELD))) as { readonly id: string }
+  return JSON.parse(String(body.get(TRANSPORT_REQUEST_FIELD))) as { readonly id: string, readonly operation: string, readonly payload: JsonObject }
+}
+
+function schemaResponse(id: string): Response {
+  const resource = editProperties().resource
+  const form = resource && typeof resource === 'object' && !Array.isArray(resource) ? resource.form : null
+  const fields = form && typeof form === 'object' && !Array.isArray(form) && Array.isArray(form.fields) ? form.fields : []
+  const schema = form && typeof form === 'object' && !Array.isArray(form) && form.schema && typeof form.schema === 'object' && !Array.isArray(form.schema)
+    ? form.schema
+    : { components: [], id: 'posts-edit-form', kind: 'schema' }
+  return Response.json({ data: { fields, operations: [], schema }, effects: [], id, ok: true, protocolVersion: '1.0' })
 }
 
 function notificationResponse(id: string): Response {
@@ -205,6 +215,7 @@ describe('Next notification and effect integration', () => {
     }> = []
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const request = await decodedRequest(input, init)
+      if (request.operation === 'options') return schemaResponse(request.id)
       return await new Promise<Response>(resolve => requests.push({
         id: request.id,
         resolve,
@@ -275,7 +286,11 @@ describe('Next notification and effect integration', () => {
       resolve(result: { readonly data: JsonObject, readonly ok: true }): void
     }> = []
     const operation: NextResourceOperationTransport = {
-      async execute(_operation, _payload, signal) {
+      async execute(operation, _payload, signal) {
+        if (operation === 'options') {
+          const response = await schemaResponse('schema').json() as { readonly data: JsonObject }
+          return { data: response.data, ok: true }
+        }
         return await new Promise(resolve => requests.push({ resolve, signal }))
       },
     }
@@ -406,6 +421,7 @@ describe('Next notification and effect integration', () => {
     const effects = new ClientEffectSession({ panelId: 'admin', redirect: () => { order.push('redirect') }, toastStore })
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const request = await decodedRequest(input, init)
+      if (request.operation === 'options') return schemaResponse(request.id)
       const envelope: ResponseEnvelope = ok
         ? { data: null, effects: [{ kind: 'redirect', url: '/admin' }, { kind: 'toast', level: 'success', message: 'Saved' }], id: request.id, ok: true, protocolVersion: '1.0' }
         : { effects: [{ kind: 'redirect', url: '/admin' }, { kind: 'toast', level: 'danger', message: 'Failed safely' }], error: { category: 'internal', code: 'failed', message: 'The operation could not be completed.', retryable: false }, id: request.id, ok: false, protocolVersion: '1.0' }

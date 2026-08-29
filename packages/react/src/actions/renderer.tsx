@@ -97,7 +97,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
   )
   const submit = (): Promise<void> => submitAction(props)
   return <div className="hp-action" data-action-mount={props.manifest.mount}>
-    <ActionTriggers {...props} />
+    {props.showTriggers === false ? null : <ActionTriggers {...props} />}
     {state.frames.slice(-1).map((frame, index) => {
       if (!frame.manifest.modal && frame.phase === 'submitting') return null
       const dismiss = {

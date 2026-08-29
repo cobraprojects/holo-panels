@@ -11,6 +11,8 @@
     ClientEffectSession,
     CollectionStore,
     createBrowserUploadAdapter,
+    decodeFormOperationPaths,
+    decodeFormSetOperations,
     bindUploadStore,
     uploadFormPatch,
     createUploadStore,
@@ -34,7 +36,6 @@
     toSvelteState,
     type JsonObject,
     type JsonValue,
-    type FormOperation,
     type SvelteEntryStore,
     type SvelteComponentRegistry,
     SvelteComponentRegistry as ComponentRegistry,
@@ -117,6 +118,7 @@
     })),
   }))
   const formState = $derived.by(() => toSvelteState(form))
+  let reactiveFormValues = $state<Record<string, unknown>>({})
   const componentRegistry = $derived(registry ?? new ComponentRegistry())
   onMount(() => {
     const preventUnload = (event: BeforeUnloadEvent): void => {
@@ -175,39 +177,59 @@
       },
     },
   }))
-  let previousLifecycleValues: JsonObject | null = null
   $effect(() => {
     if (!resource || pageType !== 'create' && pageType !== 'edit') return
-    const values = toJsonValue($formState.values)
-    if (!values || typeof values !== 'object' || Array.isArray(values)) return
-    const previousValues = previousLifecycleValues
-    previousLifecycleValues = values
-    const controller = new AbortController()
-    void transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
-      endpoint: `${endpoint}/options`,
-      panelId: data.panel.manifest.id,
-      payload: {
-        action: 'schema',
-        formOperation: pageType,
-        lifecycle: previousValues ? 'update' : 'hydrate',
-        ...(previousValues ? { previousValues } : {}),
-        ...(currentRouteIdentifier === '' ? {} : { record: currentRouteIdentifier }),
-        resourceId: resource.id,
-        values,
-      },
-      signal: requestSignal(requestController.signal, controller.signal),
-    }).then((response) => {
-      if (!response.ok) throw new Error(response.error.message)
-      if (Array.isArray(response.data.fields)) {
-        resolvedFields = response.data.fields.flatMap(field => resourceFieldDefinition(field) ?? [])
-        resolvedOptions = resourceOptionsFromFields(response.data.fields)
-      }
-      resolvedSchema = resourceSchemaManifest(response.data.schema) ?? resolvedSchema
-      if (Array.isArray(response.data.operations)) form.batch(response.data.operations as unknown as readonly FormOperation[])
-    }).catch(() => {
-      if (!controller.signal.aborted) publishPanelActionFailure(data.panel.manifest.id)
+    let controller: AbortController | null = null
+    let previousValues: JsonObject | null = null
+    const refresh = (nextValues: Record<string, unknown>): void => {
+      const values = toJsonValue(nextValues)
+      if (!values || typeof values !== 'object' || Array.isArray(values)) return
+      controller?.abort()
+      controller = new AbortController()
+      const active = controller
+      const lifecycleValues = previousValues
+      previousValues = values
+      void transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
+        endpoint: `${endpoint}/options`,
+        panelId: data.panel.manifest.id,
+        payload: {
+          action: 'schema',
+          formOperation: pageType,
+          lifecycle: lifecycleValues ? 'update' : 'hydrate',
+          ...(lifecycleValues ? { previousValues: lifecycleValues } : {}),
+          ...(currentRouteIdentifier === '' ? {} : { record: currentRouteIdentifier }),
+          resourceId: resource.id,
+          values,
+        },
+        signal: requestSignal(requestController.signal, active.signal),
+      }).then((response) => {
+        if (!response.ok) throw new Error(response.error.message)
+        const fields = Array.isArray(response.data.fields) ? response.data.fields : null
+        const schema = resourceSchemaManifest(response.data.schema)
+        const nextFields = fields?.flatMap(field => resourceFieldDefinition(field) ?? []) ?? []
+        const operationPaths = decodeFormOperationPaths(response.data.operationPaths)
+        const operations = decodeFormSetOperations(response.data.operations, operationPaths ?? new Set([...(resource?.fields ?? []), ...nextFields].map(field => field.path)))
+        if (!fields || !schema || !operations) throw new Error('Resolved form schema response is invalid')
+        resolvedFields = nextFields
+        resolvedOptions = resourceOptionsFromFields(fields)
+        resolvedSchema = schema
+        if (operations.length > 0) form.batch(operations, { notifyReactivity: false })
+        const patchedValues = toJsonValue(form.state.values)
+        if (patchedValues && typeof patchedValues === 'object' && !Array.isArray(patchedValues)) previousValues = patchedValues
+      }).catch(() => {
+        if (!active.signal.aborted) publishPanelActionFailure(data.panel.manifest.id)
+      })
+    }
+    reactiveFormValues = form.state.values
+    refresh(form.state.values)
+    const unsubscribe = form.subscribeReactivity((state) => {
+      reactiveFormValues = state.values
+      refresh(state.values)
     })
-    return () => controller.abort()
+    return () => {
+      unsubscribe()
+      controller?.abort()
+    }
   })
   const actionStore = $derived(createActionStore(pageType))
   const formInput: JsonObject = $derived(Object.fromEntries(Object.entries($formState.values).map(([key, value]) => [key, toJsonValue(value)])))
@@ -228,6 +250,21 @@
     definition,
     store: createActionStore(`infolist:${definition.path}`),
   })))
+  let fieldActionVersion = $state(0)
+  const fieldActionHosts = $derived(renderedFields.flatMap((definition) => {
+    const properties = definition.properties ?? {}
+    const mount = pageType === 'create' ? 'page' : 'record'
+    const actions = ['hintAction', 'prefixAction', 'suffixAction'].flatMap((property) => {
+      const value = properties[property]
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+      const action = actionManifest(toJsonValue({ ...value, mount }))
+      return action ? [action] : []
+    })
+    if (actions.length === 0) return []
+    const store = createActionStore(`form-field:${definition.path}`)
+    const unsubscribe = store.subscribe(() => { fieldActionVersion++ })
+    return [{ actions, path: definition.path, store, unsubscribe }]
+  }))
 
   function createActionStore(source: string): ClientActionStore<JsonObject> {
     return new ClientActionStore<JsonObject>({
@@ -270,29 +307,28 @@
   }
 
   async function executeFieldAction(path: string, actionId: string): Promise<void> {
-    if (!resource) return
-    const idempotencyKey = globalThis.crypto.randomUUID()
-    const response = await transport.execute<JsonObject, JsonObject>({ kind: 'mutation', name: 'action', supportsIdempotency: true }, {
-      endpoint: `${endpoint}/action`,
-      idempotencyKey,
-      panelId: data.panel.manifest.id,
-      payload: {
-        actionId,
-        idempotencyKey,
-        input: {},
-        mount: pageType === 'create' ? 'page' : 'record',
-        recordIds: pageType === 'create' || currentRouteIdentifier === '' ? [] : [currentRouteIdentifier],
-        resourceId: resource.id,
-        source: `form-field:${path}`,
-      },
-      signal: requestController.signal,
-    })
-    await effects.apply(response)
-    if (!response.ok) {
-      publishPanelActionFailure(data.panel.manifest.id, response.effects)
-      throw new Error(response.error.message)
-    }
+    const host = fieldActionHosts.find(candidate => candidate.path === path)
+    const action = host?.actions.find(candidate => candidate.id === actionId)
+    if (!host || !action || host.store.state.frames.some(frame => frame.manifest.id === actionId)) return
+    const recordIds = pageType === 'create' || currentRouteIdentifier === '' ? [] : [currentRouteIdentifier]
+    host.store.mount(action, formInput)
+    if (!action.confirmation && !action.modal) await host.store.submit(recordIds)
   }
+
+  function fieldActionPending(path: string, actionId: string): boolean {
+    fieldActionVersion
+    return fieldActionHosts.find(candidate => candidate.path === path)?.store.state.frames.some(frame => frame.manifest.id === actionId) === true
+  }
+
+  $effect(() => {
+    const hosts = fieldActionHosts
+    return () => {
+      for (const host of hosts) {
+        host.unsubscribe()
+        host.store.dispose()
+      }
+    }
+  })
 
   $effect(() => {
     loadedRelations = relationManagers(data.page.data.relations)
@@ -491,7 +527,7 @@
 
   function optionValues(definition: ResourceOptions): readonly (number | string)[] {
     if (!definition.dependsOn) return definition.values
-    const dependency = $formState.values[definition.dependsOn]
+    const dependency = reactiveFormValues[definition.dependsOn]
     return definition.valuesByDependency[String(dependency ?? '')] ?? []
   }
 
@@ -499,7 +535,7 @@
     const values = optionValues(definition)
     const available = values.map(value => ({ label: String(value), value }))
     const page = { hasMore: false, options: available, page: 1, perPage: 25, total: available.length }
-    const dependencies = definition.dependsOn ? { [definition.dependsOn]: toJsonValue(recordValue($formState.values, definition.dependsOn)) } : {}
+    const dependencies = definition.dependsOn ? { [definition.dependsOn]: toJsonValue(recordValue(reactiveFormValues, definition.dependsOn) ?? null) } : {}
     return new OptionStore<number | string>({
       dependencies,
       fieldId,
@@ -552,7 +588,7 @@
     const response = await transport.execute<JsonObject, JsonObject>({ kind: 'read', name: 'options' }, {
       endpoint: `${endpoint}/options`,
       panelId: data.panel.manifest.id,
-      payload: { action, dependencies: toJsonValue(request.dependencies), fieldId, page: request.page, perPage: request.perPage, resourceId: resource?.id ?? '', search: request.search, selectedValues: toJsonValue(selectedValues), values: toJsonValue($formState.values), ...(label ? { label } : {}), ...(typeof value === 'number' || typeof value === 'string' ? { value } : {}) },
+      payload: { action, dependencies: toJsonValue(request.dependencies), fieldId, page: request.page, perPage: request.perPage, resourceId: resource?.id ?? '', search: request.search, selectedValues: toJsonValue(selectedValues), values: toJsonValue(reactiveFormValues), ...(label ? { label } : {}), ...(typeof value === 'number' || typeof value === 'string' ? { value } : {}) },
       signal: requestSignal(requestController.signal, signal),
     })
     await effects.apply(response)
@@ -766,7 +802,10 @@
   }}>
     <Card>
       <CardContent class="hp:grid hp:gap-6 hp:pt-6">
-        <ResourceForm executeAction={(path: string, actionId: string) => { void executeFieldAction(path, actionId).catch(() => undefined) }} fields={renderedFields} {form} {collectionStores} {optionStores} panelId={data.panel.manifest.id} registry={componentRegistry} schema={renderedSchema} {uploadStores} />
+        <ResourceForm actionPending={fieldActionPending} executeAction={(path: string, actionId: string) => { void executeFieldAction(path, actionId).catch(() => undefined) }} fields={renderedFields} {form} {collectionStores} {optionStores} panelId={data.panel.manifest.id} registry={componentRegistry} schema={renderedSchema} {uploadStores} />
+        {#each fieldActionHosts as host (host.path)}
+          {#if host.actions[0]}<SvelteActionRenderer action={host.actions[0]} actions={host.actions} input={formInput} panelId={data.panel.manifest.id} recordIds={pageType === 'create' || currentRouteIdentifier === '' ? [] : [currentRouteIdentifier]} {registry} showTriggers={false} store={host.store} />{/if}
+        {/each}
       </CardContent>
       <CardFooter class="hp:justify-end">{#if resource.formActions[0]}<SvelteActionRenderer action={resource.formActions[0]} actions={resource.formActions} input={formInput} panelId={data.panel.manifest.id} {registry} store={formActionStore} />{/if}</CardFooter>
     </Card>

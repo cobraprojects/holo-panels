@@ -3,6 +3,7 @@ import { CreateRecord, EditRecord, ListRecords, RelationManager, Resource, ViewR
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   configureNotificationSender,
+  Action,
   defineColumn,
   defineCustomPage,
   defineField,
@@ -48,7 +49,7 @@ class CompleteFormResource extends Resource {
   static form = this.configureForm((schema, { Callout, EmptyState, Fieldset, Flex, Section, TextInput }) => schema.components([
     Flex.make([
       Section.make('Main').grow().columns({ default: 1, md: 2 }).schema([
-        TextInput.make('title').prefix('@').prefixAction({ compile: () => ({ id: 'copy-title', kind: 'custom', label: 'Copy title' }) }).hint('Public title').dehydrateStateUsing(state => state?.trim() ?? ''),
+        TextInput.make('title').prefix('@').prefixAction(Action.make<PostRecord>('copy-title').label('Copy title')).hint('Public title').dehydrateStateUsing(state => state?.trim() ?? ''),
       ]),
       Fieldset.make('Status').contained(false).grow(false).schema([]),
     ]).from('md').columnOrder({ default: 2, lg: 1 }),

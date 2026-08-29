@@ -142,7 +142,11 @@ export class ResourceExecutor<
   }
 
   async authorizeUpdate(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<void> {
-    await this.resolveAuthorized(id, 'update', context)
+    await this.resolveUpdateRecord(id, context)
+  }
+
+  async resolveUpdateRecord(id: ResourceIdentifier, context: ResourceExecutionContext<TActor, TTenant>): Promise<TRecord> {
+    return this.resolveAuthorized(id, 'update', context)
   }
 
   async create(input: TInput, context: ResourceExecutionContext<TActor, TTenant>): Promise<ResourceMutationResult<TRecord>> {

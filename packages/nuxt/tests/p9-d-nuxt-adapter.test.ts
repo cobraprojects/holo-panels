@@ -74,7 +74,7 @@ const compiledResourceSchema: JsonObject = {
   fields: [
     { disabled: false, helperText: null, hint: null, label: 'Headline', path: 'headline', placeholder: null, properties: {}, readOnly: false, required: true, type: 'text', visible: true },
     { disabled: false, helperText: null, hint: null, label: 'Permalink', path: 'permalink', placeholder: null, properties: {}, reactive: { source: 'headline', transform: 'slug' }, readOnly: false, required: true, type: 'slug', visible: true },
-    { defaultValue: 'docs', disabled: false, helperText: null, hint: null, label: 'Department', optionSource: { options: [{ label: 'Docs', value: 'docs' }, { label: 'Support', value: 'support' }] }, path: 'department', placeholder: null, properties: { paginated: false, preload: true, searchable: false }, readOnly: false, required: true, type: 'select', visible: true },
+    { debounceMilliseconds: 20, defaultValue: 'docs', disabled: false, helperText: null, hint: null, label: 'Department', optionSource: { options: [{ label: 'Docs', value: 'docs' }, { label: 'Support', value: 'support' }] }, path: 'department', placeholder: null, properties: { paginated: false, preload: true, searchable: false }, readOnly: false, required: true, type: 'select', visible: true },
     { disabled: false, helperText: null, hint: null, label: 'Office', optionSource: { dependency: 'department', options: [], optionsByDependency: { docs: [{ label: 'Berlin', value: 'Berlin' }], support: [{ label: 'Lisbon', value: 'Lisbon' }] } }, path: 'office', placeholder: null, properties: { paginated: false, preload: true, searchable: false }, readOnly: false, required: true, type: 'select', visible: true },
   ],
   filters: [{ manifest: { defaultValue: null, id: 'department', label: 'Department', properties: {}, type: 'select' }, options: [{ label: 'All', value: null }, { label: 'Docs', value: 'docs' }] }],
@@ -674,6 +674,8 @@ describe('P9-D Nuxt adapter', () => {
       department.value = 'support'
       department.dispatchEvent(new Event('change', { bubbles: true }))
     }
+    await nextTick()
+    expect(Array.from(container.querySelectorAll<HTMLOptionElement>('[data-field-path="office"] option')).map(option => option.textContent)).not.toContain('Lisbon')
     await vi.waitFor(() => {
       const officeOptions = Array.from(container.querySelectorAll<HTMLOptionElement>('[data-field-path="office"] option')).map(option => option.textContent)
       expect(officeOptions).toContain('Lisbon')

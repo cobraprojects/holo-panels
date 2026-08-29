@@ -6,9 +6,33 @@ import { PanelPage, type NuxtPanelPage } from '../src'
 import { configureNuxtNavigation } from './nuxt-imports'
 
 interface RecordedRequest {
+  readonly id?: string
   readonly operation: string
   readonly panelId: string
   readonly payload: Record<string, unknown>
+}
+
+function isSchemaRequest(request: RecordedRequest): boolean {
+  return request.operation === 'options' && request.payload.action === 'schema'
+}
+
+function schemaResponse(id: string): Response {
+  return Response.json({
+    data: {
+      fields: [{ disabled: false, helperText: null, hint: null, label: 'Title', path: 'title', placeholder: null, properties: {}, readOnly: false, required: false, type: 'text', visible: true }],
+      operationPaths: ['title'],
+      operations: [],
+      schema: {
+        components: [{ children: [], dynamicVisibility: false, extraAttributes: {}, id: 'articles-title', key: 'title', kind: 'field', layout: {}, properties: {}, slots: {}, statePath: 'title', type: 'field', visible: true }],
+        id: 'articles-form',
+        kind: 'schema',
+      },
+    },
+    effects: [],
+    id,
+    ok: true,
+    protocolVersion: '1.0',
+  })
 }
 
 function panelPage(options: {
@@ -89,6 +113,7 @@ function installFetch(effects: readonly Record<string, unknown>[] = [], mutation
     const fields = new URLSearchParams(String(init?.body ?? ''))
     const envelope = JSON.parse(fields.get('request') ?? '{}') as RecordedRequest & { readonly id: string }
     requests.push(envelope)
+    if (isSchemaRequest(envelope)) return schemaResponse(envelope.id)
     const data = envelope.operation === 'notification'
       ? { items: [], page: 1, pageSize: 20, total: 0, unread: 0 }
       : { ...(mutationRecord ? { record: mutationRecord } : {}), saved: true }
@@ -140,7 +165,8 @@ describe('Nuxt P13 notification integration', () => {
     }> = []
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const fields = new URLSearchParams(String(init?.body ?? ''))
-      const envelope = JSON.parse(fields.get('request') ?? '{}') as { readonly id: string }
+      const envelope = JSON.parse(fields.get('request') ?? '{}') as RecordedRequest & { readonly id: string }
+      if (isSchemaRequest(envelope)) return schemaResponse(envelope.id)
       return await new Promise<Response>(resolve => pending.push({ id: envelope.id, resolve, signal: init?.signal ?? null }))
     }))
     const current = shallowRef(resourcePage())

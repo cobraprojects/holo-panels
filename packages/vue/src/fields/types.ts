@@ -22,6 +22,7 @@ export interface VueCompiledField<
   TValues extends object,
   TPath extends VueFieldPath<TValues> = VueFieldPath<TValues>,
 > {
+  readonly debounceMilliseconds?: number
   readonly disabled: boolean
   readonly helperText: string | null
   readonly hint: string | null
@@ -42,6 +43,8 @@ export interface VueFieldRenderContext<
   readonly definition: VueCompiledField<TValues, TPath>
   readonly disabled: boolean
   readonly errors: readonly string[]
+  readonly actionPending?: (actionId: string) => boolean
+  readonly executeAction?: (actionId: string) => void
   readonly inputId: string
   readonly readOnly: boolean
   readonly value: VueFieldValue<TValues, TPath>
@@ -61,6 +64,8 @@ export interface VueFieldRendererProps<
   readonly createCollectionItem?: (blockType?: string) => unknown
   readonly definition: VueCompiledField<TValues, TPath>
   readonly editorAdapters?: EditorAdapterRegistry
+  readonly actionPending?: (actionId: string) => boolean
+  readonly executeAction?: (actionId: string) => void
   readonly optionStore?: OptionStore<string | number>
   readonly panelId?: string
   readonly registry: ComponentRegistry

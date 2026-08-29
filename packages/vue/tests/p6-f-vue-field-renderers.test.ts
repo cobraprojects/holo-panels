@@ -71,6 +71,16 @@ afterEach(() => {
 })
 
 describe('P6-F Vue field renderer contracts', () => {
+  it('uses panel registry overrides for built-in fields without affecting other panels', async () => {
+    const store = new FormStore<FormValues>({ attachment: null, cityId: null, sections: [], title: 'Initial' })
+    const renderer = defineComponent<{ field: VueFieldControlProps<FormValues> }>(props => () => h('output', `Custom ${props.field.context.value}`), { props: ['field'] })
+    const registry = createComponentRegistry().override('editor', 'field.text', renderer)
+    const render = (panelId: string) => renderToString(createSSRApp(fixture({ definition: definition('title', 'text'), panelId, registry, store })))
+
+    expect(await render('editor')).toContain('Custom Initial')
+    expect(await render('admin')).toContain('value="Initial"')
+  })
+
   it('leaves native file input values under browser control', async () => {
     const update = vi.fn()
     const container = document.createElement('div')

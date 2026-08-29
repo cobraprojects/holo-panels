@@ -779,6 +779,7 @@ describe('Next panel adapter', () => {
     expect(deniedResponse.status).toBe(403)
     expect(deniedMutation).not.toHaveBeenCalled()
     document.cookie = 'XSRF-TOKEN=valid; Path=/'
+    const schemaRequests: JsonObject[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const match = /\/holo\/panels\/([^/]+)\/([^/]+)$/u.exec(url)
@@ -786,6 +787,11 @@ describe('Next panel adapter', () => {
       const headers = new Headers(init?.headers)
       headers.set('x-csrf-token', 'valid')
       const request = new Request(new URL(url, 'https://example.test'), { ...init, headers })
+      if (match[2] === 'options') {
+        const parameters = new URLSearchParams(await request.clone().text())
+        const envelope = JSON.parse(parameters.get(TRANSPORT_REQUEST_FIELD) ?? '{}') as { readonly payload?: JsonObject }
+        if (envelope.payload?.action === 'schema') schemaRequests.push(envelope.payload)
+      }
       return route.POST(request, { params: Promise.resolve({ operation: match[2], panelId: match[1] }) })
     }))
     const properties = (index: number): JsonObject => {
@@ -868,7 +874,7 @@ describe('Next panel adapter', () => {
     if (!createResource || typeof createResource !== 'object' || Array.isArray(createResource)) throw new Error('Create page is missing its resource definition.')
     const createForm = createResource.form
     if (!createForm || typeof createForm !== 'object' || Array.isArray(createForm) || !Array.isArray(createForm.fields)) throw new Error('Create page is missing its form definition.')
-    createForm.fields = createForm.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, label: null } : field)
+    createForm.fields = createForm.fields.map(field => field && typeof field === 'object' && !Array.isArray(field) ? { ...field, ...(field.path === 'category' ? { debounceMilliseconds: 20 } : {}), label: null } : field)
     await renderResource(<NextPanelResourcePage data={{}} effects={effects} panelId="admin" panelPath="/admin" properties={createProperties} unsavedChangesAlerts />)
     const renderedLabels = [...container.querySelectorAll('label')].map(label => label.textContent ?? '')
     expect(renderedLabels.some(label => label.startsWith('Title'))).toBe(true)
@@ -880,10 +886,13 @@ describe('Next panel adapter', () => {
     const beforeUnload = new Event('beforeunload', { cancelable: true })
     globalThis.dispatchEvent(beforeUnload)
     expect(beforeUnload.defaultPrevented).toBe(true)
+    const schemaRequestCount = schemaRequests.length
     await choose('Guides')
+    expect(schemaRequests).toHaveLength(schemaRequestCount)
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise(resolve => setTimeout(resolve, 25))
     })
+    expect(schemaRequests).toHaveLength(schemaRequestCount + 1)
     expect([...select('[data-field-path="city"] select').options].map(option => option.value)).toContain('Giza')
     await change(select('[data-field-path="city"] select'), 'Giza')
     await click('Create')

@@ -1,7 +1,7 @@
 import { Button, Checkbox, Input, InputGroup, InputGroupAddon, InputGroupInput, InputGroupText, RadioGroup, RadioGroupItem, Switch, Textarea } from '../internal-ui'
 import { FieldLegend, FieldSet } from '../ui/field'
 import { defineComponent, h, ref, type PropType, type VNode } from 'vue'
-import { fieldFrame, property, touchField, updateField } from './shared'
+import { actionButton, fieldFrame, property, touchField, updateField } from './shared'
 import type { VueFieldControlProps } from './types'
 
 function textValue(value: unknown): string {
@@ -139,6 +139,8 @@ export const VueBasicField = defineComponent({
             : textMode === 'password' ? passwordVisible.value ? 'text' : 'password' : textMode
       const prefix = stringProperty(props, 'prefix')
       const suffix = stringProperty(props, 'suffix')
+      const prefixAction = actionButton(context.definition.properties.prefixAction, context.executeAction, context.actionPending)
+      const suffixAction = actionButton(context.definition.properties.suffixAction, context.executeAction, context.actionPending)
       const datalistValue = context.definition.properties.datalist
       const datalist = Array.isArray(datalistValue) ? datalistValue.filter((value): value is string => typeof value === 'string') : []
       const datalistId = datalist.length > 0 ? `${context.inputId}-list` : undefined
@@ -160,12 +162,13 @@ export const VueBasicField = defineComponent({
           updateField(props, context.definition.type === 'slider' || typeof context.value === 'number' ? Number(raw) : raw)
         },
       }
-      const input = prefix || suffix || revealable
+      const input = prefix || suffix || prefixAction || suffixAction || revealable
         ? h(InputGroup, {}, () => [
-            prefix ? h(InputGroupAddon, { align: 'inline-start' }, () => h(InputGroupText, { class: 'hp-field-prefix' }, () => prefix)) : null,
+            prefix || prefixAction ? h(InputGroupAddon, { align: 'inline-start' }, () => [prefix ? h(InputGroupText, { class: 'hp-field-prefix' }, () => prefix) : null, prefixAction]) : null,
             h(InputGroupInput, inputProps),
-            suffix || revealable ? h(InputGroupAddon, { align: 'inline-end' }, () => [
+            suffix || suffixAction || revealable ? h(InputGroupAddon, { align: 'inline-end' }, () => [
               suffix ? h(InputGroupText, { class: 'hp-field-suffix' }, () => suffix) : null,
+              suffixAction,
               revealable ? h(Button, {
                 'aria-controls': context.inputId,
                 'aria-label': passwordVisible.value ? 'Hide password' : 'Show password',

@@ -8,6 +8,7 @@ import {
   type RelationPath,
   toJsonValue,
 } from '@holo-js/panels-core'
+import type { ActionContract } from '@holo-js/panels-core'
 import { Component, compileSchemaComponentManifest, type SchemaColumns, type SchemaComponentManifest } from '@holo-js/panels-schemas'
 
 export type FieldPath<TRecord extends object> = RecordPath<TRecord>
@@ -16,7 +17,7 @@ export type FieldPathFor<TRecord extends object, TValue> = RecordPathFor<TRecord
 export type FieldState<TValue> = TValue | null | undefined
 export type FieldOptions<TValue extends boolean | number | string> = Readonly<Record<string, string>> | readonly Readonly<{ readonly disabled?: boolean, readonly label: string, readonly value: TValue }>[]
 export type FieldResolver<TRecord extends object, TValue> = TValue | ((context: FieldContext<TRecord>) => TValue | Promise<TValue>)
-export interface FieldActionReference { compile(): object }
+export type FieldActionReference<TRecord extends object = object> = ActionContract<TRecord>
 
 export interface FieldContext<TRecord extends object> {
   readonly operation: string
@@ -33,15 +34,8 @@ function staticValue(value: unknown): JsonValue {
   return typeof value === 'function' || typeof value === 'undefined' ? null : json(value)
 }
 
-function actionValue(action: FieldActionReference | null): JsonValue {
-  if (!action) return null
-  const compiled = action.compile()
-  const manifest = Reflect.get(compiled, 'manifest')
-  const source = manifest && typeof manifest === 'object' ? manifest : compiled
-  return json(Object.fromEntries(['color', 'icon', 'id', 'kind', 'label', 'type'].flatMap(key => {
-    const value = Reflect.get(source, key)
-    return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' || value === null ? [[key, value]] : []
-  })))
+function actionValue<TRecord extends object>(action: FieldActionReference<TRecord> | null): JsonValue {
+  return action ? json(action.manifest()) : null
 }
 
 export abstract class Field<
@@ -55,7 +49,7 @@ export abstract class Field<
   readonly type: string
   #afterStateHydrated: ((state: FieldState<TValue>, context: FieldContext<TRecord>) => void | Promise<void>) | null = null
   #afterStateUpdated: ((state: FieldState<TValue>, previous: FieldState<TValue>, context: FieldContext<TRecord>) => void | Promise<void>) | null = null
-  readonly #actions = new Map<string, FieldActionReference>()
+  readonly #actions = new Map<string, FieldActionReference<TRecord>>()
   #autocomplete: string | null = null
   #debounceMilliseconds = 0
   #defaultValue: FieldResolver<TRecord, FieldState<TValue>> = undefined
@@ -65,7 +59,7 @@ export abstract class Field<
   #helperText: FieldResolver<TRecord, string | null> = null
   #hint: FieldResolver<TRecord, string | null> = null
   #hintIcon: string | null = null
-  #hintAction: FieldActionReference | null = null
+  #hintAction: FieldActionReference<TRecord> | null = null
   #label: FieldResolver<TRecord, string | null> = null
   #placeholder: FieldResolver<TRecord, string | null> = null
   #readOnly: FieldResolver<TRecord, boolean> = false
@@ -157,7 +151,7 @@ export abstract class Field<
     return this
   }
 
-  hintAction(action: FieldActionReference | null): this {
+  hintAction(action: FieldActionReference<TRecord> | null): this {
     this.#hintAction = action
     this.registerAction('hint', action)
     return this
@@ -185,7 +179,7 @@ export abstract class Field<
     return this
   }
 
-  protected registerAction(position: string, action: FieldActionReference | null): void {
+  protected registerAction(position: string, action: FieldActionReference<TRecord> | null): void {
     if (action) this.#actions.set(position, action)
     else this.#actions.delete(position)
   }
@@ -278,10 +272,10 @@ export class TextInput<TRecord extends object = Record<string, unknown>, TPath e
   #inputMode = 'text'
   #mask: string | null = null
   #prefix: string | null = null
-  #prefixAction: FieldActionReference | null = null
+  #prefixAction: FieldActionReference<TRecord> | null = null
   #revealable = false
   #suffix: string | null = null
-  #suffixAction: FieldActionReference | null = null
+  #suffixAction: FieldActionReference<TRecord> | null = null
 
   private constructor(path: TPath) {
     super('text', path)
@@ -326,13 +320,13 @@ export class TextInput<TRecord extends object = Record<string, unknown>, TPath e
     return this
   }
 
-  prefixAction(action: FieldActionReference | null): this { this.#prefixAction = action; this.registerAction('prefix', action); return this }
+  prefixAction(action: FieldActionReference<TRecord> | null): this { this.#prefixAction = action; this.registerAction('prefix', action); return this }
 
   suffix(value: string | null): this {
     this.#suffix = value
     return this
   }
-  suffixAction(action: FieldActionReference | null): this { this.#suffixAction = action; this.registerAction('suffix', action); return this }
+  suffixAction(action: FieldActionReference<TRecord> | null): this { this.#suffixAction = action; this.registerAction('suffix', action); return this }
 
   mask(value: string | null): this {
     this.#mask = value

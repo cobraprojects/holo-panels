@@ -8,6 +8,7 @@
   import type { OptionValue } from '@holo-js/panels-client'
   import type { HTMLInputAttributes } from 'svelte/elements'
   import { toSvelteState } from '../stores'
+  import Icon from '../components/Icon.svelte'
   import type { SvelteFieldRendererProps } from './contracts'
   import FieldFrame from './FieldFrame.svelte'
   import {
@@ -21,7 +22,7 @@
     writeFieldValue,
   } from './helpers'
 
-  let { definition, executeAction, form }: SvelteFieldRendererProps = $props()
+  let { actionPending, definition, executeAction, form }: SvelteFieldRendererProps = $props()
   const formState = $derived.by(() => toSvelteState(form))
   const presentation = $derived(fieldPresentation(definition, $formState))
   const value = $derived(readFieldValue($formState.values, definition.path))
@@ -84,11 +85,19 @@
     if (option) setRadio(option.value)
   }
 
-  function fieldAction(value: unknown): { readonly id: string, readonly label: string } | null {
+  function fieldAction(value: unknown): { readonly color?: string, readonly disabled: boolean, readonly icon?: string, readonly id: string, readonly label: string, readonly tooltip?: string } | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null
     const id = Reflect.get(value, 'id')
     const label = Reflect.get(value, 'label')
-    return typeof id === 'string' && typeof label === 'string' ? { id, label } : null
+    if (typeof id !== 'string' || typeof label !== 'string' || Reflect.get(value, 'visible') === false) return null
+    const tooltip = Reflect.get(value, 'tooltip')
+    const color = Reflect.get(value, 'color')
+    const icon = Reflect.get(value, 'icon')
+    return { ...(typeof color === 'string' ? { color } : {}), disabled: Reflect.get(value, 'disabled') === true, ...(typeof icon === 'string' ? { icon } : {}), id, label, ...(typeof tooltip === 'string' ? { tooltip } : {}) }
+  }
+
+  function runFieldAction(action: NonNullable<ReturnType<typeof fieldAction>>): void {
+    executeAction?.(action.id)
   }
 
   function dateInputValue(input: unknown): string {
@@ -111,7 +120,7 @@
 </script>
 
 {#if presentation.visible}
-  <FieldFrame description={definition.helperText} errors={presentation.errors} {executeAction} hint={definition.hint} hintAction={properties.hintAction} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
+  <FieldFrame {actionPending} description={definition.helperText} errors={presentation.errors} {executeAction} hint={definition.hint} hintAction={properties.hintAction} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
     {#snippet children(attributes)}
       {#if kind === 'textarea'}
         <Textarea {...attributes} data-autosize={booleanProperty(properties, 'autosize') || undefined} data-slot="textarea" disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} rows={numberProperty(properties, 'rows') ?? 4} maxlength={numberProperty(properties, 'maximumLength')} value={typeof value === 'string' ? value : ''} onblur={touch} oninput={updateTextarea}></Textarea>
@@ -129,9 +138,9 @@
       {:else}
         {#if prefix || suffix || prefixAction || suffixAction || revealable}
           <InputGroup>
-            {#if prefix || prefixAction}<InputGroupAddon align="inline-start">{#if prefix}<InputGroupText class="hp-field-prefix">{prefix}</InputGroupText>{/if}{#if prefixAction}<InputGroupButton onclick={() => executeAction?.(prefixAction.id)}>{prefixAction.label}</InputGroupButton>{/if}</InputGroupAddon>{/if}
+            {#if prefix || prefixAction}<InputGroupAddon align="inline-start">{#if prefix}<InputGroupText class="hp-field-prefix">{prefix}</InputGroupText>{/if}{#if prefixAction}<InputGroupButton data-color={prefixAction.color} disabled={prefixAction.disabled || actionPending?.(prefixAction.id) === true} title={prefixAction.tooltip} onclick={() => runFieldAction(prefixAction)}>{#if prefixAction.icon}<Icon name={prefixAction.icon} />{/if}<span>{prefixAction.label}</span></InputGroupButton>{/if}</InputGroupAddon>{/if}
             <InputGroupInput {...attributes} type={inputType} value={kind === 'date' ? dateInputValue(value) : typeof value === 'string' || typeof value === 'number' ? value : ''} disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} {autocomplete} data-mask={mask} list={datalistId} minlength={numberProperty(properties, 'minimumLength')} maxlength={numberProperty(properties, 'maximumLength')} min={typeof properties.minimum === 'string' || typeof properties.minimum === 'number' ? properties.minimum : undefined} max={typeof properties.maximum === 'string' || typeof properties.maximum === 'number' ? properties.maximum : undefined} step={numberProperty(properties, 'step')} spellcheck={booleanProperty(properties, 'spellcheck', true)} onblur={touch} oninput={update} />
-            {#if suffix || suffixAction || revealable}<InputGroupAddon align="inline-end">{#if suffix}<InputGroupText class="hp-field-suffix">{suffix}</InputGroupText>{/if}{#if suffixAction}<InputGroupButton onclick={() => executeAction?.(suffixAction.id)}>{suffixAction.label}</InputGroupButton>{/if}{#if revealable}<InputGroupButton aria-controls={inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onclick={() => { passwordVisible = !passwordVisible }}>{passwordVisible ? 'Hide' : 'Show'}</InputGroupButton>{/if}</InputGroupAddon>{/if}
+            {#if suffix || suffixAction || revealable}<InputGroupAddon align="inline-end">{#if suffix}<InputGroupText class="hp-field-suffix">{suffix}</InputGroupText>{/if}{#if suffixAction}<InputGroupButton data-color={suffixAction.color} disabled={suffixAction.disabled || actionPending?.(suffixAction.id) === true} title={suffixAction.tooltip} onclick={() => runFieldAction(suffixAction)}>{#if suffixAction.icon}<Icon name={suffixAction.icon} />{/if}<span>{suffixAction.label}</span></InputGroupButton>{/if}{#if revealable}<InputGroupButton aria-controls={inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onclick={() => { passwordVisible = !passwordVisible }}>{passwordVisible ? 'Hide' : 'Show'}</InputGroupButton>{/if}</InputGroupAddon>{/if}
           </InputGroup>
         {:else}
           <Input {...attributes} type={inputType} data-slot="input" value={kind === 'date' ? dateInputValue(value) : typeof value === 'string' || typeof value === 'number' ? value : ''} disabled={presentation.disabled} readonly={presentation.readOnly} required={presentation.required} placeholder={definition.placeholder} {autocomplete} data-mask={mask} list={datalistId} minlength={numberProperty(properties, 'minimumLength')} maxlength={numberProperty(properties, 'maximumLength')} min={typeof properties.minimum === 'string' || typeof properties.minimum === 'number' ? properties.minimum : undefined} max={typeof properties.maximum === 'string' || typeof properties.maximum === 'number' ? properties.maximum : undefined} step={numberProperty(properties, 'step')} spellcheck={booleanProperty(properties, 'spellcheck', true)} onblur={touch} oninput={update} />

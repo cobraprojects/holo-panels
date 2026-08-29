@@ -20,6 +20,7 @@ export interface FieldControlAttributes {
 }
 
 export interface SvelteFieldFrameProps {
+  readonly actionPending?: (actionId: string) => boolean
   readonly children: Snippet<[FieldControlAttributes]>
   readonly description?: string
   readonly errors?: readonly string[]
@@ -66,6 +67,7 @@ export interface SvelteFieldRendererProps<
   TPath extends SvelteFieldPath<TValues> = SvelteFieldPath<TValues>,
 > {
   readonly definition: SvelteFieldDefinition<TValues, TPath>
+  readonly actionPending?: (actionId: string) => boolean
   readonly executeAction?: (actionId: string) => void
   readonly form: SvelteFormStore<TValues>
   readonly optionStore?: SvelteOptionStore

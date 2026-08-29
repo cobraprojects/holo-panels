@@ -48,6 +48,10 @@ export async function createNextPanelsAcceptanceRuntime(overrides: AcceptanceOve
           const records = acceptanceRecords.filter(record => !search || record.title.toLocaleLowerCase().includes(search))
           return { data: { hasMore: false, page: 1, perPage: 25, records, total: records.length } }
         }
+        if (input.operation !== 'action' && input.operation !== 'form-submit') {
+          if (!runtime.execute) throw new Error('Generated acceptance runtime has no operation executor')
+          return runtime.execute(input)
+        }
         const recordId = input.payload.recordId
         const reserved = new Set(['intent', 'recordId', 'resourceId'])
         const values = Object.fromEntries(Object.entries(input.payload)

@@ -915,6 +915,33 @@ function resourceFormFields(definition: RuntimeDefinition) {
   })
 }
 
+async function resolvedResourceFormFields(
+  definition: RuntimeDefinition,
+  context: Readonly<{ actor: object, services?: unknown, signal: AbortSignal, tenant: unknown }>,
+  record: RuntimeRecord | null,
+  mount: 'page' | 'record',
+): Promise<ReturnType<typeof resourceFormFields>> {
+  const compiledFields = resourceSchemaFields(definition.form)
+  const fields = resourceFormFields(definition)
+  return Promise.all(fields.map(async (field) => {
+    const compiledField = compiledFields.find(candidate => Reflect.get(candidate, 'path') === field.path)
+    const actions = arrayMember(objectMember(compiledField, 'server'), 'actions')
+    if (actions.length === 0) return field
+    const properties: Record<string, unknown> = { ...field.properties }
+    for (const candidate of actions) {
+      const action = { ...(candidate as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>), mount, source: `form-field:${field.path}` }
+      const scope = { actor: context.actor, mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+      const state = await resolveActionState(action, scope)
+      const manifest = await compileActionManifest(action, state.label, scope, state)
+      const position = Reflect.get(candidate, 'position')
+      if (position === 'hint') properties.hintAction = manifest
+      if (position === 'prefix') properties.prefixAction = manifest
+      if (position === 'suffix') properties.suffixAction = manifest
+    }
+    return { ...field, properties }
+  }))
+}
+
 function resourceModalAction<TServices>(
   action: ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, TServices>,
   definition: RuntimeDefinition,
@@ -1179,7 +1206,8 @@ async function resolveGeneratedPageActions(
   const infolistActions = (definition.actions ?? []).filter(action => String(Reflect.get(action, 'source')).startsWith('infolist:'))
   const form = objectMember(resource, 'form')
   const formActions = resourceFormActions(definition, manifest.pageType)
-  if (!entries.some(entry => entry.definition) && infolistActions.length === 0 && formActions.length === 0) return manifest
+  const fieldActions = resourceSchemaFields(definition.form).some(field => arrayMember(objectMember(field, 'server'), 'actions').length > 0)
+  if (!entries.some(entry => entry.definition) && infolistActions.length === 0 && formActions.length === 0 && !fieldActions) return manifest
   const executor = new ResourceExecutor(definition, { strictAuthorization: context.strictAuthorization })
   const recordId = manifest.pageType === 'edit' || manifest.pageType === 'view' ? context.parameters.record : undefined
   const record = recordId ? await executor.resolveActionRecord(recordId, context) : null
@@ -1196,6 +1224,7 @@ async function resolveGeneratedPageActions(
     const state = await resolveActionState(compiled, scope)
     return { ...await compileActionManifest(compiled, state.label, scope, state), formIntent: Reflect.get(action, 'formIntent') ?? 'submit' }
   }))
+  const resolvedFields = await resolvedResourceFormFields(definition, context, record, manifest.pageType === 'create' ? 'page' : 'record')
   const resolvedEntries = await Promise.all(infolistEntries.map(async (entry) => {
     const registered = infolistActions.filter(action => Reflect.get(action, 'source') === `infolist:${String(Reflect.get(entry, 'path'))}`)
     const actionManifests = await Promise.all(registered.map(async (action) => {
@@ -1210,7 +1239,7 @@ async function resolveGeneratedPageActions(
     ...manifest.body,
     properties: jsonObject({
       ...properties,
-      resource: { ...resource, actions, ...(form ? { form: { ...form, actions: resolvedFormActions } } : {}), ...(infolist ? { infolist: { ...infolist, entries: resolvedEntries } } : {}) },
+      resource: { ...resource, actions, ...(form ? { form: { ...form, actions: resolvedFormActions, fields: resolvedFields } } : {}), ...(infolist ? { infolist: { ...infolist, entries: resolvedEntries } } : {}) },
     }),
   }
   return Object.freeze({ ...manifest, body })
@@ -1342,10 +1371,12 @@ async function executeOptions(
     const executor = new ResourceExecutor(definition, { strictAuthorization: input.strictAuthorization })
     const identifier = recordIdentifier(input.payload)
     if (identifier === null) await executor.authorizeCreate(input.context)
-    else await executor.authorizeUpdate(identifier, input.context)
+    const record = identifier === null ? null : await executor.resolveUpdateRecord(identifier, input.context)
     const sourceValues = input.payload.values && typeof input.payload.values === 'object' && !Array.isArray(input.payload.values) ? input.payload.values : {}
-    const resolved = await resolveFormDefinition(definition, sourceValues, input)
-    return jsonObject({ fields: resourceFormFields(resolved.definition), operations: resolved.operations, schema: resourceFormSchema(resolved.definition.form, `${definition.id}-${resolved.context.operation}-form`) })
+    const resolved = await resolveFormDefinition(definition, sourceValues, input, record)
+    const fields = await resolvedResourceFormFields(resolved.definition, input.context, record, identifier === null ? 'page' : 'record')
+    const operationPaths = [...new Set([...(definition.writableAttributes ?? []), ...fields.map(field => field.path)])]
+    return jsonObject({ fields, operationPaths, operations: resolved.operations, schema: resourceFormSchema(resolved.definition.form, `${definition.id}-${resolved.context.operation}-form`) })
   }
   const { field, source } = registeredOptionField(definition, fieldId)
   const service = new OptionService(source)
@@ -1365,32 +1396,41 @@ async function resolveFormDefinition(
   definition: RuntimeDefinition,
   values: Readonly<Record<string, JsonValue>>,
   input: GeneratedResourceOperationInput,
+  record: RuntimeRecord | null = null,
 ): Promise<Readonly<{ context: Readonly<{ operation: string }>, definition: RuntimeDefinition, operations: readonly object[], values: Readonly<Record<string, JsonValue>> }>> {
   const mutable = structuredClone(values) as Record<string, JsonValue>
   const operations: object[] = []
   const context = {
     get: (path: string) => valueAtPath(mutable, path),
     operation: input.payload.formOperation === 'edit' || recordIdentifier(input.payload) !== null ? 'edit' : 'create',
-    record: null,
+    record,
     set: (path: string, value: JsonValue) => {
       setValueAtPath(mutable, path, value)
       operations.push({ kind: 'set', path, value })
     },
   }
-  const form = await resolveResourceForm(definition.form, context)
+  let form = await resolveResourceForm(definition.form, context)
   const lifecycle = input.payload.lifecycle
   const previousValues = input.payload.previousValues && typeof input.payload.previousValues === 'object' && !Array.isArray(input.payload.previousValues) ? input.payload.previousValues : {}
   if (lifecycle === 'hydrate' || lifecycle === 'update') {
-    for (const field of resourceSchemaFields(form)) {
-      const path = Reflect.get(field, 'path')
-      if (typeof path !== 'string') continue
-      const server = objectMember(field, 'server') ?? {}
-      const callback = lifecycle === 'hydrate' ? Reflect.get(server, 'afterStateHydrated') : Reflect.get(server, 'afterStateUpdated')
-      if (typeof callback !== 'function') continue
-      const state = valueAtPath(mutable, path)
-      const previous = valueAtPath(previousValues, path)
-      if (lifecycle === 'update' && JSON.stringify(state) === JSON.stringify(previous)) continue
-      await Reflect.apply(callback, field, lifecycle === 'hydrate' ? [state, context] : [state, previous, context])
+    const processedPaths = new Set<string>()
+    while (true) {
+      const operationCount = operations.length
+      for (const field of resourceSchemaFields(form)) {
+        const path = Reflect.get(field, 'path')
+        if (typeof path !== 'string' || processedPaths.has(path)) continue
+        if (processedPaths.size >= 1_000) throw new Error('[Holo Panels] Form lifecycle resolution exceeded 1,000 fields.')
+        processedPaths.add(path)
+        const server = objectMember(field, 'server') ?? {}
+        const callback = lifecycle === 'hydrate' ? Reflect.get(server, 'afterStateHydrated') : Reflect.get(server, 'afterStateUpdated')
+        if (typeof callback !== 'function') continue
+        const state = valueAtPath(mutable, path)
+        const previous = valueAtPath(previousValues, path)
+        if (lifecycle === 'update' && JSON.stringify(state) === JSON.stringify(previous)) continue
+        await Reflect.apply(callback, field, lifecycle === 'hydrate' ? [state, context] : [state, previous, context])
+      }
+      if (operations.length === operationCount) break
+      form = await resolveResourceForm(definition.form, context)
     }
   }
   return Object.freeze({ context, definition: { ...definition, ...(form ? { form } : {}) }, operations: Object.freeze(operations), values: Object.freeze(mutable) })
@@ -1479,6 +1519,7 @@ async function normalizeValues(
   definition: RuntimeDefinition,
   values: Readonly<Record<string, JsonValue>>,
   input: GeneratedResourceOperationInput,
+  record: RuntimeRecord | null = null,
 ): Promise<Readonly<Record<string, JsonValue>>> {
   const normalized = structuredClone(values) as Record<string, JsonValue>
   const fields = resourceSchemaFields(definition.form)
@@ -1496,7 +1537,7 @@ async function normalizeValues(
       const context = {
         get: (dependency: string) => valueAtPath(normalized, dependency),
         operation: input.payload.formOperation === 'edit' || recordIdentifier(input.payload) !== null ? 'edit' : 'create',
-        record: null,
+        record,
         set: (dependency: string, next: JsonValue) => setValueAtPath(normalized, dependency, next),
       }
       setValueAtPath(normalized, path, await Reflect.apply(dehydrate, field, [value, context]) as JsonValue)
@@ -1577,8 +1618,8 @@ function executableResourceAction(
     ...action,
     handle: async (submitted: JsonObject, context: Parameters<typeof action.handle>[1]) => {
       const identifier = recordIdentifier(input.payload)
-      const resolved = await resolveFormDefinition(definition, submitted, input)
-      const values = await normalizeValues(resolved.definition, resolved.values, input)
+      const resolved = await resolveFormDefinition(definition, submitted, input, context.record)
+      const values = await normalizeValues(resolved.definition, resolved.values, input, context.record)
       await validateRequiredValues(resolved.definition, values, identifier === null)
       await validateOptionValues(resolved.definition, values, input)
       const finalized = await finalizedUploadValues(resolved.definition, values, input, context.record)
@@ -1590,8 +1631,8 @@ function executableResourceAction(
   return Object.freeze({
     ...action,
     handle: async (submitted: JsonObject, context: Parameters<typeof action.handle>[1]) => {
-      const resolved = await resolveFormDefinition(definition, submitted, input)
-      const values = await normalizeValues(resolved.definition, resolved.values, input)
+      const resolved = await resolveFormDefinition(definition, submitted, input, context.record)
+      const values = await normalizeValues(resolved.definition, resolved.values, input, context.record)
       if (action.kind === 'create' || action.kind === 'edit') {
         await validateRequiredValues(resolved.definition, values, action.kind === 'create')
         await validateOptionValues(resolved.definition, values, input)
@@ -2049,6 +2090,25 @@ export async function executeGeneratedResourceOperation(
   }
   if (input.operation === 'action' && intent === 'relation') {
     return executeRelationOperation(definition, executor, input)
+  }
+  const actionSource = typeof input.payload.source === 'string' ? input.payload.source : ''
+  if (input.operation === 'action' && actionSource.startsWith('form-field:')) {
+    const fieldPath = actionSource.slice('form-field:'.length)
+    const actionMount = input.payload.mount === 'page' ? 'page' : input.payload.mount === 'record' ? 'record' : null
+    if (!fieldPath || !actionMount) throw new Error('[Holo Panels] The form field action request is invalid.')
+    const record = identifier === null ? null : await executor.resolveUpdateRecord(identifier, input.context)
+    if (identifier === null) await executor.authorizeCreate(input.context)
+    const submitted = actionInput(input.payload)
+    const resolved = await resolveFormDefinition(definition, submitted, { ...input, payload: { ...input.payload, formOperation: identifier === null ? 'create' : 'edit' } }, record)
+    const field = resourceSchemaFields(resolved.definition.form).find(candidate => Reflect.get(candidate, 'path') === fieldPath)
+    const registrations: NonNullable<RuntimeDefinition['actions']> = arrayMember(objectMember(field, 'server'), 'actions').map((action) => {
+      const registered = action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>
+      return Object.freeze({ ...registered, mount: actionMount, source: actionSource })
+    })
+    if (!registrations.some(action => findRegisteredAction(action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>, actionId))) {
+      throw new Error('[Holo Panels] The form field action is not registered.')
+    }
+    return executeCustomAction({ ...resolved.definition, actions: [...(resolved.definition.actions ?? []).filter(action => Reflect.get(action, 'source') !== actionSource), ...registrations] }, executor, input, actionId)
   }
   if (input.operation === 'action' && (definition.actions ?? []).some(action => findRegisteredAction(action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>, actionId))) {
     return executeCustomAction(definition, executor, input, actionId)

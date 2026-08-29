@@ -1836,6 +1836,8 @@ Evidence: Svelte renderers cover every P6 field family through the same shared s
 
 Evidence: one shared staged Create/Edit journey rendered six real exported fields through the Next/React, Nuxt/Vue, and SvelteKit/Svelte example fixtures and observed generated slugs, dependent city loading and clearing, nested repeater error remapping, upload progress/previews/reorder/removal, accessible markup, and deterministic SSR. All example typechecks and the full workspace validation, builds, architecture checks, packed lifecycle, and package smoke suite passed on 2026-07-27.
 
+#18 completion evidence on 2026-08-29: every parent-spec field and custom field uses the shared registries; responsive grid, flex, fieldset, section, tabs, wizard, callout, and empty-state layouts preserve nested state and breakpoint fallbacks; field actions retain the shared Action contract; and typed live, blur, and debounce updates drive dependent options, schemas, lifecycle hooks, and relationship fields without reprocessing server patches. The CI and release workflows enforce `NODE_OPTIONS=--max-old-space-size=8192`. With that heap setting, `bun run validate` passed strict diagnostics, ESLint, all 1,277 workspace tests, architecture and dependency validation, package builds, packed lifecycle checks, and independent consumer smoke tests; `bun run test:e2e` passed all 105 browser tests across Next, Nuxt, and SvelteKit. The final standards, security, and specification reviews reported no actionable findings. See [#18](https://github.com/cobraprojects/holo-panels/issues/18).
+
 ## 39. Phase P7: tables
 
 Objective: deliver scalable typed tables with secure server queries and framework-equal interaction.

@@ -1,4 +1,4 @@
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ClientToastStore, ReactFeedbackProvider, type JsonObject } from '@holo-js/panels-react'
 import { expect, it, vi } from 'vitest'
@@ -21,18 +21,61 @@ function properties(pageType: 'create' | 'list' | 'view'): { readonly properties
 it('uses the registered form action and confirms before submitting the current values', async () => {
   const page = properties('create')
   page.resource.form = { actions: [{ ...action, confirmation: 'Publish this draft?', label: 'Publish draft' }], fields: [] }
-  const execute = vi.fn<NextResourceOperationTransport['execute']>(async () => ({ data: { record: { id: 1 }, status: 'succeeded' }, ok: true }))
+  const execute = vi.fn<NextResourceOperationTransport['execute']>(async (operation): Promise<Awaited<ReturnType<NextResourceOperationTransport['execute']>>> => operation === 'options'
+    ? { data: { fields: [], operations: [], schema: { components: [], id: 'posts-create-form', kind: 'schema' } }, ok: true }
+    : { data: { record: { id: 1 }, status: 'succeeded' }, ok: true })
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<StrictMode><NextPanelResourcePage data={{}} operation={{ execute }} panelId="admin" panelPath="/admin" properties={page.properties} /></StrictMode>))
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledWith('options', expect.objectContaining({ action: 'schema', lifecycle: 'hydrate', values: {} }), expect.any(AbortSignal)))
+    expect(container.textContent).toContain('Publish draft')
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-action-id="publish"]')?.click())
+    expect(execute.mock.calls.filter(([operation]) => operation === 'form-submit')).toHaveLength(0)
+    const confirm = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Confirm')
+    await act(async () => confirm?.click())
+    expect(execute).toHaveBeenCalledWith('form-submit', expect.objectContaining({ actionId: 'publish', values: {}, idempotencyKey: expect.any(String) }), expect.any(AbortSignal))
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+  }
+})
+
+it('runs field actions through the shared confirmation host with the current form values', async () => {
+  const page = properties('create')
+  const form = page.resource.form
+  if (!form || Array.isArray(form) || typeof form !== 'object' || !Array.isArray(form.fields)) throw new Error('Expected form metadata')
+  const title = form.fields.find(field => field && typeof field === 'object' && !Array.isArray(field) && field.path === 'title')
+  if (!title || Array.isArray(title) || typeof title !== 'object') throw new Error('Expected title field metadata')
+  const fieldAction = { ...action, color: 'primary', confirmation: 'Copy the current title?', id: 'copy-title', label: 'Copy title', mount: 'record' }
+  title.properties = { ...(title.properties && typeof title.properties === 'object' && !Array.isArray(title.properties) ? title.properties : {}), prefixAction: fieldAction }
+  const formFields = form.fields
+  const execute = vi.fn<NextResourceOperationTransport['execute']>(async (operation): Promise<Awaited<ReturnType<NextResourceOperationTransport['execute']>>> => operation === 'options'
+    ? { data: { fields: formFields, operations: [], schema: form.schema as JsonObject }, ok: true }
+    : { data: { status: 'succeeded' }, ok: true })
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   try {
     await act(async () => root.render(<NextPanelResourcePage data={{}} operation={{ execute }} panelId="admin" panelPath="/admin" properties={page.properties} />))
-    expect(container.textContent).toContain('Publish draft')
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-action-id="publish"]')?.click())
-    expect(execute).not.toHaveBeenCalled()
+    const input = container.querySelector<HTMLInputElement>('[data-field-path="title"] input')
+    if (!input) throw new Error('Expected title input')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, 'Ready')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const trigger = container.querySelector<HTMLButtonElement>('.hp-field-action')
+    expect(trigger?.dataset.color).toBe('primary')
+    expect(trigger?.querySelector('svg')).not.toBeNull()
+    await act(async () => trigger?.click())
+    expect(trigger?.disabled).toBe(true)
+    await act(async () => trigger?.click())
+    expect(document.body.textContent).toContain('Copy the current title?')
+    expect(execute.mock.calls.filter(([operation]) => operation === 'action')).toHaveLength(0)
     const confirm = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Confirm')
     await act(async () => confirm?.click())
-    expect(execute).toHaveBeenCalledWith('form-submit', expect.objectContaining({ actionId: 'publish', values: {}, idempotencyKey: expect.any(String) }), expect.any(AbortSignal))
+    expect(execute).toHaveBeenCalledWith('action', expect.objectContaining({ actionId: 'copy-title', input: expect.objectContaining({ title: 'Ready' }), mount: 'page', source: 'form-field:title' }), expect.any(AbortSignal))
   } finally {
     await act(async () => root.unmount())
     container.remove()

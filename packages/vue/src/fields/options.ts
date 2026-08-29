@@ -2,7 +2,7 @@ import { Button, Checkbox, Input, InputGroup, InputGroupAddon, InputGroupInput, 
 import { Search } from 'lucide-vue-next'
 import { computed, defineComponent, h, onMounted, ref, type PropType, type VNode } from 'vue'
 import { usePanelsStore } from '../stores'
-import { fieldFrame, property, requireStore, updateField } from './shared'
+import { fieldFrame, property, requireStore, touchField, updateField } from './shared'
 import type { VueFieldControlProps } from './types'
 
 type OptionValue = string | number
@@ -92,6 +92,7 @@ export const VueOptionField = defineComponent({
         'aria-describedby': [descriptionId, errorId].filter(Boolean).join(' ') || undefined,
         'aria-invalid': props.context.errors.length > 0 ? 'true' : undefined,
         'aria-required': props.context.definition.required ? 'true' : undefined,
+        onFocusout: () => touchField(props),
       }, [
         props.context.definition.label ? h('legend', [
           props.context.definition.label,
@@ -153,6 +154,7 @@ export const VueOptionField = defineComponent({
         disabled: props.context.disabled || props.context.readOnly || state.value.disabled,
         multiple: multiple(),
         modelValue: multiple() ? values.value.map(String) : String(values.value[0] ?? ''),
+        onBlur: () => touchField(props),
         onChange: (event: Event) => {
           const element = event.currentTarget as HTMLSelectElement
           updateField(props, multiple()

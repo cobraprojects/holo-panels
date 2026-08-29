@@ -19,6 +19,7 @@ import type {
   FormPath,
   FormRequestContext,
   FormRequestResult,
+  FormReactivityListener,
   FormServerPatch,
   FormState,
   FormStateListener,
@@ -143,6 +144,7 @@ export class FormStore<TValues extends object> {
   readonly #dependencyTimers = new Map<string, ReturnType<typeof setTimeout>>()
   #state: FormState<TValues>
   readonly #listeners = new Set<FormStateListener<TValues>>()
+  readonly #reactivityListeners = new Set<FormReactivityListener<TValues>>()
   readonly #dependencies = new Map<string, FormDependency<TValues>>()
   readonly #focusIndex: SchemaFocusIndex<TValues>
   readonly #requests = new Map<RequestKind, ActiveRequest>()
@@ -218,7 +220,10 @@ export class FormStore<TValues extends object> {
     return this.batch([{ kind: 'array-move', path, from, to }])
   }
 
-  batch(operations: readonly FormOperation[]): FormState<TValues> {
+  batch(
+    operations: readonly FormOperation[],
+    options: { readonly notifyReactivity?: boolean } = {},
+  ): FormState<TValues> {
     if (operations.length === 0) return this.#state
     const working = this.createWorkingState()
     this.applyOperations(working, operations)
@@ -240,7 +245,13 @@ export class FormStore<TValues extends object> {
       if (reactivity && reactivity !== 'blur') this.scheduleDependencyFlush(operation.path, reactivity.debounceMilliseconds)
     }
     if (working.changedPaths.size > 0) this.revalidateInvalidFields()
+    if (options.notifyReactivity !== false && working.changedPaths.size > 0) this.publishReactivity(result, working.changedPaths)
     return result
+  }
+
+  subscribeReactivity(listener: FormReactivityListener<TValues>): () => void {
+    this.#reactivityListeners.add(listener)
+    return () => this.#reactivityListeners.delete(listener)
   }
 
   private clearDeferredDependency(path: string): void {
@@ -248,6 +259,12 @@ export class FormStore<TValues extends object> {
     const timer = this.#dependencyTimers.get(path)
     if (timer) clearTimeout(timer)
     this.#dependencyTimers.delete(path)
+  }
+
+  private clearDeferredDependencies(path?: string): void {
+    for (const deferredPath of [...this.#deferredDependencyPaths]) {
+      if (!path || pathsOverlap(deferredPath, path)) this.clearDeferredDependency(deferredPath)
+    }
   }
 
   private scheduleDependencyFlush(path: string, milliseconds: number): void {
@@ -259,6 +276,7 @@ export class FormStore<TValues extends object> {
 
   reset(): FormState<TValues> {
     this.#correctionSequence++
+    this.clearDeferredDependencies()
     const working = this.createWorkingState()
     const changedPaths = collectDirtyPaths(working.values, working.initialValues)
     working.values = working.initialValues
@@ -273,11 +291,14 @@ export class FormStore<TValues extends object> {
       || Object.keys(this.#state.errors).length > 0
       || typeof this.#state.focus !== 'undefined'
     this.recomputeDependencies(working)
-    return this.commit(working)
+    const result = this.commit(working)
+    if (working.changedPaths.size > 0) this.publishReactivity(result, working.changedPaths)
+    return result
   }
 
   resetField<TPath extends FormPath<TValues>>(path: TPath): FormState<TValues> {
     parseFormPath(path)
+    this.clearDeferredDependencies(path)
     const initialValue = getPathValue(this.#state.initialValues, path)
     const working = this.createWorkingState()
     const nextValues = setPathValue(working.values, path, initialValue)
@@ -304,7 +325,9 @@ export class FormStore<TValues extends object> {
       working.changed = true
     }
     this.recomputeDependencies(working)
-    return this.commit(working)
+    const result = this.commit(working)
+    if (working.changedPaths.size > 0) this.publishReactivity(result, working.changedPaths)
+    return result
   }
 
   focusFirstError(requestVersion?: number): FormFocusMetadata | undefined {
@@ -385,6 +408,7 @@ export class FormStore<TValues extends object> {
   }
 
   cancelRequests(kind?: RequestKind): void {
+    if (!kind) this.clearDeferredDependencies()
     const requests = kind ? [[kind, this.#requests.get(kind)] as const] : [...this.#requests.entries()]
     let validating = this.#state.validating
     let submitting = this.#state.submitting
@@ -583,6 +607,11 @@ export class FormStore<TValues extends object> {
     this.#state = Object.freeze(next)
     for (const listener of this.#listeners) listener(this.#state, previous)
     return this.#state
+  }
+
+  private publishReactivity(state: FormState<TValues>, changedPaths: ReadonlySet<string>): void {
+    const paths = new Set(changedPaths)
+    for (const listener of this.#reactivityListeners) listener(state, paths)
   }
 
   private applyResponse(patch: FormServerPatch, requestVersion?: number, requestKind?: RequestKind, submittedValues?: TValues): void {

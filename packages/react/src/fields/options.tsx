@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Button, Input, NativeSelect } from '../internal-ui'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui'
 import { Search } from 'lucide-react'
-import { FieldFrame, property, requireStore, updateField, useStoreState } from './shared'
+import { FieldFrame, property, requireStore, touchField, updateField, useStoreState } from './shared'
 import type { ReactFieldControlProps } from './types'
 
 type OptionValue = string | number
@@ -87,7 +87,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
     </div> : null}
   </>
   if (props.context.definition.type === 'checkbox-list' || props.context.definition.type === 'toggle-buttons') {
-    return <fieldset className="hp-field" data-field-path={props.context.definition.path} disabled={props.context.disabled || state.disabled}>
+    return <fieldset className="hp-field" data-field-path={props.context.definition.path} disabled={props.context.disabled || state.disabled} onBlur={() => touchField(props)}>
       {props.context.definition.label ? <legend>{props.context.definition.label}</legend> : null}
       {options.map(option => <label key={String(option.value)}><Input
         checked={values.includes(option.value)}
@@ -106,6 +106,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
   return <div><FieldFrame context={props.context}><NativeSelect
       disabled={props.context.disabled || props.context.readOnly || state.disabled}
       multiple={multiple}
+      onBlur={() => touchField(props)}
       onChange={event => updateField(props, multiple
         ? [...event.currentTarget.selectedOptions].map(option => optionValue(option.value, options))
         : optionValue(event.currentTarget.value, options))}

@@ -271,8 +271,11 @@ const VueSchemaNode = defineComponent({
         ...extra,
         class: className,
         'data-dynamic-visibility': component.dynamicVisibility ? 'true' : undefined,
+        'data-compact': component.properties.compact ? 'true' : undefined,
+        'data-contained': component.properties.contained === false ? 'false' : undefined,
+        'data-grow': component.properties.grow === false ? 'false' : undefined,
         'data-schema-id': component.id,
-        'data-schema-leaf': ['entry', 'filter', 'widget'].includes(component.kind) ? component.kind : undefined,
+        'data-schema-leaf': ['entry', 'field', 'filter', 'widget'].includes(component.kind) ? component.kind : undefined,
         'data-state-path': component.statePath,
         style: layoutStyle(component),
       }

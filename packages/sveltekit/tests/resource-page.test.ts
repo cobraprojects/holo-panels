@@ -346,25 +346,26 @@ describe('SvelteKit resource page acceptance', () => {
 
   it('renders the built-in tenant switcher without application transport helpers', () => {
     const data = pageData('list')
-    const html = render(PanelPage, {
-      props: {
-        data: {
-          ...data,
-          panel: {
-            ...data.panel,
-            manifest: { ...data.panel.manifest, tenancy: { enabled: true } },
-            tenancy: {
-              active: { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
-              memberships: {
-                memberships: [
-                  { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
-                  { avatarUrl: null, description: null, label: 'Globex', routeKey: 'globex' },
-                ],
-                nextCursor: null,
-              },
-            },
+    const tenantData: PanelPageData = {
+      ...data,
+      panel: {
+        ...data.panel,
+        manifest: { ...data.panel.manifest, tenancy: { enabled: true } },
+        tenancy: {
+          active: { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+          memberships: {
+            memberships: [
+              { avatarUrl: null, description: null, label: 'Acme', routeKey: 'acme' },
+              { avatarUrl: null, description: null, label: 'Globex', routeKey: 'globex' },
+            ],
+            nextCursor: null,
           },
         },
+      },
+    }
+    const html = render(PanelPage, {
+      props: {
+        data: tenantData,
       },
     }).body
 
@@ -380,6 +381,25 @@ describe('SvelteKit resource page acceptance', () => {
     expect(navigation).toBeGreaterThan(tenantMenu)
     expect(accountMenu).toBeGreaterThan(navigation)
     expect(html).toMatch(/hp-panel-page-header[\s\S]*hp-panel-page-heading[\s\S]*hp-panel-breadcrumbs[\s\S]*hp-panel-page-actions/u)
+    const arabic = render(PanelPage, {
+      props: {
+        data: {
+          ...tenantData,
+          panel: {
+            ...tenantData.panel,
+            direction: 'rtl',
+            locale: 'ar',
+            manifest: {
+              ...tenantData.panel.manifest,
+              direction: 'rtl',
+              locale: 'ar',
+            },
+          },
+        },
+      },
+    }).body
+    expect(arabic).toContain('aria-label="قائمة المستأجرين"')
+    expect(arabic).toContain('Acme')
     const hidden = render(PanelPage, {
       props: {
         data: {

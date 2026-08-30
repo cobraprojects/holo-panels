@@ -7,7 +7,7 @@ import {
   trans,
   TranslationCatalogRegistry,
 } from '@holo-js/panels-core'
-import { LocaleManager, resolvePanelLocale } from '../src/locales'
+import { createPanelTranslator, LocaleManager, resolvePanelLocale, syncDocumentLocale } from '../src/locales'
 
 describe('client locales', () => {
   it('resolves requested, actor, panel, application, and fallback locales in order', () => {
@@ -72,5 +72,32 @@ describe('client locales', () => {
       locale: 'en',
     })
     expect(production.translate(reference)).toBe('plugin.missing')
+  })
+
+  it('ships complete English and Arabic panel chrome translations', () => {
+    const english = createPanelTranslator('en')
+    const arabic = createPanelTranslator('ar')
+
+    expect(english('auth.signIn')).toBe('Sign in')
+    expect(arabic('auth.signIn')).toBe('تسجيل الدخول')
+    expect(english('notifications.empty')).toBe('No notifications')
+    expect(arabic('notifications.empty')).toBe('لا توجد إشعارات')
+    expect(arabic('search.placeholder')).not.toContain('search.')
+    expect(createPanelTranslator('fr')('auth.signIn')).toBe('Sign in')
+  })
+
+  it('updates document language and direction and restores the previous values', () => {
+    const root = { dir: '', lang: '' } as HTMLElement
+    const document = { documentElement: root }
+    root.lang = 'fr'
+    root.dir = 'ltr'
+
+    const restore = syncDocumentLocale({ direction: 'rtl', locale: 'ar' }, document)
+
+    expect(root.lang).toBe('ar')
+    expect(root.dir).toBe('rtl')
+    restore()
+    expect(root.lang).toBe('fr')
+    expect(root.dir).toBe('ltr')
   })
 })

@@ -86,4 +86,29 @@ describe('Next panel login page', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toBe('These credentials do not match our records.')
     await act(async () => root.unmount())
   })
+
+  it('renders the login journey in Arabic from the browser locale', async () => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: 'ar' })
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
+      brandName: 'Control Center',
+      forgotPasswordPath: null,
+      loginPath: '/admin/login',
+      registrationPath: null,
+      simplePageMaxContentWidth: 'screen-sm',
+      theme: 'system',
+    })))
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<NextPanelLoginPage panelId="admin" />)
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    })
+
+    expect(container.textContent).toContain('تسجيل الدخول')
+    expect(container.textContent).toContain('البريد الإلكتروني')
+    await act(async () => root.unmount())
+  })
 })

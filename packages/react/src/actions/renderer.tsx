@@ -1,6 +1,6 @@
 import { createElement, useMemo, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import type { ClientActionFrame, JsonObject } from '@holo-js/panels-client'
-import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection, createPanelTranslator, readOnlyPresentationStores } from '@holo-js/panels-client'
 import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference } from '@holo-js/panels-core'
 import { PanelsIcon } from '../internal-ui'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog'
@@ -97,6 +97,7 @@ function ReadOnlyPresentation<TResult>({ frame, props }: { readonly frame: Clien
 }
 
 export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendererProps<TResult>): ReactNode {
+  const translate = createPanelTranslator(globalThis.document?.documentElement.lang || 'en')
   const state = useSyncExternalStore(
     listener => props.store.subscribe(listener),
     () => props.store.state,
@@ -126,8 +127,8 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
               <AlertDialogDescription>{frame.manifest.confirmation}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>{frame.manifest.modal?.cancelActionLabel ?? 'Cancel'}</AlertDialogCancel>
-              <AlertDialogAction onClick={event => { event.preventDefault(); props.store.confirm(); if (!frame.manifest.modal) void submit() }} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}Confirm</AlertDialogAction>
+              <AlertDialogCancel>{frame.manifest.modal?.cancelActionLabel ?? translate('actions.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={event => { event.preventDefault(); props.store.confirm(); if (!frame.manifest.modal) void submit() }} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}{translate('actions.confirm')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

@@ -1,4 +1,4 @@
-import type { JsonObject, PanelManifest } from '@holo-js/panels-core'
+import type { JsonObject, LocaleDirection, PanelManifest } from '@holo-js/panels-core'
 
 export type PanelShellNavigationMode = 'sidebar' | 'topbar'
 export type PanelShellViewport = 'desktop' | 'mobile' | 'tablet'
@@ -72,6 +72,7 @@ export interface PanelShellManifest {
     subNavigationPosition: 'end' | 'start' | 'top'
     topbar: boolean
   }
+  locales?: PanelManifest['locales']
   path: string
   routing?: {
     domain: string | null
@@ -150,6 +151,8 @@ export interface PanelTenantSwitcherTransport {
 
 export interface PanelShellBootstrap {
   actor: JsonObject
+  direction: LocaleDirection
+  locale: string
   manifest: PanelShellManifest
   notifications: { realtimeChannel: string | null } | null
   provider: string | null

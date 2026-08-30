@@ -3,6 +3,7 @@ import type { ComponentDefault } from '../defaults/component-default'
 import type { CompiledPanelAuthServer, PanelAuthManifest } from '../auth/contracts'
 import type { PanelNotificationOperation, PanelNotificationRecipient } from '../notifications/contracts'
 import type { JsonObject } from '../protocol/json'
+import type { LocaleDirection } from '../translations/contracts'
 import type { PanelPluginInstallation } from '../plugins/panel-plugin'
 import type { PluginCompatibility } from '../plugins/compatibility'
 import type { CompiledPanelTenancy, PanelTenancyManifest, PanelTenantBootstrap } from '../tenancy/contracts'
@@ -213,6 +214,10 @@ export interface PanelManifest {
   readonly navigationGroups?: readonly PanelNavigationGroup[]
   readonly navigationMode: PanelNavigationMode
   readonly layout?: PanelLayoutConfiguration
+  readonly locales: {
+    readonly allowed: readonly string[]
+    readonly fallback: string
+  }
   readonly path: string
   readonly routing?: PanelRoutingConfiguration
   readonly runtime?: PanelRuntimeConfiguration
@@ -296,6 +301,8 @@ export interface PanelAuthenticatedScope<TActor> {
 
 export interface PanelBootstrap {
   readonly actor: JsonObject
+  readonly direction: LocaleDirection
+  readonly locale: string
   readonly manifest: PanelManifest
   readonly notifications: PanelNotificationBootstrap | null
   readonly provider: string | null

@@ -8,6 +8,7 @@ export const VueNotificationInboxTrigger = defineComponent({
   props: {
     emptyMessage: String,
     label: { default: 'Notifications', type: String },
+    locale: { default: 'en', type: String },
     lazy: { default: false, type: Boolean },
     navigate: Function as PropType<VueNotificationInboxTriggerProps['navigate']>,
     panelId: String,
@@ -40,6 +41,7 @@ export const VueNotificationInboxTrigger = defineComponent({
         ])),
         h(PopoverContent, { align: props.placement === 'topbar' ? 'end' : 'start', class: 'hp-notification-inbox-trigger-content hp:w-[min(28rem,calc(100vw-2rem))] hp:p-0 hp:data-[state=closed]:hidden', 'data-placement': inboxPlacement, forceMount: activated.value }, () => activated.value ? h(VueNotificationInbox, {
             emptyMessage: props.emptyMessage,
+            locale: props.locale,
             navigate: props.navigate,
             panelId: props.panelId,
             placement: inboxPlacement,

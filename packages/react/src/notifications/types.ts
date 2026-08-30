@@ -30,6 +30,7 @@ export interface ReactToastViewportProps {
 export interface ReactNotificationInboxProps {
   readonly emptyMessage?: string
   readonly navigate?: (url: string) => void
+  readonly locale?: string
   readonly panelId?: string
   readonly placement?: 'dropdown' | 'page' | 'sidebar'
   readonly registry?: ComponentRegistry

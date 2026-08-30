@@ -146,6 +146,17 @@ describe('Next panel adapter', () => {
     expect(markup).toContain('data-icon="home"')
   })
 
+  it('renders shared panel chrome in Arabic with an RTL sidebar', async () => {
+    const payload = await resolveNextPanelPage('admin', ['posts'], new Request('https://example.test/admin/posts', { headers: { 'accept-language': 'ar' } }), runtime())
+    const markup = renderToString(<NextPanelClient payload={payload} />)
+
+    expect(payload.bootstrap).toMatchObject({ direction: 'rtl', locale: 'ar' })
+    expect(markup).toContain('dir="rtl"')
+    expect(markup).toContain('lang="ar"')
+    expect(markup).toContain('قائمة الحساب')
+    expect(markup).toContain('data-side="right"')
+  })
+
   it('navigates same-origin panel links in SPA mode, honors exceptions, and prefetches on hover', async () => {
     const spaPanel = definePanel('admin', Actor)
       .path('/admin')

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from '../ui/button'
   import Icon from '../components/Icon.svelte'
-  import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores, type JsonObject } from '@holo-js/panels-client'
+  import { actionFormField, actionFormSchema, actionManifestCollection, createPanelTranslator, readOnlyPresentationStores, type JsonObject } from '@holo-js/panels-client'
   import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference, type SchemaManifest } from '@holo-js/panels-core'
   import * as AlertDialog from '../ui/alert-dialog'
   import * as Dialog from '../ui/dialog'
@@ -20,6 +20,7 @@
   const formState = $derived.by(() => $actionState.frames.length && store.activeForm ? toSvelteState(store.activeForm) : undefined)
   const defaultSchemaRegistry = new SvelteComponentRegistry()
   const schemaRegistry = $derived(registry ?? defaultSchemaRegistry)
+  const translate = $derived(createPanelTranslator(globalThis.document?.documentElement.lang || 'en'))
   async function submit(): Promise<void> {
     try {
       const current = store
@@ -137,7 +138,7 @@
       <AlertDialog.Root open>
         <AlertDialog.Content data-holo-panel data-panels-component="confirmation" onEscapeKeydown={(event) => { dismiss.onEscapeKeydown(event); if (!event.defaultPrevented) store.close() }} onInteractOutside={(event) => { dismiss.onInteractOutside(event); if (!event.defaultPrevented) store.close() }} onOpenAutoFocus={dismiss.onOpenAutoFocus}>
           <AlertDialog.Header><AlertDialog.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</AlertDialog.Title><AlertDialog.Description>{frame.manifest.confirmation}</AlertDialog.Description></AlertDialog.Header>
-          <AlertDialog.Footer><AlertDialog.Cancel onclick={() => store.close()}>{frame.manifest.modal?.cancelActionLabel ?? 'Cancel'}</AlertDialog.Cancel><AlertDialog.Action variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} onclick={(event) => { event.preventDefault(); store.confirm(); if (!frame.manifest.modal) void submit() }}>{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}Confirm</AlertDialog.Action></AlertDialog.Footer>
+          <AlertDialog.Footer><AlertDialog.Cancel onclick={() => store.close()}>{frame.manifest.modal?.cancelActionLabel ?? translate('actions.cancel')}</AlertDialog.Cancel><AlertDialog.Action variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} onclick={(event) => { event.preventDefault(); store.confirm(); if (!frame.manifest.modal) void submit() }}>{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}{translate('actions.confirm')}</AlertDialog.Action></AlertDialog.Footer>
         </AlertDialog.Content>
       </AlertDialog.Root>
     {:else if frame.manifest.modal?.slideOver}

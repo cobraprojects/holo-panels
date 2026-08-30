@@ -4,6 +4,8 @@ import { PanelShellStore } from '../src/panel-shell/store'
 
 const bootstrap: PanelShellBootstrap = {
   actor: { id: 7, name: 'Ada' },
+  direction: 'ltr',
+  locale: 'en',
   manifest: {
     branding: { favicon: '/favicon.svg', logo: '/logo.svg', name: 'Admin' },
     databaseNotifications: { placement: 'topbar', polling: 30_000, realtime: true },

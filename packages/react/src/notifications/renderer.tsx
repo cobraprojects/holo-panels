@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { safeExternalUrl, type ClientToast, type ClientToastStore } from '@holo-js/panels-client'
 import { toast as sonnerToast } from 'sonner'
 import { panelColorValue } from '@holo-js/panels-ui'
+import { createPanelTranslator, type PanelTranslator } from '@holo-js/panels-client'
 import { PanelsIcon } from '../internal-ui'
 import { ReactActionRenderer } from '../actions'
 import {
@@ -150,23 +151,25 @@ export function ReactToastViewport({ navigate, panelId, placement = 'top', regis
   return <><div aria-atomic="true" aria-live="polite" className="hp:sr-only" role="status">{state.liveMessage}</div><Toaster closeButton={false} position={placement === 'top' ? 'top-center' : 'bottom-center'} /></>
 }
 
-function DeleteNotificationButton({ controls, label = 'Delete' }: { readonly controls: ReactNotificationControls, readonly label?: string }): ReactNode {
+function DeleteNotificationButton({ controls, label, translate }: { readonly controls: ReactNotificationControls, readonly label?: string, readonly translate: PanelTranslator }): ReactNode {
+  const resolvedLabel = label ?? translate('notifications.confirmDelete')
   return <AlertDialog>
-    <AlertDialogTrigger asChild><Button size="sm" type="button" variant="destructive"><PanelsIcon name="trash" />{label}</Button></AlertDialogTrigger>
+    <AlertDialogTrigger asChild><Button size="sm" type="button" variant="destructive"><PanelsIcon name="trash" />{resolvedLabel}</Button></AlertDialogTrigger>
     <AlertDialogContent data-holo-panel>
-      <AlertDialogHeader><AlertDialogTitle>Delete notification?</AlertDialogTitle><AlertDialogDescription>This notification will be permanently removed.</AlertDialogDescription></AlertDialogHeader>
-      <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => ignoreFailure(controls.delete())} variant="destructive"><PanelsIcon name="trash" />Delete</AlertDialogAction></AlertDialogFooter>
+      <AlertDialogHeader><AlertDialogTitle>{translate('notifications.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{translate('notifications.deleteDescription')}</AlertDialogDescription></AlertDialogHeader>
+      <AlertDialogFooter><AlertDialogCancel>{translate('notifications.cancelDelete')}</AlertDialogCancel><AlertDialogAction onClick={() => ignoreFailure(controls.delete())} variant="destructive"><PanelsIcon name="trash" />{translate('notifications.confirmDelete')}</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
 }
 
-function NotificationActions({ controls, item, navigate, panelId, registry, store }: {
+function NotificationActions({ controls, item, navigate, panelId, registry, store, translate }: {
   readonly controls: ReactNotificationControls
   readonly item: ReactDatabaseNotification
   readonly navigate?: (url: string) => void
   readonly panelId?: string
   readonly registry?: ReactNotificationInboxProps['registry']
   readonly store: ReactNotificationInboxProps['store']
+  readonly translate: PanelTranslator
 }): ReactNode {
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null)
   const host = store.actionHost(item.id)
@@ -177,24 +180,26 @@ function NotificationActions({ controls, item, navigate, panelId, registry, stor
       if (url) return <Button asChild key={action.id} size="sm" variant="outline"><a href={url} onClick={navigate ? event => { event.preventDefault(); navigate(url) } : undefined}><PanelsIcon name={notificationActionIcon(action.kind)} />{action.label}</a></Button>
       if (action.kind === 'mark-read') return <Button key={action.id} onClick={() => ignoreFailure(controls.markRead())} size="sm" type="button" variant="outline"><PanelsIcon name="check" />{action.label}</Button>
       if (action.kind === 'mark-unread') return <Button key={action.id} onClick={() => ignoreFailure(controls.markUnread())} size="sm" type="button" variant="outline"><PanelsIcon name="mail" />{action.label}</Button>
-      if (action.kind === 'dismiss') return <DeleteNotificationButton controls={controls} key={action.id} label={action.label} />
+      if (action.kind === 'dismiss') return <DeleteNotificationButton controls={controls} key={action.id} label={action.label} translate={translate} />
       return null
     })}
     {item.read
-      ? <Button onClick={() => ignoreFailure(controls.markUnread())} size="sm" type="button" variant="outline"><PanelsIcon name="mail" />Mark unread</Button>
-      : <Button onClick={() => ignoreFailure(controls.markRead())} size="sm" type="button" variant="outline"><PanelsIcon name="check" />Mark read</Button>}
-    {!actions.some(action => action.kind === 'dismiss') ? <DeleteNotificationButton controls={controls} /> : null}
+      ? <Button onClick={() => ignoreFailure(controls.markUnread())} size="sm" type="button" variant="outline"><PanelsIcon name="mail" />{translate('notifications.markUnread')}</Button>
+      : <Button onClick={() => ignoreFailure(controls.markRead())} size="sm" type="button" variant="outline"><PanelsIcon name="check" />{translate('notifications.markRead')}</Button>}
+    {!actions.some(action => action.kind === 'dismiss') ? <DeleteNotificationButton controls={controls} translate={translate} /> : null}
   </div>
 }
 
 export function ReactNotificationInbox({
   emptyMessage = 'No notifications',
+  locale = 'en',
   navigate,
   panelId,
   placement = 'page',
   registry,
   store,
 }: ReactNotificationInboxProps): ReactNode {
+  const translate = createPanelTranslator(locale)
   const state = useSyncExternalStore(
     listener => store.subscribe(listener),
     () => store.state,
@@ -207,8 +212,8 @@ export function ReactNotificationInbox({
   const pages = Math.max(1, Math.ceil(state.total / state.pageSize))
   const content = <CardContent className="hp:space-y-4">
     {state.error ? <p className="hp:rounded-md hp:border hp:border-destructive/50 hp:p-3 hp:text-sm hp:text-destructive" data-slot="notification-error" role="alert">{state.error}</p> : null}
-    {state.loading ? <p aria-live="polite" className="hp:text-sm hp:text-muted-foreground" data-slot="notification-loading" role="status">Loading notifications</p> : null}
-    {!state.loading && !state.error && state.items.length === 0 ? <Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>You are all caught up.</EmptyDescription></EmptyHeader></Empty> : null}
+    {state.loading ? <p aria-live="polite" className="hp:text-sm hp:text-muted-foreground" data-slot="notification-loading" role="status">{translate('notifications.loading')}</p> : null}
+    {!state.loading && !state.error && state.items.length === 0 ? <Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>{translate('notifications.noneDescription')}</EmptyDescription></EmptyHeader></Empty> : null}
     {state.items.length > 0 ? <ol className="hp-notification-list hp:divide-y" data-slot="notification-list">{state.items.map(item => {
       const controls: ReactNotificationControls = {
         delete: () => store.delete([item.id]),
@@ -228,9 +233,9 @@ export function ReactNotificationInbox({
               {item.presentation.body ? <p className="hp:text-sm hp:text-muted-foreground" data-slot="notification-item-body">{item.presentation.body}</p> : null}
               <time className="hp:text-xs hp:text-muted-foreground" data-slot="notification-item-time" dateTime={item.createdAt}>{item.createdAt}</time>
             </div>
-            {!item.read ? <Badge variant="secondary">Unread</Badge> : null}
+            {!item.read ? <Badge variant="secondary">{translate('notifications.unread')}</Badge> : null}
           </div>
-          <NotificationActions controls={controls} item={item} navigate={navigate} panelId={panelId} registry={registry} store={store} />
+          <NotificationActions controls={controls} item={item} navigate={navigate} panelId={panelId} registry={registry} store={store} translate={translate} />
         </article>}
       </li>
     })}</ol> : null}

@@ -1,4 +1,6 @@
 export { LocaleManager } from './locale-manager'
 export { resolvePanelLocale } from './resolution'
+export { createPanelTranslator, syncDocumentLocale } from './presentation'
 export type { LocaleManagerOptions, LocaleState, MissingTranslationDiagnostic } from './locale-manager'
+export type { PanelTranslationKey, PanelTranslator } from './presentation'
 export type { PanelLocalePreferences, ResolvedPanelLocale } from './resolution'

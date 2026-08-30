@@ -18,6 +18,7 @@ const presentation = {
 
 describe('Next panel authentication pages', () => {
   beforeEach(() => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: 'en' })
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
       const url = String(input)
       if (url.endsWith('/presentation')) return Response.json(presentation)
@@ -25,6 +26,26 @@ describe('Next panel authentication pages', () => {
       if (url.endsWith('/mfa-status')) return Response.json({ enabled: false })
       return new Response(null, { status: 204 })
     }))
+  })
+
+  it.each([
+    ['registration', <NextPanelAuthPage panelId="cp" type="registration" />, 'إنشاء حساب'],
+    ['multi-factor', <NextPanelMultiFactorPage panelId="cp" />, 'المصادقة متعددة العوامل'],
+    ['profile', <NextPanelProfilePage panelId="cp" />, 'الملف الشخصي'],
+  ])('renders the %s journey in Arabic and RTL', async (_name, component, expected) => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: 'ar' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(component)
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    })
+
+    expect(container.textContent).toContain(expected)
+    expect(container.querySelector('main')).toMatchObject({ dir: 'rtl', lang: 'ar' })
+    await act(async () => root.unmount())
   })
 
   afterEach(() => {

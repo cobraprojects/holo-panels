@@ -12,6 +12,8 @@ function store(): PanelShellStore {
   ]
   value.bootstrap({
     actor: { id: 1 },
+    direction: 'ltr',
+    locale: 'en',
     manifest: {
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,

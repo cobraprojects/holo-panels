@@ -47,6 +47,7 @@ import {
   VueToastViewport,
   WidgetStore,
   createPanelNotificationTransport,
+  createPanelTranslator,
   createPanelTenantSwitcherTransport,
   createDefaultComponentRegistry,
   executePanelAuthRequest,
@@ -54,6 +55,7 @@ import {
   registerPanelNotificationStore,
   providePanelsRenderHooks,
   renderPanelsHook,
+  syncDocumentLocale,
   toJsonValue,
   type ClientActionManifest,
   type ClientNotificationRealtime,
@@ -1244,12 +1246,12 @@ function configuredIcon(icons: JsonObject | undefined, name: string | null): str
   return typeof configured === 'string' && configured.trim() ? configured : name
 }
 
-function actorLabel(actor: JsonObject): string {
+function actorLabel(actor: JsonObject, fallback: string): string {
   for (const key of ['name', 'email', 'username']) {
     const value = actor[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
-  return 'Account'
+  return fallback
 }
 
 function actorAvatarUrl(actor: JsonObject): string | null {
@@ -1414,6 +1416,7 @@ export const PanelPage = defineComponent({
     const router = useRouter()
     const ready = ref(false)
     const panelId = props.page.bootstrap.manifest.id
+    const translate = createPanelTranslator(props.page.bootstrap.locale)
     const registry = props.registry ?? createNuxtPanelComponentRegistry()
     providePanelsRenderHooks({ data: props.page.page.data, manifest: props.page.bootstrap.manifest, registry, scopes: [props.page.page.manifest.id, ...(typeof props.page.page.manifest.body?.properties.resourceId === 'string' ? [props.page.page.manifest.body.properties.resourceId] : [])] })
     const TopbarComponent = props.page.bootstrap.manifest.components?.topbar
@@ -1472,6 +1475,7 @@ export const PanelPage = defineComponent({
     let unregisterResize: (() => void) | undefined
     let unregisterSearchShortcut: (() => void) | undefined
     let unregisterSpa: (() => void) | undefined
+    let restoreDocumentLocale: (() => void) | undefined
     const shellElement = ref<HTMLElement | null>(null)
     const effects = new ClientEffectSession({
       panelId,
@@ -1498,6 +1502,7 @@ export const PanelPage = defineComponent({
       void effects.apply({ data: null, effects: [...next], id: `session-effects-${effectBatch}`, ok: true, protocolVersion: PROTOCOL_VERSION }).catch(() => undefined)
     })
     onMounted(() => {
+      restoreDocumentLocale = syncDocumentLocale(props.page.bootstrap, document)
       portalContainer.value = shellElement.value
       ready.value = true
       const storedColorMode = window.localStorage.getItem(`holo-panels:${panelId}:color-mode`)
@@ -1556,6 +1561,7 @@ export const PanelPage = defineComponent({
       unregisterResize?.()
       unregisterSearchShortcut?.()
       unregisterSpa?.()
+      restoreDocumentLocale?.()
       unregisterNotificationStore()
       portalContainer.value = null
       effects.dispose()
@@ -1563,22 +1569,25 @@ export const PanelPage = defineComponent({
 
     return (): VNode => {
       const { bootstrap, page } = props.page
-      const account = actorLabel(bootstrap.actor)
+      const account = actorLabel(bootstrap.actor, translate('navigation.account'))
       const avatarUrl = actorAvatarUrl(bootstrap.actor)
       const themeMenuItems = bootstrap.manifest.theme.switcher === false ? [] : [
-        { icon: colorMode.value === 'light' ? 'check' : null, id: 'panel-theme-light', label: 'Light theme' },
-        { icon: colorMode.value === 'dark' ? 'check' : null, id: 'panel-theme-dark', label: 'Dark theme' },
-        { icon: colorMode.value === 'system' ? 'check' : null, id: 'panel-theme-system', label: 'System theme' },
+        { icon: colorMode.value === 'light' ? 'check' : null, id: 'panel-theme-light', label: translate('theme.light') },
+        { icon: colorMode.value === 'dark' ? 'check' : null, id: 'panel-theme-dark', label: translate('theme.dark') },
+        { icon: colorMode.value === 'system' ? 'check' : null, id: 'panel-theme-system', label: translate('theme.system') },
       ]
       const userMenuItems = [
         ...themeMenuItems,
-        ...(bootstrap.manifest.auth?.profile && !bootstrap.manifest.userMenu.some(item => item.id === 'profile') ? [{ icon: configuredIcon(bootstrap.manifest.icons, 'user'), id: 'profile', label: 'Profile' }] : []),
+        ...(bootstrap.manifest.auth?.profile && !bootstrap.manifest.userMenu.some(item => item.id === 'profile') ? [{ icon: configuredIcon(bootstrap.manifest.icons, 'user'), id: 'profile', label: translate('navigation.profile') }] : []),
         ...bootstrap.manifest.userMenu.map(item => ({ icon: configuredIcon(bootstrap.manifest.icons, item.icon), id: item.id, label: item.label })),
-        ...(bootstrap.manifest.auth?.logout ? [{ icon: configuredIcon(bootstrap.manifest.icons, 'log-out'), id: 'panel-logout', label: 'Sign out' }] : []),
+        ...(bootstrap.manifest.auth?.logout ? [{ icon: configuredIcon(bootstrap.manifest.icons, 'log-out'), id: 'panel-logout', label: translate('navigation.signOut') }] : []),
       ]
       const notificationTrigger = inboxStore && configuration
         ? h(NotificationTrigger, {
+            emptyMessage: translate('notifications.empty'),
+            label: translate('notifications.label'),
             lazy: configuration.lazy ?? true,
+            locale: bootstrap.locale,
             navigate: browserNavigate,
             panelId,
             placement: configuration.placement,
@@ -1609,7 +1618,7 @@ export const PanelPage = defineComponent({
         if (item) void router.push(item.path)
       }
       const accountMenu = (): VNode | null => bootstrap.manifest.userMenuEnabled === false ? null : h(DropdownMenu, {}, () => [
-        h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': 'Account menu', class: 'hp-panel-user-trigger hp-panel-user-action', variant: 'outline' }, () => [
+        h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': translate('navigation.accountMenu'), class: 'hp-panel-user-trigger hp-panel-user-action', variant: 'outline' }, () => [
           AvatarComponent
             ? h(AvatarComponent, { actor: props.page.bootstrap.actor, label: account } satisfies PanelAvatarComponentProps)
             : h(Avatar, { class: 'hp-panel-user-glyph' }, () => [
@@ -1640,7 +1649,7 @@ export const PanelPage = defineComponent({
         h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => PanelsIcon('search')), h(InputGroupInput, {
           'aria-controls': 'hp-global-search-results',
           'aria-expanded': currentSearchState.open,
-          'aria-label': 'Global search',
+          'aria-label': translate('search.label'),
           'data-panel-global-search': '',
           onFocus: () => searchStore.open(),
           onKeydown: (event: KeyboardEvent) => {
@@ -1650,13 +1659,13 @@ export const PanelPage = defineComponent({
               if (url) browserNavigate(url)
             } else if (event.key === 'Escape') searchStore.close()
           },
-          placeholder: 'Search…',
+          placeholder: translate('search.placeholder'),
           role: 'combobox',
           modelValue: currentSearchState.term,
           'onUpdate:modelValue': (value: number | string) => searchStore.input(String(value)),
         }), searchConfiguration?.fieldSuffix ? h(InputGroupAddon, { align: 'inline-end' }, () => searchConfiguration.fieldSuffix ?? '') : null, searchConfiguration?.keybindingSuffix ? h(InputGroupAddon, { align: 'inline-end' }, () => h('kbd', { class: 'hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground' }, searchConfiguration.keybindingSuffix ?? '')) : null]),
         currentSearchState.open && currentSearchState.term ? h(Command, { class: 'hp:absolute hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md' }, () => h(CommandList, { id: 'hp-global-search-results' }, () => [
-          currentSearchState.loading ? h(CommandEmpty, {}, () => 'Searching…') : currentSearchState.error ? h(CommandEmpty, {}, () => currentSearchState.error) : currentSearchState.results.length === 0 ? h(CommandEmpty, {}, () => 'No results found.') : null,
+          currentSearchState.loading ? h(CommandEmpty, {}, () => translate('search.loading')) : currentSearchState.error ? h(CommandEmpty, {}, () => currentSearchState.error) : currentSearchState.results.length === 0 ? h(CommandEmpty, {}, () => translate('search.none')) : null,
           ...currentSearchState.results.map((result, index) => h(CommandItem, {
             'aria-selected': index === currentSearchState.selectedIndex,
             key: `${result.resourceId}:${result.id}`,
@@ -1692,6 +1701,8 @@ export const PanelPage = defineComponent({
           'data-sidebar-collapsed': sidebarCollapsed.value ? 'true' : 'false',
           'data-sidebar-collapsible': bootstrap.manifest.sidebarCollapsible ? 'true' : 'false',
           'data-sidebar-fully-collapsible': bootstrap.manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false',
+          dir: bootstrap.direction,
+          lang: bootstrap.locale,
           'data-width': bootstrap.manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained',
           inert: ready.value ? undefined : '',
           ref: shellElement,
@@ -1733,7 +1744,7 @@ export const PanelPage = defineComponent({
             ? [
                 SidebarComponent
                   ? h(SidebarComponent, { actor: props.page.bootstrap.actor, manifest: bootstrap.manifest, page } satisfies PanelChromeComponentProps<typeof page>)
-                  : h(Sidebar, { class: 'hp-panel-sidebar', collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none' }, () => [
+                  : h(Sidebar, { class: 'hp-panel-sidebar', collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none', side: bootstrap.direction === 'rtl' ? 'right' : 'left' }, () => [
                       renderHook(PanelsRenderHook.SIDEBAR_START),
                       h(SidebarHeader, { class: 'hp-panel-navigation-header' }, () => [
                         tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,

@@ -8,6 +8,7 @@ export function ReactNotificationInboxTrigger({
   emptyMessage,
   label = 'Notifications',
   lazy = false,
+  locale,
   navigate,
   panelId,
   placement,
@@ -39,7 +40,7 @@ export function ReactNotificationInboxTrigger({
       </Button>
     </PopoverTrigger>
     <PopoverContent align={placement === 'topbar' ? 'end' : 'start'} className="hp-notification-inbox-trigger-content hp:w-[min(28rem,calc(100vw-2rem))] hp:p-0 hp:data-[state=closed]:hidden" data-holo-panel forceMount id={inboxId} onEscapeKeyDown={() => { globalThis.queueMicrotask(() => trigger.current?.focus()) }}>
-      {activated ? <ReactNotificationInbox emptyMessage={emptyMessage} navigate={navigate} panelId={panelId} placement={inboxPlacement} registry={registry} store={store} /> : null}
+      {activated ? <ReactNotificationInbox emptyMessage={emptyMessage} locale={locale} navigate={navigate} panelId={panelId} placement={inboxPlacement} registry={registry} store={store} /> : null}
     </PopoverContent>
   </Popover>
 }

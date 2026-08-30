@@ -248,7 +248,8 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
       const auth = typeof runtime.auth === 'function' ? await runtime.auth() : runtime.auth
       const panelRuntime = new PanelRuntime(auth, [panel])
       if (selectedOperation === 'bootstrap') {
-        return success(requestId, { data: toJsonValue((await panelRuntime.bootstrap([parameters.panelId], request.signal))[0]) }).response
+        const locale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim() ?? 'en'
+        return success(requestId, { data: toJsonValue((await panelRuntime.bootstrap([parameters.panelId], request.signal, locale))[0]) }).response
       }
       if (!runtime.execute) throw new NextPanelHttpError(501, `Panel operation "${selectedOperation}" has no registered executor`)
       return panelRuntime.execute(parameters.panelId, selectedOperation, request.signal, async scope => {

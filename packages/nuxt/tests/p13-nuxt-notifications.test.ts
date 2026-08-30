@@ -45,6 +45,8 @@ function panelPage(options: {
   return {
     bootstrap: {
       actor: { id: 7 },
+      direction: 'ltr',
+      locale: 'en',
       manifest: {
         branding: { favicon: null, logo: null, name: 'Admin' },
         databaseNotifications: configured

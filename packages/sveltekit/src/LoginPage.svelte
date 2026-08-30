@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { executePanelLogin, loadPanelAuthPresentation, panelContentWidthValue, panelLoginErrorMessage, type PanelAuthPresentation } from '@holo-js/panels-svelte'
+  import { createPanelTranslator, executePanelLogin, loadPanelAuthPresentation, panelContentWidthValue, panelLoginErrorMessage, syncDocumentLocale, type PanelAuthPresentation } from '@holo-js/panels-svelte'
   import { onMount } from 'svelte'
   import { svelteKitPanelAuthAppearanceStyleAttribute } from './auth-appearance'
   import { Button } from '@holo-js/panels-svelte/ui/button'
@@ -19,10 +19,15 @@
   let password = $state('')
   let error = $state('')
   let pending = $state(false)
+  let locale = $state('en')
+  const translate = $derived(createPanelTranslator(locale))
+  const direction = $derived(locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr')
   let submitting = false
 
   onMount(() => {
+    locale = navigator.language
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
+    return syncDocumentLocale({ direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale }, document)
   })
 
   function cookie(name: string): string {
@@ -56,17 +61,17 @@
 </script>
 
 {#if presentation}
-<main class="hp-auth-page" data-density={presentation.appearance.density} data-holo-panel data-theme={presentation.theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(presentation.appearance)}--hp-auth-max-width:${panelContentWidthValue(presentation.simplePageMaxContentWidth)};`}>
+<main class="hp-auth-page" data-density={presentation.appearance.density} data-holo-panel data-theme={presentation.theme} dir={direction} lang={locale} style={`${svelteKitPanelAuthAppearanceStyleAttribute(presentation.appearance)}--hp-auth-max-width:${panelContentWidthValue(presentation.simplePageMaxContentWidth)};`}>
   <Card class="hp-auth-card hp:w-full hp:max-w-md">
-    <CardHeader><span class="hp-auth-brand-mark"><Icon name="key" /></span><CardDescription>Administration</CardDescription><CardTitle>{presentation.brandName}</CardTitle><CardDescription>Sign in to your account</CardDescription></CardHeader>
+    <CardHeader><span class="hp-auth-brand-mark"><Icon name="key" /></span><CardDescription>{translate('auth.administration')}</CardDescription><CardTitle>{presentation.brandName}</CardTitle><CardDescription>{translate('auth.signInDescription')}</CardDescription></CardHeader>
     <CardContent class="hp:space-y-6">
       <form class="hp:space-y-4" onsubmit={login}>
-        <Field><FieldLabel for={`${panelId}-email`}>Email</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} name="email" type="email" bind:value={email} required /></Field>
-        <Field><div class="hp:flex hp:items-center hp:justify-between"><FieldLabel for={`${panelId}-password`}>Password</FieldLabel>{#if presentation.forgotPasswordPath}<Button href={presentation.forgotPasswordPath} size="sm" variant="link">Forgot password?</Button>{/if}</div><Input autocomplete="current-password" id={`${panelId}-password`} name="password" type="password" bind:value={password} required /></Field>
+        <Field><FieldLabel for={`${panelId}-email`}>{translate('auth.email')}</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} name="email" type="email" bind:value={email} required /></Field>
+        <Field><div class="hp:flex hp:items-center hp:justify-between"><FieldLabel for={`${panelId}-password`}>{translate('auth.password')}</FieldLabel>{#if presentation.forgotPasswordPath}<Button href={presentation.forgotPasswordPath} size="sm" variant="link">{translate('auth.forgotPassword')}</Button>{/if}</div><Input autocomplete="current-password" id={`${panelId}-password`} name="password" type="password" bind:value={password} required /></Field>
         {#if error}<Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>{/if}
-        <Button class="hp:w-full" disabled={pending} type="submit">{pending ? 'Signing in…' : 'Sign in'}</Button>
+        <Button class="hp:w-full" disabled={pending} type="submit">{pending ? translate('auth.signingIn') : translate('auth.signIn')}</Button>
       </form>
-      {#if presentation.registrationPath}<p class="hp-auth-footer hp:text-center hp:text-sm hp:text-muted-foreground">Need an account? <Button href={presentation.registrationPath} size="sm" variant="link">Register</Button></p>{/if}
+      {#if presentation.registrationPath}<p class="hp-auth-footer hp:text-center hp:text-sm hp:text-muted-foreground">{translate('auth.needAccount')} <Button href={presentation.registrationPath} size="sm" variant="link">{translate('auth.register')}</Button></p>{/if}
     </CardContent>
   </Card>
 </main>

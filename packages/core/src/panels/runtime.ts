@@ -8,10 +8,12 @@ import type {
   HoloAuth,
   PanelAuthenticatedScope,
   PanelBootstrap,
+  PanelManifest,
   PanelNotificationBootstrap,
   PanelMiddleware,
   PanelOperation,
 } from './contracts'
+import { canonicalLocale } from '../translations/catalog-registry'
 
 export class PanelRuntimeError extends Error {
   constructor(readonly code: 'access-denied' | 'actor-not-serializable' | 'panel-not-found' | 'subscription-required' | 'unauthenticated', message: string) {
@@ -114,7 +116,7 @@ export class PanelRuntime<TActor> {
     this.#panels = new Map(entries)
   }
 
-  async bootstrap(panelIds: readonly string[], signal: AbortSignal): Promise<readonly Readonly<PanelBootstrap>[]> {
+  async bootstrap(panelIds: readonly string[], signal: AbortSignal, requestedLocale?: string): Promise<readonly Readonly<PanelBootstrap>[]> {
     if (new Set(panelIds).size !== panelIds.length) throw new Error('Panel bootstrap IDs must be unique')
     const guards = new Map<string, Promise<ResolvedGuard<TActor>>>()
     return Promise.all(panelIds.map(async panelId => {
@@ -127,7 +129,7 @@ export class PanelRuntime<TActor> {
       }
       const guard = await resolved
       const scope = await this.authorize(panel, 'bootstrap', signal, guard)
-      return executePanelPipeline(panel, scope, 'bootstrap', () => this.bootstrapPayload(panel, scope))
+      return executePanelPipeline(panel, scope, 'bootstrap', () => this.bootstrapPayload(panel, scope, requestedLocale))
     }))
   }
 
@@ -174,14 +176,39 @@ export class PanelRuntime<TActor> {
     return context
   }
 
-  private async bootstrapPayload(panel: CompiledPanelDefinition<TActor>, scope: PanelAuthenticatedScope<TActor>): Promise<Readonly<PanelBootstrap>> {
+  private async bootstrapPayload(panel: CompiledPanelDefinition<TActor>, scope: PanelAuthenticatedScope<TActor>, requestedLocale?: string): Promise<Readonly<PanelBootstrap>> {
     const actor = toJsonValue(await panel.server.presentActor(scope.actor))
     if (actor === null || Array.isArray(actor) || typeof actor !== 'object') {
       throw new PanelRuntimeError('actor-not-serializable', 'Panel actors must serialize to JSON objects')
     }
     const notifications = await this.notificationBootstrap(panel, scope)
     const tenancy = panel.server.tenancy ? await panel.server.tenancy.bootstrap(scope) : null
-    return Object.freeze({ actor: actor as JsonObject, manifest: panel.manifest, notifications, provider: scope.provider, tenancy })
+    const locale = this.resolveLocale(panel.manifest.locales, requestedLocale, scope.actor)
+    return Object.freeze({ actor: actor as JsonObject, direction: locale === 'ar' ? 'rtl' : 'ltr', locale, manifest: panel.manifest, notifications, provider: scope.provider, tenancy })
+  }
+
+  private resolveLocale(
+    configuration: PanelManifest['locales'],
+    requestedLocale: string | undefined,
+    actor: TActor,
+  ): string {
+    const allowed = new Set(configuration.allowed.map(canonicalLocale))
+    const actorLocale = typeof actor === 'object' && actor !== null && 'locale' in actor && typeof actor.locale === 'string'
+      ? actor.locale
+      : undefined
+    for (const candidate of [requestedLocale, actorLocale, configuration.fallback]) {
+      if (!candidate?.trim()) continue
+      let canonical: string
+      try {
+        canonical = canonicalLocale(candidate)
+      } catch {
+        continue
+      }
+      const hierarchy = canonical.split('-').map((_segment, index, segments) => segments.slice(0, segments.length - index).join('-'))
+      const matched = hierarchy.find(locale => allowed.has(locale))
+      if (matched) return matched
+    }
+    return configuration.fallback
   }
 
   private async notificationBootstrap(

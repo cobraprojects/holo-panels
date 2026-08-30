@@ -52,6 +52,8 @@ import type { NuxtPanelOperationContext, NuxtPanelOperationResult, NuxtPanelPage
 const page: NuxtPanelPage = {
   bootstrap: {
     actor: { id: 7 },
+    direction: 'ltr',
+    locale: 'en',
     manifest: {
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,

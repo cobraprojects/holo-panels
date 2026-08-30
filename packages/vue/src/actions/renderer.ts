@@ -28,7 +28,7 @@ import {
 } from '../internal-ui'
 import { defineComponent, h, shallowRef, watch, type PropType, type VNode } from 'vue'
 import type { ClientActionFrame, ClientActionState, JsonObject } from '@holo-js/panels-client'
-import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection, createPanelTranslator, readOnlyPresentationStores } from '@holo-js/panels-client'
 import { ActionsRenderHook } from '@holo-js/panels-core'
 import type { ActionModalWidth, RenderSlotReference } from '@holo-js/panels-core'
 import { createComponentRegistry } from '../registry'
@@ -148,6 +148,7 @@ export const VueActionRenderer = defineComponent({
     }
 
     return () => {
+      const translate = createPanelTranslator(globalThis.document?.documentElement.lang || 'en')
       const actions = actionManifestCollection(props.actions ?? [props.action])
       const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
       const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
@@ -191,14 +192,14 @@ export const VueActionRenderer = defineComponent({
           onPointerDownOutside: (event: Event) => { dismiss.onPointerDownOutside(event); if (!event.defaultPrevented) props.store.close() },
         }, () => [
           h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => frame.manifest.modal?.heading ?? frame.manifest.label), h(AlertDialogDescription, {}, () => frame.manifest.confirmation ?? 'Are you sure?')]),
-          h(AlertDialogFooter, {}, () => [h(AlertDialogCancel, { onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? 'Cancel'), h(AlertDialogAction, {
+          h(AlertDialogFooter, {}, () => [h(AlertDialogCancel, { onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? translate('actions.cancel')), h(AlertDialogAction, {
             variant: frame.manifest.color === 'danger' ? 'destructive' : 'default',
             onClick: (event: MouseEvent) => {
               event.preventDefault()
               props.store.confirm()
               if (!frame.manifest.modal) void submit()
             },
-          }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, 'Confirm'])]),
+          }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, translate('actions.confirm')])]),
         ]))
         const content = Custom
             ? [h(Custom, {

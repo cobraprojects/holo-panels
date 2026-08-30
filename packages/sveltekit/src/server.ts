@@ -291,7 +291,8 @@ export function createPanelPageLoad<TActor = unknown, TTenant = unknown>(options
     const registry = registryFor(event, options.registry)
     try {
       const signal = requestSignal(event.request)
-      const bootstraps = await registry.runtime.bootstrap([options.panelId], signal)
+      const requestedLocale = event.request.headers.get('accept-language')?.split(',')[0]?.trim()
+      const bootstraps = await registry.runtime.bootstrap([options.panelId], signal, requestedLocale)
       const panel = bootstraps[0]
       if (!panel || panel.manifest.id !== options.panelId) error(404, 'Panel not found')
       const routing = panel.manifest.routing

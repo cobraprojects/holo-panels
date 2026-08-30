@@ -25,7 +25,7 @@ import {
   PanelsIcon,
   Toaster,
 } from '../internal-ui'
-import { safeExternalUrl, type ClientToast } from '@holo-js/panels-client'
+import { createPanelTranslator, safeExternalUrl, type ClientToast, type PanelTranslator } from '@holo-js/panels-client'
 import { VueActionRenderer } from '../actions'
 import { toast as sonnerToast } from 'vue-sonner'
 import { panelColorValue } from '@holo-js/panels-ui'
@@ -177,7 +177,7 @@ export const VueToastViewport = defineComponent({
   },
 })
 
-function notificationActions(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>): VNode {
+function notificationActions(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>, translate: PanelTranslator): VNode {
   const { navigate } = props
   const host = props.store.actionHost(item.id)
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null).map(action => {
@@ -185,42 +185,42 @@ function notificationActions(item: VueDatabaseNotification, controls: VueNotific
     if (url) return h('a', { href: url, key: action.id, onClick: navigate ? (event: Event) => { event.preventDefault(); navigate(url) } : undefined }, action.label)
     if (action.kind === 'mark-read') return h(Button, { key: action.id, onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, action.label)
     if (action.kind === 'mark-unread') return h(Button, { key: action.id, onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, action.label)
-    return deleteNotificationAction(action.label, controls.delete, action.id)
+    return deleteNotificationAction(action.label, controls.delete, action.id, translate)
   })
   return h('div', { 'aria-label': `${item.presentation.title} actions`, class: 'hp-notification-actions', 'data-slot': 'notification-actions', role: 'group' }, [
     ...(host?.actions[0] ? [h(VueActionRenderer, { action: host.actions[0], actions: host.actions, panelId: props.panelId, registry: props.registry, store: host.store })] : []),
     ...actions,
     item.read
-      ? h(Button, { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, 'Mark unread')
-      : h(Button, { onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, 'Mark read'),
-    ...(item.presentation.actions.some(action => actionValue(action)?.kind === 'dismiss') ? [] : [deleteNotificationAction('Delete', controls.delete, `${item.id}-delete`)]),
+      ? h(Button, { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, translate('notifications.markUnread'))
+      : h(Button, { onClick: () => ignoreFailure(controls.markRead()), type: 'button' }, translate('notifications.markRead')),
+    ...(item.presentation.actions.some(action => actionValue(action)?.kind === 'dismiss') ? [] : [deleteNotificationAction(translate('notifications.confirmDelete'), controls.delete, `${item.id}-delete`, translate)]),
   ])
 }
 
-function deleteNotificationAction(label: string, operation: () => Promise<unknown>, key: string): VNode {
+function deleteNotificationAction(label: string, operation: () => Promise<unknown>, key: string, translate: PanelTranslator): VNode {
   return h(AlertDialog, { key }, () => [
     h(AlertDialogTrigger, { asChild: true }, () => h(Button, { type: 'button', variant: 'destructive' }, () => [PanelsIcon('trash'), label])),
     h(AlertDialogContent, {}, () => [
       h(AlertDialogHeader, {}, () => [
-        h(AlertDialogTitle, {}, () => 'Delete notification?'),
-        h(AlertDialogDescription, {}, () => 'This action cannot be undone.'),
+        h(AlertDialogTitle, {}, () => translate('notifications.deleteTitle')),
+        h(AlertDialogDescription, {}, () => translate('notifications.deleteDescription')),
       ]),
       h(AlertDialogFooter, {}, () => [
-        h(AlertDialogCancel, {}, () => 'Cancel'),
-        h(AlertDialogAction, { onClick: () => ignoreFailure(operation()), variant: 'destructive' }, () => [PanelsIcon('trash'), 'Delete']),
+        h(AlertDialogCancel, {}, () => translate('notifications.cancelDelete')),
+        h(AlertDialogAction, { onClick: () => ignoreFailure(operation()), variant: 'destructive' }, () => [PanelsIcon('trash'), translate('notifications.confirmDelete')]),
       ]),
     ]),
   ])
 }
 
-function defaultNotification(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>): VNode {
+function defaultNotification(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>, translate: PanelTranslator): VNode {
   return h(Card, { 'aria-labelledby': `${item.id}-notification-title`, class: 'hp-notification-item-content' }, () => [
     h(CardHeader, {}, () => [
       h(CardTitle, { id: `${item.id}-notification-title` }, () => [item.presentation.icon ? h('span', { 'data-slot': 'notification-icon', style: { color: panelColorValue(item.presentation.iconColor ?? item.presentation.color ?? item.presentation.status) } }, [PanelsIcon(item.presentation.icon)]) : null, item.presentation.title]),
       item.presentation.body ? h(CardDescription, {}, () => item.presentation.body) : null,
       h(CardDescription, {}, () => h('time', { class: 'hp-notification-item-time', datetime: item.createdAt }, item.createdAt)),
     ]),
-    h(CardFooter, {}, () => notificationActions(item, controls, props)),
+    h(CardFooter, {}, () => notificationActions(item, controls, props, translate)),
   ])
 }
 
@@ -228,6 +228,7 @@ export const VueNotificationInbox = defineComponent({
   name: 'HoloPanelsNotificationInbox',
   props: {
     emptyMessage: { default: 'No notifications', type: String },
+    locale: { default: 'en', type: String },
     navigate: Function as PropType<VueNotificationInboxProps['navigate']>,
     panelId: String,
     placement: { default: 'page', type: String as PropType<NonNullable<VueNotificationInboxProps['placement']>> },
@@ -235,6 +236,7 @@ export const VueNotificationInbox = defineComponent({
     store: { required: true, type: Object as PropType<VueNotificationInboxProps['store']> },
   },
   setup(props) {
+    const translate = createPanelTranslator(props.locale)
     const state = shallowRef(props.store.state)
     const unsubscribe = props.store.subscribe(next => { state.value = next })
     onMounted(() => ignoreFailure(props.store.start()))
@@ -251,24 +253,24 @@ export const VueNotificationInbox = defineComponent({
         const Custom = props.registry?.has(rendererName, props.panelId)
           ? props.registry.resolve(rendererName, props.panelId, `notification "${item.id}"`)
           : null
-        const content = Custom ? h(Custom, { controls, notification: item } satisfies VueCustomNotificationProps) : defaultNotification(item, controls, props)
+        const content = Custom ? h(Custom, { controls, notification: item } satisfies VueCustomNotificationProps) : defaultNotification(item, controls, props, translate)
         return h('li', { class: 'hp-notification-item hp:ps-3', 'data-color': item.presentation.color ?? undefined, 'data-notification': item.id, 'data-read': item.read, 'data-slot': 'notification-item', key: item.id, style: { borderInlineStartColor: panelColorValue(item.presentation.color ?? item.presentation.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' } }, [content])
       })
-      return h(Card, { 'aria-busy': state.value.loading, 'aria-label': 'Notification inbox', class: ['hp-notification-inbox hp:w-full', props.placement === 'page' ? null : 'hp:rounded-none hp:border-0 hp:shadow-none'], 'data-placement': props.placement }, () => [
+      return h(Card, { 'aria-busy': state.value.loading, 'aria-label': translate('notifications.inbox'), class: ['hp-notification-inbox hp:w-full', props.placement === 'page' ? null : 'hp:rounded-none hp:border-0 hp:shadow-none'], 'data-placement': props.placement }, () => [
         h(CardHeader, { class: 'hp-notification-inbox-header' }, () => [
-          h(CardTitle, {}, () => ['Notifications', state.value.unread > 0 ? h(Badge, { 'aria-label': `${state.value.unread} unread`, class: 'hp-notification-inbox-count', variant: 'secondary' }, () => `${state.value.unread} unread`) : null]),
-          h(Button, { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), size: 'sm', type: 'button', variant: 'outline' }, () => [PanelsIcon('check-check'), 'Mark all read']),
+          h(CardTitle, {}, () => [translate('notifications.label'), state.value.unread > 0 ? h(Badge, { 'aria-label': translate('notifications.unreadCount', { count: state.value.unread }), class: 'hp-notification-inbox-count', variant: 'secondary' }, () => translate('notifications.unreadCount', { count: state.value.unread })) : null]),
+          h(Button, { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), size: 'sm', type: 'button', variant: 'outline' }, () => [PanelsIcon('check-check'), translate('notifications.markAllRead')]),
         ]),
         h(CardContent, { class: props.placement === 'page' ? null : 'hp:max-h-[min(36rem,calc(100vh-8rem))] hp:overflow-y-auto' }, () => [
           state.value.error ? h(Alert, { 'data-slot': 'notification-error', variant: 'destructive' }, () => h(AlertDescription, {}, () => state.value.error)) : null,
-          state.value.loading ? h('p', { 'aria-live': 'polite', class: 'hp:text-sm hp:text-muted-foreground', 'data-slot': 'notification-loading', role: 'status' }, 'Loading notifications') : null,
-          !state.value.loading && !state.value.error && items.length === 0 ? h(Empty, { 'data-slot': 'notification-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => props.emptyMessage), h(EmptyDescription, {}, () => 'You are all caught up.')])) : null,
+          state.value.loading ? h('p', { 'aria-live': 'polite', class: 'hp:text-sm hp:text-muted-foreground', 'data-slot': 'notification-loading', role: 'status' }, translate('notifications.loading')) : null,
+          !state.value.loading && !state.value.error && items.length === 0 ? h(Empty, { 'data-slot': 'notification-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => props.emptyMessage), h(EmptyDescription, {}, () => translate('notifications.noneDescription'))])) : null,
           items.length > 0 ? h('ol', { class: 'hp:grid hp:gap-3', 'data-slot': 'notification-list' }, items) : null,
         ]),
         pages > 1 ? h(CardFooter, { class: 'hp-notification-pagination' }, () => [
-          h(Button, { 'aria-label': 'Previous notification page', disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button', variant: 'outline' }, () => [PanelsIcon('chevron-left'), 'Previous']),
-          h('span', `Page ${state.value.page} of ${pages}`),
-          h(Button, { 'aria-label': 'Next notification page', disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button', variant: 'outline' }, () => ['Next', PanelsIcon('chevron-right')]),
+          h(Button, { 'aria-label': 'Previous notification page', disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button', variant: 'outline' }, () => [PanelsIcon('chevron-left'), translate('pagination.previous')]),
+          h('span', translate('notifications.page', { page: state.value.page, pages })),
+          h(Button, { 'aria-label': 'Next notification page', disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button', variant: 'outline' }, () => [translate('pagination.next'), PanelsIcon('chevron-right')]),
         ]) : null,
       ])
     }

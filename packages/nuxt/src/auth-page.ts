@@ -1,18 +1,18 @@
-import { executePanelAuthRequest, panelContentWidthValue } from '@holo-js/panels-vue'
-import { defineComponent, h, ref, type VNode } from 'vue'
+import { createPanelTranslator, executePanelAuthRequest, panelContentWidthValue, syncDocumentLocale, type PanelTranslationKey } from '@holo-js/panels-vue'
+import { defineComponent, h, onMounted, onUnmounted, ref, type VNode } from 'vue'
 import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNuxtPanelAuthPresentation } from './auth-presentation'
 import { Alert, AlertDescription, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Field, FieldGroup, FieldLabel, Input, NativeSelect } from './internal-ui'
 
 type AuthPageType = 'email-verification' | 'email-verification-verify' | 'mfa-challenge' | 'password-reset-request' | 'password-reset' | 'registration'
 
-const pageText: Readonly<Record<AuthPageType, readonly [string, string]>> = Object.freeze({
-  'email-verification': ['Verify your email', 'Use the verification link in your email, or request another one.'],
-  'email-verification-verify': ['Verify your email', 'Confirm the verification link for your account.'],
-  'mfa-challenge': ['Two-factor authentication', 'Enter the code from your authenticator application.'],
-  'password-reset': ['Reset your password', 'Choose a new password for your account.'],
-  'password-reset-request': ['Forgot password', 'Enter your email and we will send a reset link.'],
-  registration: ['Create an account', 'Register to access this panel.'],
+const pageText: Readonly<Record<AuthPageType, readonly [PanelTranslationKey, PanelTranslationKey]>> = Object.freeze({
+  'email-verification': ['auth.verifyEmail', 'auth.emailVerificationDescription'],
+  'email-verification-verify': ['auth.verifyEmail', 'auth.emailVerificationLinkDescription'],
+  'mfa-challenge': ['auth.twoFactorAuthentication', 'auth.mfaChallengeDescription'],
+  'password-reset': ['auth.resetPassword', 'auth.resetPasswordDescription'],
+  'password-reset-request': ['auth.forgotPasswordTitle', 'auth.forgotPasswordDescription'],
+  registration: ['auth.createAccount', 'auth.createAccountDescription'],
 })
 
 function cookie(name: string): string {
@@ -40,8 +40,15 @@ export const PanelAuthPage = defineComponent({
     const error = ref('')
     const message = ref('')
     const pending = ref(false)
+    const locale = ref('en')
+    let restoreDocumentLocale: (() => void) | undefined
     const presentation = useNuxtPanelAuthPresentation(props.panelId)
     const type = props.type as AuthPageType
+    onMounted(() => {
+      locale.value = navigator.language
+      restoreDocumentLocale = syncDocumentLocale({ direction: locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: locale.value }, document)
+    })
+    onUnmounted(() => restoreDocumentLocale?.())
     const submit = async (): Promise<void> => {
       error.value = ''
       message.value = ''
@@ -51,11 +58,12 @@ export const PanelAuthPage = defineComponent({
         const payload = type === 'email-verification' ? {} : type === 'email-verification-verify' ? { token: new URLSearchParams(location.search).get('token') ?? '' } : type === 'mfa-challenge' ? { code: code.value } : type === 'password-reset-request' ? { email: email.value } : type === 'password-reset' ? { password: password.value, passwordConfirmation: passwordConfirmation.value, token: new URLSearchParams(location.search).get('token') ?? '' } : { credentials: { email: email.value, name: name.value, password: password.value, passwordConfirmation: passwordConfirmation.value } }
         const result = await executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId: props.panelId, payload })
         if (!result.ok) {
-          error.value = 'The request could not be completed. Check the entered information and try again.'
+          error.value = createPanelTranslator(locale.value)('auth.requestFailed')
         } else if (result.url) {
           location.assign(result.url)
         } else {
-          message.value = type === 'password-reset-request' || type === 'email-verification' ? 'The email has been sent.' : 'Your changes were saved.'
+          const translate = createPanelTranslator(locale.value)
+          message.value = translate(type === 'password-reset-request' || type === 'email-verification' ? 'auth.emailSent' : 'auth.changesSaved')
         }
       } finally {
         pending.value = false
@@ -64,8 +72,12 @@ export const PanelAuthPage = defineComponent({
     return () => {
       if (!presentation.value) return h('main', { class: 'hp-auth-page', 'data-holo-panel': '' }, [h(Card, { class: 'hp-auth-card hp:h-80 hp:animate-pulse' })])
       const { appearance, brandName, loginPath, simplePageMaxContentWidth, theme } = presentation.value
-      const [title, description] = pageText[type]
-      const fields = type === 'email-verification' || type === 'email-verification-verify' ? [] : type === 'mfa-challenge' ? [h(Field, {}, () => [h(FieldLabel, { for: `${props.panelId}-method` }, () => 'Verification method'), h(NativeSelect, { id: `${props.panelId}-method`, onChange: (event: Event) => { method.value = (event.currentTarget as HTMLSelectElement).value === 'recovery' ? 'recovery' : 'totp' }, value: method.value }, () => [h('option', { value: 'totp' }, 'Authenticator code'), h('option', { value: 'recovery' }, 'Recovery code')])]), field(`${props.panelId}-code`, 'Authentication code', code, 'text', 'one-time-code')] : type === 'password-reset-request' ? [field(`${props.panelId}-email`, 'Email', email, 'email', 'email')] : [...(type === 'registration' ? [field(`${props.panelId}-name`, 'Name', name, 'text', 'name'), field(`${props.panelId}-email`, 'Email', email, 'email', 'email')] : []), field(`${props.panelId}-password`, 'Password', password, 'password', 'new-password'), field(`${props.panelId}-password-confirmation`, 'Confirm password', passwordConfirmation, 'password', 'new-password')]
+      const translate = createPanelTranslator(locale.value)
+      const direction = locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
+      const [titleKey, descriptionKey] = pageText[type]
+      const title = translate(titleKey)
+      const description = translate(descriptionKey)
+      const fields = type === 'email-verification' || type === 'email-verification-verify' ? [] : type === 'mfa-challenge' ? [h(Field, {}, () => [h(FieldLabel, { for: `${props.panelId}-method` }, () => translate('auth.verificationMethod')), h(NativeSelect, { id: `${props.panelId}-method`, onChange: (event: Event) => { method.value = (event.currentTarget as HTMLSelectElement).value === 'recovery' ? 'recovery' : 'totp' }, value: method.value }, () => [h('option', { value: 'totp' }, translate('auth.authenticatorCode')), h('option', { value: 'recovery' }, translate('auth.recoveryCode'))])]), field(`${props.panelId}-code`, translate('auth.authenticationCode'), code, 'text', 'one-time-code')] : type === 'password-reset-request' ? [field(`${props.panelId}-email`, translate('auth.email'), email, 'email', 'email')] : [...(type === 'registration' ? [field(`${props.panelId}-name`, translate('auth.name'), name, 'text', 'name'), field(`${props.panelId}-email`, translate('auth.email'), email, 'email', 'email')] : []), field(`${props.panelId}-password`, translate('auth.password'), password, 'password', 'new-password'), field(`${props.panelId}-password-confirmation`, translate('auth.confirmPassword'), passwordConfirmation, 'password', 'new-password')]
       const card = h(Card, { class: 'hp-auth-card' }, () => [
         h(CardHeader, {}, () => [
           h(CardDescription, {}, () => brandName),
@@ -78,15 +90,17 @@ export const PanelAuthPage = defineComponent({
           ...fields,
           error.value ? h(Alert, { variant: 'destructive' }, () => h(AlertDescription, {}, () => error.value)) : null,
           message.value ? h(Alert, {}, () => h(AlertDescription, {}, () => message.value)) : null,
-          h(Button, { disabled: pending.value, type: 'submit' }, () => pending.value ? 'Please wait…' : type === 'email-verification' ? 'Resend verification email' : type === 'email-verification-verify' ? 'Verify email' : type === 'mfa-challenge' ? 'Verify' : 'Continue'),
+          h(Button, { disabled: pending.value, type: 'submit' }, () => translate(pending.value ? 'states.loading' : type === 'email-verification' ? 'auth.resendVerificationEmail' : type === 'email-verification-verify' ? 'auth.verifyEmailAction' : type === 'mfa-challenge' ? 'auth.verify' : 'auth.continue')),
         ])])),
-        loginPath ? h(CardFooter, {}, () => h(Button, { as: 'a', href: loginPath, variant: 'link' }, () => 'Back to sign in')) : null,
+        loginPath ? h(CardFooter, {}, () => h(Button, { as: 'a', href: loginPath, variant: 'link' }, () => translate('auth.backToSignIn'))) : null,
       ])
       return h('main', {
         class: 'hp-auth-page',
         'data-density': appearance.density,
         'data-holo-panel': '',
         'data-theme': theme,
+        dir: direction,
+        lang: locale.value,
         style: {
           ...nuxtPanelAuthAppearanceVariables(appearance),
           '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth),

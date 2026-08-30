@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { executePanelAuthRequest, loadPanelAuthPresentation, panelContentWidthValue, type PanelAuthPresentation, type PanelClientAuthOperation } from '@holo-js/panels-svelte'
+  import { createPanelTranslator, executePanelAuthRequest, loadPanelAuthPresentation, panelContentWidthValue, syncDocumentLocale, type PanelAuthPresentation, type PanelClientAuthOperation, type PanelTranslationKey } from '@holo-js/panels-svelte'
   import { onMount } from 'svelte'
   import { svelteKitPanelAuthAppearanceStyleAttribute } from './auth-appearance'
   import { Button } from '@holo-js/panels-svelte/ui/button'
@@ -27,18 +27,23 @@
   let error = $state('')
   let message = $state('')
   let pending = $state(false)
+  let locale = $state('en')
+  const translate = $derived(createPanelTranslator(locale))
+  const direction = $derived(locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr')
 
   onMount(() => {
+    locale = navigator.language
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
+    return syncDocumentLocale({ direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale }, document)
   })
 
-  const pageText: Readonly<Record<AuthPageType, readonly [string, string]>> = {
-    'email-verification': ['Verify your email', 'Use the verification link in your email, or request another one.'],
-    'email-verification-verify': ['Verify your email', 'Confirm the verification link for your account.'],
-    'mfa-challenge': ['Two-factor authentication', 'Enter the code from your authenticator application.'],
-    'password-reset': ['Reset your password', 'Choose a new password for your account.'],
-    'password-reset-request': ['Forgot password', 'Enter your email and we will send a reset link.'],
-    registration: ['Create an account', 'Register to access this panel.'],
+  const pageText: Readonly<Record<AuthPageType, readonly [PanelTranslationKey, PanelTranslationKey]>> = {
+    'email-verification': ['auth.verifyEmail', 'auth.emailVerificationDescription'],
+    'email-verification-verify': ['auth.verifyEmail', 'auth.emailVerificationLinkDescription'],
+    'mfa-challenge': ['auth.twoFactorAuthentication', 'auth.mfaChallengeDescription'],
+    'password-reset': ['auth.resetPassword', 'auth.resetPasswordDescription'],
+    'password-reset-request': ['auth.forgotPasswordTitle', 'auth.forgotPasswordDescription'],
+    registration: ['auth.createAccount', 'auth.createAccountDescription'],
   }
 
   function cookie(name: string): string {
@@ -59,9 +64,9 @@
       const passwordConfirmationValue = String(values.get('passwordConfirmation') ?? '')
       const payload = type === 'email-verification' ? {} : type === 'email-verification-verify' ? { token: new URLSearchParams(location.search).get('token') ?? '' } : type === 'mfa-challenge' ? { code: String(values.get('code') ?? '') } : type === 'password-reset-request' ? { email: String(values.get('email') ?? '') } : type === 'password-reset' ? { password: passwordValue, passwordConfirmation: passwordConfirmationValue, token: new URLSearchParams(location.search).get('token') ?? '' } : { credentials: { email: String(values.get('email') ?? ''), name: String(values.get('name') ?? ''), password: passwordValue, passwordConfirmation: passwordConfirmationValue } }
       const result = await executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId, payload })
-      if (!result.ok) error = 'The request could not be completed. Check the entered information and try again.'
+      if (!result.ok) error = translate('auth.requestFailed')
       else if (result.url) location.assign(result.url)
-      else message = type === 'password-reset-request' || type === 'email-verification' ? 'The email has been sent.' : 'Your changes were saved.'
+      else message = translate(type === 'password-reset-request' || type === 'email-verification' ? 'auth.emailSent' : 'auth.changesSaved')
     } finally {
       pending = false
     }
@@ -69,29 +74,29 @@
 </script>
 
 {#if presentation}
-<main class="hp-auth-page" data-density={presentation.appearance.density} data-holo-panel data-theme={presentation.theme} style={`${svelteKitPanelAuthAppearanceStyleAttribute(presentation.appearance)}--hp-auth-max-width:${panelContentWidthValue(presentation.simplePageMaxContentWidth)};`}>
+<main class="hp-auth-page" data-density={presentation.appearance.density} data-holo-panel data-theme={presentation.theme} dir={direction} lang={locale} style={`${svelteKitPanelAuthAppearanceStyleAttribute(presentation.appearance)}--hp-auth-max-width:${panelContentWidthValue(presentation.simplePageMaxContentWidth)};`}>
   <Card class="hp-auth-card hp:w-full hp:max-w-md">
-    <CardHeader><span class="hp-auth-brand-mark"><Icon name={type === 'registration' ? 'user' : 'key'} /></span><CardDescription>{presentation.brandName}</CardDescription><CardTitle>{pageText[type][0]}</CardTitle><CardDescription>{pageText[type][1]}</CardDescription></CardHeader>
+    <CardHeader><span class="hp-auth-brand-mark"><Icon name={type === 'registration' ? 'user' : 'key'} /></span><CardDescription>{presentation.brandName}</CardDescription><CardTitle>{translate(pageText[type][0])}</CardTitle><CardDescription>{translate(pageText[type][1])}</CardDescription></CardHeader>
     <CardContent class="hp:space-y-6">
       <form class="hp:space-y-4" onsubmit={submit}>
         {#if type === 'mfa-challenge'}
-          <Field><FieldLabel for={`${panelId}-method`}>Verification method</FieldLabel><NativeSelect id={`${panelId}-method`} name="method" bind:value={method}><NativeSelectOption value="totp">Authenticator code</NativeSelectOption><NativeSelectOption value="recovery">Recovery code</NativeSelectOption></NativeSelect></Field>
-          <Field><FieldLabel for={`${panelId}-code`}>Authentication code</FieldLabel><Input autocomplete="one-time-code" id={`${panelId}-code`} name="code" bind:value={code} required /></Field>
+          <Field><FieldLabel for={`${panelId}-method`}>{translate('auth.verificationMethod')}</FieldLabel><NativeSelect id={`${panelId}-method`} name="method" bind:value={method}><NativeSelectOption value="totp">{translate('auth.authenticatorCode')}</NativeSelectOption><NativeSelectOption value="recovery">{translate('auth.recoveryCode')}</NativeSelectOption></NativeSelect></Field>
+          <Field><FieldLabel for={`${panelId}-code`}>{translate('auth.authenticationCode')}</FieldLabel><Input autocomplete="one-time-code" id={`${panelId}-code`} name="code" bind:value={code} required /></Field>
         {:else if type === 'password-reset-request'}
-          <Field><FieldLabel for={`${panelId}-email`}>Email</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></Field>
+          <Field><FieldLabel for={`${panelId}-email`}>{translate('auth.email')}</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></Field>
         {:else if type !== 'email-verification' && type !== 'email-verification-verify'}
           {#if type === 'registration'}
-            <Field><FieldLabel for={`${panelId}-name`}>Name</FieldLabel><Input autocomplete="name" id={`${panelId}-name`} bind:value={name} required /></Field>
-            <Field><FieldLabel for={`${panelId}-email`}>Email</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></Field>
+            <Field><FieldLabel for={`${panelId}-name`}>{translate('auth.name')}</FieldLabel><Input autocomplete="name" id={`${panelId}-name`} bind:value={name} required /></Field>
+            <Field><FieldLabel for={`${panelId}-email`}>{translate('auth.email')}</FieldLabel><Input autocomplete="email" id={`${panelId}-email`} type="email" bind:value={email} required /></Field>
           {/if}
-          <Field><FieldLabel for={`${panelId}-password`}>Password</FieldLabel><Input autocomplete="new-password" id={`${panelId}-password`} type="password" bind:value={password} required /></Field>
-          <Field><FieldLabel for={`${panelId}-password-confirmation`}>Confirm password</FieldLabel><Input autocomplete="new-password" id={`${panelId}-password-confirmation`} type="password" bind:value={passwordConfirmation} required /></Field>
+          <Field><FieldLabel for={`${panelId}-password`}>{translate('auth.password')}</FieldLabel><Input autocomplete="new-password" id={`${panelId}-password`} type="password" bind:value={password} required /></Field>
+          <Field><FieldLabel for={`${panelId}-password-confirmation`}>{translate('auth.confirmPassword')}</FieldLabel><Input autocomplete="new-password" id={`${panelId}-password-confirmation`} type="password" bind:value={passwordConfirmation} required /></Field>
         {/if}
         {#if error}<Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>{/if}
         {#if message}<Alert><AlertDescription>{message}</AlertDescription></Alert>{/if}
-        <Button class="hp:w-full" disabled={pending} type="submit">{pending ? 'Please wait…' : type === 'email-verification' ? 'Resend verification email' : type === 'email-verification-verify' ? 'Verify email' : type === 'mfa-challenge' ? 'Verify' : 'Continue'}</Button>
+        <Button class="hp:w-full" disabled={pending} type="submit">{translate(pending ? 'states.loading' : type === 'email-verification' ? 'auth.resendVerificationEmail' : type === 'email-verification-verify' ? 'auth.verifyEmailAction' : type === 'mfa-challenge' ? 'auth.verify' : 'auth.continue')}</Button>
       </form>
-      {#if presentation.loginPath}<p class="hp-auth-footer hp:text-center"><Button href={presentation.loginPath} variant="link">Back to sign in</Button></p>{/if}
+      {#if presentation.loginPath}<p class="hp-auth-footer hp:text-center"><Button href={presentation.loginPath} variant="link">{translate('auth.backToSignIn')}</Button></p>{/if}
     </CardContent>
   </Card>
 </main>

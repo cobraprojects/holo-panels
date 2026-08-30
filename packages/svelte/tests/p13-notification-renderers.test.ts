@@ -120,6 +120,23 @@ describe('P13 Svelte notification renderers', () => {
     expect(container.textContent).toContain('No notifications')
   })
 
+  it('renders the empty notification journey in Arabic', async () => {
+    const store = new ClientNotificationInboxStore({ polling: false, transport: {
+      delete: async () => 0,
+      list: async (page, pageSize) => ({ items: [], page, pageSize, total: 0, unread: 0 }),
+      markRead: async () => 0,
+      markUnread: async () => 0,
+    } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    await store.start()
+    const component = mountClient(ClientFixture, { props: { inbox: { locale: 'ar', store } }, target: container })
+    mounted.push({ component, container })
+
+    await vi.waitFor(() => { flushClient(); expect(container.textContent).toContain('لا توجد إشعارات') })
+    expect(container.textContent).toContain('لا توجد إشعارات جديدة.')
+  })
+
   it('executes a toast action once after shared confirmation without an inbox', async () => {
     const executeToastAction = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
     const store = new ClientToastStore()

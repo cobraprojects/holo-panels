@@ -273,12 +273,13 @@ export async function resolveNextPanelPage(
   return runWithNextRequest(nextContext, async () => {
     const resolvedAuth = await auth(runtime)
     const panelRuntime = new PanelRuntime(resolvedAuth, [panel])
-    const bootstrap = (await panelRuntime.bootstrap([panelId], request.signal))[0]!
+    const requestLocale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim() ?? 'en'
+    const bootstrap = (await panelRuntime.bootstrap([panelId], request.signal, requestLocale))[0]!
     const pageResult = await panelRuntime.execute(panelId, 'page-data', request.signal, async (scope: PanelAuthenticatedScope<object>) => {
       const tenantContext = runtime.resolveTenant || !panel.server.tenancy ? undefined : await panel.server.tenancy.activeContext(scope)
       const context = {
         actor: scope.actor,
-        locale: await runtime.resolveLocale?.(request) ?? 'en',
+        locale: bootstrap.locale,
         panelId,
         services: await runtime.resolveServices?.(request),
         signal: request.signal,

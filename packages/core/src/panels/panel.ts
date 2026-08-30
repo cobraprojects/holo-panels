@@ -1408,6 +1408,7 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
       navigationGroups: state.navigationGroups,
       navigationMode: state.navigationMode,
       layout: state.layout,
+      locales: Object.freeze({ allowed: Object.freeze(['en', 'ar']), fallback: 'en' }),
       path: state.path,
       routing: state.routing,
       runtime: state.runtime,

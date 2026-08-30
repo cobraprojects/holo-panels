@@ -75,12 +75,14 @@ export {
   panelLoginErrorMessage,
   loadPanelAuthPresentation,
   createPanelNotificationTransport,
+  createPanelTranslator,
   createPanelTenantSwitcherTransport,
   decodeResponseEnvelope,
   normalizeTransportError,
   publishPanelActionFailure,
   publishPanelError,
   registerPanelNotificationStore,
+  syncDocumentLocale,
   toJsonValue,
 } from '@holo-js/panels-client'
 export type {
@@ -106,6 +108,8 @@ export type {
   PanelAvatarComponentProps,
   PanelChromeComponentProps,
   PanelShellBootstrap,
+  PanelTranslationKey,
+  PanelTranslator,
   PanelShellTenancyBootstrap,
   PanelShellTenantPresentation,
   PanelTenantSwitcherTransport,

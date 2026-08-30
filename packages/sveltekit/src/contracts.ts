@@ -31,7 +31,7 @@ export interface PanelPageData {
 export type PanelAuthenticatedScope<TActor = unknown> = CorePanelAuthenticatedScope<TActor>
 
 export interface PanelRuntimeLike<TActor = unknown> {
-  bootstrap(panelIds: readonly string[], signal: AbortSignal): Promise<readonly PanelBootstrapData[]>
+  bootstrap(panelIds: readonly string[], signal: AbortSignal, requestedLocale?: string): Promise<readonly PanelBootstrapData[]>
   execute<TResult>(
     panelId: string,
     operation: PanelOperation,

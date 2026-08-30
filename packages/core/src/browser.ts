@@ -111,7 +111,8 @@ export type {
   TranslationReplacements,
   TranslationReplacementValue,
 } from './translations/contracts'
-export type { TranslationCatalogRegistry } from './translations/catalog-registry'
+export { TranslationCatalogRegistry } from './translations/catalog-registry'
+export { arCatalog, EN_MESSAGES, enCatalog } from './translations/catalogs'
 export { panelNotification } from './notifications/notification'
 export { notificationExecution } from './notifications/presentation'
 export { dispatchPanelNotification } from './notifications/dispatch'

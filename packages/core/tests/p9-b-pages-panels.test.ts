@@ -246,6 +246,21 @@ describe('P9-B panel runtime', () => {
     await expect(runtime.execute('missing', 'page-data', signal, () => undefined)).rejects.toMatchObject({ code: 'panel-not-found' })
   })
 
+  it('carries an allow-listed locale and direction in panel bootstrap payloads', async () => {
+    const actor = { id: 1, locale: 'ar-EG', role: 'admin' }
+    const panel = definePanel('admin').compile()
+    const runtime = new PanelRuntime(auth({ web: actor }).facade, [panel])
+
+    const inherited = (await runtime.bootstrap(['admin'], signal))[0]!
+    const overridden = (await runtime.bootstrap(['admin'], signal, 'en-US'))[0]!
+    const rejectedOverride = (await runtime.bootstrap(['admin'], signal, 'fr-FR'))[0]!
+
+    expect(inherited).toMatchObject({ direction: 'rtl', locale: 'ar' })
+    expect(overridden).toMatchObject({ direction: 'ltr', locale: 'en' })
+    expect(rejectedOverride).toMatchObject({ direction: 'rtl', locale: 'ar' })
+    expect(inherited.manifest.locales).toEqual({ allowed: ['en', 'ar'], fallback: 'en' })
+  })
+
   it('runs the fixed panel access policy for every operation and rejects unauthenticated or denied actors', async () => {
     const operations: readonly PanelOperation[] = ['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload']
     const checked: PanelOperation[] = []

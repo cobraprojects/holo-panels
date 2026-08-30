@@ -10,6 +10,8 @@ function pageData(): PanelPageData {
     effects: [],
     panel: {
       actor: { id: 7, name: 'Ada' },
+      direction: 'ltr',
+      locale: 'en',
       manifest: {
         auth: null,
         branding: { favicon: null, logo: null, name: 'Admin' },
@@ -17,6 +19,7 @@ function pageData(): PanelPageData {
         default: true,
         globalSearch: false,
         id: 'admin',
+        locales: { allowed: ['en', 'ar'], fallback: 'en' },
         navigation: [
           { badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 1 },
           { badge: null, group: null, icon: null, id: 'external', label: 'External', parent: null, path: '/admin/external-report', sort: 2 },

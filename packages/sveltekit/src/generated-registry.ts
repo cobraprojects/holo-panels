@@ -289,10 +289,10 @@ async function globalSearchOperation(input: PanelOperationInput<object>, registr
 
 export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKitPanelServerRegistry): SvelteKitPanelRegistry<object> {
   const runtime: PanelRuntimeLike<object> = {
-    async bootstrap(panelIds: readonly string[], signal: AbortSignal) {
+    async bootstrap(panelIds: readonly string[], signal: AbortSignal, requestedLocale?: string) {
       const panels = await Promise.all(panelIds.map(panelId => discoveredPanel(serverRegistry, panelId)))
       const panelRuntime = new PanelRuntime(await auth({ holo }), panels)
-      const bootstraps = await panelRuntime.bootstrap(panelIds, signal)
+      const bootstraps = await panelRuntime.bootstrap(panelIds, signal, requestedLocale)
       return await Promise.all(bootstraps.map(async bootstrap => {
         const panel = panels.find(candidate => candidate.manifest.id === bootstrap.manifest.id)!
         const pages = preparePageRoutes(await definitions(serverRegistry, bootstrap.manifest.id, 'page'))
@@ -300,7 +300,7 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
           const tenancy = panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
           return await resolvePanelNavigationSeed(panel.manifest.navigation, pages, {
             actor: scope.actor,
-            locale: 'en',
+            locale: bootstrap.locale,
             panelId: bootstrap.manifest.id,
             services: await holo.getProject(),
             signal,

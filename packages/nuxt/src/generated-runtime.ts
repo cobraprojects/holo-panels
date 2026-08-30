@@ -117,9 +117,15 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
   const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
   const widgetDefinitions = await definitions(registry, context.panelId, 'widget')
+  const requestedLocale = context.event.node.req.headers['accept-language']?.split(',')[0]?.trim()
+  const allowedLocales = new Set(panel.manifest.locales.allowed)
+  const actorLocale = typeof context.actor === 'object' && context.actor !== null && 'locale' in context.actor && typeof context.actor.locale === 'string' ? context.actor.locale : undefined
+  const locale = [requestedLocale, actorLocale, panel.manifest.locales.fallback]
+    .flatMap(candidate => candidate ? [candidate, candidate.split('-')[0]!] : [])
+    .find(candidate => allowedLocales.has(candidate)) ?? panel.manifest.locales.fallback
   const resolutionContext = {
     actor: context.actor,
-    locale: 'en',
+    locale,
     panelId: context.panelId,
     services: (await context.getApp()).runtime,
     signal: context.signal,
@@ -172,6 +178,8 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   return {
     bootstrap: {
       actor: await panel.server.presentActor(context.actor),
+      direction: locale === 'ar' ? 'rtl' : 'ltr',
+      locale,
       manifest: Object.freeze({ ...panel.manifest, navigation }),
       notifications: null,
       provider: context.provider,

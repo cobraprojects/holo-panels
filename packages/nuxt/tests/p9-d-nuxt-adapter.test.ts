@@ -29,6 +29,8 @@ import type { NuxtPanelOperationContext, NuxtPanelOperationResult, NuxtPanelPage
 const page: NuxtPanelPage = {
   bootstrap: {
     actor: { id: 7 },
+    direction: 'ltr',
+    locale: 'en',
     manifest: {
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,
@@ -164,6 +166,20 @@ describe('P9-D Nuxt adapter', () => {
     const markup = await renderToString(createSSRApp(PanelPage, { page: configured }))
     expect(markup).toContain('href="/admin/overview"')
     expect(markup).toContain('data-icon="home"')
+  })
+
+  it('renders shared panel chrome in Arabic with an RTL sidebar', async () => {
+    const configured: NuxtPanelPage = {
+      ...page,
+      bootstrap: { ...page.bootstrap, direction: 'rtl', locale: 'ar' },
+    }
+
+    const markup = await renderToString(createSSRApp(PanelPage, { page: configured }))
+
+    expect(markup).toContain('dir="rtl"')
+    expect(markup).toContain('lang="ar"')
+    expect(markup).toContain('قائمة الحساب')
+    expect(markup).toContain('data-side="right"')
   })
 
   it('navigates same-origin panel links in SPA mode, honors exceptions, and prefetches on hover', async () => {

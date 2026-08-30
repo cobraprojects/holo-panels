@@ -23,12 +23,14 @@ export interface VueToastViewportProps {
   readonly panelId?: string
   readonly registry?: ComponentRegistry
   readonly navigate?: (url: string) => void
+  readonly locale?: string
   readonly placement?: 'bottom' | 'top'
   readonly store: ClientToastStore
 }
 
 export interface VueNotificationInboxProps {
   readonly emptyMessage?: string
+  readonly locale?: string
   readonly navigate?: (url: string) => void
   readonly panelId?: string
   readonly placement?: 'dropdown' | 'page' | 'sidebar'

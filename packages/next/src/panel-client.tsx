@@ -69,7 +69,9 @@ import {
   SidebarTrigger,
   WidgetStore,
   createPanelNotificationTransport,
+  createPanelTranslator,
   createPanelTenantSwitcherTransport,
+  syncDocumentLocale,
   type ClientNotificationRealtime,
   type ClientSearchResponse,
   type ComponentRegistry,
@@ -146,11 +148,12 @@ function searchResponse(value: JsonValue, panelId: string, term: string): Client
   return Object.freeze({ panelId, results: Object.freeze(results), term })
 }
 
-function PanelGlobalSearch({ configuration, end, panelId, start }: {
+function PanelGlobalSearch({ configuration, end, panelId, start, translate }: {
   readonly configuration: NextPanelClientProps['payload']['bootstrap']['manifest']['globalSearchConfiguration']
   readonly end: ReactNode
   readonly panelId: string
   readonly start: ReactNode
+  readonly translate: ReturnType<typeof createPanelTranslator>
 }): ReactNode {
   const store = useMemo(() => new GlobalSearchStore({
     async search(term, signal) {
@@ -176,16 +179,16 @@ function PanelGlobalSearch({ configuration, end, panelId, start }: {
     return () => globalThis.removeEventListener('keydown', shortcut)
   }, [store])
   return <div className="hp-global-search hp:relative hp:w-full hp:max-w-md" role="search">
-    {start}<InputGroup><InputGroupAddon><PanelsIcon name="search" /></InputGroupAddon><InputGroupInput aria-controls="hp-global-search-results" aria-expanded={state.open} aria-label="Global search" data-panel-global-search="" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
+    {start}<InputGroup><InputGroupAddon><PanelsIcon name="search" /></InputGroupAddon><InputGroupInput aria-controls="hp-global-search-results" aria-expanded={state.open} aria-label={translate('search.label')} data-panel-global-search="" onChange={event => store.input(event.currentTarget.value)} onFocus={() => store.open()} onKeyDown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') store.move(event.key === 'ArrowDown' ? 1 : -1)
       if (event.key === 'Enter') {
         const url = store.selectedUrl()
         if (url) browserNavigate(url)
       }
       if (event.key === 'Escape') store.close()
-    }} placeholder="Search…" role="combobox" value={state.term} />{configuration?.fieldSuffix ? <InputGroupAddon align="inline-end">{configuration.fieldSuffix}</InputGroupAddon> : null}{configuration?.keybindingSuffix ? <InputGroupAddon align="inline-end"><kbd className="hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground">{configuration.keybindingSuffix}</kbd></InputGroupAddon> : null}</InputGroup>
+    }} placeholder={translate('search.placeholder')} role="combobox" value={state.term} />{configuration?.fieldSuffix ? <InputGroupAddon align="inline-end">{configuration.fieldSuffix}</InputGroupAddon> : null}{configuration?.keybindingSuffix ? <InputGroupAddon align="inline-end"><kbd className="hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground">{configuration.keybindingSuffix}</kbd></InputGroupAddon> : null}</InputGroup>
     {state.open && state.term ? <Command className="hp:absolute hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md"><CommandList id="hp-global-search-results">
-      {state.loading ? <CommandEmpty>Searching…</CommandEmpty> : state.error ? <CommandEmpty>{state.error}</CommandEmpty> : state.results.length === 0 ? <CommandEmpty>No results found.</CommandEmpty> : null}
+      {state.loading ? <CommandEmpty>{translate('search.loading')}</CommandEmpty> : state.error ? <CommandEmpty>{state.error}</CommandEmpty> : state.results.length === 0 ? <CommandEmpty>{translate('search.none')}</CommandEmpty> : null}
       {state.results.map(result => <CommandItem asChild key={`${result.resourceId}:${result.id}`} value={`${result.title} ${Object.values(result.details).join(' ')}`}><a className="hp:flex hp:w-full hp:flex-col hp:items-start" href={result.url}><strong>{result.title}</strong>{Object.entries(result.details).map(([key, value]) => <span className="hp:text-xs hp:text-muted-foreground" key={key}>{key}: {value}</span>)}</a></CommandItem>)}
     </CommandList></Command> : null}{end}
   </div>
@@ -268,12 +271,12 @@ function configuredIcon(icons: JsonObject | undefined, name: string | null): str
   return typeof configured === 'string' && configured.trim() ? configured : name
 }
 
-function actorLabel(actor: JsonObject): string {
+function actorLabel(actor: JsonObject, fallback: string): string {
   for (const key of ['name', 'email', 'username']) {
     const value = actor[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
-  return 'Account'
+  return fallback
 }
 
 function actorAvatarUrl(actor: JsonObject): string | null {
@@ -374,6 +377,8 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
   }, [payload])
   const state = useSyncExternalStore(store.subscribe.bind(store), () => store.snapshot, () => store.snapshot)
   const manifest = state.manifest!
+  const translate = useMemo(() => createPanelTranslator(payload.bootstrap.locale), [payload.bootstrap.locale])
+  useEffect(() => syncDocumentLocale(payload.bootstrap, document), [payload.bootstrap.direction, payload.bootstrap.locale])
   const navigation = useRef({ router, runtime: manifest.runtime })
   navigation.current = { router, runtime: manifest.runtime }
   const shell = useRef<HTMLDivElement>(null)
@@ -452,14 +457,14 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     })
   }, [effects, notificationConfiguration, notificationRealtime, state.notifications?.realtimeChannel, state.panelId])
   const notificationTrigger = notificationStore && notificationConfiguration
-    ? <NotificationTrigger lazy={notificationConfiguration.lazy ?? true} navigate={browserNavigate} panelId={state.panelId} placement={notificationConfiguration.placement} registry={registry} store={notificationStore} />
+    ? <NotificationTrigger emptyMessage={translate('notifications.empty')} label={translate('notifications.label')} lazy={notificationConfiguration.lazy ?? true} locale={payload.bootstrap.locale} navigate={browserNavigate} panelId={state.panelId} placement={notificationConfiguration.placement} registry={registry} store={notificationStore} />
     : null
   const body = payload.page.manifest.body
   const [navigationOpen, setNavigationOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [pageActionsContainer, setPageActionsContainer] = useState<HTMLElement | null>(null)
   const [colorMode, setColorMode] = useState<PanelColorMode>(manifest.theme.darkMode)
-  const accountLabel = actorLabel(payload.bootstrap.actor)
+  const accountLabel = actorLabel(payload.bootstrap.actor, translate('navigation.account'))
   const avatarUrl = actorAvatarUrl(payload.bootstrap.actor)
   useEffect(() => {
     const stored = globalThis.localStorage?.getItem(`holo-panels:${state.panelId}:color-mode`) ?? null
@@ -470,15 +475,15 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     globalThis.localStorage?.setItem(`holo-panels:${state.panelId}:color-mode`, mode)
   }
   const themeMenu = manifest.theme.switcher === false ? [] : [
-    { icon: null, id: 'panel-theme-light', label: <span className="hp-panel-theme-option"><PanelsIcon name="sun" /><span>Light</span>{colorMode === 'light' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('light') },
-    { icon: null, id: 'panel-theme-dark', label: <span className="hp-panel-theme-option"><PanelsIcon name="moon" /><span>Dark</span>{colorMode === 'dark' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('dark') },
-    { icon: null, id: 'panel-theme-system', label: <span className="hp-panel-theme-option"><PanelsIcon name="monitor" /><span>System</span>{colorMode === 'system' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('system') },
+    { icon: null, id: 'panel-theme-light', label: <span className="hp-panel-theme-option"><PanelsIcon name="sun" /><span>{translate('theme.light')}</span>{colorMode === 'light' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('light') },
+    { icon: null, id: 'panel-theme-dark', label: <span className="hp-panel-theme-option"><PanelsIcon name="moon" /><span>{translate('theme.dark')}</span>{colorMode === 'dark' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('dark') },
+    { icon: null, id: 'panel-theme-system', label: <span className="hp-panel-theme-option"><PanelsIcon name="monitor" /><span>{translate('theme.system')}</span>{colorMode === 'system' ? <PanelsIcon name="check" /> : null}</span>, onSelect: () => chooseColorMode('system') },
   ]
   const userMenu = [
     ...themeMenu,
-    ...(manifest.auth?.profile && !manifest.userMenu.some(item => item.id === 'profile') ? [{ icon: 'user', id: 'profile', label: 'Profile', onSelect: () => browserNavigate(manifest.auth!.profile!.path) }] : []),
+    ...(manifest.auth?.profile && !manifest.userMenu.some(item => item.id === 'profile') ? [{ icon: 'user', id: 'profile', label: translate('navigation.profile'), onSelect: () => browserNavigate(manifest.auth!.profile!.path) }] : []),
     ...manifest.userMenu.map(item => ({ icon: configuredIcon(manifest.icons, item.icon), id: item.id, label: item.label, onSelect: () => browserNavigate(item.path) })),
-    ...(manifest.auth?.logout ? [{ icon: 'log-out', id: 'panel-logout', label: 'Sign out', onSelect: () => { void executePanelAuthRequest({ csrfToken: '', operation: 'logout', panelId: state.panelId, payload: {} }).then(result => { if (result.ok) globalThis.location.assign(result.url ?? manifest.auth?.login?.path ?? manifest.path) }) } }] : []),
+    ...(manifest.auth?.logout ? [{ icon: 'log-out', id: 'panel-logout', label: translate('navigation.signOut'), onSelect: () => { void executePanelAuthRequest({ csrfToken: '', operation: 'logout', panelId: state.panelId, payload: {} }).then(result => { if (result.ok) globalThis.location.assign(result.url ?? manifest.auth?.login?.path ?? manifest.path) }) } }] : []),
   ]
   const pageScopes = [payload.page.manifest.id, ...(typeof body?.properties.resourceId === 'string' ? [body.properties.resourceId] : [])]
   const renderHook = (hook: PanelsRenderHook, data: JsonObject = {}): ReactNode => <ReactPanelsRenderHook data={data} hook={hook} manifest={manifest} registry={registry} scopes={pageScopes} />
@@ -486,7 +491,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     ? <AvatarComponent actor={payload.bootstrap.actor} label={accountLabel} />
     : <Avatar className="hp-panel-user-glyph hp:size-8">{avatarUrl ? <AvatarImage alt={accountLabel} src={avatarUrl} /> : null}<AvatarFallback><PanelsIcon name="user" /></AvatarFallback></Avatar>
   const accountMenu = manifest.userMenuEnabled === false ? null : <DropdownMenu>
-    <DropdownMenuTrigger asChild><Button aria-label="Account menu" className="hp-panel-user-action hp:h-10 hp:gap-2 hp:px-2" variant="ghost">{accountAvatar}<span className="hp:hidden hp:max-w-40 hp:truncate hp:sm:inline">{accountLabel}</span><PanelsIcon name="chevron-down" /></Button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><Button aria-label={translate('navigation.accountMenu')} className="hp-panel-user-action hp:h-10 hp:gap-2 hp:px-2" variant="ghost">{accountAvatar}<span className="hp:hidden hp:max-w-40 hp:truncate hp:sm:inline">{accountLabel}</span><PanelsIcon name="chevron-down" /></Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="hp:w-56"><DropdownMenuLabel>{accountLabel}</DropdownMenuLabel><DropdownMenuSeparator />{userMenu.map((item, index) => <Fragment key={item.id}>{index === themeMenu.length && themeMenu.length > 0 ? <DropdownMenuSeparator /> : null}<DropdownMenuItem onSelect={item.onSelect} variant={item.id === 'panel-logout' ? 'destructive' : 'default'}>{item.icon ? <PanelsIcon name={item.icon} /> : null}{item.label}</DropdownMenuItem></Fragment>)}</DropdownMenuContent>
   </DropdownMenu>
   const brand = <a className="hp-panel-brand hp:flex hp:items-center hp:gap-2 hp:font-semibold" href={manifest.routing?.homeUrl ?? manifest.path}>{manifest.branding.logo ? <img alt="" className="hp:size-8 hp:rounded-md hp:object-contain" src={manifest.branding.logo} /> : <span aria-hidden="true" className="hp:flex hp:size-8 hp:items-center hp:justify-center hp:rounded-md hp:bg-primary hp:text-sm hp:font-semibold hp:text-primary-foreground">H</span>}<span className="hp:truncate hp:group-data-[collapsible=icon]:hidden">{manifest.branding.name}</span></a>
@@ -500,7 +505,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
         {manifest.navigationMode === 'sidebar' ? <Separator className="hp:mr-2 hp:h-4" orientation="vertical" /> : null}
         {manifest.navigationMode === 'topbar' ? <>{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}<nav aria-label="Panel navigation" className="hp-panel-navigation hp-panel-navigation--topbar hp:hidden hp:items-center hp:gap-1 hp:lg:flex"><NavigationItems activeId={state.activeNavigationId} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav></> : null}
         {renderHook(PanelsRenderHook.GLOBAL_SEARCH_BEFORE)}
-        {manifest.globalSearch ? <div className="hp-panel-topbar-center hp:mx-auto hp:min-w-0 hp:max-w-md hp:flex-1"><PanelGlobalSearch configuration={manifest.globalSearchConfiguration} end={renderHook(PanelsRenderHook.GLOBAL_SEARCH_END)} panelId={state.panelId} start={renderHook(PanelsRenderHook.GLOBAL_SEARCH_START)} /></div> : <div className="hp-panel-topbar-center hp:flex-1" />}
+        {manifest.globalSearch ? <div className="hp-panel-topbar-center hp:mx-auto hp:min-w-0 hp:max-w-md hp:flex-1"><PanelGlobalSearch configuration={manifest.globalSearchConfiguration} end={renderHook(PanelsRenderHook.GLOBAL_SEARCH_END)} panelId={state.panelId} start={renderHook(PanelsRenderHook.GLOBAL_SEARCH_START)} translate={translate} /></div> : <div className="hp-panel-topbar-center hp:flex-1" />}
         {renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER)}
         <div className="hp-panel-header-actions hp-panel-actions--compact hp:ml-auto hp:flex hp:shrink-0 hp:items-center hp:gap-2">
           {notificationConfiguration?.placement === 'topbar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}
@@ -524,12 +529,12 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     </SidebarInset>
     {renderHook(PanelsRenderHook.CONTENT_AFTER)}
   </>
-  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} style={panelConfigurationVariables(manifest) as CSSProperties}>
+  return <ReactFeedbackProvider panelId={state.panelId} store={toastStore}><ReactPanelsRenderHookProvider data={payload.page.data} manifest={manifest} registry={registry} scopes={pageScopes}><PanelsPageActionsProvider container={pageActionsContainer}><PanelsPortalProvider container={shell}><div ref={shell} className="hp-panel hp:min-h-svh hp:bg-background hp:text-foreground" data-density={manifest.theme.density} data-holo-panel="" data-navigation={manifest.navigationMode} data-navigation-open={navigationOpen ? 'true' : 'false'} data-panel={state.panelId} data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'} data-sidebar-collapsible={manifest.sidebarCollapsible ? 'true' : 'false'} data-sidebar-fully-collapsible={manifest.layout?.sidebarFullyCollapsible ? 'true' : 'false'} data-theme={colorMode} data-width={manifest.layout?.maxContentWidth === 'full' ? 'full' : 'constrained'} dir={payload.bootstrap.direction} lang={payload.bootstrap.locale} style={panelConfigurationVariables(manifest) as CSSProperties}>
     {renderHook(PanelsRenderHook.BODY_START)}{renderHook(PanelsRenderHook.LAYOUT_START)}
     {manifest.assets?.map(asset => asset.type === 'css' ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" /> : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
     {renderHook(PanelsRenderHook.TOPBAR_BEFORE)}
     <SidebarProvider onOpenChange={open => setSidebarCollapsed(!open)} open={!sidebarCollapsed}>
-      {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'}>
+      {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'} side={payload.bootstrap.direction === 'rtl' ? 'right' : 'left'}>
         {renderHook(PanelsRenderHook.SIDEBAR_START)}
         <SidebarHeader className="hp-panel-navigation-header">{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}{payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}</SidebarHeader>
         <SidebarContent className="hp-panel-navigation-body"><nav aria-label="Panel navigation" className="hp-panel-navigation hp:h-full">{renderHook(PanelsRenderHook.SIDEBAR_NAV_START)}<NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => undefined} />{renderHook(PanelsRenderHook.SIDEBAR_NAV_END)}</nav></SidebarContent>

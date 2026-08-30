@@ -85,6 +85,8 @@ function pageData(pageType: 'create' | 'edit' | 'list' | 'manage' | 'view'): Pan
     effects: [],
     panel: {
       actor: { id: 7, name: 'Ada' },
+      direction: 'ltr',
+      locale: 'en',
       manifest: {
         auth: null,
         branding: { favicon: null, logo: null, name: 'Admin' },
@@ -92,6 +94,7 @@ function pageData(pageType: 'create' | 'edit' | 'list' | 'manage' | 'view'): Pan
         default: true,
         globalSearch: true,
         id: 'admin',
+        locales: { allowed: ['en', 'ar'], fallback: 'en' },
         navigation: [{ badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 10 }],
         navigationMode: 'sidebar',
         path: '/admin',
@@ -158,6 +161,21 @@ describe('SvelteKit resource page acceptance', () => {
     const markup = render(PanelPage, { props: { data: configured } }).body
     expect(markup).toContain('href="/admin/overview"')
     expect(markup).toContain('data-icon="home"')
+  })
+
+  it('renders shared panel chrome in Arabic with an RTL sidebar', () => {
+    const current = pageData('list')
+    const configured: PanelPageData = {
+      ...current,
+      panel: { ...current.panel, direction: 'rtl', locale: 'ar' },
+    }
+
+    const markup = render(PanelPage, { props: { data: configured } }).body
+
+    expect(markup).toContain('dir="rtl"')
+    expect(markup).toContain('lang="ar"')
+    expect(markup).toContain('قائمة الحساب')
+    expect(markup).toContain('data-side="right"')
   })
 
   it('makes relation managers interactive on view pages only when the panel enables it', () => {

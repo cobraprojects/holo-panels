@@ -61,6 +61,8 @@ vi.mock('@sveltejs/kit', () => ({
 
 const bootstrap: PanelBootstrapData = {
   actor: { id: 7, name: 'Ada' },
+  direction: 'ltr',
+  locale: 'en',
   manifest: {
     auth: null,
     branding: { favicon: null, logo: null, name: 'Admin' },
@@ -68,6 +70,7 @@ const bootstrap: PanelBootstrapData = {
     default: true,
     globalSearch: true,
     id: 'admin',
+    locales: { allowed: ['en', 'ar'], fallback: 'en' },
     navigation: [],
     navigationMode: 'sidebar',
     path: '/admin',

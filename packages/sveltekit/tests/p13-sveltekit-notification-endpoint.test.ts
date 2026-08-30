@@ -53,6 +53,7 @@ const panel: CompiledPanelDefinition<Actor> = {
     default: true,
     globalSearch: true,
     id: 'admin',
+    locales: { allowed: ['en', 'ar'], fallback: 'en' },
     navigation: [],
     navigationMode: 'sidebar',
     path: '/admin',

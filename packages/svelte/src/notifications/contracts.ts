@@ -18,12 +18,14 @@ export interface SvelteToastViewportProps extends Record<string, unknown> {
   readonly panelId?: string
   readonly registry?: SvelteComponentRegistry
   readonly navigate?: (url: string) => void
+  readonly locale?: string
   readonly placement?: 'bottom' | 'top'
   readonly store: ClientToastStore
 }
 
 export interface SvelteNotificationInboxProps extends Record<string, unknown> {
   readonly emptyMessage?: string
+  readonly locale?: string
   readonly navigate?: (url: string) => void
   readonly panelId?: string
   readonly placement?: 'dropdown' | 'page' | 'sidebar'
@@ -35,6 +37,7 @@ export interface SvelteNotificationInboxTriggerProps extends Record<string, unkn
   readonly emptyMessage?: string
   readonly label?: string
   readonly lazy?: boolean
+  readonly locale?: string
   readonly navigate?: (url: string) => void
   readonly panelId?: string
   readonly placement: 'sidebar' | 'topbar'

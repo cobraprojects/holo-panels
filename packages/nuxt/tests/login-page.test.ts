@@ -77,4 +77,27 @@ describe('Nuxt panel login page', () => {
     expect(container.textContent).toContain('These credentials do not match our records.')
     app.unmount()
   })
+
+  it('renders the login journey in Arabic from the browser locale', async () => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: 'ar' })
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
+      brandName: 'Control Center',
+      forgotPasswordPath: null,
+      loginPath: '/admin/login',
+      registrationPath: null,
+      simplePageMaxContentWidth: 'screen-sm',
+      theme: 'system',
+    })))
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(PanelLoginPage, { panelId: 'admin' })
+    app.mount(container)
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    await nextTick()
+
+    expect(container.textContent).toContain('تسجيل الدخول')
+    expect(container.textContent).toContain('البريد الإلكتروني')
+    app.unmount()
+  })
 })

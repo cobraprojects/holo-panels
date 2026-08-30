@@ -21,6 +21,7 @@ async function settle(): Promise<void> {
 
 describe('Nuxt panel authentication pages', () => {
   beforeEach(() => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: 'en' })
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
       const url = String(input)
       if (url.endsWith('/presentation')) return Response.json(presentation)
@@ -28,6 +29,23 @@ describe('Nuxt panel authentication pages', () => {
       if (url.endsWith('/mfa-status')) return Response.json({ enabled: false })
       return new Response(null, { status: 204 })
     }))
+  })
+
+  it.each([
+    ['registration', PanelAuthPage, { panelId: 'cp', type: 'registration' }, 'إنشاء حساب'],
+    ['multi-factor', PanelMultiFactorPage, { panelId: 'cp' }, 'المصادقة متعددة العوامل'],
+    ['profile', PanelProfilePage, { panelId: 'cp' }, 'الملف الشخصي'],
+  ])('renders the %s journey in Arabic and RTL', async (_name, component, props, expected) => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: 'ar' })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(component as Component, props)
+    app.mount(container)
+    await settle()
+
+    expect(container.textContent).toContain(expected)
+    expect(container.querySelector('main')).toMatchObject({ dir: 'rtl', lang: 'ar' })
+    app.unmount()
   })
 
   afterEach(() => {

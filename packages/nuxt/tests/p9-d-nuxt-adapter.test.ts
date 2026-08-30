@@ -35,8 +35,11 @@ const page: NuxtPanelPage = {
       branding: { favicon: null, logo: null, name: 'Admin' },
       databaseNotifications: null,
       default: true,
+      direction: 'ltr',
       globalSearch: true,
       id: 'admin',
+      locale: 'en',
+      locales: { allowed: ['en', 'ar'], fallback: 'en' },
       navigation: [{ badge: '4', group: null, icon: 'posts', id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 1 }],
       navigationMode: 'sidebar',
       path: '/admin',
@@ -582,7 +585,7 @@ describe('P9-D Nuxt adapter', () => {
       runtime: runtime(['admin'], async () => { throw new ActionExecutionError('failed', 'failed', [effect]) }),
     }))
     const actionResponse = await actionFailure(formRequest('admin', 'action'))
-    expect(await actionResponse.json()).toMatchObject({ ok: false, effects: [effect] })
+    expect(await actionResponse.json()).toMatchObject({ direction: 'ltr', effects: [effect], locale: 'en', ok: false })
 
     const spoofedFailure = webHandler(createPanelOperationHandler({
       panelIds: ['admin'],

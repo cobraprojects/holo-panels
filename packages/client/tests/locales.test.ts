@@ -52,7 +52,7 @@ describe('client locales', () => {
     expect(diagnostic).not.toHaveBeenCalled()
   })
 
-  it('emits development diagnostics and returns stable keys in production', () => {
+  it('emits development diagnostics without exposing missing keys', () => {
     const reference = createTranslationReference<'plugin.missing', string>('plugin.missing')
     const diagnostic = vi.fn()
     const registry = new TranslationCatalogRegistry({ defaults: [enCatalog] })
@@ -64,14 +64,14 @@ describe('client locales', () => {
     })
     const production = new LocaleManager(registry, { requestedLocale: 'en', fallbackLocale: 'en' })
 
-    expect(development.translate(reference)).toBe('plugin.missing')
+    expect(development.translate(reference)).toBe('')
     expect(diagnostic).toHaveBeenCalledWith({
       attemptedLocales: ['en'],
       code: 'missing-translation',
       key: 'plugin.missing',
       locale: 'en',
     })
-    expect(production.translate(reference)).toBe('plugin.missing')
+    expect(production.translate(reference)).toBe('')
   })
 
   it('ships complete English and Arabic panel chrome translations', () => {

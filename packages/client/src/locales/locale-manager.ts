@@ -75,7 +75,7 @@ export class LocaleManager {
           locale: this.#state.locale,
         }))
       }
-      return reference.key
+      return ''
     }
     if (typeof lookup.message === 'string') return interpolate(lookup.message, reference.replacements)
     const count = reference.replacements.count

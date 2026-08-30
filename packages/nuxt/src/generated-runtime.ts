@@ -8,6 +8,7 @@ import {
   preparePageRoutes,
   resolvePanelNavigationSeed,
   resolvePageData,
+  requestedLocales,
   resolvePanelLocale,
   resolveWidget,
   type CompiledPageDefinition,
@@ -118,9 +119,9 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
   const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
   const widgetDefinitions = await definitions(registry, context.panelId, 'widget')
-  const requestedLocale = context.event?.node?.req?.headers['accept-language']?.split(',')[0]?.trim()
+  const requestedLocale = requestedLocales(context.event?.node?.req?.headers['accept-language'])
   const actorLocale = typeof context.actor === 'object' && context.actor !== null && 'locale' in context.actor && typeof context.actor.locale === 'string' ? context.actor.locale : undefined
-  const { locale } = resolvePanelLocale(panel.manifest.locales, [requestedLocale, actorLocale])
+  const { locale } = resolvePanelLocale(panel.manifest.locales, [...requestedLocale, actorLocale])
   const resolutionContext = {
     actor: context.actor,
     locale,

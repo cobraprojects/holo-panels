@@ -21,7 +21,7 @@ describe('P13 notifications phase gate', () => {
       expect(report.render.markup).toContain('data-placement="sidebar"')
       expect(report.render.markup).toContain('Custom release: Release deployed')
       expect(report.render.markup).toContain('Page')
-      expect(report.render.markup).toContain('Next notification page')
+      expect(report.render.markup).toContain('aria-label="Next"')
       expect(report.render.markup).toContain('Acknowledge')
       expect(report.render.markup).toContain('Remove')
       expect(report.actionObserved).toBe('open-deployment')

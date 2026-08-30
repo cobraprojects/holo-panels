@@ -56,5 +56,12 @@ export function resolvePanelLocale(
 
 export function requestedLocales(header: string | null | undefined): readonly string[] {
   if (!header) return Object.freeze([])
-  return Object.freeze(header.split(',').map(value => value.split(';', 1)[0]?.trim()).filter((value): value is string => Boolean(value) && value !== '*'))
+  return Object.freeze(header.split(',').flatMap((value, index) => {
+    const [locale, ...parameters] = value.split(';').map(part => part.trim())
+    if (!locale || locale === '*') return []
+    const qualityParameter = parameters.find(parameter => parameter.startsWith('q='))
+    const quality = qualityParameter ? Number(qualityParameter.slice(2)) : 1
+    if (!Number.isFinite(quality) || quality <= 0 || quality > 1) return []
+    return [{ index, locale, quality }]
+  }).sort((left, right) => right.quality - left.quality || left.index - right.index).map(candidate => candidate.locale))
 }

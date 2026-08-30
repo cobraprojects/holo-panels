@@ -42,6 +42,7 @@ export interface PanelShellManifest {
     realtime: boolean
   } | null
   default: boolean
+  direction: LocaleDirection
   globalSearch?: boolean
   globalSearchConfiguration?: {
     debounce: number
@@ -72,7 +73,8 @@ export interface PanelShellManifest {
     subNavigationPosition: 'end' | 'start' | 'top'
     topbar: boolean
   }
-  locales?: PanelManifest['locales']
+  locales: PanelManifest['locales']
+  locale: string
   path: string
   routing?: {
     domain: string | null

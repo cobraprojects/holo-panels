@@ -10,6 +10,8 @@ import {
   preparePageRoutes,
   resolvePanelNavigationSeed,
   resolvePageData,
+  requestedLocales,
+  resolvePanelLocale,
   resolveWidget,
   toJsonValue,
   type CompiledPageDefinition,
@@ -147,6 +149,11 @@ async function discoveredPanel(registry: SvelteKitPanelServerRegistry, panelId: 
   return panelWithNavigation(panel, pages)
 }
 
+function generatedLocale(panel: CompiledPanelDefinition<object>, input: PanelOperationInput<object> | PanelPageResolutionInput<object>): string {
+  const actorLocale = typeof input.scope.actor === 'object' && input.scope.actor !== null && 'locale' in input.scope.actor && typeof input.scope.actor.locale === 'string' ? input.scope.actor.locale : undefined
+  return resolvePanelLocale(panel.manifest.locales, [...requestedLocales(input.event.request.headers.get('accept-language')), actorLocale]).locale
+}
+
 async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, registry: SvelteKitPanelServerRegistry) {
   const pages = preparePageRoutes(await definitions(registry, input.panelId, 'page'))
   const match = pages.map(definition => ({ definition, parameters: routeParameters(definition.manifest.path, input.path) })).find(item => item.parameters !== null)
@@ -155,7 +162,7 @@ async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, reg
   const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
   const page = await resolvePageData(match.definition, {
     actor: input.scope.actor,
-    locale: input.event.request.headers.get('accept-language')?.split(',')[0]?.trim() || 'en',
+    locale: generatedLocale(panel, input),
     panelId: input.panelId,
     parameters: match.parameters,
     services: await input.holo.getProject(),
@@ -193,7 +200,7 @@ async function resourceOperation(input: PanelOperationInput<object>, registry: S
     const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
     return executeGeneratedWidgetOperation(registry, input.payload, {
       actor: input.scope.actor,
-      locale: input.event.request.headers.get('accept-language')?.split(',')[0]?.trim() || 'en',
+      locale: generatedLocale(panel, input),
       panelId: input.panelId,
       provider: input.scope.provider,
       services: await input.holo.getProject(),
@@ -338,7 +345,7 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
       const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
       const context = {
         actor: input.scope.actor,
-        locale: input.event.request.headers.get('accept-language')?.split(',')[0]?.trim() || 'en',
+        locale: generatedLocale(panel, input),
         panelId: input.panelId,
         services: await input.holo.getProject(),
         signal: input.scope.signal,

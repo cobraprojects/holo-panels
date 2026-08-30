@@ -645,7 +645,9 @@ describe('Next panel adapter', () => {
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toMatchObject({
+      direction: 'ltr',
       effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      locale: 'en',
       ok: false,
     })
   })

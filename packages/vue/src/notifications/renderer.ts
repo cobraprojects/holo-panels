@@ -271,9 +271,9 @@ export const VueNotificationInbox = defineComponent({
           items.length > 0 ? h('ol', { class: 'hp:grid hp:gap-3', 'data-slot': 'notification-list' }, items) : null,
         ]),
         pages > 1 ? h(CardFooter, { class: 'hp-notification-pagination' }, () => [
-          h(Button, { 'aria-label': 'Previous notification page', disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button', variant: 'outline' }, () => [PanelsIcon('chevron-left'), translate('pagination.previous')]),
+          h(Button, { 'aria-label': translate('pagination.previous'), disabled: state.value.page <= 1, onClick: () => ignoreFailure(props.store.load(state.value.page - 1)), type: 'button', variant: 'outline' }, () => [PanelsIcon('chevron-left', 'hp:rtl:rotate-180'), translate('pagination.previous')]),
           h('span', translate('notifications.page', { page: state.value.page, pages })),
-          h(Button, { 'aria-label': 'Next notification page', disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button', variant: 'outline' }, () => [translate('pagination.next'), PanelsIcon('chevron-right')]),
+          h(Button, { 'aria-label': translate('pagination.next'), disabled: state.value.page >= pages, onClick: () => ignoreFailure(props.store.load(state.value.page + 1)), type: 'button', variant: 'outline' }, () => [translate('pagination.next'), PanelsIcon('chevron-right', 'hp:rtl:rotate-180')]),
         ]) : null,
       ])
     }

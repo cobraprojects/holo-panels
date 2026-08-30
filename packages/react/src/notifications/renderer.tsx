@@ -241,17 +241,17 @@ export function ReactNotificationInbox({
         </article>}
       </li>
     })}</ol> : null}
-    {pages > 1 ? <><Separator /><Pagination aria-label="Notification pagination" data-slot="notification-pagination"><PaginationContent>
-      <PaginationItem><Button aria-label="Previous notification page" disabled={state.page <= 1} onClick={() => ignoreFailure(store.load(state.page - 1))} size="sm" type="button" variant="outline"><PanelsIcon name="chevron-left" />Previous</Button></PaginationItem>
-      <PaginationItem><span className="hp:px-2 hp:text-sm hp:text-muted-foreground">Page {state.page} of {pages}</span></PaginationItem>
-      <PaginationItem><Button aria-label="Next notification page" disabled={state.page >= pages} onClick={() => ignoreFailure(store.load(state.page + 1))} size="sm" type="button" variant="outline">Next<PanelsIcon name="chevron-right" /></Button></PaginationItem>
+    {pages > 1 ? <><Separator /><Pagination aria-label={translate('notifications.inbox')} data-slot="notification-pagination"><PaginationContent>
+      <PaginationItem><Button aria-label={translate('pagination.previous')} disabled={state.page <= 1} onClick={() => ignoreFailure(store.load(state.page - 1))} size="sm" type="button" variant="outline"><PanelsIcon className="hp:rtl:rotate-180" name="chevron-left" />{translate('pagination.previous')}</Button></PaginationItem>
+      <PaginationItem><span className="hp:px-2 hp:text-sm hp:text-muted-foreground">{translate('notifications.page', { page: state.page, pages })}</span></PaginationItem>
+      <PaginationItem><Button aria-label={translate('pagination.next')} disabled={state.page >= pages} onClick={() => ignoreFailure(store.load(state.page + 1))} size="sm" type="button" variant="outline">{translate('pagination.next')}<PanelsIcon className="hp:rtl:rotate-180" name="chevron-right" /></Button></PaginationItem>
     </PaginationContent></Pagination></> : null}
   </CardContent>
-  return <Card aria-busy={state.loading} aria-label="Notification inbox" className={`hp-notification-inbox hp:w-full ${placement === 'page' ? '' : 'hp:rounded-none hp:border-0 hp:shadow-none'}`} data-placement={placement}>
+  return <Card aria-busy={state.loading} aria-label={translate('notifications.inbox')} className={`hp-notification-inbox hp:w-full ${placement === 'page' ? '' : 'hp:rounded-none hp:border-0 hp:shadow-none'}`} data-placement={placement}>
     <CardHeader className="hp:flex-row hp:items-center hp:gap-3 hp:space-y-0" data-slot="notification-inbox-header">
-      <CardTitle className="hp:flex-1" data-slot="notification-inbox-title">Notifications</CardTitle>
-      {state.unread > 0 ? <Badge aria-label={`${state.unread} unread`} className="hp-notification-inbox-count" data-slot="notification-inbox-count" variant="secondary">{state.unread}</Badge> : null}
-      <Button disabled={state.unread === 0} onClick={() => ignoreFailure(store.markAllRead())} size="sm" type="button" variant="outline"><PanelsIcon name="check-check" />Mark all read</Button>
+      <CardTitle className="hp:flex-1" data-slot="notification-inbox-title">{translate('notifications.label')}</CardTitle>
+      {state.unread > 0 ? <Badge aria-label={translate('notifications.unreadCount', { count: state.unread })} className="hp-notification-inbox-count" data-slot="notification-inbox-count" variant="secondary">{state.unread}</Badge> : null}
+      <Button disabled={state.unread === 0} onClick={() => ignoreFailure(store.markAllRead())} size="sm" type="button" variant="outline"><PanelsIcon name="check-check" />{translate('notifications.markAllRead')}</Button>
     </CardHeader>
     {placement === 'page' ? content : <ScrollArea className="hp:max-h-[min(36rem,calc(100vh-8rem))]">{content}</ScrollArea>}
   </Card>

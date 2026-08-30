@@ -115,7 +115,7 @@ export class PanelRuntime<TActor> {
     this.#panels = new Map(entries)
   }
 
-  async bootstrap(panelIds: readonly string[], signal: AbortSignal, requestedLocale?: string): Promise<readonly Readonly<PanelBootstrap>[]> {
+  async bootstrap(panelIds: readonly string[], signal: AbortSignal, requestedLocales: string | readonly string[] = []): Promise<readonly Readonly<PanelBootstrap>[]> {
     if (new Set(panelIds).size !== panelIds.length) throw new Error('Panel bootstrap IDs must be unique')
     const guards = new Map<string, Promise<ResolvedGuard<TActor>>>()
     return Promise.all(panelIds.map(async panelId => {
@@ -128,7 +128,7 @@ export class PanelRuntime<TActor> {
       }
       const guard = await resolved
       const scope = await this.authorize(panel, 'bootstrap', signal, guard)
-      return executePanelPipeline(panel, scope, 'bootstrap', () => this.bootstrapPayload(panel, scope, requestedLocale))
+      return executePanelPipeline(panel, scope, 'bootstrap', () => this.bootstrapPayload(panel, scope, requestedLocales))
     }))
   }
 
@@ -175,7 +175,7 @@ export class PanelRuntime<TActor> {
     return context
   }
 
-  private async bootstrapPayload(panel: CompiledPanelDefinition<TActor>, scope: PanelAuthenticatedScope<TActor>, requestedLocale?: string): Promise<Readonly<PanelBootstrap>> {
+  private async bootstrapPayload(panel: CompiledPanelDefinition<TActor>, scope: PanelAuthenticatedScope<TActor>, requestedLocales: string | readonly string[]): Promise<Readonly<PanelBootstrap>> {
     const actor = toJsonValue(await panel.server.presentActor(scope.actor))
     if (actor === null || Array.isArray(actor) || typeof actor !== 'object') {
       throw new PanelRuntimeError('actor-not-serializable', 'Panel actors must serialize to JSON objects')
@@ -185,8 +185,9 @@ export class PanelRuntime<TActor> {
     const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string'
       ? scope.actor.locale
       : undefined
-    const resolved = resolvePanelLocale(panel.manifest.locales, [requestedLocale, actorLocale])
-    return Object.freeze({ actor: actor as JsonObject, direction: resolved.direction, locale: resolved.locale, manifest: panel.manifest, notifications, provider: scope.provider, tenancy })
+    const resolved = resolvePanelLocale(panel.manifest.locales, [...(typeof requestedLocales === 'string' ? [requestedLocales] : requestedLocales), actorLocale])
+    const manifest = Object.freeze({ ...panel.manifest, direction: resolved.direction, locale: resolved.locale })
+    return Object.freeze({ actor: actor as JsonObject, direction: resolved.direction, locale: resolved.locale, manifest, notifications, provider: scope.provider, tenancy })
   }
 
   private async notificationBootstrap(

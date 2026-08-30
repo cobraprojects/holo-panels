@@ -23,6 +23,7 @@ import {
   PanelTenantOperationError,
   panelAuthOperationStatus,
   panelTenantOperationStatus,
+  requestedLocales,
   resolvePanelRoute,
   resolvePanelLocale,
   type PanelAuthOperation,
@@ -207,11 +208,11 @@ function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[]
   return decodeResponseEnvelope({ data, effects, id, ok: true, protocolVersion: PROTOCOL_VERSION, ...locale }, id)
 }
 
-function errorEnvelope(id: string, cause: unknown, status: number, panel?: CompiledPanelDefinition<object>): Readonly<ResponseEnvelope> {
+function errorEnvelope(id: string, cause: unknown, status: number, panel?: CompiledPanelDefinition<object>, locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): Readonly<ResponseEnvelope> {
   const actionEffects = cause instanceof ActionExecutionError ? (cause as { readonly effects: readonly Effect[] }).effects : []
   const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status) : null
   const effects = notification ? [...actionEffects, notification] : actionEffects
-  return decodeResponseEnvelope({ effects, error: normalizeTransportError(cause, status), id, ok: false, protocolVersion: PROTOCOL_VERSION }, id)
+  return decodeResponseEnvelope({ effects, error: normalizeTransportError(cause, status), id, ok: false, protocolVersion: PROTOCOL_VERSION, ...locale }, id)
 }
 
 function responseFromBytes(bytes: Uint8Array<ArrayBuffer>, status: number): Response {
@@ -292,7 +293,7 @@ export function createPanelPageLoad<TActor = unknown, TTenant = unknown>(options
     const registry = registryFor(event, options.registry)
     try {
       const signal = requestSignal(event.request)
-      const requestedLocale = event.request.headers.get('accept-language')?.split(',')[0]?.trim()
+      const requestedLocale = requestedLocales(event.request.headers.get('accept-language'))
       const bootstraps = await registry.runtime.bootstrap([options.panelId], signal, requestedLocale)
       const panel = bootstraps[0]
       if (!panel || panel.manifest.id !== options.panelId) error(404, 'Panel not found')
@@ -355,6 +356,7 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
       id = decoded.envelope.id
       panelId = event.params.panelId
       if (!panelId || !options.panelIds.includes(panelId) || decoded.envelope.panelId !== panelId) throw Object.assign(new Error('Panel transport panel mismatch'), { status: 404 })
+      responseLocale = Object.freeze({ direction: 'ltr' as const, locale: 'en' })
       const operation = operationFrom(event)
       if (decoded.envelope.operation !== operation) throw new TransportDecodingError('Request operation does not match its route.')
       const registry = registryFor(event, options.registry)
@@ -369,7 +371,7 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
         guard = await sessionGuard(scope.guard)
         const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
         responseLocale = configuredPanel
-          ? resolvePanelLocale(configuredPanel.manifest.locales, [event.request.headers.get('accept-language')?.split(',')[0]?.trim(), actorLocale])
+          ? resolvePanelLocale(configuredPanel.manifest.locales, [...requestedLocales(event.request.headers.get('accept-language')), actorLocale])
           : Object.freeze({ direction: 'ltr' as const, locale: 'en' })
         const result = await handler({
           event,
@@ -391,7 +393,8 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
       return serialized
     } catch (cause) {
       const status = statusFor(cause)
-      const response = errorEnvelope(id, cause, status, configuredPanel)
+      const locale = responseLocale ?? (configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(event.request.headers.get('accept-language'))) : undefined)
+      const response = errorEnvelope(id, cause, status, configuredPanel, locale)
       if (panelId) await flashRedirectToasts(guard, panelId, response.effects)
       return envelopeResponse(response, status)
     }
@@ -541,7 +544,7 @@ export function createPanelAuthHandler<TActor = unknown, TTenant = unknown>(opti
           operation,
           panel,
           payload: await nativePayload(event.request, method),
-          requestedLocale: event.request.headers.get('accept-language')?.split(',')[0]?.trim(),
+          requestedLocale: requestedLocales(event.request.headers.get('accept-language'))[0],
           services: Object.freeze({ event, holo }),
           signal: requestSignal(event.request),
           tenant: operation === 'profile-read' || operation === 'profile-update'

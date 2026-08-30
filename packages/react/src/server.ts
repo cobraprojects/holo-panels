@@ -57,6 +57,7 @@ export {
   panelAuthOperationStatus,
   panelTenantOperationStatus,
   panelErrorNotificationEffect,
+  requestedLocales,
   resolvePanelLocale,
 } from '@holo-js/panels-core/server'
 export type { PanelAuthOperation, PanelAuthRuntime, PanelTenantOperation } from '@holo-js/panels-core/server'

@@ -93,10 +93,10 @@
         </li>
       {/each}
     </ol>{/if}
-    {#if pages > 1}<Separator /><nav aria-label="Notification pagination" class="hp-notification-pagination"><PaginationContent>
-      <PaginationItem><Button aria-label="Previous notification page" disabled={$inboxState.page <= 1} size="sm" type="button" variant="outline" onclick={() => ignoreFailure(store.load($inboxState.page - 1))}><ChevronLeft />Previous</Button></PaginationItem>
+    {#if pages > 1}<Separator /><nav aria-label={translate('notifications.inbox')} class="hp-notification-pagination"><PaginationContent>
+      <PaginationItem><Button aria-label={translate('pagination.previous')} disabled={$inboxState.page <= 1} size="sm" type="button" variant="outline" onclick={() => ignoreFailure(store.load($inboxState.page - 1))}><ChevronLeft class="hp:rtl:rotate-180" />{translate('pagination.previous')}</Button></PaginationItem>
       <PaginationItem><span class="hp:px-2 hp:text-sm hp:text-muted-foreground">{translate('notifications.page', { page: $inboxState.page, pages })}</span></PaginationItem>
-      <PaginationItem><Button aria-label="Next notification page" disabled={$inboxState.page >= pages} size="sm" type="button" variant="outline" onclick={() => ignoreFailure(store.load($inboxState.page + 1))}>Next<ChevronRight /></Button></PaginationItem>
+      <PaginationItem><Button aria-label={translate('pagination.next')} disabled={$inboxState.page >= pages} size="sm" type="button" variant="outline" onclick={() => ignoreFailure(store.load($inboxState.page + 1))}>{translate('pagination.next')}<ChevronRight class="hp:rtl:rotate-180" /></Button></PaginationItem>
     </PaginationContent></nav>{/if}
   </CardContent>
 </Card>

@@ -26,6 +26,7 @@ import {
   PanelTenantOperationError,
   panelAuthOperationStatus,
   panelTenantOperationStatus,
+  requestedLocales,
   resolvePanelLocale,
   type PanelAuthOperation,
   type PanelAuthRuntime,
@@ -163,7 +164,7 @@ function errorDetails(cause: unknown): { readonly category: ErrorCategory, reado
   return { category: 'internal', code: 'operation_failed', message: 'Panel operation failed.', retryable: true, status: 500 }
 }
 
-function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefinition<object>): { readonly response: Readonly<ResponseEnvelope>, readonly status: number } {
+function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefinition<object>, locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): { readonly response: Readonly<ResponseEnvelope>, readonly status: number } {
   const error = errorDetails(cause)
   let effects: readonly Effect[] = Object.freeze([])
   if (cause instanceof ActionExecutionError) {
@@ -182,14 +183,15 @@ function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefiniti
   }
   const notification = panel && effects.length === 0 ? panelErrorNotificationEffect(panel, error.status) : null
   if (notification) effects = Object.freeze([...effects, notification])
-  return {
-    response: Object.freeze({
+  const body = {
       effects: [...effects],
       error: Object.freeze({ category: error.category, code: error.code, ...(error.details ? { details: error.details } : {}), message: error.message, retryable: error.retryable }),
       id,
-      ok: false,
+      ok: false as const,
       protocolVersion: PROTOCOL_VERSION,
-    }),
+  }
+  return {
+    response: Object.freeze(locale ? { ...body, ...locale } : body),
     status: error.status,
   }
 }
@@ -401,13 +403,15 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
         const result = await executeGet(event, operation, panelId, options)
         return result instanceof Response ? result : dataResponse(id, result)
       } catch (cause) {
-        const failure = errorEnvelope(id, cause, configuredPanel)
+        const locale = configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(getRequestHeader(event, 'accept-language'))) : undefined
+        const failure = errorEnvelope(id, cause, configuredPanel, locale)
         return envelopeResponse(failure.response, failure.status)
       }
     }
 
     let guard: AuthenticatedGuard | undefined
     let configuredPanel: CompiledPanelDefinition<object> | undefined
+    let responseLocale: { readonly direction: 'ltr' | 'rtl', readonly locale: string } | undefined
     let id = requestId(event)
     try {
       const body = await boundedRequestBody(event, operation === 'upload' ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES)
@@ -417,9 +421,14 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
       if (decoded.envelope.panelId !== panelId || decoded.envelope.operation !== operation) {
         throw new TransportDecodingError('Request envelope does not match the fixed operation route.')
       }
+      responseLocale = Object.freeze({ direction: 'ltr' as const, locale: 'en' })
       const scope = await authorizedContext(event, operation, panelId, options)
       guard = scope.guard
       configuredPanel = scope.definition as CompiledPanelDefinition<object> | undefined
+      const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
+      responseLocale = configuredPanel
+        ? resolvePanelLocale(configuredPanel.manifest.locales, [...requestedLocales(getRequestHeader(event, 'accept-language')), actorLocale])
+        : responseLocale
       const context: NuxtPanelOperationContext<TActor, TTenant> = {
         actor: scope.actor,
         event,
@@ -442,16 +451,13 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
         ? await executePanelPipeline(scope.definition, { actor: scope.actor, guard: scope.definition.guard, panelId, provider: scope.provider, signal: scope.signal }, operation, execute)
         : await options.runtime.execute(context)
       const data = toJsonValue(result.data)
-      const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
-      const locale = configuredPanel
-        ? resolvePanelLocale(configuredPanel.manifest.locales, [getRequestHeader(event, 'accept-language')?.split(',')[0]?.trim(), actorLocale])
-        : Object.freeze({ direction: 'ltr' as const, locale: 'en' })
-      const response = successEnvelope(id, data, result.effects ?? [], locale)
+      const response = successEnvelope(id, data, result.effects ?? [], responseLocale)
       const serialized = envelopeResponse(response, result.status ?? 200)
       if (serialized.status < 300) await flashRedirectToasts(scope.guard, panelId, response.effects)
       return serialized
     } catch (cause) {
-      const failure = errorEnvelope(id, cause, configuredPanel)
+      const locale = responseLocale ?? (configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(getRequestHeader(event, 'accept-language'))) : undefined)
+      const failure = errorEnvelope(id, cause, configuredPanel, locale)
       const serialized = envelopeResponse(failure.response, failure.status)
       if (guard && serialized.status === failure.status) await flashRedirectToasts(guard, panelId, failure.response.effects)
       return serialized
@@ -552,7 +558,7 @@ export function createPanelAuthHandler<TActor, TTenant, TResult>(options: Create
         operation,
         panel: await compiledPanel(event, options, panelId),
         payload: input,
-        requestedLocale: getRequestHeader(event, 'accept-language')?.split(',')[0]?.trim(),
+        requestedLocale: requestedLocales(getRequestHeader(event, 'accept-language'))[0],
         services: Object.freeze({ event, getApp: () => holo.getApp(), getAuth: () => holo.getAuth() }),
         signal: requestSignal(event),
         tenant: operation === 'profile-read' || operation === 'profile-update'

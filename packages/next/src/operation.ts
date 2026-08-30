@@ -19,6 +19,7 @@ import {
   PanelNotificationRequestError,
   PanelRuntime,
   PanelRuntimeError,
+  requestedLocales,
   resolvePanelLocale,
   decodeTransportServerRequest,
   executePanelRoute,
@@ -80,14 +81,14 @@ function success(id: string, result: NextPanelOperationResult, locale?: { readon
   const status = result.status ?? 200
   if (!Number.isInteger(status) || status < 200 || status > 299) throw new NextPanelHttpError(500, 'Panel operation returned an invalid success status')
   const data = toJsonValue(result.data ?? null)
-  const envelope: ResponseEnvelope = {
+  const body = {
     data,
-    ...locale,
     effects: [...(result.effects ?? [])],
     id,
-    ok: true,
+    ok: true as const,
     protocolVersion: PROTOCOL_VERSION,
   }
+  const envelope: ResponseEnvelope = locale ? { ...body, ...locale } : body
   const validated = decodeResponseEnvelope(envelope, id)
   const response = envelopeResponse(validated, status)
   return { effects: response.status === 500 ? [] : validated.effects, response }
@@ -113,18 +114,19 @@ async function flashRedirectToasts(
   }
 }
 
-function failure(id: string, error: unknown, explicitStatus?: number, panel?: CompiledPanelDefinition<object>): Response {
+function failure(id: string, error: unknown, explicitStatus?: number, panel?: CompiledPanelDefinition<object>, locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): Response {
   const status = explicitStatus ?? statusFor(error)
   const normalizedError = normalizeTransportError(error, status)
   const actionEffects = error instanceof ActionExecutionError ? [...error.effects] : []
   const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status ?? 500) : null
-  const envelope: ResponseEnvelope = {
+  const body = {
     effects: notification ? [...actionEffects, notification] : actionEffects,
     error: normalizedError,
     id,
-    ok: false,
+    ok: false as const,
     protocolVersion: PROTOCOL_VERSION,
   }
+  const envelope: ResponseEnvelope = locale ? { ...body, ...locale } : body
   try {
     return envelopeResponse(decodeResponseEnvelope(envelope, id), status ?? 500)
   } catch {
@@ -198,6 +200,7 @@ function requestIdFromFailure(request: Request): string {
 async function handle<TRuntime>(request: Request, context: NextPanelRouteContext, options: CreatePanelOperationRouteOptions<TRuntime>): Promise<Response> {
   let requestId = requestIdFromFailure(request)
   let configuredPanel: CompiledPanelDefinition<object> | undefined
+  let responseLocale: { readonly direction: 'ltr' | 'rtl', readonly locale: string } | undefined
   try {
     const parameters = await context.params
     if (!options.panelIds.includes(parameters.panelId)) throw new NextPanelHttpError(404, 'Panel was not found')
@@ -250,16 +253,18 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
       const auth = typeof runtime.auth === 'function' ? await runtime.auth() : runtime.auth
       const panelRuntime = new PanelRuntime(auth, [panel])
       if (selectedOperation === 'bootstrap') {
-        const locale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim() ?? 'en'
-        const bootstrap = (await panelRuntime.bootstrap([parameters.panelId], request.signal, locale))[0]!
+        const locale = await runtime.resolveLocale?.(request)
+        const bootstrap = (await panelRuntime.bootstrap([parameters.panelId], request.signal, locale ? [locale] : requestedLocales(request.headers.get('accept-language'))))[0]!
+        responseLocale = { direction: bootstrap.direction, locale: bootstrap.locale }
         return success(requestId, { data: toJsonValue(bootstrap) }, { direction: bootstrap.direction, locale: bootstrap.locale }).response
       }
       if (!runtime.execute) throw new NextPanelHttpError(501, `Panel operation "${selectedOperation}" has no registered executor`)
       return panelRuntime.execute(parameters.panelId, selectedOperation, request.signal, async scope => {
         const tenantContext = runtime.resolveTenant || !panel.server.tenancy ? undefined : await panel.server.tenancy.activeContext(scope)
-        const requestedLocale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim()
+        const requestedLocale = await runtime.resolveLocale?.(request)
         const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
-        const locale = resolvePanelLocale(panel.manifest.locales, [requestedLocale, actorLocale])
+        const locale = resolvePanelLocale(panel.manifest.locales, [...(requestedLocale ? [requestedLocale] : requestedLocales(request.headers.get('accept-language'))), actorLocale])
+        responseLocale = locale
         const result = await runtime.execute!({
           operation: selectedOperation,
           panelId: parameters.panelId,
@@ -287,7 +292,8 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
       })
     })
   } catch (error) {
-    return failure(requestId, error, undefined, configuredPanel)
+    const locale = responseLocale ?? (configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(request.headers.get('accept-language'))) : undefined)
+    return failure(requestId, error, undefined, configuredPanel, locale)
   }
 }
 

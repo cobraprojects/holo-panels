@@ -57,5 +57,5 @@ export {
   panelAuthOperationStatus,
   panelTenantOperationStatus,
 } from '@holo-js/panels-core/server'
-export { bootPanel, executeGeneratedUploadOperation, executePanelPipeline, executePanelRoute, panelErrorNotificationEffect, resolvePanelLocale } from '@holo-js/panels-core/server'
+export { bootPanel, executeGeneratedUploadOperation, executePanelPipeline, executePanelRoute, panelErrorNotificationEffect, requestedLocales, resolvePanelLocale } from '@holo-js/panels-core/server'
 export type { PanelAuthOperation, PanelAuthRuntime, PanelTenantOperation } from '@holo-js/panels-core/server'

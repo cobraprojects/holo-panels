@@ -16,6 +16,7 @@ import { PanelRuntime, type PanelRuntimeError } from '../src/panels/runtime'
 import type { JsonObject } from '../src/protocol/json'
 import { defineSchema, schemaComponentsFor } from '../src/schemas'
 import type { HoloAuth, PanelOperation } from '../src/panels/contracts'
+import { requestedLocales } from '../src/translations/panel-locale'
 
 class Actor {
   declare readonly id: number
@@ -253,12 +254,13 @@ describe('P9-B panel runtime', () => {
 
     const inherited = (await runtime.bootstrap(['admin'], signal))[0]!
     const overridden = (await runtime.bootstrap(['admin'], signal, 'en-US'))[0]!
-    const rejectedOverride = (await runtime.bootstrap(['admin'], signal, 'fr-FR'))[0]!
+    const laterAllowedPreference = (await runtime.bootstrap(['admin'], signal, ['fr-FR', 'ar-EG']))[0]!
 
     expect(inherited).toMatchObject({ direction: 'rtl', locale: 'ar' })
     expect(overridden).toMatchObject({ direction: 'ltr', locale: 'en' })
-    expect(rejectedOverride).toMatchObject({ direction: 'rtl', locale: 'ar' })
-    expect(inherited.manifest.locales).toEqual({ allowed: ['en', 'ar'], fallback: 'en' })
+    expect(laterAllowedPreference).toMatchObject({ direction: 'rtl', locale: 'ar' })
+    expect(inherited.manifest).toMatchObject({ direction: 'rtl', locale: 'ar', locales: { allowed: ['en', 'ar'], fallback: 'en' } })
+    expect(requestedLocales('fr;q=0.4, ar-EG;q=0.9, en;q=0, *;q=1')).toEqual(['ar-EG', 'fr'])
   })
 
   it('honors a panel locale allow-list and fallback without duplicating locale resolution', async () => {

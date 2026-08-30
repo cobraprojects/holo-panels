@@ -17,8 +17,10 @@ function pageData(): PanelPageData {
         branding: { favicon: null, logo: null, name: 'Admin' },
         databaseNotifications: null,
         default: true,
+        direction: 'ltr',
         globalSearch: false,
         id: 'admin',
+        locale: 'en',
         locales: { allowed: ['en', 'ar'], fallback: 'en' },
         navigation: [
           { badge: null, group: null, icon: null, id: 'posts', label: 'Posts', parent: null, path: '/admin/posts', sort: 1 },

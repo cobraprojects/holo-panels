@@ -230,6 +230,11 @@ export interface PanelManifest {
   readonly userMenuEnabled?: boolean
 }
 
+export interface ResolvedPanelManifest extends PanelManifest {
+  readonly direction: LocaleDirection
+  readonly locale: string
+}
+
 export interface PanelAccessContext<TActor> {
   readonly actor: TActor
   readonly guard: string
@@ -303,7 +308,7 @@ export interface PanelBootstrap {
   readonly actor: JsonObject
   readonly direction: LocaleDirection
   readonly locale: string
-  readonly manifest: PanelManifest
+  readonly manifest: ResolvedPanelManifest
   readonly notifications: PanelNotificationBootstrap | null
   readonly provider: string | null
   readonly tenancy: PanelTenantBootstrap | null

@@ -26,7 +26,7 @@ function requiredString(value: unknown, label: string): string {
   return value
 }
 
-function decodeResponseLocale(value: Record<string, unknown>): Partial<ResponseLocale> {
+function decodeResponseLocale(value: Record<string, unknown>): ResponseLocale | { readonly direction?: never, readonly locale?: never } {
   if (value.locale === undefined && value.direction === undefined) return Object.freeze({})
   if ((value.direction !== 'ltr' && value.direction !== 'rtl') || typeof value.locale !== 'string' || !value.locale) {
     throw new TransportDecodingError('Invalid response locale metadata.')

@@ -14,6 +14,7 @@ import {
   createNavigationSeed,
   preparePageRoutes,
   resolvePanelNavigationSeed,
+  requestedLocales,
   resolvePageData,
   resolveWidget,
   type CompiledWidgetDefinition,
@@ -273,8 +274,8 @@ export async function resolveNextPanelPage(
   return runWithNextRequest(nextContext, async () => {
     const resolvedAuth = await auth(runtime)
     const panelRuntime = new PanelRuntime(resolvedAuth, [panel])
-    const requestLocale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim() ?? 'en'
-    const bootstrap = (await panelRuntime.bootstrap([panelId], request.signal, requestLocale))[0]!
+    const requestLocale = await runtime.resolveLocale?.(request)
+    const bootstrap = (await panelRuntime.bootstrap([panelId], request.signal, requestLocale ? [requestLocale] : requestedLocales(request.headers.get('accept-language'))))[0]!
     const pageResult = await panelRuntime.execute(panelId, 'page-data', request.signal, async (scope: PanelAuthenticatedScope<object>) => {
       const tenantContext = runtime.resolveTenant || !panel.server.tenancy ? undefined : await panel.server.tenancy.activeContext(scope)
       const context = {

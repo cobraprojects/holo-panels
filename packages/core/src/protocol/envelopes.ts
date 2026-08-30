@@ -35,7 +35,7 @@ export interface RequestEnvelope<TPayload extends JsonValue = JsonObject> {
   protocolVersion: string
 }
 
-export interface SuccessEnvelope<TData extends JsonValue = JsonValue> extends Partial<ResponseLocale> {
+interface SuccessEnvelopeBody<TData extends JsonValue = JsonValue> {
   data: TData
   effects: Effect[]
   id: string
@@ -43,13 +43,19 @@ export interface SuccessEnvelope<TData extends JsonValue = JsonValue> extends Pa
   protocolVersion: string
 }
 
-export interface ErrorEnvelope extends Partial<ResponseLocale> {
+interface ErrorEnvelopeBody {
   effects: Effect[]
   error: PanelsError
   id: string
   ok: false
   protocolVersion: string
 }
+
+type OptionalResponseLocale = ResponseLocale | { direction?: never, locale?: never }
+
+export type SuccessEnvelope<TData extends JsonValue = JsonValue> = SuccessEnvelopeBody<TData> & OptionalResponseLocale
+
+export type ErrorEnvelope = ErrorEnvelopeBody & OptionalResponseLocale
 
 export type ResponseEnvelope<TData extends JsonValue = JsonValue> =
   | ErrorEnvelope

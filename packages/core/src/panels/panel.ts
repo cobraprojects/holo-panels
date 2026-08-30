@@ -599,13 +599,7 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
   }
 
   locales(values: readonly string[]): this {
-    const currentFallback = this.readState().locales.fallback
-    let configuration: ReturnType<typeof normalizePanelLocaleConfiguration>
-    try {
-      configuration = normalizePanelLocaleConfiguration(values, currentFallback)
-    } catch {
-      configuration = normalizePanelLocaleConfiguration(values, values[0] ?? '')
-    }
+    const configuration = normalizePanelLocaleConfiguration(values, values[0] ?? '')
     return this.writeState('locales', configuration)
   }
 

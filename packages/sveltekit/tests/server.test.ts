@@ -68,8 +68,10 @@ const bootstrap: PanelBootstrapData = {
     branding: { favicon: null, logo: null, name: 'Admin' },
     databaseNotifications: null,
     default: true,
+    direction: 'ltr',
     globalSearch: true,
     id: 'admin',
+    locale: 'en',
     locales: { allowed: ['en', 'ar'], fallback: 'en' },
     navigation: [],
     navigationMode: 'sidebar',
@@ -476,7 +478,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     const handler = createPanelOperationHandler({ panelIds: ['admin'], registry: configured.value })
     const response = await handler.POST(event('POST', { operation: 'action', panelId: 'admin' }))
 
-    await expect(response.json()).resolves.toMatchObject({ effects: [failureEffect], ok: false })
+    await expect(response.json()).resolves.toMatchObject({ direction: 'ltr', effects: [failureEffect], locale: 'en', ok: false })
 
     configured.value.runtime.execute = async () => {
       throw Object.assign(new Error('untrusted'), { effects: [failureEffect] })

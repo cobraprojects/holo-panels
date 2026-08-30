@@ -100,7 +100,7 @@ function ToastContent({ locale, navigate, panelId, registry, store, toast }: {
   const actions = toast.actions.map(actionValue).filter(action => action !== null)
   const host = store.actionHost(toast.id)
   return <Card className="hp-notification-toast hp:relative hp:w-full hp:border-0 hp:shadow-none" data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} data-slot="notification-toast" style={{ borderInlineStartColor: panelColorValue(toast.color ?? toast.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' }}>
-    <CardHeader className="hp:gap-1 hp:pr-10">
+    <CardHeader className="hp:gap-1 hp:pe-10">
       <CardTitle className="hp:flex hp:items-center hp:gap-2 hp:text-sm">{toast.icon ? <span data-slot="notification-icon" style={{ color: panelColorValue(toast.iconColor ?? toast.color ?? toast.status) }}><PanelsIcon name={toast.icon} /></span> : null}{toast.title}</CardTitle>
       {toast.body ? <CardDescription>{toast.body}</CardDescription> : null}
     </CardHeader>

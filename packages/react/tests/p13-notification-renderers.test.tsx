@@ -128,7 +128,7 @@ describe('P13 React notification renderers', () => {
     const store = new ClientToastStore()
     store.push({ ...presentation, color: '#16a34a', iconColor: '#b42318' })
     store.push({ ...presentation, actions: [{ id: 'unsafe', kind: 'navigate', label: 'Unsafe', url: 'javascript:alert(1)' }], id: 'notice-2', persistent: false, title: 'Unsafe link' })
-    const markup = renderToStaticMarkup(<ReactToastViewport placement="bottom" store={store} />)
+    const markup = renderToStaticMarkup(<ReactToastViewport locale="ar" placement="bottom" store={store} />)
     expect(markup).toContain('aria-live="polite"')
     expect(markup).not.toContain('javascript:')
 
@@ -136,15 +136,16 @@ describe('P13 React notification renderers', () => {
     document.body.append(container)
     const root = createRoot(container)
     roots.push({ container, root })
-    await act(async () => root.render(<ReactToastViewport store={store} />))
+    await act(async () => root.render(<ReactToastViewport locale="ar" store={store} />))
     await vi.waitFor(() => expect(document.querySelector('[data-slot="notification-toast"]')).not.toBeNull())
+    expect(document.querySelector('[data-slot="card-header"]')?.className).toContain('hp:pe-10')
     expect(document.querySelector('[data-persistent="true"]')).not.toBeNull()
     const colored = document.querySelector<HTMLElement>('.hp-notification-toast[data-color="#16a34a"]')!
     expect(getComputedStyle(colored).borderInlineStartColor).toBe('#16a34a')
     expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
     expect(document.querySelector('a[href="/reports"]')).not.toBeNull()
     expect(document.body.innerHTML).not.toContain('javascript:')
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close: Report ready"]')?.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="إغلاق: Report ready"]')?.click())
     expect(store.state.items.some(item => item.id === 'notice-1')).toBe(false)
   })
 

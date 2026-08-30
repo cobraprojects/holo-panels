@@ -86,7 +86,7 @@ export const VueTenantSwitcher = defineComponent({
               variant: 'outline',
             }, () => [
               h('span', tenancy.active?.label ?? 'Select tenant'),
-              PanelsIcon('chevron-down', 'hp:ml-auto hp:opacity-50'),
+              PanelsIcon('chevron-down', 'hp:ms-auto hp:opacity-50'),
             ]),
           }),
           h(PopoverContent, { align: 'start', class: 'hp:w-(--reka-popover-trigger-width) hp:p-0' }, {
@@ -104,7 +104,7 @@ export const VueTenantSwitcher = defineComponent({
                 }, () => [
                   item.icon ? PanelsIcon(item.icon) : null,
                   h('span', item.label),
-                  item.disabled ? PanelsIcon('check', 'hp:ml-auto') : null,
+                  item.disabled ? PanelsIcon('check', 'hp:ms-auto') : null,
                 ])),
               ]),
             ]),

@@ -132,6 +132,7 @@ describe('P13 Vue notification renderers', () => {
     locale.value = 'ar'
     await nextTick()
     await vi.waitFor(() => expect(container.querySelector('[aria-label="إغلاق: Report ready"]')).not.toBeNull())
+    expect(container.querySelector('[data-slot="card-header"]')?.className).toContain('hp:pe-10')
     store.dismiss('notice-1')
     store.dispose()
   })

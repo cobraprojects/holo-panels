@@ -26,7 +26,7 @@
 </script>
 
 <Card class="hp-notification-toast hp:relative hp:w-full hp:border-0 hp:shadow-none" data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} style={`border-inline-start-color: ${panelColorValue(toast.color ?? toast.status)}; border-inline-start-style: solid; border-inline-start-width: 3px`}>
-  <CardHeader class="hp:gap-1 hp:pr-10">
+  <CardHeader class="hp:gap-1 hp:pe-10">
     <CardTitle class="hp:flex hp:items-center hp:gap-2 hp:text-sm">{#if toast.icon}<span data-slot="notification-icon" style:color={panelColorValue(toast.iconColor ?? toast.color ?? toast.status)}><Icon name={toast.icon} /></span>{/if}{toast.title}</CardTitle>
     {#if toast.body}<CardDescription>{toast.body}</CardDescription>{/if}
   </CardHeader>

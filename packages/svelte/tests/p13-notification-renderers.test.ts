@@ -81,11 +81,12 @@ describe('P13 Svelte notification renderers', () => {
     store.push({ ...presentation, color: '#16a34a', iconColor: '#b42318' })
     const container = document.createElement('div')
     document.body.append(container)
-    const component = mountClient(ClientFixture, { props: { toasts: { store } }, target: container })
+    const component = mountClient(ClientFixture, { props: { toasts: { locale: 'ar', store } }, target: container })
     mounted.push({ component, container })
     flushClient()
     await vi.waitFor(() => expect(container.querySelector('.hp-notification-toast')).not.toBeNull())
     const colored = container.querySelector<HTMLElement>('.hp-notification-toast')!
+    expect(colored.querySelector('[data-slot="card-header"]')?.className).toContain('hp:pe-10')
     expect(getComputedStyle(colored).borderInlineStartColor).toBe('#16a34a')
     expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
     store.dispose()
@@ -192,7 +193,7 @@ describe('P13 Svelte notification renderers', () => {
     const store = new ClientToastStore()
     store.push(presentation)
     store.push({ ...presentation, actions: [{ id: 'unsafe', kind: 'navigate', label: 'Unsafe', url: 'javascript:alert(1)' }], id: 'notice-2', persistent: false, title: 'Unsafe link' })
-    const markup = renderServer(ServerFixture, { props: { toasts: { placement: 'bottom', store } } }).body
+    const markup = renderServer(ServerFixture, { props: { toasts: { locale: 'ar', placement: 'bottom', store } } }).body
     expect(markup).toContain('aria-live="polite"')
     expect(markup).toContain('aria-label="Notifications alt+T"')
     expect(markup).not.toContain('javascript:')

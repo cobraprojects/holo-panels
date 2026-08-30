@@ -119,7 +119,7 @@ const VueToastContent = defineComponent({
         'data-status': props.toast.status,
         style: { borderInlineStartColor: panelColorValue(props.toast.color ?? props.toast.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' },
       }, () => [
-        h(CardHeader, { class: 'hp:gap-1 hp:pr-10' }, () => [
+        h(CardHeader, { class: 'hp:gap-1 hp:pe-10' }, () => [
           h(CardTitle, { class: 'hp:flex hp:items-center hp:gap-2 hp:text-sm' }, () => [props.toast.icon ? h('span', { 'data-slot': 'notification-icon', style: { color: panelColorValue(props.toast.iconColor ?? props.toast.color ?? props.toast.status) } }, [PanelsIcon(props.toast.icon)]) : null, props.toast.title]),
           props.toast.body ? h(CardDescription, {}, () => props.toast.body) : null,
         ]),

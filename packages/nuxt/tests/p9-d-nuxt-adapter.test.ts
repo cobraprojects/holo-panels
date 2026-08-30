@@ -182,6 +182,8 @@ describe('P9-D Nuxt adapter', () => {
     expect(markup).toContain('dir="rtl"')
     expect(markup).toContain('lang="ar"')
     expect(markup).toContain('قائمة الحساب')
+    expect(markup).toContain('aria-label="تنقل اللوحة"')
+    expect(markup).toContain('aria-label="إجراءات الصفحة"')
     expect(markup).toContain('data-side="right"')
   })
 

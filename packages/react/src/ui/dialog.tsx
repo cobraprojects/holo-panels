@@ -74,10 +74,10 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="hp:absolute hp:top-4 hp:right-4 hp:rounded-xs hp:opacity-70 hp:ring-offset-background hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-ring hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none hp:data-[state=open]:bg-accent hp:data-[state=open]:text-muted-foreground hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4"
+            className="hp:absolute hp:top-4 hp:end-4 hp:rounded-xs hp:opacity-70 hp:ring-offset-background hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-ring hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none hp:data-[state=open]:bg-accent hp:data-[state=open]:text-muted-foreground hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4"
           >
             <XIcon />
-            <span className="hp:sr-only">Close</span>
+            <span className="hp:sr-only hp:rtl:hidden">Close</span><span className="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -115,7 +115,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline"><span className="hp:rtl:hidden">Close</span><span className="hp:hidden hp:rtl:inline">إغلاق</span></Button>
         </DialogPrimitive.Close>
       )}
     </div>

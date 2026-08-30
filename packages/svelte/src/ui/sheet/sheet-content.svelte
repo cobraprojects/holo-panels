@@ -48,7 +48,7 @@
 				{#snippet child({ props })}
 					<Button variant="ghost" class="hp:absolute hp:top-3 hp:end-3" size="icon-sm" {...props}>
 						<XIcon  />
-						<span class="hp:sr-only">Close</span>
+						<span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
 					</Button>
 				{/snippet}
 			</SheetPrimitive.Close>

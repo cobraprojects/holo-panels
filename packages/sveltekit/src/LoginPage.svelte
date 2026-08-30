@@ -49,7 +49,7 @@
     try {
       const result = await executePanelLogin({ credentials: { email: submittedEmail, password: submittedPassword }, csrfToken: cookie('XSRF-TOKEN'), panelId })
       if (!result.ok || !result.url) {
-        error = panelLoginErrorMessage(result)
+        error = panelLoginErrorMessage(result, locale)
         return
       }
       window.location.assign(result.url)

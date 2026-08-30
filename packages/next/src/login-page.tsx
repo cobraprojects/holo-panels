@@ -39,7 +39,7 @@ export function NextPanelLoginPage({ panelId }: NextPanelLoginPageProps) {
         panelId,
       })
       if (!result.ok || !result.url) {
-        setError(panelLoginErrorMessage(result))
+        setError(panelLoginErrorMessage(result, locale))
         return
       }
       globalThis.location.assign(result.url)

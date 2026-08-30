@@ -46,10 +46,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       <DialogClose
         v-if="showCloseButton"
         data-slot="dialog-close"
-        class="hp:ring-offset-background hp:focus:ring-ring hp:data-[state=open]:bg-accent hp:data-[state=open]:text-muted-foreground hp:absolute hp:top-4 hp:right-4 hp:rounded-xs hp:opacity-70 hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*='size-'])]:size-4"
+        class="hp:ring-offset-background hp:focus:ring-ring hp:data-[state=open]:bg-accent hp:data-[state=open]:text-muted-foreground hp:absolute hp:top-4 hp:end-4 hp:rounded-xs hp:opacity-70 hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*='size-'])]:size-4"
       >
         <Cross2Icon />
-        <span class="hp:sr-only">Close</span>
+        <span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
       </DialogClose>
     </DialogContent>
   </DialogPortal>

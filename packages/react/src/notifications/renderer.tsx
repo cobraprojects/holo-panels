@@ -96,6 +96,7 @@ function ToastContent({ locale, navigate, panelId, registry, store, toast }: {
   readonly store: ClientToastStore
   readonly toast: ClientToast
 }): ReactNode {
+  const translate = createPanelTranslator(locale)
   const actions = toast.actions.map(actionValue).filter(action => action !== null)
   const host = store.actionHost(toast.id)
   return <Card className="hp-notification-toast hp:relative hp:w-full hp:border-0 hp:shadow-none" data-color={toast.color ?? undefined} data-persistent={toast.persistent || undefined} data-status={toast.status} data-slot="notification-toast" style={{ borderInlineStartColor: panelColorValue(toast.color ?? toast.status), borderInlineStartStyle: 'solid', borderInlineStartWidth: '3px' }}>
@@ -105,7 +106,7 @@ function ToastContent({ locale, navigate, panelId, registry, store, toast }: {
     </CardHeader>
     {actions.length > 0 ? <CardContent className="hp:flex hp:flex-wrap hp:gap-2">{actions.map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</CardContent> : null}
     {host?.actions[0] ? <CardContent><ReactActionRenderer actions={host.actions} direction={locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'} locale={locale} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /></CardContent> : null}
-    {toast.closeable ? <Button aria-label={`Close ${toast.title}`} className="hp:absolute hp:end-2 hp:top-2" onClick={() => store.dismiss(toast.id)} size="icon-sm" type="button" variant="ghost"><PanelsIcon name="x" /></Button> : null}
+    {toast.closeable ? <Button aria-label={`${translate('actions.close')}: ${toast.title}`} className="hp:absolute hp:end-2 hp:top-2" onClick={() => store.dismiss(toast.id)} size="icon-sm" type="button" variant="ghost"><PanelsIcon name="x" /></Button> : null}
   </Card>
 }
 

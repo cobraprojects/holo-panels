@@ -1316,6 +1316,7 @@ function navigationLink(item: PanelNavigationItem, depth: number, activePath: st
 }
 
 function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boolean, id: string, close: () => void): VNode {
+  const translate = createPanelTranslator(page.bootstrap.locale)
   const activePath = page.path.split(/[?]/u, 1)[0] ?? page.path
   const ordered = orderedNavigation(page.bootstrap.manifest.navigation.map(item => ({
     ...item,
@@ -1324,7 +1325,7 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
   const items: VNode[] = []
   if (mode === 'topbar') {
     for (const { depth, item } of ordered) items.push(navigationLink(item, depth, activePath, mode, close))
-    return h('nav', { 'aria-label': 'Panel navigation', class: 'hp-panel-navigation hp-panel-navigation--topbar hp-panel-navigation-body hp-panel-topbar-center', 'data-open': open ? 'true' : 'false', 'data-slot': 'navigation-menu', id }, items)
+    return h('nav', { 'aria-label': translate('navigation.label'), class: 'hp-panel-navigation hp-panel-navigation--topbar hp-panel-navigation-body hp-panel-topbar-center', 'data-open': open ? 'true' : 'false', 'data-slot': 'navigation-menu', id }, items)
   }
   const ungrouped: VNode[] = []
   for (let index = 0; index < ordered.length;) {
@@ -1354,7 +1355,7 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
   if (ungrouped.length > 0) {
     items.unshift(h(SidebarGroup, { key: 'navigation' }, () => h(SidebarGroupContent, {}, () => h(SidebarMenu, {}, () => ungrouped))))
   }
-  return h(SidebarContent, { class: 'hp-panel-navigation-body' }, () => h('nav', { 'aria-label': 'Panel navigation', class: 'hp-panel-navigation hp:h-full', id }, items))
+  return h(SidebarContent, { class: 'hp-panel-navigation-body' }, () => h('nav', { 'aria-label': translate('navigation.label'), class: 'hp-panel-navigation hp:h-full', id }, items))
 }
 
 function pageBody(page: NuxtPanelPage, registry: ComponentRegistry, resolveResource: PanelPageProps['resolveResource'], runtime: PanelPageRuntime): VNode {
@@ -1729,8 +1730,8 @@ export const PanelPage = defineComponent({
             bootstrap.manifest.navigationEnabled === false
               ? null
               : bootstrap.manifest.navigationMode === 'sidebar' && !SidebarComponent
-                ? h(SidebarTrigger, { 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId })
-                : h(Button, { 'aria-controls': navigationId, 'aria-expanded': navigationOpen.value, 'aria-label': 'Toggle navigation', class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId, onClick: toggleNavigation, type: 'button', variant: 'ghost' }, () => PanelsIcon('menu')),
+                ? h(SidebarTrigger, { 'aria-label': translate('navigation.toggle'), class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId })
+                : h(Button, { 'aria-controls': navigationId, 'aria-expanded': navigationOpen.value, 'aria-label': translate('navigation.toggle'), class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId, onClick: toggleNavigation, type: 'button', variant: 'ghost' }, () => PanelsIcon('menu')),
             renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE),
             h(Button, { as: 'a', class: ['hp-panel-brand', 'hp-panel-topbar-start', bootstrap.manifest.navigationMode === 'sidebar' ? 'hp-panel-navigation-header' : null], href: bootstrap.manifest.routing?.homeUrl ?? bootstrap.manifest.path, variant: 'ghost' }, () => [bootstrap.manifest.branding.logo ? h('img', { alt: '', src: bootstrap.manifest.branding.logo }) : h(Avatar, {}, () => h(AvatarFallback, {}, () => 'H')), h('strong', bootstrap.manifest.branding.name)]),
             renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER),
@@ -1772,7 +1773,7 @@ export const PanelPage = defineComponent({
               h(BreadcrumbItem, { key: `${item.path}:${index}` }, () => index === page.breadcrumbs.length - 1
                 ? h(BreadcrumbPage, {}, () => item.label)
                 : h(BreadcrumbLink, { href: item.path }, () => item.label)),
-            ]))), renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, page.data), h('h1', { class: 'hp:text-3xl hp:font-bold hp:tracking-tight' }, page.heading ?? page.title), page.subheading ? h('p', { class: 'hp:text-muted-foreground' }, page.subheading) : null, renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, page.data)]), h('div', { 'aria-label': 'Page actions', class: 'hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2', role: 'group' }, [renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, page.data), h('div', { class: 'hp:contents', id: pageActionsTarget.slice(1) }), renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, page.data)])]),
+            ]))), renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_BEFORE, page.data), h('h1', { class: 'hp:text-3xl hp:font-bold hp:tracking-tight' }, page.heading ?? page.title), page.subheading ? h('p', { class: 'hp:text-muted-foreground' }, page.subheading) : null, renderHook(PanelsRenderHook.PAGE_HEADER_HEADING_AFTER, page.data)]), h('div', { 'aria-label': translate('actions.pageGroup'), class: 'hp-panel-page-actions hp:flex hp:flex-wrap hp:items-center hp:justify-end hp:gap-2', role: 'group' }, [renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_BEFORE, page.data), h('div', { class: 'hp:contents', id: pageActionsTarget.slice(1) }), renderHook(PanelsRenderHook.PAGE_HEADER_ACTIONS_AFTER, page.data)])]),
             h('div', { class: 'hp-panel-main-body hp:flex hp:flex-col hp:gap-6' }, [
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, page.data),
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, page.data),

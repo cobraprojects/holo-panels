@@ -83,7 +83,7 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close className="hp:absolute hp:top-4 hp:end-4 hp:rounded-xs hp:opacity-70 hp:ring-offset-background hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-ring hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none hp:data-[state=open]:bg-secondary">
             <XIcon className="hp:size-4" />
-            <span className="hp:sr-only">Close</span>
+            <span className="hp:sr-only hp:rtl:hidden">Close</span><span className="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Content>

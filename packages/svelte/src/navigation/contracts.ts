@@ -1,6 +1,7 @@
 import type { GlobalSearchStore, NavigationStore, PanelShellStore, PanelTenantSwitcherTransport } from '@holo-js/panels-client'
 
 export interface SvelteNavigationSearchRendererProps {
+  readonly locale?: string
   readonly navigation: NavigationStore
   readonly onNavigate?: (url: string) => void
   readonly search: GlobalSearchStore

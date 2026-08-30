@@ -48,10 +48,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         <slot />
 
         <DialogClose
-          class="hp:absolute hp:top-4 hp:right-4 hp:p-0.5 hp:transition-colors hp:rounded-md hp:hover:bg-secondary"
+          class="hp:absolute hp:top-4 hp:end-4 hp:p-0.5 hp:transition-colors hp:rounded-md hp:hover:bg-secondary"
         >
           <Cross2Icon class="hp:w-4 hp:h-4" />
-          <span class="hp:sr-only">Close</span>
+          <span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
         </DialogClose>
       </DialogContent>
     </DialogOverlay>

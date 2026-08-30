@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { executePanelLogin } from '../src/auth/login'
+import { executePanelLogin, panelLoginErrorMessage } from '../src/auth/login'
 import { loadPanelAuthPresentation } from '../src/auth/operation'
 
 describe('panel login client boundary', () => {
   afterEach(() => vi.unstubAllGlobals())
+
+  it('localizes login failures without exposing server messages', () => {
+    expect(panelLoginErrorMessage({ error: 'authentication', ok: false, status: 422, url: null }, 'ar')).toBe('بيانات الاعتماد هذه غير صحيحة.')
+    expect(panelLoginErrorMessage({ error: 'security', ok: false, status: 419, url: null }, 'ar')).toBe('انتهت صلاحية جلستك. حدّث الصفحة وحاول مرة أخرى.')
+    expect(panelLoginErrorMessage({ error: 'request', ok: false, status: 500, url: null }, 'ar')).toBe('تعذر تسجيل الدخول. حاول مرة أخرى.')
+  })
 
   it('posts only fixed credentials with CSRF to the compiled panel endpoint', async () => {
     const fetcher = vi.fn(async () => new Response(null, { status: 200 }))

@@ -2,13 +2,14 @@
   import { Button } from '../ui/button'
   import { Input } from '../ui/input'
   import { NativeSelect as Select } from '../ui/native-select'
-  import type { NavigationKey } from '@holo-js/panels-client'
+  import { createPanelTranslator, type NavigationKey } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'
   import type { SvelteNavigationSearchRendererProps } from './contracts'
 
   let { shell }: { readonly shell: SvelteNavigationSearchRendererProps } = $props()
   const navigation = $derived.by(() => toSvelteSnapshot(shell.navigation))
   const search = $derived.by(() => toSvelteSnapshot(shell.search))
+  const translate = $derived(createPanelTranslator(shell.locale ?? 'en'))
   const navigationKeys: readonly NavigationKey[] = ['ArrowDown', 'ArrowUp', 'End', 'Enter', 'Escape', 'Home']
 
   function shortcut(event: KeyboardEvent): void {
@@ -35,11 +36,11 @@
 <svelte:window onkeydown={shortcut} />
 
 <div class={`hp-navigation-search hp-navigation-search--${$navigation.manifest.layout}`} data-panels-component="navigation-search">
-  <Button aria-expanded={$navigation.menuOpen} aria-label="Toggle navigation" type="button" onclick={() => shell.navigation.toggleMenu()}>Menu</Button>
+  <Button aria-expanded={$navigation.menuOpen} aria-label={translate('navigation.toggle')} type="button" onclick={() => shell.navigation.toggleMenu()}>{translate('navigation.menu')}</Button>
   {#if $navigation.manifest.panels.length > 1}
-    <label>Panel<Select aria-label="Panel" value={$navigation.manifest.panelId} onchange={(event) => shell.onNavigate?.(shell.navigation.switchPanel(event.currentTarget.value))}>{#each $navigation.manifest.panels as panel (panel.id)}<option value={panel.id}>{panel.label}</option>{/each}</Select></label>
+    <label>{translate('navigation.panel')}<Select aria-label={translate('navigation.panel')} value={$navigation.manifest.panelId} onchange={(event) => shell.onNavigate?.(shell.navigation.switchPanel(event.currentTarget.value))}>{#each $navigation.manifest.panels as panel (panel.id)}<option value={panel.id}>{panel.label}</option>{/each}</Select></label>
   {/if}
-  <nav aria-label="Panel navigation" hidden={!$navigation.menuOpen && $navigation.manifest.layout === 'sidebar'}>
+  <nav aria-label={translate('navigation.label')} hidden={!$navigation.menuOpen && $navigation.manifest.layout === 'sidebar'}>
     {#each $navigation.manifest.groups as group (group.id)}<Button aria-expanded={!$navigation.collapsedGroups.has(group.id)} type="button" onclick={() => shell.navigation.toggleGroup(group.id)}>{group.label}</Button>{/each}
     {#each $navigation.manifest.clusters as cluster (cluster.id)}<Button aria-expanded={!$navigation.collapsedClusters.has(cluster.id)} type="button" onclick={() => shell.navigation.toggleCluster(cluster.id)}>{cluster.label}</Button>{/each}
     <ul>
@@ -53,9 +54,9 @@
     </ul>
   </nav>
   <div class="hp-global-search" role="search">
-    <label>Global search<Input aria-controls="hp-global-search-results" aria-expanded={$search.open} placeholder="Search…" role="combobox" value={$search.term} onfocus={() => shell.search.open()} oninput={(event) => shell.search.input(event.currentTarget.value)} onkeydown={searchKey} /></label>
+    <label>{translate('search.label')}<Input aria-controls="hp-global-search-results" aria-expanded={$search.open} placeholder={translate('search.placeholder')} role="combobox" value={$search.term} onfocus={() => shell.search.open()} oninput={(event) => shell.search.input(event.currentTarget.value)} onkeydown={searchKey} /></label>
     <kbd>⌘/Ctrl K</kbd>
-    {#if $search.loading}<span aria-live="polite" role="status">Searching…</span>{/if}
+    {#if $search.loading}<span aria-live="polite" role="status">{translate('search.loading')}</span>{/if}
     {#if $search.error}<span role="alert">{$search.error}</span>{/if}
     <ul id="hp-global-search-results" role="listbox">
       {#each $search.results as result, index (`${result.resourceId}:${result.id}`)}

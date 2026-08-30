@@ -68,6 +68,8 @@ function notificationActionIcon(kind: NotificationAction['kind']): string {
   return 'trash'
 }
 
+let toastViewportSequence = 0
+
 const VueToastContent = defineComponent({
   name: 'HoloPanelsToastContent',
   props: {
@@ -81,6 +83,7 @@ const VueToastContent = defineComponent({
   setup(props) {
     const store = toRaw(props.store)
     return (): VNode => {
+      const translate = createPanelTranslator(props.locale)
       const actions = props.toast.actions.map(actionValue).filter(action => action !== null)
       const host = store.actionHost(props.toast.id)
       const renderAction = (action: NotificationAction): VNode => {
@@ -122,7 +125,7 @@ const VueToastContent = defineComponent({
         ]),
         actions.length > 0 ? h(CardContent, { class: 'hp:flex hp:flex-wrap hp:gap-2' }, () => actions.map(renderAction)) : null,
         host?.actions[0] ? h(CardContent, {}, () => h(VueActionRenderer, { action: host.actions[0]!, actions: host.actions, direction: props.locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: props.locale, panelId: props.panelId, registry: props.registry, store: host.store })) : null,
-        props.toast.closeable ? h(Button, { 'aria-label': `Close ${props.toast.title}`, class: 'hp:absolute hp:end-2 hp:top-2', onClick: () => store.dismiss(props.toast.id), size: 'icon-sm', type: 'button', variant: 'ghost' }, () => PanelsIcon('x')) : null,
+        props.toast.closeable ? h(Button, { 'aria-label': `${translate('actions.close')}: ${props.toast.title}`, class: 'hp:absolute hp:end-2 hp:top-2', onClick: () => store.dismiss(props.toast.id), size: 'icon-sm', type: 'button', variant: 'ghost' }, () => PanelsIcon('x')) : null,
       ])
     }
   },
@@ -139,27 +142,31 @@ export const VueToastViewport = defineComponent({
     store: { required: true, type: Object as PropType<VueToastViewportProps['store']> },
   },
   setup(props) {
+    const viewportId = ++toastViewportSequence
     const state = shallowRef(props.store.state)
-    const rendered = new Map<string, string>()
+    const rendered = new Map<string, { readonly displayId: string, readonly fingerprint: string }>()
     const sync = (items: readonly ClientToast[]): void => {
       const nextIds = new Set(items.map(item => item.id))
       for (const id of rendered.keys()) {
         if (!nextIds.has(id)) {
-          sonnerToast.dismiss(id)
+          sonnerToast.dismiss(rendered.get(id)?.displayId)
           rendered.delete(id)
         }
       }
       for (const item of items) {
         const fingerprint = `${props.locale}:${JSON.stringify(item)}`
-        if (rendered.get(item.id) === fingerprint) continue
+        const current = rendered.get(item.id)
+        if (current?.fingerprint === fingerprint) continue
+        const displayId = `${viewportId}:${item.id}:${props.locale}`
+        rendered.set(item.id, { displayId, fingerprint })
+        if (current) sonnerToast.dismiss(current.displayId)
         sonnerToast.custom(VueToastContent, {
           componentProps: { locale: props.locale, navigate: props.navigate, panelId: props.panelId, registry: props.registry, store: props.store, toast: item },
           duration: Number.POSITIVE_INFINITY,
-          id: item.id,
-          onAutoClose: () => props.store.dismiss(item.id),
-          onDismiss: () => props.store.dismiss(item.id),
+          id: displayId,
+          onAutoClose: () => { if (rendered.get(item.id)?.displayId === displayId) props.store.dismiss(item.id) },
+          onDismiss: () => { if (rendered.get(item.id)?.displayId === displayId) props.store.dismiss(item.id) },
         })
-        rendered.set(item.id, fingerprint)
       }
     }
     const unsubscribe = props.store.subscribe(next => {
@@ -167,15 +174,15 @@ export const VueToastViewport = defineComponent({
       sync(next.items)
     })
     onMounted(() => sync(props.store.state.items))
-    watch(() => props.locale, () => sync(props.store.state.items))
+    watch(() => props.locale, () => sync(props.store.state.items), { flush: 'post' })
     onUnmounted(() => {
       unsubscribe()
-      for (const id of rendered.keys()) sonnerToast.dismiss(id)
+      for (const item of rendered.values()) sonnerToast.dismiss(item.displayId)
     })
     const position = props.placement === 'top' ? 'top-center' : 'bottom-center'
     return (): VNode => h(Fragment, {}, [
       h('div', { 'aria-atomic': 'true', 'aria-live': 'polite', class: 'hp:sr-only', role: 'status' }, state.value.liveMessage),
-      h(Toaster, { closeButton: false, position }),
+      h(Toaster, { closeButton: false, key: props.locale, position }),
     ])
   },
 })

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ClientToast, ClientToastStore } from '@holo-js/panels-client'
+  import { createPanelTranslator, type ClientToast, type ClientToastStore } from '@holo-js/panels-client'
   import { panelColorValue } from '@holo-js/panels-ui'
   import X from 'lucide-svelte/icons/x'
   import { Button } from '../ui/button'
@@ -18,6 +18,7 @@
     readonly toast: ClientToast
   } = $props()
   const host = $derived(store.actionHost(toast.id))
+  const translate = $derived(createPanelTranslator(locale))
 
   function ignoreFailure(operation: Promise<unknown>): void {
     void operation.catch(() => undefined)
@@ -41,6 +42,6 @@
       {/each}
     </CardContent>
   {/if}
-  {#if toast.closeable}<Button aria-label={`Close ${toast.title}`} class="hp:absolute hp:end-2 hp:top-2" size="icon-sm" type="button" variant="ghost" onclick={() => store.dismiss(toast.id)}><X /></Button>{/if}
+  {#if toast.closeable}<Button aria-label={`${translate('actions.close')}: ${toast.title}`} class="hp:absolute hp:end-2 hp:top-2" size="icon-sm" type="button" variant="ghost" onclick={() => store.dismiss(toast.id)}><X /></Button>{/if}
   {#if host?.actions[0]}<CardContent><ActionRenderer action={host.actions[0]} actions={host.actions} direction={locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'} {locale} {panelId} {registry} store={host.store} /></CardContent>{/if}
 </Card>

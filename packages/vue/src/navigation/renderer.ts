@@ -1,5 +1,5 @@
 import { Button, Input, NativeSelect } from '../internal-ui'
-import type { NavigationKey } from '@holo-js/panels-client'
+import { createPanelTranslator, type NavigationKey } from '@holo-js/panels-client'
 import { defineComponent, h, onBeforeUnmount, onMounted, type PropType, type VNodeChild } from 'vue'
 import { usePanelsStore } from '../stores'
 import type { VueNavigationSearchRendererProps } from './types'
@@ -46,10 +46,11 @@ export const VueNavigationSearchRenderer = defineComponent({
     return (): VNodeChild => {
       const state = navigation.value
       const results = search.value
+      const translate = createPanelTranslator(componentProps.shell.locale ?? 'en')
       return h('div', { class: ['hp-navigation-search', `hp-navigation-search--${state.manifest.layout}`], 'data-panels-component': 'navigation-search' }, [
-        h(Button, { 'aria-expanded': state.menuOpen, 'aria-label': 'Toggle navigation', type: 'button', onClick: () => componentProps.shell.navigation.toggleMenu() }, 'Menu'),
-        state.manifest.panels.length > 1 ? h('label', ['Panel', h(NativeSelect, { 'aria-label': 'Panel', modelValue: state.manifest.panelId, onChange: (event: Event) => componentProps.shell.onNavigate?.(componentProps.shell.navigation.switchPanel(target<HTMLSelectElement>(event).value)) }, state.manifest.panels.map(panel => h('option', { key: panel.id, value: panel.id }, panel.label)))]) : null,
-        h('nav', { 'aria-label': 'Panel navigation', hidden: !state.menuOpen && state.manifest.layout === 'sidebar', onKeydown: navigateKey }, [
+        h(Button, { 'aria-expanded': state.menuOpen, 'aria-label': translate('navigation.toggle'), type: 'button', onClick: () => componentProps.shell.navigation.toggleMenu() }, translate('navigation.menu')),
+        state.manifest.panels.length > 1 ? h('label', [translate('navigation.panel'), h(NativeSelect, { 'aria-label': translate('navigation.panel'), modelValue: state.manifest.panelId, onChange: (event: Event) => componentProps.shell.onNavigate?.(componentProps.shell.navigation.switchPanel(target<HTMLSelectElement>(event).value)) }, state.manifest.panels.map(panel => h('option', { key: panel.id, value: panel.id }, panel.label)))]) : null,
+        h('nav', { 'aria-label': translate('navigation.label'), hidden: !state.menuOpen && state.manifest.layout === 'sidebar', onKeydown: navigateKey }, [
           ...state.manifest.groups.map(group => h(Button, { 'aria-expanded': !state.collapsedGroups.has(group.id), key: group.id, type: 'button', onClick: () => componentProps.shell.navigation.toggleGroup(group.id) }, group.label)),
           ...state.manifest.clusters.map(cluster => h(Button, { 'aria-expanded': !state.collapsedClusters.has(cluster.id), key: cluster.id, type: 'button', onClick: () => componentProps.shell.navigation.toggleCluster(cluster.id) }, cluster.label)),
           h('ul', componentProps.shell.navigation.visibleItems.map(item => h('li', { 'data-cluster': item.cluster, 'data-group': item.group, 'data-parent': item.parent, key: item.id }, h('a', {
@@ -60,10 +61,10 @@ export const VueNavigationSearchRenderer = defineComponent({
           }, [item.icon ? h('span', { 'aria-hidden': 'true', 'data-icon': item.icon }) : null, item.label, item.badge ? h('span', item.badge) : null, item.variant ? h('small', item.variant) : null])))),
         ]),
         h('div', { class: 'hp-global-search', role: 'search' }, [
-          h('label', ['Global search', h(Input, {
+          h('label', [translate('search.label'), h(Input, {
             'aria-controls': 'hp-global-search-results',
             'aria-expanded': results.open,
-            placeholder: 'Search…',
+            placeholder: translate('search.placeholder'),
             role: 'combobox',
             modelValue: results.term,
             onFocus: () => componentProps.shell.search.open(),
@@ -71,7 +72,7 @@ export const VueNavigationSearchRenderer = defineComponent({
             onKeydown: searchKey,
           })]),
           h('kbd', '⌘/Ctrl K'),
-          results.loading ? h('span', { 'aria-live': 'polite', role: 'status' }, 'Searching…') : null,
+          results.loading ? h('span', { 'aria-live': 'polite', role: 'status' }, translate('search.loading')) : null,
           results.error ? h('span', { role: 'alert' }, results.error) : null,
           h('ul', { id: 'hp-global-search-results', role: 'listbox' }, results.results.map((result, index) => h('li', { 'aria-selected': index === results.selectedIndex, key: `${result.resourceId}:${result.id}`, role: 'option' }, [
             h('a', { href: result.url }, [result.image ? h('img', { alt: '', src: result.image }) : null, result.icon ? h('span', { 'aria-hidden': 'true', 'data-icon': result.icon }) : null, h('strong', result.title), ...Object.entries(result.details).map(([label, value]) => h('span', { key: label }, `${label}: ${value}`))]),

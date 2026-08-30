@@ -144,7 +144,7 @@ describe('P13 React notification renderers', () => {
     expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
     expect(document.querySelector('a[href="/reports"]')).not.toBeNull()
     expect(document.body.innerHTML).not.toContain('javascript:')
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close Report ready"]')?.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close: Report ready"]')?.click())
     expect(store.state.items.some(item => item.id === 'notice-1')).toBe(false)
   })
 

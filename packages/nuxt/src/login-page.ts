@@ -46,7 +46,7 @@ export const PanelLoginPage = defineComponent({
           panelId: props.panelId,
         })
         if (!result.ok || !result.url) {
-          error.value = panelLoginErrorMessage(result)
+          error.value = panelLoginErrorMessage(result, locale.value)
           return
         }
         window.location.assign(result.url)

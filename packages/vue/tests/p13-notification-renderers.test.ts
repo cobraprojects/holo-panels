@@ -117,6 +117,25 @@ describe('P13 Vue notification renderers', () => {
     expect(executeToastAction).toHaveBeenCalledOnce()
     store.dispose()
   })
+
+  it('updates existing toast accessibility copy when the locale changes', async () => {
+    const store = new ClientToastStore()
+    store.push(presentation)
+    const locale = ref('en')
+    const container = document.createElement('div')
+    document.body.append(container)
+    const app = createApp(() => h(VueToastViewport, { locale: locale.value, store }))
+    apps.push(app)
+    app.mount(container)
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="Close: Report ready"]')).not.toBeNull())
+
+    locale.value = 'ar'
+    await nextTick()
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="إغلاق: Report ready"]')).not.toBeNull())
+    store.dismiss('notice-1')
+    store.dispose()
+  })
+
   it('runs saved notification actions through the shared confirmation dialog', async () => {
     const executeAction = vi.fn(async () => ({ effects: [], items: [], status: 'succeeded' as const }))
     const manifest = { badge: null, color: null, confirmation: 'Retry publishing?', disabled: false, icon: 'rotate-cw', id: 'retry', kind: 'custom', label: 'Retry', modal: null, mount: 'notification', size: 'medium', tooltip: null, type: 'custom', visible: true }
@@ -161,7 +180,7 @@ describe('P13 Vue notification renderers', () => {
     const colored = reportToast.querySelector<HTMLElement>('.hp-notification-toast')!
     expect(getComputedStyle(colored).borderInlineStartColor).toBe('#16a34a')
     expect(getComputedStyle(colored.querySelector<HTMLElement>('[data-slot="notification-icon"]')!).color).toBe('#b42318')
-    reportToast?.querySelector<HTMLButtonElement>('[aria-label="Close Report ready"]')?.click()
+    reportToast?.querySelector<HTMLButtonElement>('[aria-label="Close: Report ready"]')?.click()
     await vi.waitFor(() => expect(store.state.items.some(item => item.id === 'notice-1')).toBe(false))
   })
 

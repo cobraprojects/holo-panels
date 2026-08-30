@@ -1,5 +1,6 @@
 import { HoloSecurityCsrfProvider } from '../transport/csrf'
 import { requestedPanelDestination } from './destination'
+import { createPanelTranslator } from '../locales/presentation'
 
 export interface PanelLoginCredentials {
   readonly email: string
@@ -20,10 +21,11 @@ export interface PanelLoginResult {
   readonly url: string | null
 }
 
-export function panelLoginErrorMessage(result: PanelLoginResult): string {
-  if (result.error === 'authentication') return 'These credentials do not match our records.'
-  if (result.error === 'security') return 'Your session expired. Refresh the page and try again.'
-  return 'Sign in failed. Please try again.'
+export function panelLoginErrorMessage(result: PanelLoginResult, locale = 'en'): string {
+  const translate = createPanelTranslator(locale)
+  if (result.error === 'authentication') return translate('auth.invalidCredentials')
+  if (result.error === 'security') return translate('auth.sessionExpired')
+  return translate('auth.signInFailed')
 }
 
 const PANEL_ID = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u

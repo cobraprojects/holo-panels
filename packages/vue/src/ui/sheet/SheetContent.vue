@@ -14,6 +14,7 @@ import SheetOverlay from "./SheetOverlay.vue"
 
 interface SheetContentProps extends DialogContentProps {
   class?: HTMLAttributes["class"]
+  closeLabel?: string
   side?: "top" | "right" | "bottom" | "left"
 }
 
@@ -22,11 +23,12 @@ defineOptions({
 })
 
 const props = withDefaults(defineProps<SheetContentProps>(), {
+  closeLabel: 'Close',
   side: "right",
 })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "side")
+const delegatedProps = reactiveOmit(props, "class", "closeLabel", "side")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -58,7 +60,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         class="hp:ring-offset-background hp:focus:ring-ring hp:data-[state=open]:bg-secondary hp:absolute hp:top-4 hp:end-4 hp:rounded-xs hp:opacity-70 hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none"
       >
         <Cross2Icon class="hp:size-4" />
-        <span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
+        <span class="hp:sr-only">{{ closeLabel }}</span>
       </DialogClose>
     </DialogContent>
   </DialogPortal>

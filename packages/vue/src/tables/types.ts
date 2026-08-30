@@ -188,6 +188,7 @@ export interface VueTableRendererProps<
   readonly getRecordVersion?: (record: Readonly<TRecord>) => string | undefined
   readonly groups?: readonly VueTableGroup<TRecord>[]
   readonly inlineEditTransport?: VueInlineEditTransport<TRecordId>
+  readonly locale?: string
   readonly notificationStore?: ClientToastStore
   readonly onQueryChange?: () => void
   readonly panelId?: string

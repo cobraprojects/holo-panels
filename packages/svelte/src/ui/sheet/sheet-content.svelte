@@ -15,12 +15,14 @@
 	let {
 		ref = $bindable(null),
 		class: className,
+		closeLabel = 'Close',
 		side = "right",
 		showCloseButton = true,
 		portalProps,
 		children,
 		...restProps
 	}: WithoutChildrenOrChild<SheetPrimitive.ContentProps> & {
+		closeLabel?: string;
 		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof SheetPortal>>;
 		side?: Side;
 		showCloseButton?: boolean;
@@ -48,7 +50,7 @@
 				{#snippet child({ props })}
 					<Button variant="ghost" class="hp:absolute hp:top-3 hp:end-3" size="icon-sm" {...props}>
 						<XIcon  />
-						<span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
+						<span class="hp:sr-only">{closeLabel}</span>
 					</Button>
 				{/snippet}
 			</SheetPrimitive.Close>

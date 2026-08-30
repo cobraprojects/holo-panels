@@ -184,6 +184,7 @@ export interface SvelteTableRendererProps<TRecord extends object, TRecordId exte
   readonly getRecordVersion?: (record: Readonly<TRecord>) => string | undefined
   readonly groups?: readonly SvelteTableGroup<TRecord>[]
   readonly inlineEditTransport?: SvelteInlineEditTransport<TRecordId>
+  readonly locale?: string
   readonly onQueryChange?: () => void
   readonly panelId?: string
   readonly registry?: SvelteComponentRegistry

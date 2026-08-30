@@ -1082,6 +1082,7 @@ function tablePage(page: NuxtPanelPageData, panelId: string, schema: ResourceRen
       filters: schema.filters,
       groups,
       getRecordId: (record: ResourceRecord) => recordId(record, schema.routeKey),
+      locale: runtime.locale,
       notificationStore: runtime.toastStore,
       registry: runtime.registry,
       onQueryChange: refresh,
@@ -1347,7 +1348,7 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
     const collapsible = page.bootstrap.manifest.layout?.collapsibleNavigationGroups !== false && configuration?.collapsible !== false
     items.push(collapsible
       ? h(Collapsible, { asChild: true, defaultOpen: true, key: group }, () => h(SidebarGroup, {}, () => [
-          h(CollapsibleTrigger, { asChild: true }, () => h(SidebarGroupLabel, {}, () => [h('span', group), PanelsIcon('chevron-down', 'hp:ml-auto')])),
+          h(CollapsibleTrigger, { asChild: true }, () => h(SidebarGroupLabel, {}, () => [h('span', group), PanelsIcon('chevron-down', 'hp:ms-auto')])),
           h(CollapsibleContent, {}, content),
         ]))
       : h(SidebarGroup, { key: group }, () => [h(SidebarGroupLabel, {}, () => group), content()]))
@@ -1730,7 +1731,7 @@ export const PanelPage = defineComponent({
             bootstrap.manifest.navigationEnabled === false
               ? null
               : bootstrap.manifest.navigationMode === 'sidebar' && !SidebarComponent
-                ? h(SidebarTrigger, { 'aria-label': translate('navigation.toggle'), class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId })
+                ? h(SidebarTrigger, { 'aria-label': translate('navigation.toggle'), class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId, label: translate('sidebar.toggle') })
                 : h(Button, { 'aria-controls': navigationId, 'aria-expanded': navigationOpen.value, 'aria-label': translate('navigation.toggle'), class: 'hp-panel-navigation-toggle hp-panel-topbar-start-action', id: navigationToggleId, onClick: toggleNavigation, type: 'button', variant: 'ghost' }, () => PanelsIcon('menu')),
             renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE),
             h(Button, { as: 'a', class: ['hp-panel-brand', 'hp-panel-topbar-start', bootstrap.manifest.navigationMode === 'sidebar' ? 'hp-panel-navigation-header' : null], href: bootstrap.manifest.routing?.homeUrl ?? bootstrap.manifest.path, variant: 'ghost' }, () => [bootstrap.manifest.branding.logo ? h('img', { alt: '', src: bootstrap.manifest.branding.logo }) : h(Avatar, {}, () => h(AvatarFallback, {}, () => 'H')), h('strong', bootstrap.manifest.branding.name)]),
@@ -1751,7 +1752,7 @@ export const PanelPage = defineComponent({
             ? [
                 SidebarComponent
                   ? h(SidebarComponent, { actor: props.page.bootstrap.actor, manifest: bootstrap.manifest, page } satisfies PanelChromeComponentProps<typeof page>)
-                  : h(Sidebar, { class: 'hp-panel-sidebar', collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none', side: bootstrap.direction === 'rtl' ? 'right' : 'left' }, () => [
+                  : h(Sidebar, { class: 'hp-panel-sidebar', closeLabel: translate('actions.close'), collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none', mobileDescription: translate('sidebar.description'), mobileTitle: translate('sidebar.title'), side: bootstrap.direction === 'rtl' ? 'right' : 'left' }, () => [
                       renderHook(PanelsRenderHook.SIDEBAR_START),
                       h(SidebarHeader, { class: 'hp-panel-navigation-header' }, () => [
                         tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,

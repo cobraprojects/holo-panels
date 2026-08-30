@@ -170,14 +170,14 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
       const modalWidth = frame.manifest.modal?.width ?? 'medium'
       return frame.manifest.modal?.slideOver
         ? <Sheet key={frame.manifest.id} onOpenChange={open => { if (!open) props.store.close() }} open>
-          <SheetContent {...dismiss} className={modalWidthClass(modalWidth)} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="slide-over" side={props.direction === 'rtl' ? 'left' : 'right'}>
+          <SheetContent {...dismiss} className={modalWidthClass(modalWidth)} closeLabel={translate('actions.close')} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="slide-over" side={props.direction === 'rtl' ? 'left' : 'right'}>
             <SheetHeader><SheetTitle id={titleId}>{heading}</SheetTitle>{description ? <SheetDescription>{description}</SheetDescription> : null}</SheetHeader>
             <div className="hp:flex-1 hp:overflow-y-auto hp:px-4">{content}</div>
             <SheetFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? translate('actions.close')}</Button></SheetFooter>
           </SheetContent>
         </Sheet>
         : <Dialog key={frame.manifest.id} onOpenChange={open => { if (!open) props.store.close() }} open>
-          <DialogContent {...dismiss} className={modalWidthClass(modalWidth)} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="modal">
+          <DialogContent {...dismiss} className={modalWidthClass(modalWidth)} closeLabel={translate('actions.close')} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="modal">
             <DialogHeader><DialogTitle id={titleId}>{heading}</DialogTitle>{description ? <DialogDescription>{description}</DialogDescription> : null}</DialogHeader>
             {content}
             <DialogFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? translate('actions.close')}</Button></DialogFooter>

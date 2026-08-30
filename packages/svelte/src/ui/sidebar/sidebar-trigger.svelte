@@ -9,9 +9,11 @@
 		ref = $bindable(null),
 		class: className,
 		onclick,
+		label = "Toggle Sidebar",
 		...restProps
 	}: ComponentProps<typeof Button> & {
 		onclick?: (e: MouseEvent) => void;
+		label?: string;
 	} = $props();
 
 	const sidebar = useSidebar();
@@ -42,5 +44,5 @@
 	{...restProps}
 >
 	<PanelLeftIcon  />
-	<span class="hp:sr-only">Toggle Sidebar</span>
+	<span class="hp:sr-only">{label}</span>
 </Button>

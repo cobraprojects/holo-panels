@@ -8,6 +8,7 @@ import { useSidebar } from "./utils"
 
 const props = defineProps<{
   class?: HTMLAttributes["class"]
+  label?: string
 }>()
 
 const { isMobile, open, openMobile, toggleSidebar } = useSidebar()
@@ -35,6 +36,6 @@ watch(openMobile, (nextOpen, previousOpen) => {
     @click="toggleSidebar"
   >
     <ViewVerticalIcon />
-    <span class="hp:sr-only">Toggle Sidebar</span>
+    <span class="hp:sr-only">{{ props.label ?? 'Toggle Sidebar' }}</span>
   </Button>
 </template>

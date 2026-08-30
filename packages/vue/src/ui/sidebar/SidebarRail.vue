@@ -5,6 +5,7 @@ import { useSidebar } from "./utils"
 
 const props = defineProps<{
   class?: HTMLAttributes["class"]
+  label?: string
 }>()
 
 const { toggleSidebar } = useSidebar()
@@ -14,9 +15,9 @@ const { toggleSidebar } = useSidebar()
   <button
     data-sidebar="rail"
     data-slot="sidebar-rail"
-    aria-label="Toggle Sidebar"
+    :aria-label="props.label ?? 'Toggle Sidebar'"
     :tabindex="-1"
-    title="Toggle Sidebar"
+    :title="props.label ?? 'Toggle Sidebar'"
     :class="cn(
       'hp:hover:after:bg-sidebar-border hp:absolute hp:inset-y-0 hp:z-20 hp:hidden hp:w-4 hp:-translate-x-1/2 hp:transition-all hp:ease-linear hp:group-data-[side=left]:-right-4 hp:group-data-[side=right]:left-0 hp:after:absolute hp:after:inset-y-0 hp:after:left-1/2 hp:after:w-0.5 hp:sm:flex',
       'hp:in-data-[side=left]:cursor-w-resize hp:in-data-[side=right]:cursor-e-resize',

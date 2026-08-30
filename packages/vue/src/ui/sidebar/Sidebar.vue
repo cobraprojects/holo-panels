@@ -15,6 +15,9 @@ const props = withDefaults(defineProps<SidebarProps>(), {
   side: "left",
   variant: "sidebar",
   collapsible: "offcanvas",
+  closeLabel: "Close",
+  mobileDescription: "Displays the mobile sidebar.",
+  mobileTitle: "Sidebar",
 })
 
 const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
@@ -32,6 +35,7 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
   <Sheet v-else-if="isMobile" :open="openMobile" v-bind="$attrs" @update:open="setOpenMobile">
     <SheetContent
+      :close-label="closeLabel"
       data-sidebar="sidebar"
       data-slot="sidebar"
       data-mobile="true"
@@ -42,8 +46,8 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
       }"
     >
       <SheetHeader class="hp:sr-only">
-        <SheetTitle>Sidebar</SheetTitle>
-        <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+        <SheetTitle>{{ mobileTitle }}</SheetTitle>
+        <SheetDescription>{{ mobileDescription }}</SheetDescription>
       </SheetHeader>
       <div class="hp:flex hp:h-full hp:w-full hp:flex-col">
         <slot />

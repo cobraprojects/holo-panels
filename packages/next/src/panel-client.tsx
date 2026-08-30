@@ -358,7 +358,7 @@ function NavigationItems({ activeId, collapsibleGroups, groups, icons, items, mo
     const collapsible = collapsibleGroups !== false && configuration?.collapsible !== false
     const links = <SidebarGroupContent><SidebarMenu><SidebarNavigationBranch activeId={activeId} icons={icons} items={grouped} onNavigate={onNavigate} /></SidebarMenu></SidebarGroupContent>
     rendered.push(collapsible
-      ? <Collapsible asChild key={group} onOpenChange={() => toggleGroup(group)} open={!collapsedGroups.has(group)}><SidebarGroup><CollapsibleTrigger asChild><SidebarGroupLabel className="hp:cursor-pointer">{group}<PanelsIcon className="hp:ml-auto" name="chevron-down" /></SidebarGroupLabel></CollapsibleTrigger><CollapsibleContent>{links}</CollapsibleContent></SidebarGroup></Collapsible>
+      ? <Collapsible asChild key={group} onOpenChange={() => toggleGroup(group)} open={!collapsedGroups.has(group)}><SidebarGroup><CollapsibleTrigger asChild><SidebarGroupLabel className="hp:cursor-pointer">{group}<PanelsIcon className="hp:ms-auto" name="chevron-down" /></SidebarGroupLabel></CollapsibleTrigger><CollapsibleContent>{links}</CollapsibleContent></SidebarGroup></Collapsible>
       : <SidebarGroup key={group}><SidebarGroupLabel>{group}</SidebarGroupLabel>{links}</SidebarGroup>)
   }
   return rendered
@@ -502,12 +502,12 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
       {manifest.layout?.topbar === false ? null : TopbarComponent ? <TopbarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <header className="hp-panel-header hp-panel-main-header hp:sticky hp:top-0 hp:z-20 hp:flex hp:h-16 hp:shrink-0 hp:items-center hp:gap-2 hp:border-b hp:bg-background hp:px-4">
         <div className="hp-panel-topbar-start hp:contents">{renderHook(PanelsRenderHook.TOPBAR_START)}</div>
         {manifest.navigationEnabled === false ? null : manifest.navigationMode === 'sidebar' ? <SidebarTrigger aria-label={translate('navigation.toggle')} className="hp-panel-navigation-toggle" /> : <Button aria-expanded={navigationOpen} aria-label={translate('navigation.toggle')} className="hp-panel-navigation-toggle" onClick={() => setNavigationOpen(open => !open)} size="icon" variant="ghost"><PanelsIcon name="menu" /></Button>}
-        {manifest.navigationMode === 'sidebar' ? <Separator className="hp:mr-2 hp:h-4" orientation="vertical" /> : null}
+        {manifest.navigationMode === 'sidebar' ? <Separator className="hp:me-2 hp:h-4" orientation="vertical" /> : null}
         {manifest.navigationMode === 'topbar' ? <>{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}<nav aria-label={translate('navigation.label')} className="hp-panel-navigation hp-panel-navigation--topbar hp:hidden hp:items-center hp:gap-1 hp:lg:flex"><NavigationItems activeId={state.activeNavigationId} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="topbar" onNavigate={() => setNavigationOpen(false)} /></nav></> : null}
         {renderHook(PanelsRenderHook.GLOBAL_SEARCH_BEFORE)}
         {manifest.globalSearch ? <div className="hp-panel-topbar-center hp:mx-auto hp:min-w-0 hp:max-w-md hp:flex-1"><PanelGlobalSearch configuration={manifest.globalSearchConfiguration} end={renderHook(PanelsRenderHook.GLOBAL_SEARCH_END)} panelId={state.panelId} start={renderHook(PanelsRenderHook.GLOBAL_SEARCH_START)} translate={translate} /></div> : <div className="hp-panel-topbar-center hp:flex-1" />}
         {renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER)}
-        <div className="hp-panel-header-actions hp-panel-actions--compact hp:ml-auto hp:flex hp:shrink-0 hp:items-center hp:gap-2">
+        <div className="hp-panel-header-actions hp-panel-actions--compact hp:ms-auto hp:flex hp:shrink-0 hp:items-center hp:gap-2">
           {notificationConfiguration?.placement === 'topbar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}
           {manifest.navigationMode === 'topbar' && payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}
           {manifest.navigationMode === 'topbar' ? accountMenu : null}
@@ -534,11 +534,11 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     {manifest.assets?.map(asset => asset.type === 'css' ? <link data-panel-asset={asset.id} href={asset.src} key={asset.id} rel="stylesheet" /> : <script data-panel-asset={asset.id} defer key={asset.id} src={asset.src} />)}
     {renderHook(PanelsRenderHook.TOPBAR_BEFORE)}
     <SidebarProvider onOpenChange={open => setSidebarCollapsed(!open)} open={!sidebarCollapsed}>
-      {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'} side={payload.bootstrap.direction === 'rtl' ? 'right' : 'left'}>
+      {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" closeLabel={translate('actions.close')} collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'} mobileDescription={translate('sidebar.description')} mobileTitle={translate('sidebar.title')} side={payload.bootstrap.direction === 'rtl' ? 'right' : 'left'}>
         {renderHook(PanelsRenderHook.SIDEBAR_START)}
         <SidebarHeader className="hp-panel-navigation-header">{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}{payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}</SidebarHeader>
         <SidebarContent className="hp-panel-navigation-body"><nav aria-label={translate('navigation.label')} className="hp-panel-navigation hp:h-full">{renderHook(PanelsRenderHook.SIDEBAR_NAV_START)}<NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => undefined} />{renderHook(PanelsRenderHook.SIDEBAR_NAV_END)}</nav></SidebarContent>
-        <SidebarFooter>{notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}{accountMenu}{renderHook(PanelsRenderHook.SIDEBAR_FOOTER)}</SidebarFooter><SidebarRail />
+        <SidebarFooter>{notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}{accountMenu}{renderHook(PanelsRenderHook.SIDEBAR_FOOTER)}</SidebarFooter><SidebarRail label={translate('sidebar.toggle')} />
       </Sidebar> : null}
       {page}
     </SidebarProvider>

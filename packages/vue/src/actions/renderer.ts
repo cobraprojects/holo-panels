@@ -194,7 +194,7 @@ export const VueActionRenderer = defineComponent({
           onEscapeKeyDown: (event: Event) => { dismiss.onEscapeKeyDown(event); if (!event.defaultPrevented) props.store.close() },
           onPointerDownOutside: (event: Event) => { dismiss.onPointerDownOutside(event); if (!event.defaultPrevented) props.store.close() },
         }, () => [
-          h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => frame.manifest.modal?.heading ?? frame.manifest.label), h(AlertDialogDescription, {}, () => frame.manifest.confirmation ?? 'Are you sure?')]),
+          h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => frame.manifest.modal?.heading ?? frame.manifest.label), h(AlertDialogDescription, {}, () => frame.manifest.confirmation ?? translate('actions.confirmQuestion'))]),
           h(AlertDialogFooter, {}, () => [h(AlertDialogCancel, { onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? translate('actions.cancel')), h(AlertDialogAction, {
             variant: frame.manifest.color === 'danger' ? 'destructive' : 'default',
             onClick: (event: MouseEvent) => {
@@ -224,6 +224,7 @@ export const VueActionRenderer = defineComponent({
         return h(Root, { key: `${frame.manifest.id}-${index}`, open: true, 'onUpdate:open': (open: boolean) => { if (!open) props.store.close() } }, () => h(Content, {
           ...dismiss,
           class: modalWidthClass(modalWidth),
+          closeLabel: translate('actions.close'),
           'data-holo-panel': '',
           'data-modal-width': modalWidth,
           'data-panels-component': slideOver ? 'slide-over' : 'modal',

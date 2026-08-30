@@ -11,11 +11,13 @@
 	let {
 		ref = $bindable(null),
 		class: className,
+		closeLabel = 'Close',
 		portalProps,
 		children,
 		showCloseButton = true,
 		...restProps
 	}: WithoutChildrenOrChild<DialogPrimitive.ContentProps> & {
+		closeLabel?: string;
 		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof DialogPortal>>;
 		children: Snippet;
 		showCloseButton?: boolean;
@@ -41,7 +43,7 @@
 				{#snippet child({ props })}
 					<Button variant="ghost" class="hp:absolute hp:top-2 hp:end-2" size="icon-sm" {...props}>
 						<XIcon  />
-						<span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
+						<span class="hp:sr-only">{closeLabel}</span>
 					</Button>
 				{/snippet}
 			</DialogPrimitive.Close>

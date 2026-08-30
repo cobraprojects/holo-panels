@@ -806,6 +806,7 @@
     },
     getRecordId: recordRouteIdentifier,
     groups: renderedGroups,
+    locale,
     onQueryChange: () => { void refreshTable() },
     store: table,
     summaries: renderedSummaries,

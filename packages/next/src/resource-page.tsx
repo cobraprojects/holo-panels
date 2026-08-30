@@ -486,6 +486,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
   readonly renderHookScopes: readonly string[]
   readonly resource: JsonObject
 }): ReactNode {
+  const { locale } = useContext(ResourceLocaleContext)
   const records = useMemo(() => recordsFrom(data), [data])
   const table = object(resource.table)
   const routeKey = propertyPath(text(resource.routeKey))
@@ -576,6 +577,7 @@ function ResourceList({ data, operation, panelId, panelManifest, registry, rende
     filters={filters}
     getRecordId={record => text(record[routeKey])}
     groups={groups.length > 0 ? groups : undefined}
+    locale={locale}
     onQueryChange={refresh}
     store={store}
     summaries={summaries}

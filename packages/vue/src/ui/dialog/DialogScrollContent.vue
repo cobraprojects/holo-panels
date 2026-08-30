@@ -16,10 +16,10 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes["class"] }>()
+const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], closeLabel?: string }>(), { closeLabel: 'Close' })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "closeLabel")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -51,7 +51,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           class="hp:absolute hp:top-4 hp:end-4 hp:p-0.5 hp:transition-colors hp:rounded-md hp:hover:bg-secondary"
         >
           <Cross2Icon class="hp:w-4 hp:h-4" />
-          <span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
+          <span class="hp:sr-only">{{ closeLabel }}</span>
         </DialogClose>
       </DialogContent>
     </DialogOverlay>

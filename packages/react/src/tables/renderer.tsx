@@ -12,7 +12,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { ClientTransferStore, createTableActionHost, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
+import { ClientTransferStore, createPanelTranslator, createTableActionHost, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
 import { ReactActionRenderer } from '../actions/renderer'
 import { TablesRenderHook } from '@holo-js/panels-core'
 import { ChevronLeft, ChevronRight, Columns3, ListFilter, Search, X } from 'lucide-react'
@@ -119,11 +119,12 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
   const state = useTableStore(props.store)
   const modalTitleId = useId()
   const [open, setOpen] = useState(false)
+  const translate = createPanelTranslator(props.locale ?? 'en')
   if (filters.length === 0) return null
   const presentation = props.filterPresentation
   const placement = presentation?.placement ?? 'inline'
   const content = <form
-    aria-label="Table filters"
+    aria-label={translate('tables.filterForm')}
     className="hp-table-filters hp:grid hp:gap-4"
     data-filter-placement={placement}
     style={collectionStyle(presentation?.columns ?? { default: 1 })}
@@ -194,17 +195,17 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
             : <Input id={id} onChange={event => update(event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
       </label>)
     })}
-    {state.filters.mode === 'deferred' ? <Button type="submit">Apply filters</Button> : null}
+    {state.filters.mode === 'deferred' ? <Button type="submit">{translate('tables.applyFilters')}</Button> : null}
     <Button onClick={() => {
       props.store.resetFilters()
       notifyQueryChange(props.onQueryChange)
-    }} type="button">Reset filters</Button>
+    }} type="button">{translate('tables.resetFilters')}</Button>
     <FilterCollectionSlot placement="after" props={props} />
   </form>
   if (placement === 'inline') return content
-  const trigger = <Button aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} type="button" variant="outline"><ListFilter aria-hidden="true" />Filters</Button>
+  const trigger = <Button aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} type="button" variant="outline"><ListFilter aria-hidden="true" />{translate('tables.filters')}</Button>
   if (placement === 'dropdown') return <Popover onOpenChange={setOpen} open={open}><PopoverTrigger asChild>{trigger}</PopoverTrigger><PopoverContent align="end" className="hp:w-96">{content}</PopoverContent></Popover>
-  return <Fragment>{trigger}<Dialog onOpenChange={setOpen} open={open}><DialogContent aria-labelledby={modalTitleId}><DialogHeader><DialogTitle id={modalTitleId}>Filters</DialogTitle><DialogDescription>Refine the records shown in this table.</DialogDescription></DialogHeader>{content}</DialogContent></Dialog></Fragment>
+  return <Fragment>{trigger}<Dialog onOpenChange={setOpen} open={open}><DialogContent aria-labelledby={modalTitleId} closeLabel={translate('actions.close')}><DialogHeader><DialogTitle id={modalTitleId}>{translate('tables.filters')}</DialogTitle><DialogDescription>{translate('tables.filterDescription')}</DialogDescription></DialogHeader>{content}</DialogContent></Dialog></Fragment>
 }
 
 function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): ReactNode {
@@ -300,7 +301,7 @@ function TableActions<TRecord extends object, TRecordId extends TableRecordId>({
     },
   }), [actions, feedback, group, props.actionTransport, props.store, recordId])
   useEffect(() => () => { while (host.store.activeFrame) host.store.close() }, [host])
-  return host.actions[0] ? <ReactActionRenderer {...host} manifest={host.actions[0]} panelId={props.panelId} registry={props.registry} /> : null
+  return host.actions[0] ? <ReactActionRenderer {...host} locale={props.locale} manifest={host.actions[0]} panelId={props.panelId} registry={props.registry} /> : null
 }
 
 function ActionGroupButton<TRecord extends object, TRecordId extends TableRecordId>({ group, props, record }: {
@@ -336,6 +337,8 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
   const [formatId, setFormatId] = useState(manifest.formatIds[0] ?? '')
   const [mappings, setMappings] = useState<Readonly<Record<string, string>>>({})
   const [columns, setColumns] = useState(() => new Set(manifest.kind === 'export' ? manifest.columns.filter(column => column.visibleByDefault).map(column => column.id) : []))
+  const translate = createPanelTranslator(props.locale ?? 'en')
+  const kind = translate(`transfers.${manifest.kind}`)
   const submit = async (): Promise<void> => {
     if (!store) return
     if (manifest.kind === 'import') {
@@ -346,11 +349,11 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
   }
   return <span className="hp-transfer-action">
     <Button className="hp-action-trigger" data-action={manifest.id} disabled={!transport} onClick={() => setOpen(true)} type="button" variant="outline"><PanelsIcon name={manifest.kind === 'import' ? 'upload' : 'download'} /><span>{manifest.label}</span></Button>
-    <Dialog onOpenChange={(next) => { if (!next) store?.cancel(); setOpen(next) }} open={open}><DialogContent>
-      <DialogHeader><DialogTitle id={`${manifest.id}-title`}>{manifest.label}</DialogTitle><DialogDescription>Configure and start this {manifest.kind}.</DialogDescription></DialogHeader>
-      <label>Format<NativeSelect onChange={event => setFormatId(event.currentTarget.value)} value={formatId}>{manifest.formatIds.map(id => <option key={id} value={id}>{id.toUpperCase()}</option>)}</NativeSelect></label>
+    <Dialog onOpenChange={(next) => { if (!next) store?.cancel(); setOpen(next) }} open={open}><DialogContent closeLabel={translate('actions.close')}>
+      <DialogHeader><DialogTitle id={`${manifest.id}-title`}>{manifest.label}</DialogTitle><DialogDescription>{translate('transfers.configure', { kind })}</DialogDescription></DialogHeader>
+      <label>{translate('transfers.format')}<NativeSelect onChange={event => setFormatId(event.currentTarget.value)} value={formatId}>{manifest.formatIds.map(id => <option key={id} value={id}>{id.toUpperCase()}</option>)}</NativeSelect></label>
       {manifest.kind === 'import' ? <>
-        <label>CSV file<Input accept=".csv,text/csv" onChange={event => {
+        <label>{translate('transfers.csvFile')}<Input accept=".csv,text/csv" onChange={event => {
           const file = event.currentTarget.files?.[0]
           if (file && store) void store.inspect(file).catch(() => undefined)
         }} type="file" /></label>
@@ -358,9 +361,9 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
           const value = event.currentTarget.value
           setMappings(current => ({ ...current, [column.key]: value }))
         }} value={mappings[column.key] ?? ''}>
-          <option value="">Do not import</option>{state.inspection?.headers.map(header => <option key={header} value={header}>{header}</option>)}
-        </NativeSelect>{column.example ? <small>Example: {column.example}</small> : null}</label>) : null}
-        {state.uploadProgress > 0 ? <Progress aria-label="Upload progress" max={100} value={state.uploadProgress} /> : null}
+          <option value="">{translate('transfers.doNotImport')}</option>{state.inspection?.headers.map(header => <option key={header} value={header}>{header}</option>)}
+        </NativeSelect>{column.example ? <small>{translate('transfers.example', { value: column.example })}</small> : null}</label>) : null}
+        {state.uploadProgress > 0 ? <Progress aria-label={translate('transfers.uploadProgress')} max={100} value={state.uploadProgress} /> : null}
       </> : manifest.columns.map(column => <label key={column.id}><Checkbox checked={columns.has(column.id)} onCheckedChange={value => {
         const checked = value === true
         setColumns(current => {
@@ -370,9 +373,9 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
         return next
         })
       }} />{column.label}</label>)}
-      <DialogFooter><Button disabled={!store || (manifest.kind === 'import' && !state.inspection)} onClick={() => void submit().catch(() => undefined)} type="button">Start {manifest.kind}</Button>
-      <Button onClick={() => setOpen(false)} type="button" variant="outline">Close</Button></DialogFooter>
-      {state.progress ? <Progress aria-label="Transfer progress" max={Math.max(1, state.progress.total)} value={(state.progress.completed / Math.max(1, state.progress.total)) * 100} /> : null}
+      <DialogFooter><Button disabled={!store || (manifest.kind === 'import' && !state.inspection)} onClick={() => void submit().catch(() => undefined)} type="button">{translate('transfers.start', { kind })}</Button>
+      <Button onClick={() => setOpen(false)} type="button" variant="outline">{translate('transfers.close')}</Button></DialogFooter>
+      {state.progress ? <Progress aria-label={translate('transfers.transferProgress')} max={Math.max(1, state.progress.total)} value={(state.progress.completed / Math.max(1, state.progress.total)) * 100} /> : null}
       {state.error ? <div role="alert">{state.error}</div> : null}
     </DialogContent></Dialog>
   </span>

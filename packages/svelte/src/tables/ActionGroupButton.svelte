@@ -31,4 +31,4 @@
   })
 </script>
 
-{#if host.actions[0]}<ActionRenderer {...host} action={host.actions[0]} panelId={table.panelId} registry={table.registry} />{/if}
+{#if host.actions[0]}<ActionRenderer {...host} action={host.actions[0]} locale={table.locale} panelId={table.panelId} registry={table.registry} />{/if}

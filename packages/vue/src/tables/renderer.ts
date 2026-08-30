@@ -1,5 +1,5 @@
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress } from '../internal-ui'
-import { ClientTransferStore, createTableActionHost, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import { ClientTransferStore, createPanelTranslator, createTableActionHost, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
 import { VueActionRenderer } from '../actions/renderer'
 import { TablesRenderHook } from '@holo-js/panels-core'
 import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, Search } from 'lucide-vue-next'
@@ -91,6 +91,8 @@ const VueTransferAction = defineComponent({
     table: { type: Object as PropType<RuntimeTable>, required: true },
   },
   setup(props) {
+    const translate = createPanelTranslator(props.table.locale ?? 'en')
+    const kind = translate(`transfers.${props.manifest.kind}`)
     const open = ref(false)
     const formatId = ref(props.manifest.formatIds[0] ?? '')
     const mappings = ref<Readonly<Record<string, string>>>({})
@@ -105,16 +107,16 @@ const VueTransferAction = defineComponent({
     }
     return () => h('span', { class: 'hp-transfer-action' }, [
       h(Button, { class: 'hp-action-trigger', 'data-action': props.manifest.id, disabled: !store, type: 'button', variant: 'outline', onClick: () => { open.value = true } }, () => [PanelsIcon(props.manifest.kind === 'import' ? 'upload' : 'download'), h('span', props.manifest.label)]),
-      h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { if (!active) { store?.cancel(); open.value = false } } }, () => h(DialogContent, { 'data-holo-panel': '' }, () => [
-        h(DialogHeader, {}, () => [h(DialogTitle, {}, () => props.manifest.label), h(DialogDescription, {}, () => `Configure this ${props.manifest.kind}.`)]),
-        h('label', ['Format', h(NativeSelect, { modelValue: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
+      h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { if (!active) { store?.cancel(); open.value = false } } }, () => h(DialogContent, { 'data-holo-panel': '', closeLabel: translate('actions.close') }, () => [
+        h(DialogHeader, {}, () => [h(DialogTitle, {}, () => props.manifest.label), h(DialogDescription, {}, () => translate('transfers.configure', { kind }))]),
+        h('label', [translate('transfers.format'), h(NativeSelect, { modelValue: formatId.value, onChange: (event: Event) => { formatId.value = eventTarget<HTMLSelectElement>(event).value } }, props.manifest.formatIds.map(id => h('option', { value: id }, id.toUpperCase()))) ]),
         props.manifest.kind === 'import' ? h('div', [
-          h('label', ['CSV file', h(Input, { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
-          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h(NativeSelect, { required: column.required, modelValue: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, 'Do not import'), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
-          state.value?.uploadProgress ? h(Progress, { 'aria-label': 'Upload progress', max: 100, modelValue: state.value.uploadProgress }) : null,
+          h('label', [translate('transfers.csvFile'), h(Input, { accept: '.csv,text/csv', type: 'file', onChange: (event: Event) => { const file = eventTarget<HTMLInputElement>(event).files?.[0]; if (file && store) void store.inspect(file).catch(() => undefined) } })]),
+          ...(state.value?.inspection ? props.manifest.columns.map(column => h('label', [column.label, h(NativeSelect, { required: column.required, modelValue: mappings.value[column.key] ?? '', onChange: (event: Event) => { mappings.value = { ...mappings.value, [column.key]: eventTarget<HTMLSelectElement>(event).value } } }, [h('option', { value: '' }, translate('transfers.doNotImport')), ...state.value!.inspection!.headers.map(header => h('option', { value: header }, header))])])) : []),
+          state.value?.uploadProgress ? h(Progress, { 'aria-label': translate('transfers.uploadProgress'), max: 100, modelValue: state.value.uploadProgress }) : null,
         ]) : h('div', props.manifest.columns.map(column => h('label', [h(Checkbox, { modelValue: columns.value.has(column.id), 'onUpdate:modelValue': (checked: boolean | 'indeterminate') => { const next = new Set(columns.value); if (checked === true) next.add(column.id); else next.delete(column.id); columns.value = next } }), column.label]))),
-        h(DialogFooter, {}, () => h(Button, { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, () => `Start ${props.manifest.kind}`)),
-        state.value?.progress ? h(Progress, { 'aria-label': 'Transfer progress', max: 100, modelValue: (state.value.progress.completed / Math.max(1, state.value.progress.total)) * 100 }) : null,
+        h(DialogFooter, {}, () => h(Button, { disabled: !store || (props.manifest.kind === 'import' && !state.value?.inspection), type: 'button', onClick: () => void submit().catch(() => undefined) }, () => translate('transfers.start', { kind }))),
+        state.value?.progress ? h(Progress, { 'aria-label': translate('transfers.transferProgress'), max: 100, modelValue: (state.value.progress.completed / Math.max(1, state.value.progress.total)) * 100 }) : null,
         state.value?.error ? h('div', { role: 'alert' }, state.value.error) : null,
       ])),
     ])
@@ -229,7 +231,7 @@ const TableActionGroupButton = defineComponent({
     return (): VNodeChild => {
       const table = runtimeTable(props.table)
       const current = host.value
-      return current.actions[0] ? h(VueActionRenderer, { ...current, action: current.actions[0], panelId: table.panelId, registry: table.registry }) : null
+      return current.actions[0] ? h(VueActionRenderer, { ...current, action: current.actions[0], locale: table.locale, panelId: table.panelId, registry: table.registry }) : null
     }
   },
 })
@@ -386,6 +388,7 @@ function tableFilters(
   idPrefix: string,
   open: Ref<boolean>,
 ): VNodeChild {
+  const translate = createPanelTranslator(table.locale ?? 'en')
   const filters = table.filters ?? []
   if (filters.length === 0) return null
   const presentation = table.filterPresentation
@@ -478,7 +481,7 @@ function tableFilters(
     return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, control]))
   }
   const content = h('form', {
-    'aria-label': 'Table filters',
+    'aria-label': translate('tables.filterForm'),
     class: 'hp-table-filters',
     'data-filter-placement': placement,
     style: filterCollectionStyle(presentation?.columns ?? { default: 1 }),
@@ -490,14 +493,14 @@ function tableFilters(
   }, [
     filterCollectionSlot(table, 'before'),
     ...orderedFilters(filters, presentation).map(field),
-    state.filters.mode === 'deferred' ? h(Button, { type: 'submit' }, 'Apply filters') : null,
+    state.filters.mode === 'deferred' ? h(Button, { type: 'submit' }, translate('tables.applyFilters')) : null,
     h(Button, {
       type: 'button',
       onClick: () => {
         table.store.resetFilters()
         notifyQueryChange(table.onQueryChange)
       },
-    }, 'Reset filters'),
+    }, translate('tables.resetFilters')),
     filterCollectionSlot(table, 'after'),
   ])
   if (placement === 'inline') return content
@@ -506,9 +509,9 @@ function tableFilters(
     'aria-haspopup': 'dialog',
     type: 'button',
     variant: 'outline',
-  }, [h(ListFilter, { 'aria-hidden': 'true' }), 'Filters'])
+  }, [h(ListFilter, { 'aria-hidden': 'true' }), translate('tables.filters')])
   if (placement === 'dropdown') return h(Popover, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => [h(PopoverTrigger, { asChild: true }, () => trigger), h(PopoverContent, { 'data-holo-panel': '' }, () => content)])
-  return [trigger, h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => h(DialogContent, { 'data-holo-panel': '' }, () => [h(DialogHeader, {}, () => [h(DialogTitle, {}, () => 'Filters'), h(DialogDescription, {}, () => 'Narrow the records shown in this table.')]), content]))]
+  return [trigger, h(Dialog, { open: open.value, 'onUpdate:open': (active: boolean) => { open.value = active } }, () => h(DialogContent, { 'data-holo-panel': '', closeLabel: translate('actions.close') }, () => [h(DialogHeader, {}, () => [h(DialogTitle, {}, () => translate('tables.filters')), h(DialogDescription, {}, () => translate('tables.filterDescription'))]), content]))]
 }
 
 export const VueTableRenderer = defineComponent({

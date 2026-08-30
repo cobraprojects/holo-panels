@@ -7,8 +7,9 @@
 		ref = $bindable(null),
 		class: className,
 		children,
+		label = "Toggle Sidebar",
 		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLButtonElement>, HTMLButtonElement> = $props();
+	}: WithElementRef<HTMLAttributes<HTMLButtonElement>, HTMLButtonElement> & { label?: string } = $props();
 
 	const sidebar = useSidebar();
 </script>
@@ -17,10 +18,10 @@
 	bind:this={ref}
 	data-sidebar="rail"
 	data-slot="sidebar-rail"
-	aria-label="Toggle Sidebar"
+	aria-label={label}
 	tabindex={-1}
 	onclick={sidebar.toggle}
-	title="Toggle Sidebar"
+	title={label}
 	class={cn(
 		"hp:hover:after:bg-sidebar-border hp:absolute hp:inset-y-0 hp:z-20 hp:hidden hp:w-4 hp:-translate-x-1/2 hp:transition-all hp:ease-linear hp:group-data-[side=left]:-right-4 hp:group-data-[side=right]:left-0 hp:after:absolute hp:after:inset-y-0 hp:after:left-1/2 hp:after:w-[2px] hp:sm:flex",
 		"hp:in-data-[side=left]:cursor-w-resize hp:in-data-[side=right]:cursor-e-resize",

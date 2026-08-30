@@ -16,12 +16,13 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], showCloseButton?: boolean }>(), {
+const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], closeLabel?: string, showCloseButton?: boolean }>(), {
+  closeLabel: 'Close',
   showCloseButton: true,
 })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "closeLabel", "showCloseButton")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -49,7 +50,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         class="hp:ring-offset-background hp:focus:ring-ring hp:data-[state=open]:bg-accent hp:data-[state=open]:text-muted-foreground hp:absolute hp:top-4 hp:end-4 hp:rounded-xs hp:opacity-70 hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*='size-'])]:size-4"
       >
         <Cross2Icon />
-        <span class="hp:sr-only hp:rtl:hidden">Close</span><span class="hp:sr-only hp:hidden hp:rtl:inline">إغلاق</span>
+        <span class="hp:sr-only">{{ closeLabel }}</span>
       </DialogClose>
     </DialogContent>
   </DialogPortal>

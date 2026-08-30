@@ -6,8 +6,10 @@ import { Button } from '@/ui/button'
 
 const props = withDefaults(defineProps<{
   class?: HTMLAttributes["class"]
+  closeLabel?: string
   showCloseButton?: boolean
 }>(), {
+  closeLabel: 'Close',
   showCloseButton: false,
 })
 </script>
@@ -20,7 +22,7 @@ const props = withDefaults(defineProps<{
     <slot />
     <DialogClose v-if="showCloseButton" as-child>
       <Button variant="outline">
-        Close
+        {{ closeLabel }}
       </Button>
     </DialogClose>
   </div>

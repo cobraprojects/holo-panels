@@ -163,6 +163,7 @@ export interface ReactTableRendererProps<
   readonly getRecordVersion?: (record: Readonly<TRecord>) => string | undefined
   readonly groups?: readonly ReactTableGroup<TRecord>[]
   readonly inlineEditTransport?: ReactInlineEditTransport<TRecordId>
+  readonly locale?: string
   readonly onQueryChange?: () => void
   readonly panelId?: string
   readonly registry?: ComponentRegistry

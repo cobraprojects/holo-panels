@@ -7,10 +7,12 @@
 	let {
 		ref = $bindable(null),
 		class: className,
+		closeLabel = 'Close',
 		children,
 		showCloseButton = false,
 		...restProps
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+		closeLabel?: string;
 		showCloseButton?: boolean;
 	} = $props();
 </script>
@@ -25,7 +27,7 @@
 	{#if showCloseButton}
 		<DialogPrimitive.Close>
 			{#snippet child({ props })}
-				<Button variant="outline" {...props}><span class="hp:rtl:hidden">Close</span><span class="hp:hidden hp:rtl:inline">إغلاق</span></Button>
+				<Button variant="outline" {...props}>{closeLabel}</Button>
 			{/snippet}
 		</DialogPrimitive.Close>
 	{/if}

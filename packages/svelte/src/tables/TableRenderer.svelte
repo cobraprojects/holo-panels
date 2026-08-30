@@ -3,7 +3,7 @@
   import { Checkbox } from '../ui/checkbox'
   import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
   import { NativeSelect } from '../ui/native-select'
-  import type { JsonValue, TableRecordId } from '@holo-js/panels-client'
+  import { createPanelTranslator, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
   import { TablesRenderHook } from '@holo-js/panels-core'
   import * as Dialog from '../ui/dialog'
   import * as DropdownMenu from '../ui/dropdown-menu'
@@ -35,6 +35,7 @@
   } from './types'
 
   let { table }: { readonly table: SvelteTableRendererProps<TRecord, TRecordId> } = $props()
+  const translate = $derived(createPanelTranslator(table.locale ?? 'en'))
   const snapshotStore = $derived.by(() => toSvelteSnapshot(table.store))
   const captionId = $props.id()
   let columnsOpen = $state(false)
@@ -169,7 +170,7 @@
 
 {#snippet filterForm()}
   <form
-    aria-label="Table filters"
+    aria-label={translate('tables.filterForm')}
     class="hp-table-filters"
     data-filter-placement={filterPlacement}
     onsubmit={applyFilters}
@@ -180,8 +181,8 @@
       {@const filterValue = $snapshotStore.filters.draft[filter.manifest.id] ?? filter.manifest.defaultValue}
       <FilterControl {filter} panelId={table.panelId} registry={table.registry} value={filterValue} update={(value) => updateFilter(filter, value)} />
     {/each}
-    {#if $snapshotStore.filters.mode === 'deferred'}<Button type="submit">Apply filters</Button>{/if}
-    <Button type="button" onclick={resetFilters}>Reset filters</Button>
+    {#if $snapshotStore.filters.mode === 'deferred'}<Button type="submit">{translate('tables.applyFilters')}</Button>{/if}
+    <Button type="button" onclick={resetFilters}>{translate('tables.resetFilters')}</Button>
     {#if filterPresentation}<FilterCollectionSlot panelId={table.panelId} placement="after" presentation={filterPresentation} registry={table.registry} />{/if}
   </form>
 {/snippet}
@@ -222,13 +223,13 @@
       {:else}
         {#if filterPlacement === 'dropdown'}
           <Popover.Root bind:open={filtersOpen}>
-            <Popover.Trigger>{#snippet child({ props })}<Button {...props} variant="outline"><ListFilter aria-hidden="true" />Filters</Button>{/snippet}</Popover.Trigger>
+            <Popover.Trigger>{#snippet child({ props })}<Button {...props} variant="outline"><ListFilter aria-hidden="true" />{translate('tables.filters')}</Button>{/snippet}</Popover.Trigger>
             <Popover.Content align="end" class="hp:w-80" data-holo-panel>{@render filterForm()}</Popover.Content>
           </Popover.Root>
         {:else if filterPlacement === 'modal'}
-          <Button type="button" variant="outline" onclick={() => { filtersOpen = true }}><ListFilter aria-hidden="true" />Filters</Button>
+          <Button type="button" variant="outline" onclick={() => { filtersOpen = true }}><ListFilter aria-hidden="true" />{translate('tables.filters')}</Button>
           <Dialog.Root bind:open={filtersOpen}>
-            <Dialog.Content data-holo-panel><Dialog.Header><Dialog.Title id={`${captionId}-filters-title`}>Filters</Dialog.Title><Dialog.Description>Filter the records in this table.</Dialog.Description></Dialog.Header>{@render filterForm()}</Dialog.Content>
+            <Dialog.Content closeLabel={translate('actions.close')} data-holo-panel><Dialog.Header><Dialog.Title id={`${captionId}-filters-title`}>{translate('tables.filters')}</Dialog.Title><Dialog.Description>{translate('tables.filterDescription')}</Dialog.Description></Dialog.Header>{@render filterForm()}</Dialog.Content>
           </Dialog.Root>
         {/if}
       {/if}

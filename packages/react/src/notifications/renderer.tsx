@@ -88,7 +88,8 @@ function ToastAction({ action, navigate, store, toast }: {
   return <Button onClick={() => ignoreFailure(store.trigger(toast.id, action.id))} size="sm" type="button" variant={action.kind === 'dismiss' ? 'destructive' : 'outline'}><PanelsIcon name={notificationActionIcon(action.kind)} />{action.label}</Button>
 }
 
-function ToastContent({ navigate, panelId, registry, store, toast }: {
+function ToastContent({ locale, navigate, panelId, registry, store, toast }: {
+  readonly locale: string
   readonly panelId?: ReactToastViewportProps['panelId']
   readonly registry?: ReactToastViewportProps['registry']
   readonly navigate?: (url: string) => void
@@ -103,8 +104,8 @@ function ToastContent({ navigate, panelId, registry, store, toast }: {
       {toast.body ? <CardDescription>{toast.body}</CardDescription> : null}
     </CardHeader>
     {actions.length > 0 ? <CardContent className="hp:flex hp:flex-wrap hp:gap-2">{actions.map(action => <ToastAction action={action} key={action.id} navigate={navigate} store={store} toast={toast} />)}</CardContent> : null}
-    {host?.actions[0] ? <CardContent><ReactActionRenderer actions={host.actions} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /></CardContent> : null}
-    {toast.closeable ? <Button aria-label={`Close ${toast.title}`} className="hp:absolute hp:right-2 hp:top-2" onClick={() => store.dismiss(toast.id)} size="icon-sm" type="button" variant="ghost"><PanelsIcon name="x" /></Button> : null}
+    {host?.actions[0] ? <CardContent><ReactActionRenderer actions={host.actions} direction={locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'} locale={locale} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /></CardContent> : null}
+    {toast.closeable ? <Button aria-label={`Close ${toast.title}`} className="hp:absolute hp:end-2 hp:top-2" onClick={() => store.dismiss(toast.id)} size="icon-sm" type="button" variant="ghost"><PanelsIcon name="x" /></Button> : null}
   </Card>
 }
 
@@ -112,7 +113,7 @@ function toastFingerprint(value: ClientToast): string {
   return JSON.stringify(value)
 }
 
-export function ReactToastViewport({ navigate, panelId, placement = 'top', registry, store }: ReactToastViewportProps): ReactNode {
+export function ReactToastViewport({ locale = 'en', navigate, panelId, placement = 'top', registry, store }: ReactToastViewportProps): ReactNode {
   const state = useSyncExternalStore(
     listener => store.subscribe(listener),
     () => store.state,
@@ -138,7 +139,7 @@ export function ReactToastViewport({ navigate, panelId, placement = 'top', regis
     for (const item of state.items) {
       const fingerprint = toastFingerprint(item)
       if (rendered.current.get(item.id) === fingerprint) continue
-      sonnerToast.custom(() => <ToastContent navigate={navigate} panelId={panelId} registry={registry} store={store} toast={item} />, {
+      sonnerToast.custom(() => <ToastContent locale={locale} navigate={navigate} panelId={panelId} registry={registry} store={store} toast={item} />, {
         duration: Infinity,
         id: item.id,
         onDismiss: () => store.dismiss(item.id),
@@ -162,9 +163,10 @@ function DeleteNotificationButton({ controls, label, translate }: { readonly con
   </AlertDialog>
 }
 
-function NotificationActions({ controls, item, navigate, panelId, registry, store, translate }: {
+function NotificationActions({ controls, item, locale, navigate, panelId, registry, store, translate }: {
   readonly controls: ReactNotificationControls
   readonly item: ReactDatabaseNotification
+  readonly locale: string
   readonly navigate?: (url: string) => void
   readonly panelId?: string
   readonly registry?: ReactNotificationInboxProps['registry']
@@ -174,7 +176,7 @@ function NotificationActions({ controls, item, navigate, panelId, registry, stor
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null)
   const host = store.actionHost(item.id)
   return <div aria-label={`${item.presentation.title} actions`} className="hp-notification-actions hp:flex hp:flex-wrap hp:gap-2" data-slot="notification-actions" role="group">
-    {host?.actions[0] ? <ReactActionRenderer actions={host.actions} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /> : null}
+    {host?.actions[0] ? <ReactActionRenderer actions={host.actions} direction={locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'} locale={locale} manifest={host.actions[0]} panelId={panelId} registry={registry} store={host.store} /> : null}
     {actions.map(action => {
       const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
       if (url) return <Button asChild key={action.id} size="sm" variant="outline"><a href={url} onClick={navigate ? event => { event.preventDefault(); navigate(url) } : undefined}><PanelsIcon name={notificationActionIcon(action.kind)} />{action.label}</a></Button>
@@ -235,7 +237,7 @@ export function ReactNotificationInbox({
             </div>
             {!item.read ? <Badge variant="secondary">{translate('notifications.unread')}</Badge> : null}
           </div>
-          <NotificationActions controls={controls} item={item} navigate={navigate} panelId={panelId} registry={registry} store={store} translate={translate} />
+          <NotificationActions controls={controls} item={item} locale={locale} navigate={navigate} panelId={panelId} registry={registry} store={store} translate={translate} />
         </article>}
       </li>
     })}</ol> : null}

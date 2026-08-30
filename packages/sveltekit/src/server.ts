@@ -24,6 +24,7 @@ import {
   panelAuthOperationStatus,
   panelTenantOperationStatus,
   resolvePanelRoute,
+  resolvePanelLocale,
   type PanelAuthOperation,
   type PanelAuthRuntime,
   type PanelTenantOperation,
@@ -202,8 +203,8 @@ function requestId(): string {
   return globalThis.crypto?.randomUUID?.() ?? 'unavailable-request-id'
 }
 
-function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[]): Readonly<ResponseEnvelope> {
-  return decodeResponseEnvelope({ data, effects, id, ok: true, protocolVersion: PROTOCOL_VERSION }, id)
+function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[], locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): Readonly<ResponseEnvelope> {
+  return decodeResponseEnvelope({ data, effects, id, ok: true, protocolVersion: PROTOCOL_VERSION, ...locale }, id)
 }
 
 function errorEnvelope(id: string, cause: unknown, status: number, panel?: CompiledPanelDefinition<object>): Readonly<ResponseEnvelope> {
@@ -345,6 +346,7 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
     let guard: SessionEffectGuard | undefined
     let panelId: string | undefined
     let configuredPanel: CompiledPanelDefinition<object> | undefined
+    let responseLocale: { readonly direction: 'ltr' | 'rtl', readonly locale: string } | undefined
     let id = requestId()
     try {
       if (method !== 'POST') return envelopeResponse(errorEnvelope(id, new Error('Panel transport operations require POST'), 405), 405)
@@ -365,6 +367,10 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
       if (!handler) throw Object.assign(new Error('Panel operation not found'), { status: 404 })
       const result: PanelOperationResult = await registry.runtime.execute(panelId, operation, requestSignal(event.request), async scope => {
         guard = await sessionGuard(scope.guard)
+        const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
+        responseLocale = configuredPanel
+          ? resolvePanelLocale(configuredPanel.manifest.locales, [event.request.headers.get('accept-language')?.split(',')[0]?.trim(), actorLocale])
+          : Object.freeze({ direction: 'ltr' as const, locale: 'en' })
         const result = await handler({
           event,
           holo,
@@ -379,7 +385,7 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
       })
       const status = result.status ?? 200
       if (!Number.isInteger(status) || status < 200 || status > 299 || status === 204 || status === 205) throw new Error('Panel operation success statuses must support a JSON response body')
-      const response = successEnvelope(id, result.data, result.effects ?? [])
+      const response = successEnvelope(id, result.data, result.effects ?? [], responseLocale)
       const serialized = envelopeResponse(response, status)
       if (serialized.status < 300) await flashRedirectToasts(guard, panelId, response.effects)
       return serialized
@@ -535,6 +541,7 @@ export function createPanelAuthHandler<TActor = unknown, TTenant = unknown>(opti
           operation,
           panel,
           payload: await nativePayload(event.request, method),
+          requestedLocale: event.request.headers.get('accept-language')?.split(',')[0]?.trim(),
           services: Object.freeze({ event, holo }),
           signal: requestSignal(event.request),
           tenant: operation === 'profile-read' || operation === 'profile-update'

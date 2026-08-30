@@ -261,6 +261,18 @@ describe('P9-B panel runtime', () => {
     expect(inherited.manifest.locales).toEqual({ allowed: ['en', 'ar'], fallback: 'en' })
   })
 
+  it('honors a panel locale allow-list and fallback without duplicating locale resolution', async () => {
+    const actor = { id: 1, locale: 'ar-EG', role: 'admin' }
+    const panel = definePanel('admin').locales(['en']).defaultLocale('en-US').compile()
+    const runtime = new PanelRuntime(auth({ web: actor }).facade, [panel])
+
+    const bootstrap = (await runtime.bootstrap(['admin'], signal, 'ar'))[0]!
+
+    expect(bootstrap).toMatchObject({ direction: 'ltr', locale: 'en' })
+    expect(bootstrap.manifest.locales).toEqual({ allowed: ['en'], fallback: 'en' })
+    expect(definePanel('arabic').locales(['ar']).compile().manifest.locales).toEqual({ allowed: ['ar'], fallback: 'ar' })
+  })
+
   it('runs the fixed panel access policy for every operation and rejects unauthenticated or denied actors', async () => {
     const operations: readonly PanelOperation[] = ['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload']
     const checked: PanelOperation[] = []

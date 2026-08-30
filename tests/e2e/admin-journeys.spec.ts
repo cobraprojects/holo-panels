@@ -227,6 +227,31 @@ test('protects the admin shell with the configured Holo Auth guard', async ({ re
 test.describe('authenticated admin journeys', () => {
   test.describe.configure({ mode: 'serial' })
 
+  test('runs the shared authentication and shell journey in Arabic and RTL', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ baseURL: String(testInfo.project.use.baseURL), locale: 'ar-EG' })
+    const page = await context.newPage()
+    try {
+      await page.goto('/admin/login', { waitUntil: 'networkidle' })
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ar')
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+      await page.getByLabel('البريد الإلكتروني').fill('super@example.test')
+      await page.getByLabel('كلمة المرور').fill('panel-secret')
+      await Promise.all([
+        page.waitForURL(url => url.pathname.startsWith('/admin') && url.pathname !== '/admin/login'),
+        page.getByRole('button', { name: 'تسجيل الدخول' }).click(),
+      ])
+      await waitForPanelReady(page)
+
+      const panel = page.locator('.hp-panel[data-holo-panel]')
+      await expect(panel).toHaveAttribute('lang', 'ar')
+      await expect(panel).toHaveAttribute('dir', 'rtl')
+      await expect(page.getByPlaceholder('بحث…')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'قائمة الحساب' })).toBeVisible()
+    } finally {
+      await context.close()
+    }
+  })
+
   test('opens the notification inbox by keyboard and separates loading, error, and empty states', async ({ page }) => {
     await login(page)
     let releaseFailure: () => void = () => undefined

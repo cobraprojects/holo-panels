@@ -3,6 +3,8 @@ import { createTranslationReference, type RegisteredTranslations, type Translati
 
 export { TranslationCatalogRegistry, canonicalLocale } from './catalog-registry'
 export { arCatalog, EN_MESSAGES, enCatalog } from './catalogs'
+export { normalizePanelLocaleConfiguration, requestedLocales, resolvePanelLocale } from './panel-locale'
+export type { ResolvedPanelLocale } from './panel-locale'
 export {
   TRANSLATION_REFERENCE_KIND,
   assertUntranslatedStableKey,

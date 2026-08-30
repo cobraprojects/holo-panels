@@ -24,9 +24,9 @@
   let method = $state<'recovery' | 'totp'>('totp')
   let error = $state('')
   let disableConfirmation = $state(false)
-  let locale = $state('en')
+  const locale = $derived(presentation?.locale ?? 'en')
   const translate = $derived(createPanelTranslator(locale))
-  const direction = $derived(locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr')
+  const direction = $derived(presentation?.direction ?? 'ltr')
 
   function cookie(name: string): string {
     const entry = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(`${name}=`))
@@ -36,13 +36,13 @@
   const request = (operation: PanelClientAuthOperation, payload: Readonly<Record<string, unknown>> = {}) => executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId, payload })
 
   onMount(() => {
-    locale = navigator.language
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
     void request('mfa-status').then((result) => {
       if (result.ok && typeof result.data === 'object' && result.data !== null && 'enabled' in result.data) enabled = result.data.enabled === true
     })
-    return syncDocumentLocale({ direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale }, document)
   })
+
+  $effect(() => presentation ? syncDocumentLocale({ direction: presentation.direction, locale: presentation.locale }, document) : undefined)
 
   async function begin(): Promise<void> {
     const result = await request('mfa-enrollment-begin')

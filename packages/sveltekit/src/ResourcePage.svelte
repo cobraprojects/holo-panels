@@ -63,6 +63,8 @@
   } from './resource-page'
 
   let { data, effects, pageActionsTarget, registry }: { readonly data: PanelPageData, readonly effects: ClientEffectSession, readonly pageActionsTarget?: HTMLElement, readonly registry?: SvelteComponentRegistry } = $props()
+  const direction = $derived(data.panel.direction)
+  const locale = $derived(data.panel.locale)
   const requestController = $derived.by(() => {
     data.page.manifest.path
     return new AbortController()
@@ -748,7 +750,7 @@
   <div class="hp-resource-page">
     <PanelsPageActions to={pageActionsTarget}>
       {@const actions = resource.recordActions.filter(action => action.mount === 'page' && action.visible)}
-      {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} panelId={data.panel.manifest.id} {registry} store={actionStore} />{/if}
+      {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} {direction} {locale} panelId={data.panel.manifest.id} {registry} store={actionStore} />{/if}
     </PanelsPageActions>
   <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />
   <SvelteTableRenderer table={{
@@ -814,7 +816,7 @@
   {#if pageType === 'create' || pageType === 'edit' && currentRouteIdentifier !== ''}
     <PanelsPageActions to={pageActionsTarget}>
       {@const actions = resource.recordActions.filter(action => action.visible && action.mount === (pageType === 'create' ? 'page' : 'record'))}
-      {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} panelId={data.panel.manifest.id} recordIds={pageType === 'create' ? [] : [currentRouteIdentifier]} {registry} store={actionStore} />{/if}
+      {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} {direction} {locale} panelId={data.panel.manifest.id} recordIds={pageType === 'create' ? [] : [currentRouteIdentifier]} {registry} store={actionStore} />{/if}
     </PanelsPageActions>
   {/if}
   <form class="hp-resource-form hp:grid hp:gap-6" novalidate onsubmit={(event) => {
@@ -825,10 +827,10 @@
       <CardContent class="hp:grid hp:gap-6 hp:pt-6">
         <ResourceForm actionPending={fieldActionPending} executeAction={(path: string, actionId: string) => { void executeFieldAction(path, actionId).catch(() => undefined) }} fields={renderedFields} {form} {collectionStores} {optionStores} panelId={data.panel.manifest.id} registry={componentRegistry} schema={renderedSchema} {uploadStores} />
         {#each fieldActionHosts as host (host.path)}
-          {#if host.actions[0]}<SvelteActionRenderer action={host.actions[0]} actions={host.actions} input={formInput} panelId={data.panel.manifest.id} recordIds={pageType === 'create' || currentRouteIdentifier === '' ? [] : [currentRouteIdentifier]} {registry} showTriggers={false} store={host.store} />{/if}
+          {#if host.actions[0]}<SvelteActionRenderer action={host.actions[0]} actions={host.actions} {direction} input={formInput} {locale} panelId={data.panel.manifest.id} recordIds={pageType === 'create' || currentRouteIdentifier === '' ? [] : [currentRouteIdentifier]} {registry} showTriggers={false} store={host.store} />{/if}
         {/each}
       </CardContent>
-      <CardFooter class="hp:justify-end">{#if resource.formActions[0]}<SvelteActionRenderer action={resource.formActions[0]} actions={resource.formActions} input={formInput} panelId={data.panel.manifest.id} {registry} store={formActionStore} />{/if}</CardFooter>
+      <CardFooter class="hp:justify-end">{#if resource.formActions[0]}<SvelteActionRenderer action={resource.formActions[0]} actions={resource.formActions} {direction} input={formInput} {locale} panelId={data.panel.manifest.id} {registry} store={formActionStore} />{/if}</CardFooter>
     </Card>
     {#if $formState.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}
   </form>
@@ -841,7 +843,7 @@
   </div>
   <PanelsPageActions to={pageActionsTarget}>
     {@const actions = resource.recordActions.filter(action => action.visible && action.mount === 'record')}
-    {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} {registry} store={actionStore} />{/if}
+    {#if actions[0]}<SvelteActionRenderer action={actions[0]} {actions} {direction} {locale} panelId={data.panel.manifest.id} recordIds={[recordRouteIdentifier(record)]} {registry} store={actionStore} />{/if}
   </PanelsPageActions>
   {#if relations.length > 0}<PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_BEFORE} manifest={data.panel.manifest} {registry} scopes={resourceScopes} /><SvelteRelationManagerRenderer relations={readOnlyRelations ? { managers: relations, onTableQuery: loadRelationTable, panelId: data.panel.manifest.id } : { loadOptions: loadRelationOptions, managers: relations, onOperation: runRelation, onTableQuery: loadRelationTable, panelId: data.panel.manifest.id, registry }} /><PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.RESOURCE_RELATION_MANAGER_AFTER} manifest={data.panel.manifest} {registry} scopes={resourceScopes} />{/if}
   </article>

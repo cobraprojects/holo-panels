@@ -607,7 +607,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
         <Button aria-label="Previous page" disabled={state.page <= 1 || state.loading} onClick={() => {
           props.store.setPage(state.page - 1)
           notifyQueryChange(props.onQueryChange)
-        }} size="icon" type="button" variant="outline"><ChevronLeft aria-hidden="true" /></Button>
+        }} size="icon" type="button" variant="outline"><ChevronLeft aria-hidden="true" className="hp:rtl:rotate-180" /></Button>
         {paginationItems.map((item, index) => item === 'ellipsis'
           ? <span aria-hidden="true" className="hp-table-pagination-ellipsis" key={`ellipsis-${index}`}>…</span>
           : <Button
@@ -626,7 +626,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
         <Button aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
           props.store.setPage(state.page + 1)
           notifyQueryChange(props.onQueryChange)
-        }} size="icon" type="button" variant="outline"><ChevronRight aria-hidden="true" /></Button>
+        }} size="icon" type="button" variant="outline"><ChevronRight aria-hidden="true" className="hp:rtl:rotate-180" /></Button>
       </span>
     </nav>
   </section>

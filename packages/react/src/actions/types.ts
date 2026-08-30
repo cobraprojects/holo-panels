@@ -8,10 +8,12 @@ export interface ReactActionCustomProps<TResult> {
 }
 
 export interface ReactActionRendererProps<TResult = unknown> {
+  readonly direction?: 'ltr' | 'rtl'
   readonly input?: JsonObject
   readonly actions?: readonly Readonly<ClientActionManifest>[]
   readonly groups?: readonly Readonly<ActionGroupManifest>[]
   readonly manifest: Readonly<ClientActionManifest>
+  readonly locale?: string
   readonly panelId?: string
   readonly recordIds?: readonly (number | string)[]
   readonly registry?: ComponentRegistry

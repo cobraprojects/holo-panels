@@ -323,8 +323,10 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     const response = await handler.POST(event('POST', { operation: 'action', panelId: 'admin' }))
     await expect(response.json()).resolves.toEqual({
       data: { ok: true, payload: { title: 'New post' } },
+      direction: 'ltr',
       effects: [],
       id: 'request-12345678',
+      locale: 'en',
       ok: true,
       protocolVersion: '1.0',
     })
@@ -551,7 +553,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     mocks.failFlash = true
     const response = await createPanelOperationHandler({ panelIds: ['admin'], registry: value }).POST(event('POST', { operation: 'action', panelId: 'admin' }))
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({ data: { saved: true }, effects, ok: true })
+    await expect(response.json()).resolves.toMatchObject({ data: { saved: true }, direction: 'ltr', effects, locale: 'en', ok: true })
 
     mocks.failTake = true
     await expect(createPanelPageLoad({ panelId: 'admin', registry: value })(event('GET', { path: 'posts' }))).resolves.toMatchObject({ effects: [], page })

@@ -1,5 +1,5 @@
 import { createPanelTranslator, executePanelAuthRequest, panelContentWidthValue, syncDocumentLocale } from '@holo-js/panels-vue'
-import { defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
+import { defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNuxtPanelAuthPresentation } from './auth-presentation'
 import { Alert, AlertDescription, Button, Card, CardContent, CardDescription, CardHeader, Checkbox, Field, FieldGroup, FieldLabel, Input } from './internal-ui'
@@ -30,10 +30,14 @@ export const PanelProfilePage = defineComponent({
     const locale = ref('en')
     let restoreDocumentLocale: (() => void) | undefined
     const presentation = useNuxtPanelAuthPresentation(props.panelId)
+    watch(presentation, (value) => {
+      if (!value) return
+      locale.value = value.locale
+      restoreDocumentLocale?.()
+      restoreDocumentLocale = syncDocumentLocale({ direction: value.direction, locale: value.locale }, document)
+    })
     const request = (operation: 'profile-read' | 'profile-update', payload: Readonly<Record<string, unknown>>) => executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId: props.panelId, payload })
     onMounted(() => {
-      locale.value = navigator.language
-      restoreDocumentLocale = syncDocumentLocale({ direction: locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: locale.value }, document)
       void request('profile-read', {}).then((result) => {
         if (!result.ok || typeof result.data !== 'object' || result.data === null || !('values' in result.data) || typeof result.data.values !== 'object' || result.data.values === null || Array.isArray(result.data.values)) error.value = createPanelTranslator(locale.value)('auth.profileLoadFailed')
         else values.value = result.data.values as Readonly<Record<string, unknown>>
@@ -49,7 +53,7 @@ export const PanelProfilePage = defineComponent({
       if (!presentation.value) return h('main', { class: 'hp-auth-page', 'data-holo-panel': '' }, [h(Card, { class: 'hp-auth-card hp:h-80 hp:animate-pulse' })])
       const { appearance, brandName, simplePageMaxContentWidth, theme } = presentation.value
       const translate = createPanelTranslator(locale.value)
-      const direction = locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
+      const direction = presentation.value.direction
       const fields = Object.entries(values.value).map(([field, value]) => h(Field, { key: field }, () => [
         h(FieldLabel, { for: `${props.panelId}-${field}` }, () => field === 'email' ? translate('auth.email') : field === 'name' ? translate('auth.name') : label(field)),
         typeof value === 'boolean'

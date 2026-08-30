@@ -9,7 +9,8 @@
   import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { SvelteToastViewportProps } from './contracts'
 
-  let { navigate, panelId, registry, store, toast }: {
+  let { locale, navigate, panelId, registry, store, toast }: {
+    readonly locale: string
     readonly panelId?: SvelteToastViewportProps['panelId']
     readonly registry?: SvelteToastViewportProps['registry']
     readonly navigate?: (url: string) => void
@@ -40,6 +41,6 @@
       {/each}
     </CardContent>
   {/if}
-  {#if toast.closeable}<Button aria-label={`Close ${toast.title}`} class="hp:absolute hp:right-2 hp:top-2" size="icon-sm" type="button" variant="ghost" onclick={() => store.dismiss(toast.id)}><X /></Button>{/if}
-  {#if host?.actions[0]}<CardContent><ActionRenderer action={host.actions[0]} actions={host.actions} {panelId} {registry} store={host.store} /></CardContent>{/if}
+  {#if toast.closeable}<Button aria-label={`Close ${toast.title}`} class="hp:absolute hp:end-2 hp:top-2" size="icon-sm" type="button" variant="ghost" onclick={() => store.dismiss(toast.id)}><X /></Button>{/if}
+  {#if host?.actions[0]}<CardContent><ActionRenderer action={host.actions[0]} actions={host.actions} direction={locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'} {locale} {panelId} {registry} store={host.store} /></CardContent>{/if}
 </Card>

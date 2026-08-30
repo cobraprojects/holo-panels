@@ -53,12 +53,11 @@ export function NextPanelAuthPage({ panelId, type }: NextPanelAuthPageProps) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
-  const [locale, setLocale] = useState('en')
-  const translate = useMemo(() => createPanelTranslator(locale), [locale])
-  const direction = locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
   const [titleKey, descriptionKey] = pageText[type]
   const presentation = useNextPanelAuthPresentation(panelId)
-  useEffect(() => setLocale(navigator.language), [])
+  const locale = presentation?.locale ?? 'en'
+  const direction = presentation?.direction ?? 'ltr'
+  const translate = useMemo(() => createPanelTranslator(locale), [locale])
   useEffect(() => syncDocumentLocale({ direction, locale }, document), [direction, locale])
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {

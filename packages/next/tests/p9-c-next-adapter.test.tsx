@@ -595,7 +595,7 @@ describe('Next panel adapter', () => {
     expect(denied.status).toBe(419)
     const accepted = await route.POST(operationRequest('admin', 'form-submit', { title: 'Post' }), context)
     expect(accepted.status).toBe(200)
-    await expect(accepted.json()).resolves.toMatchObject({ effects: [{ kind: 'redirect', url: '/admin/posts' }], id: 'request-123', ok: true, protocolVersion: '1.0' })
+    await expect(accepted.json()).resolves.toMatchObject({ direction: 'ltr', effects: [{ kind: 'redirect', url: '/admin/posts' }], id: 'request-123', locale: 'en', ok: true, protocolVersion: '1.0' })
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'form-submit', panelId: 'admin', payload: { title: 'Post' } }))
     const unknown = await route.POST(operationRequest('other', 'bootstrap'), { params: Promise.resolve({ operation: 'bootstrap', panelId: 'other' }) })
     expect(unknown.status).toBe(404)

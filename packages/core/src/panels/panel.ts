@@ -16,6 +16,7 @@ import type { PluginCompatibility } from '../plugins/compatibility'
 import type { PanelPlugin, PanelPluginInstallation } from '../plugins/panel-plugin'
 import type { JsonObject } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
+import { normalizePanelLocaleConfiguration } from '../translations/panel-locale'
 import type { RenderSlotReference } from '../schemas/contracts'
 import { defineSchema } from '../schemas/builder'
 import type { RecordTypeSource, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
@@ -107,6 +108,10 @@ interface PanelState<TActor> {
     simplePageMaxContentWidth: PanelContentWidth
     subNavigationPosition: PanelSubNavigationPosition
     topbar: boolean
+  }
+  locales: {
+    allowed: readonly string[]
+    fallback: string
   }
   middleware: {
     authenticated: readonly PanelMiddleware<TActor>[]
@@ -501,6 +506,7 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
         subNavigationPosition: 'start',
         topbar: true,
       },
+      locales: { allowed: ['en', 'ar'], fallback: 'en' },
       middleware: { authenticated: [], panel: [], persistent: { authenticated: [], panel: [], tenant: [] }, tenant: [] },
       navigation: [],
       navigationEnabled: true,
@@ -590,6 +596,22 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
 
   defaultPanel(value = true): this {
     return this.writeState('defaultPanel', value)
+  }
+
+  locales(values: readonly string[]): this {
+    const currentFallback = this.readState().locales.fallback
+    let configuration: ReturnType<typeof normalizePanelLocaleConfiguration>
+    try {
+      configuration = normalizePanelLocaleConfiguration(values, currentFallback)
+    } catch {
+      configuration = normalizePanelLocaleConfiguration(values, values[0] ?? '')
+    }
+    return this.writeState('locales', configuration)
+  }
+
+  defaultLocale(value: string): this {
+    const configuration = normalizePanelLocaleConfiguration(this.readState().locales.allowed, value)
+    return this.writeState('locales', configuration)
   }
 
   ['default'](value = true): this {
@@ -1408,7 +1430,7 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
       navigationGroups: state.navigationGroups,
       navigationMode: state.navigationMode,
       layout: state.layout,
-      locales: Object.freeze({ allowed: Object.freeze(['en', 'ar']), fallback: 'en' }),
+      locales: normalizePanelLocaleConfiguration(state.locales.allowed, state.locales.fallback),
       path: state.path,
       routing: state.routing,
       runtime: state.runtime,

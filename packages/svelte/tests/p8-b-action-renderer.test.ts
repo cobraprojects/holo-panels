@@ -143,7 +143,7 @@ describe('P8-B Svelte action renderer', () => {
     const registry = new SvelteComponentRegistry()
     registry.register({ component: P16ActionSlot, source: 'action test', typeId: 'action-content' })
     registry.register({ component: P16ActionSlot, source: 'action test', typeId: 'action-footer' })
-    const action = { action: presented, actions: [presented, nested], groups: [{ actions: [presented.id], color: null, icon: null, id: 'publishing', label: 'Publishing' }], registry, store }
+    const action = { action: presented, actions: [presented, nested], direction: 'rtl' as const, groups: [{ actions: [presented.id], color: null, icon: null, id: 'publishing', label: 'Publishing' }], locale: 'ar', registry, store }
     const container = document.createElement('div')
     document.body.append(container)
     const component = mountClient(P8BActionFixture, { props: { action }, target: container })
@@ -166,6 +166,8 @@ describe('P8-B Svelte action renderer', () => {
     expect(dialog).not.toBeNull()
     expect(slideOver).not.toBeNull()
     expect(slideOver?.getAttribute('data-modal-width')).toBe('large')
+    expect(slideOver?.getAttribute('data-side')).toBe('left')
+    expect(slideOver?.textContent).toContain('إغلاق')
     expect(slideOver?.textContent).toContain('Restore post')
     expect(slideOver?.textContent).toContain('Review restoration')
     expect(slideOver?.textContent).toContain('Body slot')

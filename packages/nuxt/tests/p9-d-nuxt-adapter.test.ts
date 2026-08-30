@@ -537,7 +537,7 @@ describe('P9-D Nuxt adapter', () => {
     const response = await fetch(formRequest('admin', 'action', { id: 42 }))
     const body = await response.json() as Record<string, unknown>
     expect(response.status, JSON.stringify(body)).toBe(200)
-    expect(body).toMatchObject({ id: 'request-1234567890', ok: true, protocolVersion: PROTOCOL_VERSION, data: { deleted: 42 } })
+    expect(body).toMatchObject({ data: { deleted: 42 }, direction: 'ltr', id: 'request-1234567890', locale: 'en', ok: true, protocolVersion: PROTOCOL_VERSION })
     expect(body.effects).toEqual([{ kind: 'toast', level: 'success', message: 'Deleted' }])
     expect(security.calls).toEqual(['POST'])
     const context = execute.mock.calls[0]?.[0]

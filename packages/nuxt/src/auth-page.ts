@@ -1,5 +1,5 @@
 import { createPanelTranslator, executePanelAuthRequest, panelContentWidthValue, syncDocumentLocale, type PanelTranslationKey } from '@holo-js/panels-vue'
-import { defineComponent, h, onMounted, onUnmounted, ref, type VNode } from 'vue'
+import { defineComponent, h, onUnmounted, ref, watch, type VNode } from 'vue'
 import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNuxtPanelAuthPresentation } from './auth-presentation'
 import { Alert, AlertDescription, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Field, FieldGroup, FieldLabel, Input, NativeSelect } from './internal-ui'
@@ -44,9 +44,11 @@ export const PanelAuthPage = defineComponent({
     let restoreDocumentLocale: (() => void) | undefined
     const presentation = useNuxtPanelAuthPresentation(props.panelId)
     const type = props.type as AuthPageType
-    onMounted(() => {
-      locale.value = navigator.language
-      restoreDocumentLocale = syncDocumentLocale({ direction: locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: locale.value }, document)
+    watch(presentation, (value) => {
+      if (!value) return
+      locale.value = value.locale
+      restoreDocumentLocale?.()
+      restoreDocumentLocale = syncDocumentLocale({ direction: value.direction, locale: value.locale }, document)
     })
     onUnmounted(() => restoreDocumentLocale?.())
     const submit = async (): Promise<void> => {
@@ -73,7 +75,7 @@ export const PanelAuthPage = defineComponent({
       if (!presentation.value) return h('main', { class: 'hp-auth-page', 'data-holo-panel': '' }, [h(Card, { class: 'hp-auth-card hp:h-80 hp:animate-pulse' })])
       const { appearance, brandName, loginPath, simplePageMaxContentWidth, theme } = presentation.value
       const translate = createPanelTranslator(locale.value)
-      const direction = locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
+      const direction = presentation.value.direction
       const [titleKey, descriptionKey] = pageText[type]
       const title = translate(titleKey)
       const description = translate(descriptionKey)

@@ -27,15 +27,15 @@
   let error = $state('')
   let message = $state('')
   let pending = $state(false)
-  let locale = $state('en')
+  const locale = $derived(presentation?.locale ?? 'en')
   const translate = $derived(createPanelTranslator(locale))
-  const direction = $derived(locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr')
+  const direction = $derived(presentation?.direction ?? 'ltr')
 
   onMount(() => {
-    locale = navigator.language
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
-    return syncDocumentLocale({ direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale }, document)
   })
+
+  $effect(() => presentation ? syncDocumentLocale({ direction: presentation.direction, locale: presentation.locale }, document) : undefined)
 
   const pageText: Readonly<Record<AuthPageType, readonly [PanelTranslationKey, PanelTranslationKey]>> = {
     'email-verification': ['auth.verifyEmail', 'auth.emailVerificationDescription'],

@@ -41,8 +41,10 @@ export interface PanelAuthPresentation {
     readonly tokens: Readonly<Record<string, string>>
   }>
   readonly brandName: string
+  readonly direction: 'ltr' | 'rtl'
   readonly forgotPasswordPath: string | null
   readonly loginPath: string | null
+  readonly locale: string
   readonly registrationPath: string | null
   readonly simplePageMaxContentWidth: string
   readonly theme: 'dark' | 'light' | 'system'
@@ -73,7 +75,8 @@ export async function executePanelAuthRequest(options: ExecutePanelAuthRequestOp
 function authPresentation(value: unknown): PanelAuthPresentation {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Panel authentication presentation is invalid')
   const presentation = value as Partial<PanelAuthPresentation>
-  if (typeof presentation.brandName !== 'string' || typeof presentation.simplePageMaxContentWidth !== 'string') throw new Error('Panel authentication presentation is invalid')
+  if (typeof presentation.brandName !== 'string' || typeof presentation.simplePageMaxContentWidth !== 'string' || typeof presentation.locale !== 'string') throw new Error('Panel authentication presentation is invalid')
+  if (presentation.direction !== 'ltr' && presentation.direction !== 'rtl') throw new Error('Panel authentication presentation is invalid')
   if (presentation.theme !== 'dark' && presentation.theme !== 'light' && presentation.theme !== 'system') throw new Error('Panel authentication presentation is invalid')
   if (typeof presentation.appearance !== 'object' || presentation.appearance === null) throw new Error('Panel authentication presentation is invalid')
   return presentation as PanelAuthPresentation

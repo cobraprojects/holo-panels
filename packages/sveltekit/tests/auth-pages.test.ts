@@ -7,8 +7,10 @@ import PanelProfilePage from '../src/ProfilePage.svelte'
 const presentation = {
   appearance: { colors: { primary: '#123456' }, density: 'compact', fontFamily: 'Panel Sans', monoFontFamily: 'Panel Mono', serifFontFamily: 'Panel Serif', tokens: { 'radius-lg': '1.25rem' } },
   brandName: 'Control',
+  direction: 'rtl',
   forgotPasswordPath: '/cp/forgot-password',
   loginPath: '/cp/login',
+  locale: 'ar',
   registrationPath: '/cp/register',
   simplePageMaxContentWidth: 'screen-sm',
   theme: 'system',

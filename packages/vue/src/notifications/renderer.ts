@@ -71,6 +71,7 @@ function notificationActionIcon(kind: NotificationAction['kind']): string {
 const VueToastContent = defineComponent({
   name: 'HoloPanelsToastContent',
   props: {
+    locale: { default: 'en', type: String },
     navigate: Function as PropType<VueToastViewportProps['navigate']>,
     panelId: String,
     registry: Object as PropType<VueToastViewportProps['registry']>,
@@ -120,8 +121,8 @@ const VueToastContent = defineComponent({
           props.toast.body ? h(CardDescription, {}, () => props.toast.body) : null,
         ]),
         actions.length > 0 ? h(CardContent, { class: 'hp:flex hp:flex-wrap hp:gap-2' }, () => actions.map(renderAction)) : null,
-        host?.actions[0] ? h(CardContent, {}, () => h(VueActionRenderer, { action: host.actions[0]!, actions: host.actions, panelId: props.panelId, registry: props.registry, store: host.store })) : null,
-        props.toast.closeable ? h(Button, { 'aria-label': `Close ${props.toast.title}`, class: 'hp:absolute hp:right-2 hp:top-2', onClick: () => store.dismiss(props.toast.id), size: 'icon-sm', type: 'button', variant: 'ghost' }, () => PanelsIcon('x')) : null,
+        host?.actions[0] ? h(CardContent, {}, () => h(VueActionRenderer, { action: host.actions[0]!, actions: host.actions, direction: props.locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: props.locale, panelId: props.panelId, registry: props.registry, store: host.store })) : null,
+        props.toast.closeable ? h(Button, { 'aria-label': `Close ${props.toast.title}`, class: 'hp:absolute hp:end-2 hp:top-2', onClick: () => store.dismiss(props.toast.id), size: 'icon-sm', type: 'button', variant: 'ghost' }, () => PanelsIcon('x')) : null,
       ])
     }
   },
@@ -130,6 +131,7 @@ const VueToastContent = defineComponent({
 export const VueToastViewport = defineComponent({
   name: 'HoloPanelsToastViewport',
   props: {
+    locale: { default: 'en', type: String },
     navigate: Function as PropType<VueToastViewportProps['navigate']>,
     panelId: String,
     registry: Object as PropType<VueToastViewportProps['registry']>,
@@ -151,7 +153,7 @@ export const VueToastViewport = defineComponent({
         const fingerprint = JSON.stringify(item)
         if (rendered.get(item.id) === fingerprint) continue
         sonnerToast.custom(VueToastContent, {
-          componentProps: { navigate: props.navigate, panelId: props.panelId, registry: props.registry, store: props.store, toast: item },
+          componentProps: { locale: props.locale, navigate: props.navigate, panelId: props.panelId, registry: props.registry, store: props.store, toast: item },
           duration: Number.POSITIVE_INFINITY,
           id: item.id,
           onAutoClose: () => props.store.dismiss(item.id),
@@ -177,8 +179,9 @@ export const VueToastViewport = defineComponent({
   },
 })
 
-function notificationActions(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'navigate' | 'panelId' | 'registry' | 'store'>, translate: PanelTranslator): VNode {
+function notificationActions(item: VueDatabaseNotification, controls: VueNotificationControls, props: Pick<VueNotificationInboxProps, 'locale' | 'navigate' | 'panelId' | 'registry' | 'store'>, translate: PanelTranslator): VNode {
   const { navigate } = props
+  const locale = props.locale ?? 'en'
   const host = props.store.actionHost(item.id)
   const actions = item.presentation.actions.map(actionValue).filter(action => action !== null).map(action => {
     const url = action.kind === 'navigate' ? safeExternalUrl(action.url) : null
@@ -188,7 +191,7 @@ function notificationActions(item: VueDatabaseNotification, controls: VueNotific
     return deleteNotificationAction(action.label, controls.delete, action.id, translate)
   })
   return h('div', { 'aria-label': `${item.presentation.title} actions`, class: 'hp-notification-actions', 'data-slot': 'notification-actions', role: 'group' }, [
-    ...(host?.actions[0] ? [h(VueActionRenderer, { action: host.actions[0], actions: host.actions, panelId: props.panelId, registry: props.registry, store: host.store })] : []),
+    ...(host?.actions[0] ? [h(VueActionRenderer, { action: host.actions[0], actions: host.actions, direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale, panelId: props.panelId, registry: props.registry, store: host.store })] : []),
     ...actions,
     item.read
       ? h(Button, { onClick: () => ignoreFailure(controls.markUnread()), type: 'button' }, translate('notifications.markUnread'))

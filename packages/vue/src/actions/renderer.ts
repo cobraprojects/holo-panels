@@ -63,6 +63,8 @@ export const VueActionRenderer = defineComponent({
     actions: Array as PropType<VueActionRendererProps['actions']>,
     input: Object as PropType<JsonObject>,
     groups: Array as PropType<VueActionRendererProps['groups']>,
+    direction: String as PropType<VueActionRendererProps['direction']>,
+    locale: String,
     panelId: String,
     recordIds: Array as PropType<readonly (number | string)[]>,
     registry: Object as PropType<VueActionRendererProps['registry']>,
@@ -95,6 +97,7 @@ export const VueActionRenderer = defineComponent({
 
     function form(frame: ClientActionFrame): VNode {
       const schema = actionFormSchema(frame.manifest.modal?.schema ?? null, frame.manifest.id)
+      const translate = createPanelTranslator(props.locale ?? 'en')
       return h('form', {
         class: 'hp-panel-form hp:grid hp:gap-6',
         novalidate: true,
@@ -115,7 +118,7 @@ export const VueActionRenderer = defineComponent({
             }), renderHook(ActionsRenderHook.MODAL_SCHEMA_AFTER)]
           : null,
         props.store.activeForm?.state.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, props.store.activeForm.state.errors._root.map(message => h('li', message))) : null,
-        frame.manifest.kind === 'view' ? null : h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action')]),
+        frame.manifest.kind === 'view' ? null : h(Button, { class: 'hp-action-trigger', 'data-action-id': frame.manifest.id, 'data-color': frame.manifest.color ?? undefined, disabled: frame.phase === 'submitting', type: 'submit', variant: frame.manifest.color === 'danger' ? 'destructive' : 'outline' }, () => [frame.manifest.icon ? PanelsIcon(frame.manifest.icon) : null, h('span', frame.phase === 'submitting' ? translate('actions.working') : frame.manifest.modal?.submitActionLabel ?? translate('actions.run'))]),
       ])
     }
 
@@ -148,7 +151,7 @@ export const VueActionRenderer = defineComponent({
     }
 
     return () => {
-      const translate = createPanelTranslator(globalThis.document?.documentElement.lang || 'en')
+      const translate = createPanelTranslator(props.locale ?? 'en')
       const actions = actionManifestCollection(props.actions ?? [props.action])
       const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
       const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
@@ -169,7 +172,7 @@ export const VueActionRenderer = defineComponent({
             openGroups.value = next
           },
         }, () => [
-          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': group.label ?? 'Actions', class: 'hp-action-group-trigger', 'data-action-group': group.id, variant: 'outline' }, () => [group.icon ? PanelsIcon(group.icon) : null, group.label ?? 'Actions'])),
+          h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-label': group.label ?? translate('actions.group'), class: 'hp-action-group-trigger', 'data-action-group': group.id, variant: 'outline' }, () => [group.icon ? PanelsIcon(group.icon) : null, group.label ?? translate('actions.group')])),
           h(DropdownMenuContent, { 'data-holo-panel': '' }, () => items.map(item => h(DropdownMenuItem, { 'data-action': item.id, 'data-action-id': item.id, 'data-color': item.color ?? undefined, disabled: item.disabled || state.value.frames.some(frame => frame.manifest.id === item.id), variant: item.color === 'danger' ? 'destructive' : 'default', onSelect: () => activate(item) }, () => [item.icon ? PanelsIcon(item.icon) : null, item.label]))),
         ])
         }) ?? [],
@@ -224,6 +227,7 @@ export const VueActionRenderer = defineComponent({
           'data-holo-panel': '',
           'data-modal-width': modalWidth,
           'data-panels-component': slideOver ? 'slide-over' : 'modal',
+          ...(slideOver ? { side: props.direction === 'rtl' ? 'left' : 'right' } : {}),
         }, () => [
             h(Header, {}, () => [h(Title, {}, () => frame.manifest.modal?.heading ?? frame.manifest.label), frame.manifest.modal?.description ? h(Description, {}, () => frame.manifest.modal?.description) : null]),
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_BEFORE),
@@ -237,7 +241,7 @@ export const VueActionRenderer = defineComponent({
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_BEFORE),
             modalSlot(frame, 'footer'),
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_FOOTER_AFTER),
-            h(Footer, {}, () => h(Button, { type: 'button', variant: 'outline', onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? 'Close')),
+            h(Footer, {}, () => h(Button, { type: 'button', variant: 'outline', onClick: () => props.store.close() }, () => frame.manifest.modal?.cancelActionLabel ?? translate('actions.close'))),
           ]))
       }),
     ])

@@ -9,6 +9,7 @@ export type {
 export { executePanelTenantOperation, executePanelTenantSwitch, PanelTenantOperationError, panelTenantOperationStatus } from './tenancy/operation'
 export type { ExecutePanelTenantOperationOptions, ExecutePanelTenantSwitchOptions, PanelTenantOperation, PanelTenantOperationResult, PanelTenantSwitchResult } from './tenancy/operation'
 export { bootPanel, executePanelPipeline, panelErrorNotificationEffect, PanelRuntime, PanelRuntimeError } from './panels/runtime'
+export { requestedLocales, resolvePanelLocale } from './translations/panel-locale'
 export { executePanelRoute, resolvePanelRoute } from './panels/routes'
 export type { HoloAuth } from './panels/contracts'
 export { ResourceExecutor } from './resources/executor'

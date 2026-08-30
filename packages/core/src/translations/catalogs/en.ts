@@ -2,12 +2,16 @@ import { defineTranslationCatalog } from '../contracts'
 
 export const EN_MESSAGES = Object.freeze({
   'actions.cancel': 'Cancel',
+  'actions.close': 'Close',
   'actions.confirm': 'Confirm',
   'actions.create': 'Create',
   'actions.delete': 'Delete',
   'actions.edit': 'Edit',
+  'actions.group': 'Actions',
+  'actions.run': 'Run action',
   'actions.save': 'Save',
   'actions.view': 'View',
+  'actions.working': 'Working…',
   'auth.administration': 'Administration',
   'auth.authenticationCode': 'Authentication code',
   'auth.authenticatorCode': 'Authenticator code',

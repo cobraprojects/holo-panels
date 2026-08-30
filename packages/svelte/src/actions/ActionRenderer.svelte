@@ -15,12 +15,12 @@
   import { toSvelteState } from '../stores'
   import type { SvelteActionCustomProps, SvelteActionRendererProps, SvelteActionSlotProps } from './contracts'
 
-  let { action, actions = [action], groups = [], input, panelId, recordIds, registry, showTriggers = true, store }: SvelteActionRendererProps = $props()
+  let { action, actions = [action], direction = 'ltr', groups = [], input, locale = 'en', panelId, recordIds, registry, showTriggers = true, store }: SvelteActionRendererProps = $props()
   const actionState = $derived.by(() => toSvelteState(store))
   const formState = $derived.by(() => $actionState.frames.length && store.activeForm ? toSvelteState(store.activeForm) : undefined)
   const defaultSchemaRegistry = new SvelteComponentRegistry()
   const schemaRegistry = $derived(registry ?? defaultSchemaRegistry)
-  const translate = $derived(createPanelTranslator(globalThis.document?.documentElement.lang || 'en'))
+  const translate = $derived(createPanelTranslator(locale))
   async function submit(): Promise<void> {
     try {
       const current = store
@@ -74,7 +74,7 @@
     {#each groups as group (group.id)}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
-          {#snippet child({ props })}<Button {...props} aria-label={group.label ?? 'Actions'} class="hp-action-group-trigger" data-action-group={group.id} variant="outline">{#if group.icon}<Icon name={group.icon} />{/if}{group.label ?? 'Actions'}<Icon name="chevron-down" /></Button>{/snippet}
+          {#snippet child({ props })}<Button {...props} aria-label={group.label ?? translate('actions.group')} class="hp-action-group-trigger" data-action-group={group.id} variant="outline">{#if group.icon}<Icon name={group.icon} />{/if}{group.label ?? translate('actions.group')}<Icon name="chevron-down" /></Button>{/snippet}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content align="end" data-holo-panel>
           {#each group.actions as id (id)}
@@ -122,7 +122,7 @@
               {/snippet}
             </SchemaRenderer><RenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} />
           {/if}
-          <Dialog.Footer><Button onclick={() => store.close()} type="button" variant="outline">{frame.manifest.modal?.cancelActionLabel ?? 'Close'}</Button>{#if frame.manifest.kind !== 'view'}<Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button>{/if}</Dialog.Footer>
+          <Dialog.Footer><Button onclick={() => store.close()} type="button" variant="outline">{frame.manifest.modal?.cancelActionLabel ?? translate('actions.close')}</Button>{#if frame.manifest.kind !== 'view'}<Button class="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'} disabled={frame.phase === 'submitting'} type="submit">{#if frame.manifest.icon}<Icon name={frame.manifest.icon} />{/if}<span>{frame.phase === 'submitting' ? translate('actions.working') : frame.manifest.modal?.submitActionLabel ?? translate('actions.run')}</span></Button>{/if}</Dialog.Footer>
           {#if $formState?.errors._root?.length}<ul data-form-errors="" role="alert">{#each $formState.errors._root as message}<li>{message}</li>{/each}</ul>{/if}
         </form>
       {/if}
@@ -143,7 +143,7 @@
       </AlertDialog.Root>
     {:else if frame.manifest.modal?.slideOver}
       <Sheet.Root open onOpenChange={(open) => { if (!open) store.close() }}>
-        <Sheet.Content {...dismiss} class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="slide-over">
+        <Sheet.Content {...dismiss} class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="slide-over" side={direction === 'rtl' ? 'left' : 'right'}>
           <Sheet.Header><Sheet.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</Sheet.Title>{#if frame.manifest.modal?.description}<Sheet.Description>{frame.manifest.modal.description}</Sheet.Description>{/if}</Sheet.Header>
           <div class="hp:space-y-4 hp:p-4">{@render actionContent()}</div>
         </Sheet.Content>

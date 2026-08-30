@@ -719,7 +719,7 @@ export const VueTableRenderer = defineComponent({
                 table.store.setPage(snapshot.page - 1)
                 notifyQueryChange(table.onQueryChange)
               },
-            }, () => [h(ChevronLeft, { 'aria-hidden': 'true' })]),
+            }, () => [h(ChevronLeft, { 'aria-hidden': 'true', class: 'hp:rtl:rotate-180' })]),
             ...paginationItems.map((item, index) => item === 'ellipsis'
               ? h('span', { 'aria-hidden': 'true', class: 'hp-table-pagination-ellipsis', key: `ellipsis-${index}` }, '…')
               : h(Button, {
@@ -745,7 +745,7 @@ export const VueTableRenderer = defineComponent({
                 table.store.setPage(snapshot.page + 1)
                 notifyQueryChange(table.onQueryChange)
               },
-            }, () => [h(ChevronRight, { 'aria-hidden': 'true' })]),
+            }, () => [h(ChevronRight, { 'aria-hidden': 'true', class: 'hp:rtl:rotate-180' })]),
           ]),
         ]),
       ]

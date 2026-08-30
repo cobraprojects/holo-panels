@@ -311,7 +311,7 @@
       </label>
     {/if}
     <div class="hp-table-pagination-pages hp:flex hp:items-center hp:gap-1">
-      <Button type="button" aria-label="Previous page" size="icon" variant="outline" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" /></Button>
+      <Button type="button" aria-label="Previous page" size="icon" variant="outline" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
       {#each pageNumbers as entry, i (typeof entry === 'number' ? entry : `ellipsis-${i}`)}
         {#if entry === 'ellipsis'}
           <span aria-hidden="true" class="hp-table-pagination-ellipsis">…</span>
@@ -319,7 +319,7 @@
           <Button type="button" aria-label="Page {entry}" aria-current={entry === $snapshotStore.page ? 'page' : undefined} data-active={entry === $snapshotStore.page ? 'true' : undefined} variant={entry === $snapshotStore.page ? 'secondary' : 'ghost'} disabled={$snapshotStore.loading} onclick={() => changePage(entry)}>{entry}</Button>
         {/if}
       {/each}
-      <Button type="button" aria-label="Next page" size="icon" variant="outline" disabled={$snapshotStore.page >= pages || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page + 1)}><ChevronRight aria-hidden="true" /></Button>
+      <Button type="button" aria-label="Next page" size="icon" variant="outline" disabled={$snapshotStore.page >= pages || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page + 1)}><ChevronRight aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
     </div>
   </nav>
 </section>

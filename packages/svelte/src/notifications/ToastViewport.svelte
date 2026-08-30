@@ -6,7 +6,7 @@
   import type { SvelteToastViewportProps } from './contracts'
   import ToastContent from './ToastContent.svelte'
 
-  let { navigate, panelId, placement = 'top', registry, store }: SvelteToastViewportProps = $props()
+  let { locale = 'en', navigate, panelId, placement = 'top', registry, store }: SvelteToastViewportProps = $props()
   const toastState = $derived.by(() => toSvelteState(store))
 
   let rendered = new Map<string, string>()
@@ -27,7 +27,7 @@
       const fingerprint = JSON.stringify(item)
       if (rendered.get(item.id) === fingerprint) continue
       toast.custom(ToastContent, {
-        componentProps: { navigate, panelId, registry, store, toast: item },
+        componentProps: { locale, navigate, panelId, registry, store, toast: item },
         duration: Infinity,
         id: item.id,
         onAutoClose: () => store.dismiss(item.id),

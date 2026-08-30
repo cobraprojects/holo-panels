@@ -19,6 +19,7 @@ import {
   PanelNotificationRequestError,
   PanelRuntime,
   PanelRuntimeError,
+  resolvePanelLocale,
   decodeTransportServerRequest,
   executePanelRoute,
   panelErrorNotificationEffect,
@@ -75,12 +76,13 @@ function envelopeResponse(envelope: Readonly<ResponseEnvelope>, status: number):
     : responseFromBytes(bytes, status)
 }
 
-function success(id: string, result: NextPanelOperationResult): { readonly effects: readonly Effect[], readonly response: Response } {
+function success(id: string, result: NextPanelOperationResult, locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): { readonly effects: readonly Effect[], readonly response: Response } {
   const status = result.status ?? 200
   if (!Number.isInteger(status) || status < 200 || status > 299) throw new NextPanelHttpError(500, 'Panel operation returned an invalid success status')
   const data = toJsonValue(result.data ?? null)
   const envelope: ResponseEnvelope = {
     data,
+    ...locale,
     effects: [...(result.effects ?? [])],
     id,
     ok: true,
@@ -249,11 +251,15 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
       const panelRuntime = new PanelRuntime(auth, [panel])
       if (selectedOperation === 'bootstrap') {
         const locale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim() ?? 'en'
-        return success(requestId, { data: toJsonValue((await panelRuntime.bootstrap([parameters.panelId], request.signal, locale))[0]) }).response
+        const bootstrap = (await panelRuntime.bootstrap([parameters.panelId], request.signal, locale))[0]!
+        return success(requestId, { data: toJsonValue(bootstrap) }, { direction: bootstrap.direction, locale: bootstrap.locale }).response
       }
       if (!runtime.execute) throw new NextPanelHttpError(501, `Panel operation "${selectedOperation}" has no registered executor`)
       return panelRuntime.execute(parameters.panelId, selectedOperation, request.signal, async scope => {
         const tenantContext = runtime.resolveTenant || !panel.server.tenancy ? undefined : await panel.server.tenancy.activeContext(scope)
+        const requestedLocale = await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim()
+        const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
+        const locale = resolvePanelLocale(panel.manifest.locales, [requestedLocale, actorLocale])
         const result = await runtime.execute!({
           operation: selectedOperation,
           panelId: parameters.panelId,
@@ -261,7 +267,7 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
           request,
           scope: {
             actor: scope.actor,
-            locale: await runtime.resolveLocale?.(request) ?? 'en',
+            locale: locale.locale,
             panelId: parameters.panelId,
             parameters: {},
             provider: scope.provider,
@@ -275,7 +281,7 @@ async function handle<TRuntime>(request: Request, context: NextPanelRouteContext
             } : {}),
           },
         })
-        const succeeded = success(requestId, { ...result, effects: [...(result.effects ?? []), ...takePanelNotificationEffects()] })
+        const succeeded = success(requestId, { ...result, effects: [...(result.effects ?? []), ...takePanelNotificationEffects()] }, locale)
         await flashRedirectToasts(auth.guard(panel.guard), parameters.panelId, succeeded.effects)
         return succeeded.response
       })

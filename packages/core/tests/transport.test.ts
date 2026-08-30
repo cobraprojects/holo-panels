@@ -84,12 +84,14 @@ describe('server transport contracts', () => {
       ok: true,
       protocolVersion: '1.0',
       data: { saved: true },
+      direction: 'rtl',
       effects: [
         { kind: 'redirect', url: '/admin/posts', replace: true },
         { kind: 'toast', level: 'success', message: 'Saved', duration: 2500 },
         { kind: 'toast', presentation },
         { kind: 'invalidate-table', tableId: 'posts' },
       ],
+      locale: 'ar',
     }, 'request-1')
 
     expect(response.effects).toEqual([
@@ -98,6 +100,7 @@ describe('server transport contracts', () => {
       { kind: 'toast', presentation },
       { kind: 'invalidate-table', tableId: 'posts' },
     ])
+    expect(response).toMatchObject({ direction: 'rtl', locale: 'ar' })
     expect(() => decodeResponseEnvelope({
       id: 'request-1',
       ok: true,

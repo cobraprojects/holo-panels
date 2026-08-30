@@ -35,6 +35,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <DialogPortal>
     <SheetOverlay />
     <DialogContent
+      :data-side="side"
       data-slot="sheet-content"
       data-panels-component="slide-over"
       :class="cn(
@@ -54,7 +55,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       <slot />
 
       <DialogClose
-        class="hp:ring-offset-background hp:focus:ring-ring hp:data-[state=open]:bg-secondary hp:absolute hp:top-4 hp:right-4 hp:rounded-xs hp:opacity-70 hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none"
+        class="hp:ring-offset-background hp:focus:ring-ring hp:data-[state=open]:bg-secondary hp:absolute hp:top-4 hp:end-4 hp:rounded-xs hp:opacity-70 hp:transition-opacity hp:hover:opacity-100 hp:focus:ring-2 hp:focus:ring-offset-2 hp:focus:outline-hidden hp:disabled:pointer-events-none"
       >
         <Cross2Icon class="hp:size-4" />
         <span class="hp:sr-only">Close</span>

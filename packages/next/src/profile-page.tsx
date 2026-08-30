@@ -29,11 +29,10 @@ export function NextPanelProfilePage({ panelId }: NextPanelProfilePageProps) {
   const [values, setValues] = useState<Readonly<Record<string, unknown>>>({})
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
-  const [locale, setLocale] = useState('en')
-  const translate = useMemo(() => createPanelTranslator(locale), [locale])
-  const direction = locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
   const presentation = useNextPanelAuthPresentation(panelId)
-  useEffect(() => setLocale(navigator.language), [])
+  const locale = presentation?.locale ?? 'en'
+  const direction = presentation?.direction ?? 'ltr'
+  const translate = useMemo(() => createPanelTranslator(locale), [locale])
   useEffect(() => syncDocumentLocale({ direction, locale }, document), [direction, locale])
   useEffect(() => {
     void executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation: 'profile-read', panelId, payload: {} }).then((result) => {

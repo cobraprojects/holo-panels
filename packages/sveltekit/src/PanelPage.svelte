@@ -459,7 +459,7 @@
             if (url) void navigate(url)
           } else if (event.key === 'Escape') globalSearchStore?.close()
         }} />{#if data.panel.manifest.globalSearchConfiguration?.fieldSuffix}<InputGroupAddon align="inline-end">{data.panel.manifest.globalSearchConfiguration.fieldSuffix}</InputGroupAddon>{/if}{#if data.panel.manifest.globalSearchConfiguration?.keybindingSuffix}<InputGroupAddon align="inline-end"><kbd class="hp:rounded hp:border hp:bg-muted hp:px-1.5 hp:text-xs hp:text-muted-foreground">{data.panel.manifest.globalSearchConfiguration.keybindingSuffix}</kbd></InputGroupAddon>{/if}</InputGroup>
-        {#if searchState.open && searchState.term}<Command class="hp:absolute hp:left-0 hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md"><CommandList id="hp-global-search-results">{#if searchState.loading}<CommandEmpty>{translate('search.loading')}</CommandEmpty>{:else if searchState.error}<CommandEmpty>{searchState.error}</CommandEmpty>{:else if searchState.results.length === 0}<CommandEmpty>{translate('search.none')}</CommandEmpty>{/if}{#each searchState.results as result, index (`${result.resourceId}:${result.id}`)}<CommandItem aria-selected={index === searchState.selectedIndex} value={result.title} onclick={() => void navigate(result.url)}>{result.title}</CommandItem>{/each}</CommandList></Command>{/if}
+        {#if searchState.open && searchState.term}<Command class="hp:absolute hp:start-0 hp:top-full hp:z-50 hp:mt-2 hp:w-full hp:rounded-md hp:border hp:bg-popover hp:shadow-md"><CommandList id="hp-global-search-results">{#if searchState.loading}<CommandEmpty>{translate('search.loading')}</CommandEmpty>{:else if searchState.error}<CommandEmpty>{searchState.error}</CommandEmpty>{:else if searchState.results.length === 0}<CommandEmpty>{translate('search.none')}</CommandEmpty>{/if}{#each searchState.results as result, index (`${result.resourceId}:${result.id}`)}<CommandItem aria-selected={index === searchState.selectedIndex} value={result.title} onclick={() => void navigate(result.url)}>{result.title}</CommandItem>{/each}</CommandList></Command>{/if}
         <PanelsRenderHookRenderer hook={PanelsRenderHook.GLOBAL_SEARCH_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
       </div>
     {/if}
@@ -538,7 +538,7 @@
   </SidebarInset>
   <PanelsRenderHookRenderer hook={PanelsRenderHook.CONTENT_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   <PanelsRenderHookRenderer hook={PanelsRenderHook.FOOTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
-  <SvelteNotificationToastViewport navigate={navigate} panelId={data.panel.manifest.id} {registry} store={toastStore} />
+  <SvelteNotificationToastViewport locale={data.panel.locale} navigate={navigate} panelId={data.panel.manifest.id} {registry} store={toastStore} />
   <PanelsRenderHookRenderer hook={PanelsRenderHook.LAYOUT_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
   <PanelsRenderHookRenderer hook={PanelsRenderHook.BODY_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
 </div>

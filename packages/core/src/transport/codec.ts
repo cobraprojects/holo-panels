@@ -1,5 +1,5 @@
 import { validatedToastPresentation, type Effect } from '../protocol/effects'
-import type { ErrorCategory, PanelsError, RequestEnvelope, ResponseEnvelope } from '../protocol/envelopes'
+import type { ErrorCategory, PanelsError, RequestEnvelope, ResponseEnvelope, ResponseLocale } from '../protocol/envelopes'
 import { assertJsonSafe, toJsonValue } from '../protocol/serialization'
 import { assertProtocolCompatible, PROTOCOL_VERSION } from '../protocol/version'
 import type { JsonObject, JsonValue } from '../protocol/json'
@@ -24,6 +24,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function requiredString(value: unknown, label: string): string {
   if (typeof value !== 'string' || !value.trim()) throw new TransportDecodingError(`Invalid ${label}.`)
   return value
+}
+
+function decodeResponseLocale(value: Record<string, unknown>): Partial<ResponseLocale> {
+  if (value.locale === undefined && value.direction === undefined) return Object.freeze({})
+  if ((value.direction !== 'ltr' && value.direction !== 'rtl') || typeof value.locale !== 'string' || !value.locale) {
+    throw new TransportDecodingError('Invalid response locale metadata.')
+  }
+  return Object.freeze({ direction: value.direction, locale: value.locale })
 }
 
 function optionalString(value: unknown, label: string): string | undefined {
@@ -173,9 +181,11 @@ export function decodeResponseEnvelope<TData extends JsonValue = JsonValue>(
   const id = requiredString(value.id, 'response ID')
   if (expectedRequestId && id !== expectedRequestId) throw new TransportDecodingError('Response ID does not match its request.')
   const effects = [...decodeEffects(value.effects)]
+  const locale = decodeResponseLocale(value)
   if (value.ok === true) {
     return Object.freeze({
       data: toJsonValue(value.data) as TData,
+      ...locale,
       effects,
       id,
       ok: true,
@@ -186,6 +196,7 @@ export function decodeResponseEnvelope<TData extends JsonValue = JsonValue>(
     return Object.freeze({
       effects,
       error: decodePanelsError(value.error),
+      ...locale,
       id,
       ok: false,
       protocolVersion,

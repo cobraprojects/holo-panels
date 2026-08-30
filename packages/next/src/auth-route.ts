@@ -123,6 +123,7 @@ export function createPanelAuthRoute(options: CreatePanelAuthRouteOptions): { re
           operation,
           panel: await runtimePanel(runtime, parameters.panelId),
           payload: await payload(request),
+          requestedLocale: await runtime.resolveLocale?.(request) ?? request.headers.get('accept-language')?.split(',')[0]?.trim(),
           services: await runtime.resolveServices?.(request),
           signal: request.signal,
           tenant: await authTenant(runtime, operation, request),

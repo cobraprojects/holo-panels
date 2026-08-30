@@ -2,6 +2,7 @@ import { AuthControllerError, createPanelAuthController, type PanelAuthRuntime }
 import type { CompiledPanelDefinition } from '../panels/contracts'
 import type { JsonValue } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
+import { resolvePanelLocale } from '../translations/panel-locale'
 
 export type PanelAuthOperation =
   | 'email-verification-resend'
@@ -27,6 +28,7 @@ export interface ExecutePanelAuthOperationOptions<TActor, TTenant, TServices> {
   readonly operation: PanelAuthOperation
   readonly panel: CompiledPanelDefinition<TActor>
   readonly payload: unknown
+  readonly requestedLocale?: string
   readonly services: TServices
   readonly signal: AbortSignal
   readonly tenant: TTenant
@@ -49,8 +51,10 @@ export interface PanelAuthPresentation {
     readonly tokens: Readonly<Record<string, string>>
   }>
   readonly brandName: string
+  readonly direction: 'ltr' | 'rtl'
   readonly forgotPasswordPath: string | null
   readonly loginPath: string | null
+  readonly locale: string
   readonly registrationPath: string | null
   readonly simplePageMaxContentWidth: string
   readonly theme: 'dark' | 'light' | 'system'
@@ -158,7 +162,8 @@ function redirectOutcome(cookies: readonly string[], data: unknown, redirectTo: 
   return Object.freeze({ cookies: Object.freeze([...cookies]), data: toJsonValue(data), redirectTo, status: 303 })
 }
 
-export function panelAuthPresentation<TActor>(panel: CompiledPanelDefinition<TActor>): PanelAuthPresentation {
+export function panelAuthPresentation<TActor>(panel: CompiledPanelDefinition<TActor>, requestedLocale?: string): PanelAuthPresentation {
+  const resolved = resolvePanelLocale(panel.manifest.locales, [requestedLocale])
   return Object.freeze({
     appearance: Object.freeze({
       colors: Object.freeze({ ...panel.manifest.theme.colors }) as Readonly<Record<string, string>>,
@@ -169,8 +174,10 @@ export function panelAuthPresentation<TActor>(panel: CompiledPanelDefinition<TAc
       tokens: Object.freeze({ ...panel.manifest.theme.tokens }) as Readonly<Record<string, string>>,
     }),
     brandName: panel.manifest.branding.name,
+    direction: resolved.direction,
     forgotPasswordPath: panel.manifest.auth?.passwordReset?.requestPath ?? null,
     loginPath: panel.manifest.auth?.login?.path ?? null,
+    locale: resolved.locale,
     registrationPath: panel.manifest.auth?.registration?.path ?? null,
     simplePageMaxContentWidth: panel.manifest.layout?.simplePageMaxContentWidth ?? 'lg',
     theme: panel.manifest.theme.darkMode,
@@ -184,7 +191,7 @@ export async function executePanelAuthOperation<TActor, TTenant, TServices>(
 
   if (options.operation === 'presentation') {
     exactInput(input, [])
-    return outcome(panelAuthPresentation(options.panel))
+    return outcome(panelAuthPresentation(options.panel, options.requestedLocale))
   }
 
   const controller = createPanelAuthController(options)

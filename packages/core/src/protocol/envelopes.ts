@@ -1,6 +1,12 @@
 import type { Effect } from './effects'
 import type { JsonObject, JsonValue } from './json'
 import type { PublicSourceLocation } from './source-location'
+import type { LocaleDirection } from '../translations/contracts'
+
+export interface ResponseLocale {
+  direction: LocaleDirection
+  locale: string
+}
 
 export type ErrorCategory =
   | 'authentication'
@@ -29,7 +35,7 @@ export interface RequestEnvelope<TPayload extends JsonValue = JsonObject> {
   protocolVersion: string
 }
 
-export interface SuccessEnvelope<TData extends JsonValue = JsonValue> {
+export interface SuccessEnvelope<TData extends JsonValue = JsonValue> extends Partial<ResponseLocale> {
   data: TData
   effects: Effect[]
   id: string
@@ -37,7 +43,7 @@ export interface SuccessEnvelope<TData extends JsonValue = JsonValue> {
   protocolVersion: string
 }
 
-export interface ErrorEnvelope {
+export interface ErrorEnvelope extends Partial<ResponseLocale> {
   effects: Effect[]
   error: PanelsError
   id: string

@@ -19,16 +19,16 @@
   let password = $state('')
   let error = $state('')
   let pending = $state(false)
-  let locale = $state('en')
+  const locale = $derived(presentation?.locale ?? 'en')
   const translate = $derived(createPanelTranslator(locale))
-  const direction = $derived(locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr')
+  const direction = $derived(presentation?.direction ?? 'ltr')
   let submitting = false
 
   onMount(() => {
-    locale = navigator.language
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
-    return syncDocumentLocale({ direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale }, document)
   })
+
+  $effect(() => presentation ? syncDocumentLocale({ direction: presentation.direction, locale: presentation.locale }, document) : undefined)
 
   function cookie(name: string): string {
     const entry = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(`${name}=`))

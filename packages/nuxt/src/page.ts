@@ -141,8 +141,10 @@ function panelColorMode(value: unknown): PanelColorMode {
 }
 
 interface PanelPageRuntime {
+  readonly direction: 'ltr' | 'rtl'
   readonly effects: ClientEffectSession
   readonly manifest: NuxtPanelPage['bootstrap']['manifest']
+  readonly locale: string
   readonly navigate: (url: string, replace?: boolean) => Promise<void>
   readonly pageActionsTarget: string
   readonly registry: ComponentRegistry
@@ -967,12 +969,12 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
         host.store.mount(action, mutationPayload(formState.values))
         if (!action.confirmation && !action.modal) void host.store.submit(recordIds).catch(() => undefined)
       }, optionStore: optionStores.get(definition.path), panelId, registry, store, uploadStore: uploadStores.get(definition.path) } }),
-      host.actions[0] ? h(VueActionRenderer, { action: host.actions[0], actions: host.actions, input: mutationPayload(formState.values), panelId, recordIds, registry, showTriggers: false, store: host.store }) : null,
+      host.actions[0] ? h(VueActionRenderer, { action: host.actions[0], actions: host.actions, direction: runtime.direction, input: mutationPayload(formState.values), locale: runtime.locale, panelId, recordIds, registry, showTriggers: false, store: host.store }) : null,
     ])
   }
   return () => h('div', { class: 'hp-resource-page' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
-      recordActions[0] ? h(VueActionRenderer, { action: recordActions[0], actions: recordActions, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], registry, store: actionStore }) : null,
+      recordActions[0] ? h(VueActionRenderer, { action: recordActions[0], actions: recordActions, direction: runtime.direction, locale: runtime.locale, panelId, recordIds: typeof routeValue === 'string' || typeof routeValue === 'number' ? [routeValue] : [], registry, store: actionStore }) : null,
     ]),
     h('form', { class: 'hp-resource-form hp:grid hp:gap-6', novalidate: true, 'data-resource-crud': page.manifest.pageType, onSubmit: (event: Event) => {
       event.preventDefault()
@@ -980,7 +982,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
     } }, [
       h(Card, {}, () => [
         h(CardContent, { class: 'hp:grid hp:gap-6 hp:pt-6' }, () => h(VueSchemaRenderer as Component, { panelId, registry, schema: formSchema.value, renderContent: renderFormContent })),
-        h(CardFooter, { class: 'hp:justify-end' }, () => schema.formActions[0] ? h(VueActionRenderer, { action: schema.formActions[0], actions: schema.formActions, input: mutationPayload(formState.values), panelId, registry, store: formActionStore }) : null),
+        h(CardFooter, { class: 'hp:justify-end' }, () => schema.formActions[0] ? h(VueActionRenderer, { action: schema.formActions[0], actions: schema.formActions, direction: runtime.direction, input: mutationPayload(formState.values), locale: runtime.locale, panelId, registry, store: formActionStore }) : null),
       ]),
       formState.errors._root?.length ? h('ul', { 'data-form-errors': '', role: 'alert' }, formState.errors._root.map(message => h('li', message))) : null,
     ]),
@@ -1117,7 +1119,7 @@ const VueResourceActions = defineComponent({
     onUnmounted(() => { while (store.activeFrame) store.close() })
     return () => props.entry
       ? h(VueEntryRenderer, { entry: { actions: props.actions, actionStore: store, panelId: props.panelId, recordIds: props.recordIds, registry: props.runtime.registry, store: props.entry } })
-      : props.actions[0] ? h(VueActionRenderer, { action: props.actions[0], actions: props.actions, panelId: props.panelId, recordIds: props.recordIds, registry: props.runtime.registry, store }) : null
+      : props.actions[0] ? h(VueActionRenderer, { action: props.actions[0], actions: props.actions, direction: props.runtime.direction, locale: props.runtime.locale, panelId: props.panelId, recordIds: props.recordIds, registry: props.runtime.registry, store }) : null
   },
 })
 
@@ -1171,7 +1173,7 @@ function viewPage(page: NuxtPanelPageData, panelId: string, readOnlyRelations: b
   }
   return h('section', { class: 'hp-resource-view', 'data-resource-crud': 'view' }, [
     h(PanelsPageActions, { to: runtime.pageActionsTarget }, () => [
-      actions[0] ? h(VueActionRenderer, { action: actions[0], actions, panelId, recordIds: routeValue === null ? [] : [routeValue], registry, store }) : null,
+      actions[0] ? h(VueActionRenderer, { action: actions[0], actions, direction: runtime.direction, locale: runtime.locale, panelId, recordIds: routeValue === null ? [] : [routeValue], registry, store }) : null,
     ]),
     h('div', { class: 'hp-infolist' }, record ? schema.entries.map(entry => h(VueResourceActions, {
       actions: Array.isArray(entry.actionManifests) ? entry.actionManifests.flatMap(value => { const action = clientAction(value); return action ? [action] : [] }) : [],
@@ -1193,6 +1195,8 @@ const VueResourcePage = defineComponent({
     effects: { type: Object as PropType<ClientEffectSession>, required: true },
     page: { type: Object as PropType<NuxtPanelPageData>, required: true },
     pageActionsTarget: { type: String, required: true },
+    direction: { type: String as PropType<'ltr' | 'rtl'>, required: true },
+    locale: { type: String, required: true },
     panelId: { type: String, required: true },
     panelManifest: { type: Object as PropType<NuxtPanelPage['bootstrap']['manifest']>, required: true },
     registry: { type: Object as PropType<ComponentRegistry>, required: true },
@@ -1210,8 +1214,10 @@ const VueResourcePage = defineComponent({
     const requestController = new AbortController()
     onUnmounted(() => requestController.abort())
     const runtime = {
+      direction: props.direction,
       effects: props.effects,
       manifest: props.panelManifest,
+      locale: props.locale,
       navigate: async (url: string, replace = false) => { await (replace ? router.replace(url) : router.push(url)) },
       pageActionsTarget: props.pageActionsTarget,
       registry: props.registry,
@@ -1353,7 +1359,7 @@ function navigation(page: NuxtPanelPage, mode: 'sidebar' | 'topbar', open: boole
 
 function pageBody(page: NuxtPanelPage, registry: ComponentRegistry, resolveResource: PanelPageProps['resolveResource'], runtime: PanelPageRuntime): VNode {
   const component = resourceComponent(page.page, resolveResource)
-  if (component) return h(component, { effects: runtime.effects, key: page.path, page: page.page, pageActionsTarget: runtime.pageActionsTarget, panelId: page.bootstrap.manifest.id, panelManifest: page.bootstrap.manifest, readOnlyRelations: page.bootstrap.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true, registry, resourceCreatePageRedirect: page.bootstrap.manifest.runtime?.resourceCreatePageRedirect ?? 'edit', resourceEditPageRedirect: page.bootstrap.manifest.runtime?.resourceEditPageRedirect ?? null, signal: runtime.signal, toastStore: runtime.toastStore, transport: runtime.transport, unsavedChangesAlerts: page.bootstrap.manifest.runtime?.unsavedChangesAlerts ?? false })
+  if (component) return h(component, { direction: runtime.direction, effects: runtime.effects, key: page.path, locale: runtime.locale, page: page.page, pageActionsTarget: runtime.pageActionsTarget, panelId: page.bootstrap.manifest.id, panelManifest: page.bootstrap.manifest, readOnlyRelations: page.bootstrap.manifest.runtime?.readOnlyRelationManagersOnResourceViewPagesByDefault ?? true, registry, resourceCreatePageRedirect: page.bootstrap.manifest.runtime?.resourceCreatePageRedirect ?? 'edit', resourceEditPageRedirect: page.bootstrap.manifest.runtime?.resourceEditPageRedirect ?? null, signal: runtime.signal, toastStore: runtime.toastStore, transport: runtime.transport, unsavedChangesAlerts: page.bootstrap.manifest.runtime?.unsavedChangesAlerts ?? false })
   return h('section', { 'data-panels-page-type': page.page.manifest.pageType })
 }
 
@@ -1774,8 +1780,10 @@ export const PanelPage = defineComponent({
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_END, page.data),
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER, page.data),
               pageBody(props.page, registry, props.resolveResource, {
+                direction: bootstrap.direction,
                 effects,
                 manifest: bootstrap.manifest,
+                locale: bootstrap.locale,
                 navigate: async (url: string, replace = false) => { await (replace ? router.replace(url) : router.push(url)) },
                 pageActionsTarget,
                 registry,
@@ -1795,7 +1803,7 @@ export const PanelPage = defineComponent({
           ]),
           renderHook(PanelsRenderHook.CONTENT_AFTER),
           renderHook(PanelsRenderHook.FOOTER),
-          h(VueToastViewport, { navigate: browserNavigate, panelId, registry, store: toastStore }),
+          h(VueToastViewport, { locale: bootstrap.locale, navigate: browserNavigate, panelId, registry, store: toastStore }),
           renderHook(PanelsRenderHook.LAYOUT_END),
           renderHook(PanelsRenderHook.BODY_END),
         ])),

@@ -77,7 +77,7 @@
                 {#if !item.read}<Badge variant="secondary">{translate('notifications.unread')}</Badge>{/if}
               </div>
               <div aria-label={`${item.presentation.title} actions`} class="hp-notification-actions hp:flex hp:flex-wrap hp:gap-2" role="group">
-                {#if actionHost?.actions[0]}<ActionRenderer action={actionHost.actions[0]} actions={actionHost.actions} {panelId} {registry} store={actionHost.store} />{/if}
+                {#if actionHost?.actions[0]}<ActionRenderer action={actionHost.actions[0]} actions={actionHost.actions} direction={locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'} {locale} {panelId} {registry} store={actionHost.store} />{/if}
                 {#each notificationActions(item.presentation.actions) as action (action.id)}
                   {@const url = notificationUrl(action)}
                   {#if url}<Button href={url} size="sm" variant="outline" onclick={(event) => { if (navigate) { event.preventDefault(); navigate(url) } }}>{action.label}</Button>

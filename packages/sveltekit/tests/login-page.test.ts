@@ -12,8 +12,10 @@ describe('SvelteKit panel login page', () => {
     const fetcher = vi.fn(async () => Response.json({
       appearance: { colors: { primary: '#7c3aed' }, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
       brandName: 'Control Center',
+      direction: 'ltr',
       forgotPasswordPath: '/admin/forgot-password',
       loginPath: '/admin/login',
+      locale: 'en',
       registrationPath: '/admin/register',
       simplePageMaxContentWidth: 'screen-sm',
       theme: 'system',
@@ -42,8 +44,10 @@ describe('SvelteKit panel login page', () => {
       : Response.json({
           appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
           brandName: 'Control Center',
+          direction: 'ltr',
           forgotPasswordPath: null,
           loginPath: '/admin/login',
+          locale: 'en',
           registrationPath: null,
           simplePageMaxContentWidth: 'screen-sm',
           theme: 'system',
@@ -75,13 +79,15 @@ describe('SvelteKit panel login page', () => {
     await unmount(instance)
   })
 
-  it('renders the login journey in Arabic from the browser locale', async () => {
+  it('renders the login journey in the server-selected Arabic locale', async () => {
     Object.defineProperty(navigator, 'language', { configurable: true, value: 'ar' })
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({
       appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
       brandName: 'Control Center',
+      direction: 'rtl',
       forgotPasswordPath: null,
       loginPath: '/admin/login',
+      locale: 'ar',
       registrationPath: null,
       simplePageMaxContentWidth: 'screen-sm',
       theme: 'system',

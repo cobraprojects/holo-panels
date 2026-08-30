@@ -18,12 +18,11 @@ function cookie(name: string): string {
 export function NextPanelLoginPage({ panelId }: NextPanelLoginPageProps) {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
-  const [locale, setLocale] = useState('en')
   const submitting = useRef(false)
   const presentation = useNextPanelAuthPresentation(panelId)
+  const locale = presentation?.locale ?? 'en'
+  const direction = presentation?.direction ?? 'ltr'
   const translate = useMemo(() => createPanelTranslator(locale), [locale])
-  useEffect(() => setLocale(navigator.language), [])
-  const direction = locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
   useEffect(() => syncDocumentLocale({ direction, locale }, document), [direction, locale])
 
   async function login(event: FormEvent<HTMLFormElement>): Promise<void> {

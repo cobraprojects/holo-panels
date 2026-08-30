@@ -157,8 +157,10 @@ describe('panel login client boundary', () => {
     const presentation = {
       appearance: { colors: {}, density: 'comfortable', fontFamily: null, monoFontFamily: null, serifFontFamily: null, tokens: {} },
       brandName: 'Control Center',
+      direction: 'ltr',
       forgotPasswordPath: '/admin/password-reset/request',
       loginPath: '/admin/login',
+      locale: 'en',
       registrationPath: '/admin/register',
       simplePageMaxContentWidth: 'screen-sm',
       theme: 'system',

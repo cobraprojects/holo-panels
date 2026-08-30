@@ -3,12 +3,16 @@ import type { EN_MESSAGES } from './en'
 
 const AR_MESSAGES = Object.freeze({
   'actions.cancel': 'إلغاء',
+  'actions.close': 'إغلاق',
   'actions.confirm': 'تأكيد',
   'actions.create': 'إنشاء',
   'actions.delete': 'حذف',
   'actions.edit': 'تعديل',
+  'actions.group': 'الإجراءات',
+  'actions.run': 'تشغيل الإجراء',
   'actions.save': 'حفظ',
   'actions.view': 'عرض',
+  'actions.working': 'جارٍ التنفيذ…',
   'auth.administration': 'الإدارة',
   'auth.authenticationCode': 'رمز المصادقة',
   'auth.authenticatorCode': 'رمز تطبيق المصادقة',

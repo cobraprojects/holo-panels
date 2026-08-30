@@ -151,8 +151,10 @@ describe('P8-B React action renderer', () => {
     roots.push({ container, unmount: () => root.unmount() })
     act(() => root.render(createElement(ReactActionRenderer, {
       actions: [presented, nested],
+      direction: 'rtl',
       groups: [{ actions: [presented.id], color: null, icon: null, id: 'publishing', label: 'Publishing' }],
       manifest: presented,
+      locale: 'ar',
       registry,
       store,
     })))
@@ -168,6 +170,8 @@ describe('P8-B React action renderer', () => {
     const dialog = document.querySelector('[role="dialog"]')
     expect(dialog?.getAttribute('data-panels-component')).toBe('slide-over')
     expect(dialog?.getAttribute('data-modal-width')).toBe('large')
+    expect(dialog?.getAttribute('data-side')).toBe('left')
+    expect(dialog?.textContent).toContain('إغلاق')
     expect(dialog?.textContent).toContain('Publish post')
     expect(dialog?.textContent).toContain('Review publishing')
     expect(dialog?.textContent).toContain('Body slot')

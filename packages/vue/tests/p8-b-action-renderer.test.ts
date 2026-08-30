@@ -91,7 +91,9 @@ describe('P8-B Vue action renderer', () => {
     const app = createApp(defineComponent(() => () => h(VueActionRenderer, {
       action: presented,
       actions: [presented, nested],
+      direction: 'rtl',
       groups: [{ actions: [presented.id], color: null, icon: null, id: 'publishing', label: 'Publishing' }],
+      locale: 'ar',
       registry,
       store,
     })))
@@ -104,6 +106,8 @@ describe('P8-B Vue action renderer', () => {
     const dialog = document.querySelector('[data-slot="sheet-content"]')
     expect(dialog?.getAttribute('data-panels-component')).toBe('slide-over')
     expect(dialog?.getAttribute('data-modal-width')).toBe('large')
+    expect(dialog?.getAttribute('data-side')).toBe('left')
+    expect(dialog?.textContent).toContain('إغلاق')
     expect(dialog?.textContent).toContain('Delete post')
     expect(dialog?.textContent).toContain('Review deletion')
     expect(dialog?.textContent).toContain('Body slot')

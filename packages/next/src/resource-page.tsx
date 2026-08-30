@@ -24,7 +24,7 @@ import {
   publishPanelActionFailure,
   PanelsPageActions,
   PanelsRenderHook,
-  ReactActionRenderer,
+  ReactActionRenderer as SharedReactActionRenderer,
   ReactEntryRenderer,
   ReactFieldRenderer,
   ReactRelationManagerRenderer,
@@ -43,6 +43,7 @@ import {
   type JsonValue,
   type PanelShellBootstrap,
   type ReactCompiledField,
+  type ReactActionRendererProps,
   type ReactEntrySnapshot,
   type ReactEntryStore,
   type ReactRelationManagerRendererProps,
@@ -82,6 +83,12 @@ class NextResourceEffectError extends Error {
 }
 
 const ClientRequestSignalContext = createContext<AbortSignal | null>(null)
+const ResourceLocaleContext = createContext<Readonly<{ direction: 'ltr' | 'rtl', locale: string }>>({ direction: 'ltr', locale: 'en' })
+
+function ReactActionRenderer<TResult = unknown>(props: ReactActionRendererProps<TResult>): ReactNode {
+  const locale = useContext(ResourceLocaleContext)
+  return <SharedReactActionRenderer {...props} {...locale} />
+}
 
 function requestSignal(owner: AbortSignal, operation?: AbortSignal): AbortSignal {
   return operation ? AbortSignal.any([owner, operation]) : owner
@@ -1194,11 +1201,13 @@ function ResourceView({ basePath, data, operation, panelId, panelManifest, readO
   </article>
 }
 
-export function NextPanelResourcePage({ createRedirect = 'edit', data, editRedirect = null, effects, operation: operationInput, panelId, panelManifest, panelPath, properties, readOnlyRelations = true, registry: registryInput, renderHookScopes = [], unsavedChangesAlerts = false }: {
+export function NextPanelResourcePage({ createRedirect = 'edit', data, direction = 'ltr', editRedirect = null, effects, locale = 'en', operation: operationInput, panelId, panelManifest, panelPath, properties, readOnlyRelations = true, registry: registryInput, renderHookScopes = [], unsavedChangesAlerts = false }: {
   readonly createRedirect?: 'edit' | 'index' | 'view'
   readonly data: JsonObject
+  readonly direction?: 'ltr' | 'rtl'
   readonly editRedirect?: 'index' | 'view' | null
   readonly effects?: ClientEffectSession
+  readonly locale?: string
   readonly operation?: NextResourceOperationTransport
   readonly panelId: string
   readonly panelManifest?: Pick<PanelShellBootstrap['manifest'], 'id' | 'slots'>
@@ -1227,5 +1236,5 @@ export function NextPanelResourcePage({ createRedirect = 'edit', data, editRedir
     : pageOperation === 'create' || pageOperation === 'edit'
       ? <ResourceForm basePath={basePath} createRedirect={createRedirect} data={data} editRedirect={editRedirect} operation={operation} pageOperation={pageOperation} panelId={panelId} panelManifest={renderHookManifest} registry={registry} renderHookScopes={renderHookScopes} resource={resource} unsavedChangesAlerts={unsavedChangesAlerts} />
       : <ResourceView basePath={basePath} data={data} operation={operation} panelId={panelId} panelManifest={renderHookManifest} readOnlyRelations={readOnlyRelations} registry={registry} renderHookScopes={renderHookScopes} resource={resource} />
-  return <ClientRequestSignalContext.Provider value={requestController.signal}>{page}</ClientRequestSignalContext.Provider>
+  return <ResourceLocaleContext.Provider value={{ direction, locale }}><ClientRequestSignalContext.Provider value={requestController.signal}>{page}</ClientRequestSignalContext.Provider></ResourceLocaleContext.Provider>
 }

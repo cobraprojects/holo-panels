@@ -20,11 +20,11 @@ export function NextPanelMultiFactorPage({ panelId }: NextPanelMultiFactorPagePr
   const [manualKey, setManualKey] = useState('')
   const [recoveryCodes, setRecoveryCodes] = useState<readonly string[]>([])
   const [error, setError] = useState('')
-  const [locale, setLocale] = useState('en')
   const [disableRequest, setDisableRequest] = useState<{ readonly code: string, readonly method: 'recovery' | 'totp' } | null>(null)
-  const translate = useMemo(() => createPanelTranslator(locale), [locale])
-  const direction = locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
   const presentation = useNextPanelAuthPresentation(panelId)
+  const locale = presentation?.locale ?? 'en'
+  const direction = presentation?.direction ?? 'ltr'
+  const translate = useMemo(() => createPanelTranslator(locale), [locale])
   const request = (operation: Parameters<typeof executePanelAuthRequest>[0]['operation'], payload: Readonly<Record<string, unknown>> = {}) => executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId, payload })
 
   useEffect(() => {
@@ -32,7 +32,6 @@ export function NextPanelMultiFactorPage({ panelId }: NextPanelMultiFactorPagePr
       if (result.ok && typeof result.data === 'object' && result.data !== null && 'enabled' in result.data) setEnabled(result.data.enabled === true)
     })
   }, [])
-  useEffect(() => setLocale(navigator.language), [])
   useEffect(() => syncDocumentLocale({ direction, locale }, document), [direction, locale])
 
   async function begin(): Promise<void> {

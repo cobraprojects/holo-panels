@@ -1,5 +1,5 @@
 import { createPanelTranslator, executePanelLogin, panelContentWidthValue, panelLoginErrorMessage, syncDocumentLocale } from '@holo-js/panels-vue'
-import { defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
+import { defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNuxtPanelAuthPresentation } from './auth-presentation'
 import { Alert, AlertDescription, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Field, FieldGroup, FieldLabel, Input } from './internal-ui'
@@ -24,10 +24,14 @@ export const PanelLoginPage = defineComponent({
     let submitting = false
     let restoreDocumentLocale: (() => void) | undefined
     const presentation = useNuxtPanelAuthPresentation(props.panelId)
+    watch(presentation, (value) => {
+      if (!value) return
+      locale.value = value.locale
+      restoreDocumentLocale?.()
+      restoreDocumentLocale = syncDocumentLocale({ direction: value.direction, locale: value.locale }, document)
+    })
     onMounted(() => {
       ready.value = true
-      locale.value = navigator.language
-      restoreDocumentLocale = syncDocumentLocale({ direction: locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: locale.value }, document)
     })
     onUnmounted(() => restoreDocumentLocale?.())
     const login = async (): Promise<void> => {
@@ -55,7 +59,7 @@ export const PanelLoginPage = defineComponent({
       if (!presentation.value) return h('main', { class: 'hp-auth-page', 'data-holo-panel': '' }, [h(Card, { class: 'hp-auth-card hp:h-80 hp:animate-pulse' })])
       const { appearance, brandName, forgotPasswordPath, registrationPath, simplePageMaxContentWidth, theme } = presentation.value
       const translate = createPanelTranslator(locale.value)
-      const direction = locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
+      const direction = presentation.value.direction
       return h('main', { class: 'hp-auth-page', 'data-density': appearance.density, 'data-holo-panel': '', 'data-theme': theme, dir: direction, lang: locale.value, style: { ...nuxtPanelAuthAppearanceVariables(appearance), '--hp-auth-max-width': panelContentWidthValue(simplePageMaxContentWidth) } }, [
       h(Card, { class: 'hp-auth-card' }, () => [
         h(CardHeader, {}, () => [h(CardDescription, {}, () => translate('auth.administration')), h(CardTitle, {}, () => brandName), h(CardDescription, {}, () => translate('auth.signInDescription'))]),

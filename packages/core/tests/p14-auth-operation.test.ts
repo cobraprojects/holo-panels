@@ -168,7 +168,7 @@ describe('panel auth operation dispatcher', () => {
       .theme({ darkMode: 'system', density: 'compact' })
       .compile()
 
-    const result = await executePanelAuthOperation({ ...common, operation: 'presentation', panel, payload: {} })
+    const result = await executePanelAuthOperation({ ...common, operation: 'presentation', panel, payload: {}, requestedLocale: 'ar-EG' })
 
     expect(result).toEqual({
       cookies: [],
@@ -182,8 +182,10 @@ describe('panel auth operation dispatcher', () => {
           tokens: {},
         },
         brandName: 'Control Center',
+        direction: 'rtl',
         forgotPasswordPath: '/admin/forgot-password',
         loginPath: '/admin/login',
+        locale: 'ar',
         registrationPath: '/admin/register',
         simplePageMaxContentWidth: 'screen-sm',
         theme: 'system',

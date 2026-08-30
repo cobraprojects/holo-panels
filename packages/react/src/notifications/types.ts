@@ -20,6 +20,7 @@ export interface ReactCustomNotificationProps {
 }
 
 export interface ReactToastViewportProps {
+  readonly locale?: string
   readonly panelId?: string
   readonly registry?: ComponentRegistry
   readonly navigate?: (url: string) => void

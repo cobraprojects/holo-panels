@@ -8,12 +8,11 @@ import type {
   HoloAuth,
   PanelAuthenticatedScope,
   PanelBootstrap,
-  PanelManifest,
   PanelNotificationBootstrap,
   PanelMiddleware,
   PanelOperation,
 } from './contracts'
-import { canonicalLocale } from '../translations/catalog-registry'
+import { resolvePanelLocale } from '../translations/panel-locale'
 
 export class PanelRuntimeError extends Error {
   constructor(readonly code: 'access-denied' | 'actor-not-serializable' | 'panel-not-found' | 'subscription-required' | 'unauthenticated', message: string) {
@@ -183,32 +182,11 @@ export class PanelRuntime<TActor> {
     }
     const notifications = await this.notificationBootstrap(panel, scope)
     const tenancy = panel.server.tenancy ? await panel.server.tenancy.bootstrap(scope) : null
-    const locale = this.resolveLocale(panel.manifest.locales, requestedLocale, scope.actor)
-    return Object.freeze({ actor: actor as JsonObject, direction: locale === 'ar' ? 'rtl' : 'ltr', locale, manifest: panel.manifest, notifications, provider: scope.provider, tenancy })
-  }
-
-  private resolveLocale(
-    configuration: PanelManifest['locales'],
-    requestedLocale: string | undefined,
-    actor: TActor,
-  ): string {
-    const allowed = new Set(configuration.allowed.map(canonicalLocale))
-    const actorLocale = typeof actor === 'object' && actor !== null && 'locale' in actor && typeof actor.locale === 'string'
-      ? actor.locale
+    const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string'
+      ? scope.actor.locale
       : undefined
-    for (const candidate of [requestedLocale, actorLocale, configuration.fallback]) {
-      if (!candidate?.trim()) continue
-      let canonical: string
-      try {
-        canonical = canonicalLocale(candidate)
-      } catch {
-        continue
-      }
-      const hierarchy = canonical.split('-').map((_segment, index, segments) => segments.slice(0, segments.length - index).join('-'))
-      const matched = hierarchy.find(locale => allowed.has(locale))
-      if (matched) return matched
-    }
-    return configuration.fallback
+    const resolved = resolvePanelLocale(panel.manifest.locales, [requestedLocale, actorLocale])
+    return Object.freeze({ actor: actor as JsonObject, direction: resolved.direction, locale: resolved.locale, manifest: panel.manifest, notifications, provider: scope.provider, tenancy })
   }
 
   private async notificationBootstrap(

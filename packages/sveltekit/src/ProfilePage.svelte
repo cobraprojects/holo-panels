@@ -19,9 +19,9 @@
   let values = $state<Readonly<Record<string, unknown>>>({})
   let error = $state('')
   let saved = $state(false)
-  let locale = $state('en')
+  const locale = $derived(presentation?.locale ?? 'en')
   const translate = $derived(createPanelTranslator(locale))
-  const direction = $derived(locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr')
+  const direction = $derived(presentation?.direction ?? 'ltr')
 
   function cookie(name: string): string {
     const entry = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(`${name}=`))
@@ -39,14 +39,14 @@
   }
 
   onMount(() => {
-    locale = navigator.language
     void loadPanelAuthPresentation(panelId).then(value => { presentation = value })
     void executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation: 'profile-read', panelId, payload: {} }).then((result) => {
       if (!result.ok || typeof result.data !== 'object' || result.data === null || !('values' in result.data) || typeof result.data.values !== 'object' || result.data.values === null || Array.isArray(result.data.values)) error = translate('auth.profileLoadFailed')
       else values = result.data.values as Readonly<Record<string, unknown>>
     })
-    return syncDocumentLocale({ direction: locale.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale }, document)
   })
+
+  $effect(() => presentation ? syncDocumentLocale({ direction: presentation.direction, locale: presentation.locale }, document) : undefined)
 
   function update(field: string, current: unknown, input: HTMLInputElement): void {
     values = { ...values, [field]: typeof current === 'boolean' ? input.checked : typeof current === 'number' ? input.valueAsNumber : input.value }

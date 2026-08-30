@@ -1,5 +1,5 @@
 import { createPanelTranslator, executePanelAuthRequest, panelContentWidthValue, syncDocumentLocale, type PanelClientAuthOperation } from '@holo-js/panels-vue'
-import { defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
+import { defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { nuxtPanelAuthAppearanceVariables } from './auth-appearance'
 import { useNuxtPanelAuthPresentation } from './auth-presentation'
 import { Alert, AlertDescription, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Field, FieldGroup, FieldLabel, Input, NativeSelect, PanelsIcon } from './internal-ui'
@@ -25,10 +25,14 @@ export const PanelMultiFactorPage = defineComponent({
     const disableConfirmationOpen = ref(false)
     let restoreDocumentLocale: (() => void) | undefined
     const presentation = useNuxtPanelAuthPresentation(props.panelId)
+    watch(presentation, (value) => {
+      if (!value) return
+      locale.value = value.locale
+      restoreDocumentLocale?.()
+      restoreDocumentLocale = syncDocumentLocale({ direction: value.direction, locale: value.locale }, document)
+    })
     const request = (operation: PanelClientAuthOperation, payload: Readonly<Record<string, unknown>> = {}) => executePanelAuthRequest({ csrfToken: cookie('XSRF-TOKEN'), operation, panelId: props.panelId, payload })
     onMounted(() => {
-      locale.value = navigator.language
-      restoreDocumentLocale = syncDocumentLocale({ direction: locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr', locale: locale.value }, document)
       void request('mfa-status').then((result) => {
         if (result.ok && typeof result.data === 'object' && result.data !== null && 'enabled' in result.data) enabled.value = result.data.enabled === true
       })
@@ -62,7 +66,7 @@ export const PanelMultiFactorPage = defineComponent({
       if (!presentation.value) return h('main', { class: 'hp-auth-page', 'data-holo-panel': '' }, [h(Card, { class: 'hp-auth-card hp:h-80 hp:animate-pulse' })])
       const { appearance, brandName, simplePageMaxContentWidth, theme } = presentation.value
       const translate = createPanelTranslator(locale.value)
-      const direction = locale.value.toLowerCase().startsWith('ar') ? 'rtl' : 'ltr'
+      const direction = presentation.value.direction
       const disableDialog = h(AlertDialog, { open: disableConfirmationOpen.value, 'onUpdate:open': (open: boolean) => { disableConfirmationOpen.value = open } }, () => h(AlertDialogContent, {}, () => [
         h(AlertDialogHeader, {}, () => [h(AlertDialogTitle, {}, () => translate('auth.disableMfa')), h(AlertDialogDescription, {}, () => translate('auth.disableMfaDescription'))]),
         h(FieldGroup, {}, verificationFields),

@@ -65,12 +65,13 @@ function ActionTrigger<TResult>({ action, props }: { readonly action: ReactActio
 
 function ActionTriggers<TResult>(props: ReactActionRendererProps<TResult>): ReactNode {
   const actions = actionManifestCollection(props.actions ?? [props.manifest])
+  const translate = createPanelTranslator(props.locale ?? 'en')
   const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
   const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
   return <div className="hp-action-collection">
     {actions.filter(action => !grouped.has(action.id) && !nestedIds.has(action.id)).map(action => <ActionTrigger action={action} key={action.id} props={props} />)}
     {props.groups?.map(group => <DropdownMenu key={group.id}>
-      <DropdownMenuTrigger asChild><Button aria-label={group.label ?? 'Actions'} className="hp-action-group-trigger" data-action-group={group.id} variant="outline">{group.icon ? <PanelsIcon name={group.icon} /> : null}{group.label ?? 'Actions'}</Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button aria-label={group.label ?? translate('actions.group')} className="hp-action-group-trigger" data-action-group={group.id} variant="outline">{group.icon ? <PanelsIcon name={group.icon} /> : null}{group.label ?? translate('actions.group')}</Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" data-action-color={group.color ?? undefined}>
         {group.actions.flatMap(id => {
           const action = actions.find(candidate => candidate.id === id)
@@ -97,7 +98,7 @@ function ReadOnlyPresentation<TResult>({ frame, props }: { readonly frame: Clien
 }
 
 export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendererProps<TResult>): ReactNode {
-  const translate = createPanelTranslator(globalThis.document?.documentElement.lang || 'en')
+  const translate = createPanelTranslator(props.locale ?? 'en')
   const state = useSyncExternalStore(
     listener => props.store.subscribe(listener),
     () => props.store.state,
@@ -152,7 +153,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
                 }} schema={schema} /><ReactPanelsRenderHook hook={ActionsRenderHook.MODAL_SCHEMA_AFTER} /></>
               : null}
             {frame.manifest.kind === 'view' ? null : <DialogFooter>
-              <Button className="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} disabled={frame.phase === 'submitting'} type="submit" variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}<span>{frame.phase === 'submitting' ? 'Working…' : frame.manifest.modal?.submitActionLabel ?? 'Run action'}</span></Button>
+              <Button className="hp-action-trigger" data-action-id={frame.manifest.id} data-color={frame.manifest.color ?? undefined} disabled={frame.phase === 'submitting'} type="submit" variant={frame.manifest.color === 'danger' ? 'destructive' : 'default'}>{frame.manifest.icon ? <PanelsIcon name={frame.manifest.icon} /> : null}<span>{frame.phase === 'submitting' ? translate('actions.working') : frame.manifest.modal?.submitActionLabel ?? translate('actions.run')}</span></Button>
             </DialogFooter>}
             {props.store.activeForm?.state.errors._root?.length ? <ul data-form-errors="" role="alert">{props.store.activeForm.state.errors._root.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
           </form>}
@@ -169,17 +170,17 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
       const modalWidth = frame.manifest.modal?.width ?? 'medium'
       return frame.manifest.modal?.slideOver
         ? <Sheet key={frame.manifest.id} onOpenChange={open => { if (!open) props.store.close() }} open>
-          <SheetContent {...dismiss} className={modalWidthClass(modalWidth)} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="slide-over" side="right">
+          <SheetContent {...dismiss} className={modalWidthClass(modalWidth)} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="slide-over" side={props.direction === 'rtl' ? 'left' : 'right'}>
             <SheetHeader><SheetTitle id={titleId}>{heading}</SheetTitle>{description ? <SheetDescription>{description}</SheetDescription> : null}</SheetHeader>
             <div className="hp:flex-1 hp:overflow-y-auto hp:px-4">{content}</div>
-            <SheetFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? 'Close'}</Button></SheetFooter>
+            <SheetFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? translate('actions.close')}</Button></SheetFooter>
           </SheetContent>
         </Sheet>
         : <Dialog key={frame.manifest.id} onOpenChange={open => { if (!open) props.store.close() }} open>
           <DialogContent {...dismiss} className={modalWidthClass(modalWidth)} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="modal">
             <DialogHeader><DialogTitle id={titleId}>{heading}</DialogTitle>{description ? <DialogDescription>{description}</DialogDescription> : null}</DialogHeader>
             {content}
-            <DialogFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? 'Close'}</Button></DialogFooter>
+            <DialogFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? translate('actions.close')}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
     })}

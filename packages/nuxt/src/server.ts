@@ -26,6 +26,7 @@ import {
   PanelTenantOperationError,
   panelAuthOperationStatus,
   panelTenantOperationStatus,
+  resolvePanelLocale,
   type PanelAuthOperation,
   type PanelAuthRuntime,
   type PanelTenantOperation,
@@ -193,8 +194,8 @@ function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefiniti
   }
 }
 
-function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[]): Readonly<ResponseEnvelope> {
-  return decodeResponseEnvelope({ data, effects: [...effects], id, ok: true, protocolVersion: PROTOCOL_VERSION }, id)
+function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[], locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): Readonly<ResponseEnvelope> {
+  return decodeResponseEnvelope({ data, effects: [...effects], id, ok: true, protocolVersion: PROTOCOL_VERSION, ...locale }, id)
 }
 
 function responseFromBytes(bytes: Uint8Array<ArrayBuffer>, status: number): Response {
@@ -441,7 +442,11 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
         ? await executePanelPipeline(scope.definition, { actor: scope.actor, guard: scope.definition.guard, panelId, provider: scope.provider, signal: scope.signal }, operation, execute)
         : await options.runtime.execute(context)
       const data = toJsonValue(result.data)
-      const response = successEnvelope(id, data, result.effects ?? [])
+      const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
+      const locale = configuredPanel
+        ? resolvePanelLocale(configuredPanel.manifest.locales, [getRequestHeader(event, 'accept-language')?.split(',')[0]?.trim(), actorLocale])
+        : Object.freeze({ direction: 'ltr' as const, locale: 'en' })
+      const response = successEnvelope(id, data, result.effects ?? [], locale)
       const serialized = envelopeResponse(response, result.status ?? 200)
       if (serialized.status < 300) await flashRedirectToasts(scope.guard, panelId, response.effects)
       return serialized
@@ -547,6 +552,7 @@ export function createPanelAuthHandler<TActor, TTenant, TResult>(options: Create
         operation,
         panel: await compiledPanel(event, options, panelId),
         payload: input,
+        requestedLocale: getRequestHeader(event, 'accept-language')?.split(',')[0]?.trim(),
         services: Object.freeze({ event, getApp: () => holo.getApp(), getAuth: () => holo.getAuth() }),
         signal: requestSignal(event),
         tenant: operation === 'profile-read' || operation === 'profile-update'

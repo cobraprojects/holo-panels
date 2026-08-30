@@ -122,6 +122,7 @@ export {
   PanelNotificationAccessError,
 } from './notifications/inbox'
 export { canonicalLocale } from './translations/catalog-registry'
+export { normalizePanelLocaleConfiguration, requestedLocales, resolvePanelLocale } from './translations/panel-locale'
 export {
   applySchemaManifestPatches,
   patchSchemaManifestNode,

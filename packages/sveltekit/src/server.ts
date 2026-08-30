@@ -362,6 +362,9 @@ async function executeOperation<TActor, TTenant>(event: SvelteKitPanelEvent, opt
       const registry = registryFor(event, options.registry)
       const registeredPanel = registry.panels?.[panelId]
       configuredPanel = registeredPanel as CompiledPanelDefinition<object> | undefined
+      responseLocale = configuredPanel
+        ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(event.request.headers.get('accept-language')))
+        : responseLocale
       const routing = registeredPanel?.manifest.routing
       const hosts = routing ? [...routing.domains, ...(routing.domain === null ? [] : [routing.domain])] : []
       if (hosts.length > 0 && !hosts.includes(event.url.hostname.toLowerCase())) throw Object.assign(new Error('Panel not found'), { status: 404 })

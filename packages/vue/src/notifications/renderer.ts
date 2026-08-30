@@ -29,7 +29,7 @@ import { createPanelTranslator, safeExternalUrl, type ClientToast, type PanelTra
 import { VueActionRenderer } from '../actions'
 import { toast as sonnerToast } from 'vue-sonner'
 import { panelColorValue } from '@holo-js/panels-ui'
-import { defineComponent, Fragment, h, onMounted, onUnmounted, shallowRef, toRaw, type PropType, type VNode, type VNodeChild } from 'vue'
+import { defineComponent, Fragment, h, onMounted, onUnmounted, shallowRef, toRaw, watch, type PropType, type VNode, type VNodeChild } from 'vue'
 import type {
   VueCustomNotificationProps,
   VueDatabaseNotification,
@@ -150,7 +150,7 @@ export const VueToastViewport = defineComponent({
         }
       }
       for (const item of items) {
-        const fingerprint = JSON.stringify(item)
+        const fingerprint = `${props.locale}:${JSON.stringify(item)}`
         if (rendered.get(item.id) === fingerprint) continue
         sonnerToast.custom(VueToastContent, {
           componentProps: { locale: props.locale, navigate: props.navigate, panelId: props.panelId, registry: props.registry, store: props.store, toast: item },
@@ -167,6 +167,7 @@ export const VueToastViewport = defineComponent({
       sync(next.items)
     })
     onMounted(() => sync(props.store.state.items))
+    watch(() => props.locale, () => sync(props.store.state.items))
     onUnmounted(() => {
       unsubscribe()
       for (const id of rendered.keys()) sonnerToast.dismiss(id)
@@ -239,12 +240,12 @@ export const VueNotificationInbox = defineComponent({
     store: { required: true, type: Object as PropType<VueNotificationInboxProps['store']> },
   },
   setup(props) {
-    const translate = createPanelTranslator(props.locale)
     const state = shallowRef(props.store.state)
     const unsubscribe = props.store.subscribe(next => { state.value = next })
     onMounted(() => ignoreFailure(props.store.start()))
     onUnmounted(() => { unsubscribe(); props.store.dispose() })
     return (): VNode => {
+      const translate = createPanelTranslator(props.locale)
       const pages = Math.max(1, Math.ceil(state.value.total / state.value.pageSize))
       const items: VNodeChild[] = state.value.items.map(item => {
         const controls: VueNotificationControls = {

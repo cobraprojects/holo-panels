@@ -179,7 +179,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
       actor: await panel.server.presentActor(context.actor),
       direction: locale === 'ar' ? 'rtl' : 'ltr',
       locale,
-      manifest: Object.freeze({ ...panel.manifest, navigation }),
+      manifest: Object.freeze({ ...panel.manifest, direction: locale === 'ar' ? 'rtl' : 'ltr', locale, navigation }),
       notifications: null,
       provider: context.provider,
     },

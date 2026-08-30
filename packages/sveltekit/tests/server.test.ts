@@ -468,6 +468,21 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     expect(payload).not.toContain('secret policy implementation')
   })
 
+  it('localizes runtime authorization failures before an actor is available', async () => {
+    const configured = registry(['action'])
+    configured.value.runtime.execute = async () => { throw Object.assign(new Error('secret policy implementation'), { code: 'access-denied' }) }
+    const localizedPanel = definePanel('admin').locales(['en', 'ar']).compile()
+    const value: SvelteKitPanelRegistry = { ...configured.value, panels: { admin: localizedPanel } }
+    const { createPanelOperationHandler } = await import('../src/server')
+    const requestEvent = event('POST', { operation: 'action', panelId: 'admin' })
+    requestEvent.request.headers.set('Accept-Language', 'ar')
+
+    const response = await createPanelOperationHandler({ panelIds: ['admin'], registry: value }).POST(requestEvent)
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({ direction: 'rtl', locale: 'ar', ok: false })
+  })
+
   it('preserves validated action failure effects without trusting arbitrary errors', async () => {
     const configured = registry(['action'])
     const failureEffect = { kind: 'toast' as const, level: 'danger' as const, message: 'The action failed safely' }

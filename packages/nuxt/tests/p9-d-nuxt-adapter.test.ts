@@ -238,6 +238,21 @@ describe('P9-D Nuxt adapter', () => {
     })
   })
 
+  it('localizes authorization failures before an actor is available', async () => {
+    const configured = runtime(['admin'], async () => ({ data: {} }))
+    const runtimePanel = configured.panels.admin
+    if (!runtimePanel) throw new Error('Admin panel fixture was not registered')
+    Reflect.set(runtimePanel, 'access', () => false)
+    Reflect.set(runtimePanel, 'definition', definePanel('admin').locales(['en', 'ar']).compile())
+    const request = formRequest('admin', 'action')
+    request.headers.set('Accept-Language', 'ar')
+
+    const response = await webHandler(createPanelOperationHandler({ panelIds: ['admin'], runtime: configured }))(request)
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({ direction: 'rtl', locale: 'ar', ok: false })
+  })
+
   it('serves the configured tenant billing route before subscription-protected page execution', async () => {
     const routeAction = vi.fn(() => new Response(null, { headers: { location: 'https://billing.example.test/session' }, status: 303 }))
     const configured = runtime(['admin'], vi.fn(() => ({ data: {} })))

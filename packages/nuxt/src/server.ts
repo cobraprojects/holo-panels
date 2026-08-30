@@ -403,7 +403,7 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
         const result = await executeGet(event, operation, panelId, options)
         return result instanceof Response ? result : dataResponse(id, result)
       } catch (cause) {
-        const locale = configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(getRequestHeader(event, 'accept-language'))) : undefined
+        const locale = configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(requestHeader(event, 'accept-language'))) : undefined
         const failure = errorEnvelope(id, cause, configuredPanel, locale)
         return envelopeResponse(failure.response, failure.status)
       }
@@ -421,13 +421,16 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
       if (decoded.envelope.panelId !== panelId || decoded.envelope.operation !== operation) {
         throw new TransportDecodingError('Request envelope does not match the fixed operation route.')
       }
-      responseLocale = Object.freeze({ direction: 'ltr' as const, locale: 'en' })
+      configuredPanel = (await runtimePanel(options.runtime, panelId))?.definition as CompiledPanelDefinition<object> | undefined
+      responseLocale = configuredPanel
+        ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(requestHeader(event, 'accept-language')))
+        : Object.freeze({ direction: 'ltr' as const, locale: 'en' })
       const scope = await authorizedContext(event, operation, panelId, options)
       guard = scope.guard
-      configuredPanel = scope.definition as CompiledPanelDefinition<object> | undefined
+      configuredPanel = (scope.definition as CompiledPanelDefinition<object> | undefined) ?? configuredPanel
       const actorLocale = typeof scope.actor === 'object' && scope.actor !== null && 'locale' in scope.actor && typeof scope.actor.locale === 'string' ? scope.actor.locale : undefined
       responseLocale = configuredPanel
-        ? resolvePanelLocale(configuredPanel.manifest.locales, [...requestedLocales(getRequestHeader(event, 'accept-language')), actorLocale])
+        ? resolvePanelLocale(configuredPanel.manifest.locales, [...requestedLocales(requestHeader(event, 'accept-language')), actorLocale])
         : responseLocale
       const context: NuxtPanelOperationContext<TActor, TTenant> = {
         actor: scope.actor,
@@ -456,7 +459,7 @@ export function createPanelOperationHandler<TActor, TTenant, TResult>(options: C
       if (serialized.status < 300) await flashRedirectToasts(scope.guard, panelId, response.effects)
       return serialized
     } catch (cause) {
-      const locale = responseLocale ?? (configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(getRequestHeader(event, 'accept-language'))) : undefined)
+      const locale = responseLocale ?? (configuredPanel ? resolvePanelLocale(configuredPanel.manifest.locales, requestedLocales(requestHeader(event, 'accept-language'))) : undefined)
       const failure = errorEnvelope(id, cause, configuredPanel, locale)
       const serialized = envelopeResponse(failure.response, failure.status)
       if (guard && serialized.status === failure.status) await flashRedirectToasts(guard, panelId, failure.response.effects)
@@ -558,7 +561,7 @@ export function createPanelAuthHandler<TActor, TTenant, TResult>(options: Create
         operation,
         panel: await compiledPanel(event, options, panelId),
         payload: input,
-        requestedLocale: requestedLocales(getRequestHeader(event, 'accept-language'))[0],
+        requestedLocale: requestedLocales(requestHeader(event, 'accept-language'))[0],
         services: Object.freeze({ event, getApp: () => holo.getApp(), getAuth: () => holo.getAuth() }),
         signal: requestSignal(event),
         tenant: operation === 'profile-read' || operation === 'profile-update'

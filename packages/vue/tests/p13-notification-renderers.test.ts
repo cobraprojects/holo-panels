@@ -1,5 +1,5 @@
 import { ClientNotificationInboxStore, ClientToastStore } from '@holo-js/panels-client'
-import { createApp, createSSRApp, defineComponent, h, nextTick, type App } from 'vue'
+import { createApp, createSSRApp, defineComponent, h, nextTick, ref, type App } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerVueNotificationRenderer, VueNotificationInbox, VueToastViewport } from '../src'
@@ -71,6 +71,27 @@ describe('P13 Vue notification renderers', () => {
       expect(container.textContent).toContain('لا توجد إشعارات')
       expect(container.textContent).toContain('لا توجد إشعارات جديدة.')
     })
+  })
+
+  it('updates notification copy when the locale changes', async () => {
+    const store = new ClientNotificationInboxStore({ polling: false, transport: {
+      delete: async () => 0,
+      list: async (page, pageSize) => ({ items: [], page, pageSize, total: 0, unread: 0 }),
+      markRead: async () => 0,
+      markUnread: async () => 0,
+    } })
+    const locale = ref('en')
+    const container = document.createElement('div')
+    const app = createApp(() => h(VueNotificationInbox, { locale: locale.value, store }))
+    apps.push(app)
+    await store.start()
+    app.mount(container)
+    expect(container.textContent).toContain('You are all caught up.')
+
+    locale.value = 'ar'
+    await nextTick()
+
+    await vi.waitFor(() => expect(container.textContent).toContain('لا توجد إشعارات جديدة.'))
   })
 
   it('executes a toast action once after shared confirmation without an inbox', async () => {

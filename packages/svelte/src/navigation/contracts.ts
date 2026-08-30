@@ -8,6 +8,7 @@ export interface SvelteNavigationSearchRendererProps {
 }
 
 export interface SvelteTenantSwitcherProps {
+  readonly locale?: string
   readonly onError?: (error: unknown) => void
   readonly onNavigate?: (path: string) => void
   readonly onSwitched?: (routeKey: string) => void

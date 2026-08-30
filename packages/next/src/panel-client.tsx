@@ -509,7 +509,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
         {renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER)}
         <div className="hp-panel-header-actions hp-panel-actions--compact hp:ms-auto hp:flex hp:shrink-0 hp:items-center hp:gap-2">
           {notificationConfiguration?.placement === 'topbar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}
-          {manifest.navigationMode === 'topbar' && payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}
+          {manifest.navigationMode === 'topbar' && payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher locale={payload.bootstrap.locale} onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}
           {manifest.navigationMode === 'topbar' ? accountMenu : null}
         </div>
         <div className="hp-panel-topbar-end hp:contents">{renderHook(PanelsRenderHook.TOPBAR_END)}</div>
@@ -536,7 +536,7 @@ export function NextPanelClient({ notificationRealtime, payload, registry: regis
     <SidebarProvider onOpenChange={open => setSidebarCollapsed(!open)} open={!sidebarCollapsed}>
       {manifest.navigationEnabled !== false && manifest.navigationMode === 'sidebar' ? SidebarComponent ? <SidebarComponent actor={payload.bootstrap.actor} manifest={manifest} page={payload.page} /> : <Sidebar className="hp-panel-sidebar" closeLabel={translate('actions.close')} collapsible={manifest.sidebarCollapsible ? manifest.layout?.sidebarFullyCollapsible ? 'offcanvas' : 'icon' : 'none'} mobileDescription={translate('sidebar.description')} mobileTitle={translate('sidebar.title')} side={payload.bootstrap.direction === 'rtl' ? 'right' : 'left'}>
         {renderHook(PanelsRenderHook.SIDEBAR_START)}
-        <SidebarHeader className="hp-panel-navigation-header">{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}{payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}</SidebarHeader>
+        <SidebarHeader className="hp-panel-navigation-header">{renderHook(PanelsRenderHook.TOPBAR_LOGO_BEFORE)}{brand}{renderHook(PanelsRenderHook.TOPBAR_LOGO_AFTER)}{payload.bootstrap.tenancy && manifest.tenancy?.switcher !== false ? <ReactTenantSwitcher locale={payload.bootstrap.locale} onSwitched={url => router.push(url)} store={store} transport={resolvedTenantTransport} /> : null}</SidebarHeader>
         <SidebarContent className="hp-panel-navigation-body"><nav aria-label={translate('navigation.label')} className="hp-panel-navigation hp:h-full">{renderHook(PanelsRenderHook.SIDEBAR_NAV_START)}<NavigationItems activeId={state.activeNavigationId} collapsibleGroups={manifest.layout?.collapsibleNavigationGroups} groups={manifest.navigationGroups} icons={manifest.icons} items={manifest.navigation} mode="sidebar" onNavigate={() => undefined} />{renderHook(PanelsRenderHook.SIDEBAR_NAV_END)}</nav></SidebarContent>
         <SidebarFooter>{notificationConfiguration?.placement === 'sidebar' ? <div className="hp-panel-notification-action hp:contents">{notificationTrigger}</div> : null}{accountMenu}{renderHook(PanelsRenderHook.SIDEBAR_FOOTER)}</SidebarFooter><SidebarRail label={translate('sidebar.toggle')} />
       </Sidebar> : null}

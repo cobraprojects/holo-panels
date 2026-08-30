@@ -47,4 +47,12 @@ describe('Vue tenant switcher', () => {
     expect(html).toContain('data-slot="popover-trigger"')
     expect(html).toContain('Acme')
   })
+
+  it('localizes built-in tenant controls without translating application labels', async () => {
+    const shell = { locale: 'ar', store: store(), transport: { switch: async (routeKey: string) => ({ tenant: { id: routeKey, routeKey } }) } }
+    const html = await renderToString(createSSRApp(() => h(VueTenantSwitcher, { shell })))
+
+    expect(html).toContain('aria-label="قائمة المستأجرين"')
+    expect(html).toContain('Acme')
+  })
 })

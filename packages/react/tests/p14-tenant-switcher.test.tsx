@@ -45,4 +45,11 @@ describe('React tenant switcher', () => {
     expect(html).toContain('data-slot="dropdown-menu-trigger"')
     expect(html).toContain('Acme')
   })
+
+  it('localizes built-in tenant controls without translating application labels', () => {
+    const html = renderToString(<ReactTenantSwitcher locale="ar" store={store()} transport={{ switch: async routeKey => ({ tenant: { id: routeKey, routeKey } }) }} />)
+
+    expect(html).toContain('aria-label="قائمة المستأجرين"')
+    expect(html).toContain('Acme')
+  })
 })

@@ -10,7 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '../internal-ui'
-import type { PanelShellStore, PanelTenantSwitcherTransport } from '@holo-js/panels-client'
+import { createPanelTranslator, type PanelShellStore, type PanelTenantSwitcherTransport } from '@holo-js/panels-client'
 import { defineComponent, h, onScopeDispose, ref, shallowRef, type PropType, type VNodeChild } from 'vue'
 
 interface TenantMenuItem {
@@ -21,6 +21,7 @@ interface TenantMenuItem {
 }
 
 export interface VueTenantSwitcherProps {
+  readonly locale?: string
   readonly onError?: (error: unknown) => void
   readonly onNavigate?: (path: string) => void
   readonly onSwitched?: (routeKey: string) => void
@@ -34,6 +35,7 @@ export const VueTenantSwitcher = defineComponent({
     shell: { type: Object as PropType<VueTenantSwitcherProps>, required: true },
   },
   setup(componentProps) {
+    const translate = createPanelTranslator(componentProps.shell.locale ?? 'en')
     const open = ref(false)
     const state = shallowRef(componentProps.shell.store.snapshot)
     const unsubscribe = componentProps.shell.store.subscribe(next => {
@@ -52,10 +54,10 @@ export const VueTenantSwitcher = defineComponent({
             label: tenant.label,
           }))
       const routes = [
-        ...(configuration.profile ? [{ icon: 'user', id: 'profile', label: 'Tenant profile', path: configuration.profile.path }] : []),
-        ...(configuration.billing ? [{ icon: 'billing', id: 'billing', label: 'Billing', path: configuration.billing.path }] : []),
+        ...(configuration.profile ? [{ icon: 'user', id: 'profile', label: translate('tenant.profile'), path: configuration.profile.path }] : []),
+        ...(configuration.billing ? [{ icon: 'billing', id: 'billing', label: translate('tenant.billing'), path: configuration.billing.path }] : []),
         ...(configuration.menuItems ?? []),
-        ...(configuration.registration ? [{ icon: 'plus', id: 'registration', label: 'Create tenant', path: configuration.registration.path }] : []),
+        ...(configuration.registration ? [{ icon: 'plus', id: 'registration', label: translate('tenant.create'), path: configuration.registration.path }] : []),
       ]
       items.push(...routes.map(item => ({ icon: item.icon, id: `menu:${item.id}`, label: item.label })))
       if (items.length === 0) return null
@@ -81,21 +83,21 @@ export const VueTenantSwitcher = defineComponent({
           h(PopoverTrigger, { asChild: true }, {
             default: () => h(Button, {
               'aria-expanded': open.value,
-              'aria-label': 'Tenant menu',
+              'aria-label': translate('tenant.menu'),
               role: 'combobox',
               variant: 'outline',
             }, () => [
-              h('span', tenancy.active?.label ?? 'Select tenant'),
+              h('span', tenancy.active?.label ?? translate('tenant.select')),
               PanelsIcon('chevron-down', 'hp:ms-auto hp:opacity-50'),
             ]),
           }),
           h(PopoverContent, { align: 'start', class: 'hp:w-(--reka-popover-trigger-width) hp:p-0' }, {
             default: () => h(Command, {}, () => [
               configuration.searchableMenu ?? tenancy.memberships.memberships.length > 10
-                ? h(CommandInput, { placeholder: 'Search tenants…' })
+                ? h(CommandInput, { placeholder: translate('tenant.search') })
                 : null,
               h(CommandList, {}, () => [
-                h(CommandEmpty, {}, () => 'No tenant found.'),
+                h(CommandEmpty, {}, () => translate('tenant.none')),
                 ...items.map(item => h(CommandItem, {
                   disabled: item.disabled,
                   key: item.id,

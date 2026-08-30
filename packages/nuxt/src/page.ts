@@ -1742,7 +1742,7 @@ export const PanelPage = defineComponent({
             renderHook(PanelsRenderHook.GLOBAL_SEARCH_AFTER),
             h('div', { class: 'hp-panel-header-actions hp-panel-topbar-end hp-panel-actions--compact' }, [
               configuration?.placement === 'topbar' ? h('div', { class: 'hp-panel-notification-action hp-panel-action--compact' }, [notificationTrigger]) : null,
-              bootstrap.manifest.navigationMode === 'topbar' && tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action hp-panel-action--compact' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
+              bootstrap.manifest.navigationMode === 'topbar' && tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action hp-panel-action--compact' }, [h(VueTenantSwitcher, { shell: { ...tenantShell, locale: bootstrap.locale, onSwitched: () => window.location.reload() } })]) : null,
               bootstrap.manifest.navigationMode === 'topbar' ? accountMenu() : null,
             ]),
             renderHook(PanelsRenderHook.TOPBAR_END),
@@ -1755,7 +1755,7 @@ export const PanelPage = defineComponent({
                   : h(Sidebar, { class: 'hp-panel-sidebar', closeLabel: translate('actions.close'), collapsible: bootstrap.manifest.sidebarCollapsible ? 'icon' : 'none', mobileDescription: translate('sidebar.description'), mobileTitle: translate('sidebar.title'), side: bootstrap.direction === 'rtl' ? 'right' : 'left' }, () => [
                       renderHook(PanelsRenderHook.SIDEBAR_START),
                       h(SidebarHeader, { class: 'hp-panel-navigation-header' }, () => [
-                        tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action' }, [h(VueTenantSwitcher, { shell: { onSwitched: () => window.location.reload(), ...tenantShell } })]) : null,
+                        tenantShell && bootstrap.manifest.tenancy?.switcher !== false ? h('div', { class: 'hp-panel-tenant-action' }, [h(VueTenantSwitcher, { shell: { ...tenantShell, locale: bootstrap.locale, onSwitched: () => window.location.reload() } })]) : null,
                       ]),
                       renderHook(PanelsRenderHook.SIDEBAR_NAV_START),
                       navigation(props.page, 'sidebar', navigationOpen.value, navigationId, () => { navigationOpen.value = false }),

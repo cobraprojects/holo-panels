@@ -13,7 +13,7 @@ interface WidgetTableOptions {
 export class WidgetTableController {
   readonly #widget: WidgetStore
   readonly #options: WidgetTableOptions
-  readonly #unsubscribe: () => void
+  #unsubscribe: (() => void) | null = null
   #table: TableStateStore<JsonObject, string> | null = null
   #result: JsonObject = {}
   #resource: JsonObject = {}
@@ -21,8 +21,7 @@ export class WidgetTableController {
   constructor(widget: WidgetStore, options: WidgetTableOptions) {
     this.#widget = widget
     this.#options = options
-    this.#unsubscribe = widget.subscribe(() => this.synchronize())
-    this.synchronize()
+    this.start()
   }
 
   get query(): JsonObject {
@@ -48,8 +47,14 @@ export class WidgetTableController {
     }
   }
 
+  start(): void {
+    this.#unsubscribe ??= this.#widget.subscribe(() => this.synchronize())
+    this.synchronize()
+  }
+
   dispose(): void {
-    this.#unsubscribe()
+    this.#unsubscribe?.()
+    this.#unsubscribe = null
   }
 
   private synchronize(): void {
@@ -67,7 +72,26 @@ export class WidgetTableController {
       const state = widgetTableObject(this.#result.tableState)
       this.#table = new TableStateStore({ filterMode: table.filterMode === 'deferred' ? 'deferred' : 'live', panelId: this.#options.panelId, perPage: typeof state.perPage === 'number' ? state.perPage : 25, records, selection: widgetTableObject(table.selection), tableId: data.tableId, total, visibleColumns: widgetTableColumns(table).filter(column => !column.manifest.hidden).map(column => column.manifest.path) })
     }
+    const query = widgetTableObject(this.#result.query)
+    this.restoreQuery(this.#table, { ...widgetTableObject(toJsonValue(this.#table.query)), ...query, ...widgetTableObject(this.#result.tableState), filters: query.filters ?? toJsonValue(this.#table.snapshot.filters.applied) })
     this.#table.applyData({ queryVersion: this.#table.query.queryVersion, records, selection: widgetTableObject(this.#result.selection), total })
+  }
+
+  private restoreQuery(table: TableStateStore<JsonObject, string>, query: JsonObject): void {
+    if (typeof query.perPage === 'number') table.setPerPage(query.perPage)
+    if (typeof query.search === 'string') table.setSearch(query.search)
+    table.setSort(widgetTableObjects(query.sort).flatMap(item => typeof item.column === 'string' && (item.direction === 'asc' || item.direction === 'desc') ? [{ column: item.column, direction: item.direction }] : []))
+    const grouping = widgetTableObject(query.grouping)
+    if (query.grouping === null) table.setGrouping(null)
+    if (typeof grouping.column === 'string' && (grouping.direction === 'asc' || grouping.direction === 'desc')) table.setGrouping({ column: grouping.column, direction: grouping.direction })
+    const filters = widgetTableObject(query.filters)
+    if (JSON.stringify(toJsonValue(filters)) !== JSON.stringify(toJsonValue(table.snapshot.filters.applied))) {
+      table.resetFilters()
+      for (const [id, value] of Object.entries(filters)) table.setFilter(id, value)
+      table.applyDeferredFilters()
+    }
+    if (Array.isArray(query.visibleColumns)) table.setVisibleColumns(query.visibleColumns.filter((column): column is string => typeof column === 'string'))
+    if (typeof query.page === 'number') table.setPage(query.page)
   }
 
   private async execute(request: TableActionExecutionRequest<string>, signal: AbortSignal): Promise<void> {

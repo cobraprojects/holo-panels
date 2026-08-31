@@ -18,7 +18,7 @@ export function createWidgetRuntime(options: {
   }
 }) {
   const { widget } = options
-  const controller = new AbortController()
+  let controller = new AbortController()
   const store: WidgetStore = new WidgetStore(widget.manifest, createWidgetLoader(options.transport, options.panelId, widget.request ?? {}, options.dashboardFilters, widget.manifest.family === 'table' ? () => table?.query ?? {} : undefined), {
     initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status },
   })
@@ -36,5 +36,5 @@ export function createWidgetRuntime(options: {
       return response.data
     },
   }) : undefined
-  return { store, table, dispose: () => { controller.abort(); store.stop(); table?.dispose() } }
+  return { store, table, start: () => { if (controller.signal.aborted) controller = new AbortController(); table?.start() }, dispose: () => { controller.abort(); store.stop(); table?.dispose() } }
 }

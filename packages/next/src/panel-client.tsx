@@ -220,7 +220,7 @@ function ResolvedWidgetView({ dashboardFilters, effects, panelId, registry, widg
 }): ReactNode {
   const runtime = useMemo(() => createWidgetRuntime({ applyEffects: response => effects.apply(response), dashboardFilters: dashboardFilters ? () => dashboardFilters.applied : undefined, panelId, transport: browserPanelsTransport(), widget }), [widget, panelId, dashboardFilters, effects])
   const { store } = runtime
-  useEffect(() => () => runtime.dispose(), [runtime])
+  useEffect(() => { runtime.start(); return () => runtime.dispose() }, [runtime])
   useEffect(() => dashboardFilters?.subscribe(() => store.load()), [dashboardFilters, store])
   const actionStore = useMemo(() => createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId, resourceId: widget.resourceId, transport: browserPanelsTransport(), widgetId: widget.manifest.id }), [effects, panelId, widget.manifest.id, widget.resourceId])
   useEffect(() => () => { while (actionStore.activeFrame) actionStore.close() }, [actionStore])

@@ -20,7 +20,7 @@ export async function executeWidgetTableOperation(
   if (typeof request.widgetId !== 'string') throw new Error('Table widget requests require a widget ID')
   if (payload.intent === 'relation' || payload.source !== undefined && payload.source !== 'table') throw new Error('Table widget requests require table operations')
   const query = operation === 'table-data' ? widgetTableQuery(payload, false) : object(payload.tableQuery ?? {})
-  const { data: resolved, definition } = await resolveWidgetRequestData(registry, { ...request, widgetTableQuery: query }, context, panel)
+  const { data: resolved, definition } = await resolveWidgetRequestData(registry, { ...request, widgetTableQuery: { ...query, ...(payload.selection === undefined ? {} : { selection: payload.selection }) } }, context, panel)
   if (resolved.status !== 'ready' || object(resolved.manifest).family !== 'table') throw new Error('The table widget is not available')
   const data = object(resolved.data)
   const result = object(data.result)
@@ -30,7 +30,7 @@ export async function executeWidgetTableOperation(
   if (!binding) throw new Error('The table widget resource is not registered')
   return executeGeneratedResourceOperation(binding.resource(), {
     context, operation, panel, panelId: context.panelId,
-    payload: { ...payload, resourceId: data.tableId, source: 'table', tableQuery: result.query ?? {} },
+    payload: { ...payload, resourceId: data.tableId, source: 'table', tableQuery: result.query ?? {}, ...(payload.selection === undefined ? {} : { selection: object(result.query).selection ?? null }) },
     strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
   })
 }

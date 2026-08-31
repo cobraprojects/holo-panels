@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { column, configureDB, createAdapter, createConnectionManager, createDialect, createSchemaService, DB, defineGeneratedTable, defineModel, registerDatabaseDriverFactory, resetDB } from '@holo-js/db'
 import { sqliteDatabaseDriverFactory } from '@holo-js/db-sqlite'
 import { definePolicy } from '@holo-js/authorization'
-import { definePanel } from '../src/panels'
-import { defineCustomPage } from '../src/pages'
-import { defineTableWidget } from '../src/widgets/builder'
-import { executeWidgetDataOperation } from '../src/widgets/page-data'
-import { resolvePageWidgetGroup } from '../src/widgets/page-widgets'
-import { executeWidgetTableOperation } from '../src/widgets/table-operation'
+import { definePanel, defineCustomPage, defineTableWidget, type JsonObject } from '@holo-js/panels-core'
+import { executeWidgetDataOperation, resolvePageWidgetGroup, executeWidgetTableOperation } from '@holo-js/panels-core/server'
+import { WidgetStore, WidgetTableController } from '@holo-js/panels-client'
 
 describe('registered table widgets', () => {
   it('uses the resource query, record authorization and client-safe table manifest for initial and refreshed data', async () => {
@@ -29,18 +26,34 @@ describe('registered table widgets', () => {
         table: { columns: [{ path: 'title', type: 'text', label: 'Title', searchable: true, sortable: true }], serverColumns: [{ path: 'title', searchable: true, sortable: true }] },
       }
       let allowed = true
+      let boundQuery: JsonObject = {}
       const definition = defineTableWidget('recent').authorize(() => allowed).compile()
-      const widget = { ...definition, server: { ...definition.server, table: { resource: () => resource } } }
+      const widget = { ...definition, server: { ...definition.server, table: { resource: () => resource, query: () => boundQuery } } }
       const panel = definePanel('admin').compile()
       const page = defineCustomPage('overview').headerWidgets('recent').compile()
       const context = { actor: {}, locale: 'en', panelId: 'admin', services: undefined, signal: new AbortController().signal, tenant: 'one' }
       const request = { pageId: 'overview', widgetId: 'recent' }
       const registry = { 'admin:page:overview': async () => page, 'admin:widget:recent': async () => widget, 'admin:resource:posts': async () => ({ ...resource, baseQuery: (query: ReturnType<typeof model.query>) => query }) }
-      const refreshed = await executeWidgetDataOperation(registry, { ...request, widgetTableQuery: { search: 'Second' } }, context, panel)
-      expect(refreshed).toMatchObject({ status: 'ready', data: { result: { records: [{ id: 'second' }] } } })
       const initial = await resolvePageWidgetGroup(['recent'], [widget], context, null, 'header', { pageId: 'overview' }, {}, panel)
       expect(initial[0]).toMatchObject({ status: 'ready', data: { tableId: 'posts', result: { records: [{ id: 'first' }, { id: 'second' }], resource: { id: 'posts', table: { columns: [{ path: 'title' }] } } } } })
       expect(JSON.stringify(initial)).not.toMatch(/Foreign post|Hidden post|baseQuery|serverColumns/)
+      const store = new WidgetStore(definition.manifest, async () => {
+        const refreshed = await executeWidgetDataOperation(registry, { ...request, widgetTableQuery: controller.query }, context, panel)
+        if (refreshed.status !== 'ready') throw new Error('Widget did not resolve')
+        return { status: 'ready', data: refreshed.data ?? null }
+      }, { initialResult: { status: 'ready', data: initial[0]!.data } })
+      const controller = new WidgetTableController(store, { panelId: 'admin', request: () => request, execute: async (_operation, payload) => (await executeWidgetTableOperation(registry, 'action', payload, context, panel)).data })
+      controller.presentation!.store.setSearch('Second')
+      await store.load()
+      expect(store.snapshot.status).toBe('ready')
+      expect(controller.presentation!.store.snapshot.records).toMatchObject([{ id: 'second' }])
+      boundQuery = { search: 'First' }
+      await store.load()
+      expect(controller.presentation!.store.snapshot).toMatchObject({ search: 'First', records: [{ id: 'first' }] })
+      controller.presentation!.store.selectAllMatching()
+      expect((await executeWidgetTableOperation(registry, 'action', { widgetTable: request, actionId: 'queue', mount: 'bulk', resourceId: 'posts', source: 'table', tableQuery: controller.query, selection: { mode: 'all-matching', query: { search: '' }, excludedRecordIds: [] } }, context, panel)).data).toMatchObject({ items: [{ recordId: 'first', result: { queued: ['first'] } }] })
+      controller.dispose()
+      boundQuery = {}
       await expect(executeWidgetDataOperation(registry, { ...request, widgetTableQuery: { intent: 'relation', managerId: 'comments', ownerId: 'foreign' } }, context, panel)).rejects.toThrow('query field')
       const action = { widgetTable: request, actionId: 'queue', mount: 'bulk', recordIds: ['first', 'foreign'], resourceId: 'posts', source: 'table' }
       expect((await executeWidgetTableOperation(registry, 'action', action, context, panel)).data).toMatchObject({ status: 'partial', items: [{ recordId: 'first', result: { queued: ['first'] }, status: 'succeeded' }, { recordId: 'foreign', status: 'denied' }] })

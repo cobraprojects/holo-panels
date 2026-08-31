@@ -73,6 +73,8 @@
     }
   },
   "devDependencies": {
+    "@holo-js/authorization": "catalog:",
+    "@holo-js/db-sqlite": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@types/react": "catalog:",

@@ -3,7 +3,7 @@ import type { JsonObject, JsonValue } from '../protocol/json'
 import { executeGeneratedResourceOperation, generatedResourcePageManifests } from '../resources/generated-pages'
 import type { CompiledWidgetDefinition, ResourceWidgetContext, ResolvedWidget, WidgetContext, WidgetFilterState } from './contracts'
 import { resolveWidget } from './resolution'
-import { widgetTableQuery } from './table-query'
+import { bindWidgetTableQuery } from './table-query'
 
 export async function resolveRegisteredWidget(
   definition: CompiledWidgetDefinition<JsonValue, object, unknown, unknown>,
@@ -25,7 +25,7 @@ export async function resolveRegisteredWidget(
         const page = pages.find(candidate => candidate.pageType === 'list' || candidate.pageType === 'manage')
         const manifest = page?.body?.properties.resource
         if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest) || typeof manifest.id !== 'string') throw new Error('Table widgets require a listable resource')
-        const query = { ...widgetTableQuery(options.tableQuery ?? {}), ...widgetTableQuery(await binding.query?.(scope) ?? {}) }
+        const query = bindWidgetTableQuery(options.tableQuery ?? {}, await binding.query?.(scope) ?? {})
         if (query.tableId !== undefined && query.tableId !== manifest.id || query.panelId !== undefined && query.panelId !== context.panelId) throw new Error('The query belongs to another table widget')
         const result = await executeGeneratedResourceOperation(tableResource, {
           context, operation: 'table-data', panel, panelId: context.panelId,

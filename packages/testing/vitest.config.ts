@@ -35,6 +35,7 @@ export default defineConfig({
           fileParallelism: false,
           include: [
             'tests/contracts.test.ts',
+            'tests/p12-table-widget-runtime.test.ts',
             'tests/p9-example-phase-gate.test.ts',
             'tests/p13-holo-notification-runtime.test.ts',
             'tests/p13-sqlite-notification-phase-gate.test.ts',

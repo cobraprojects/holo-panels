@@ -539,8 +539,10 @@
         "@holo-js/panels-core": "workspace:*",
       },
       "devDependencies": {
+        "@holo-js/authorization": "catalog:",
         "@holo-js/core": "catalog:",
         "@holo-js/db": "catalog:",
+        "@holo-js/db-sqlite": "catalog:",
         "@holo-js/notifications": "catalog:",
         "@holo-js/panels-react": "workspace:*",
         "@holo-js/panels-shield": "workspace:*",

@@ -219,6 +219,7 @@ export interface ResourcePageRegistration<TRecord extends object = object> {
   readonly page: ResourcePageConstructor<TRecord>
   readonly pageType: ResourcePageType
   readonly path: string
+  readonly widgets?: Readonly<{ readonly footer: readonly object[], readonly header: readonly object[] }>
 }
 
 export type ResourcePageType = 'create' | 'edit' | 'list' | 'manage' | 'manage-related' | 'view'
@@ -259,6 +260,7 @@ export abstract class ResourcePage<TRecord extends object = object> {
       page: this as ResourcePageConstructor<TRecord>,
       pageType: this.pageType,
       path,
+      widgets: Object.freeze({ footer: Object.freeze([...page.getFooterWidgets()]), header: Object.freeze([...page.getHeaderWidgets()]) }),
     })
   }
 
@@ -521,7 +523,7 @@ export abstract class Resource {
       ...(this.navigationLabel ? { label: this.navigationLabel } : {}),
       ...(this.navigationSort !== null ? { sort: this.navigationSort } : {}),
     })
-    builder = builder.form(form).infolist(infolist).table(table).pages(...pages).relations(...relations).widgets(...widgets)
+    builder = builder.form(form).infolist(infolist).table(table).pages(...pages).relations(...relations).widgets(...widgets, ...pages.flatMap(page => [...page.widgets?.header ?? [], ...page.widgets?.footer ?? []]))
     const tableActions = table.compile().serverActions
     builder = builder.actions(() => Array.isArray(tableActions) ? tableActions.map(action => ({ compile: () => action })) : [])
     const baseQuery = Reflect.get(this, 'modifyBaseQuery')
@@ -547,6 +549,7 @@ export abstract class Resource {
     const fieldActions = fieldActionDefinitions(form)
     return Object.freeze({
       ...compiled,
+      globalWidgets: widgets,
       actions: Object.freeze([
         ...(Array.isArray(actions) ? actions.map(action => Object.freeze({ ...action, source: Reflect.get(action, 'source') ?? 'table' })) : []),
         ...pageActions,

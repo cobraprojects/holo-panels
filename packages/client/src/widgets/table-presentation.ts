@@ -47,14 +47,16 @@ export interface WidgetTableActionGroup {
   readonly actions: readonly TableActionDefinition[]
   readonly id: string
   readonly kind: 'action-group'
-  readonly label: string
+  readonly label: string | null
+  readonly icon: string | null
+  readonly color: string | null
   readonly scope: 'bulk' | 'header' | 'row'
 }
 
 export function widgetTableActions(entries: JsonValue | undefined, data: () => JsonObject): readonly (TableActionDefinition | WidgetTableActionGroup)[] {
   return widgetTableObjects(entries).map(action => {
     const scope = action.scope === 'bulk' || action.scope === 'header' ? action.scope : 'row'
-    if (action.kind === 'action-group') return { actions: widgetTableActions(action.actions, data).flatMap(item => 'actions' in item ? [...item.actions] : [item]), id: text(action.id), kind: 'action-group', label: text(action.label), scope }
+    if (action.kind === 'action-group') return { actions: widgetTableActions(action.actions, data).flatMap(item => 'actions' in item ? [...item.actions] : [item]), color: typeof action.color === 'string' ? action.color : null, icon: typeof action.icon === 'string' ? action.icon : null, id: text(action.id), kind: 'action-group', label: typeof action.label === 'string' ? action.label : null, scope }
     return { id: text(action.id), label: text(action.label), scope, resolveManifest: recordId => resolveTableActionManifest(data(), text(action.id), recordId) }
   })
 }

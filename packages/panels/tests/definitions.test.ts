@@ -8,6 +8,7 @@ import {
   defineCustomPage,
   defineField,
   definePanel,
+  defineCustomWidget,
   generatedResourcePageManifests,
   Notification,
   type ResourceRecordFor,
@@ -19,6 +20,22 @@ const authors = defineGeneratedTable('authors', {
   name: databaseColumn.string(),
 })
 const Author = defineModel(authors, { fillable: ['name'] })
+
+it('registers page widgets without displaying them on unrelated resource pages', () => {
+  const footer = defineCustomWidget('record-context').data(() => ({ component: 'app.widgets.context', properties: {} }))
+  class WidgetView extends ViewRecord {
+    protected override getFooterWidgets() { return [footer] }
+  }
+  class WidgetList extends ListRecords {}
+  class WidgetResource extends Resource {
+    protected static override model = Author
+    static getPages() { return { index: WidgetList.route('/'), view: WidgetView.route('/{record}') } }
+  }
+  const pages = generatedResourcePageManifests({ panelPath: '/admin', resource: WidgetResource })
+  expect(pages.find(page => page.pageType === 'list')?.widgets).toEqual({ header: [], footer: [] })
+  expect(pages.find(page => page.pageType === 'view')?.widgets).toEqual({ header: [], footer: ['record-context'] })
+  expect(WidgetResource.compile().widgets).toHaveLength(1)
+})
 const posts = defineGeneratedTable('posts', {
   authorId: databaseColumn.integer(),
   id: databaseColumn.id(),

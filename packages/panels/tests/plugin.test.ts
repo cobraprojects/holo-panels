@@ -138,6 +138,22 @@ describe('Holo Panels plugin', () => {
       .toContain('"checksum"')
   })
 
+  it('updates Custom widget renderer registrations on development add and delete', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-widget-watch-'))
+    temporaryDirectories.push(projectRoot)
+    const directory = join(projectRoot, 'resources/panels/renderers/next/widgets')
+    await mkdir(directory, { recursive: true })
+    const path = join(directory, 'admin-notice.tsx')
+    const context = createPrepareContext(new AbortController().signal, projectRoot, true)
+    await writeFile(path, 'export default function Notice() { return null }\n')
+    const added = await preparer.prepare(context)
+    expect(added.watch?.roots).toEqual(['server', 'resources'])
+    expect(added.generatedArtifacts?.find(artifact => artifact.path === 'application-renderers.ts')?.contents).toContain("registry.register('widget.app.widgets.admin-notice'")
+    await rm(path)
+    const removed = await preparer.prepare({ ...context, run: { command: 'dev', kind: 'incremental', changes: [{ kind: 'deleted', path: 'resources/panels/renderers/next/widgets/admin-notice.tsx' }] } })
+    expect(removed.generatedArtifacts?.find(artifact => artifact.path === 'application-renderers.ts')?.contents).not.toContain('admin-notice')
+  })
+
   it('rebuilds relation bindings when custom model and migration paths change during development', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-relation-watch-'))
     temporaryDirectories.push(projectRoot)

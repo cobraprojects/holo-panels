@@ -17,6 +17,8 @@ export class WidgetTableController {
   #table: TableStateStore<JsonObject, string> | null = null
   #result: JsonObject = {}
   #resource: JsonObject = {}
+  #presentation: ReturnType<WidgetTableController['createPresentation']> = null
+  #presentationKey = ''
 
   constructor(widget: WidgetStore, options: WidgetTableOptions) {
     this.#widget = widget
@@ -29,6 +31,10 @@ export class WidgetTableController {
   }
 
   get presentation() {
+    return this.#presentation
+  }
+
+  private createPresentation() {
     const store = this.#table
     if (!store) return null
     const table = widgetTableObject(this.#resource.table)
@@ -75,6 +81,11 @@ export class WidgetTableController {
     const query = widgetTableObject(this.#result.query)
     this.restoreQuery(this.#table, { ...widgetTableObject(toJsonValue(this.#table.query)), ...query, ...widgetTableObject(this.#result.tableState), filters: query.filters ?? toJsonValue(this.#table.snapshot.filters.applied) })
     this.#table.applyData({ queryVersion: this.#table.query.queryVersion, records, selection: widgetTableObject(this.#result.selection), total })
+    const presentationKey = JSON.stringify({ resource: this.#resource, tableActions: this.#result.tableActions, rowActions: this.#result.rowActions, groups: this.#result.groups, summaries: this.#result.summaries })
+    if (presentationKey !== this.#presentationKey) {
+      this.#presentationKey = presentationKey
+      this.#presentation = this.createPresentation()
+    }
   }
 
   private restoreQuery(table: TableStateStore<JsonObject, string>, query: JsonObject): void {

@@ -27,7 +27,7 @@ describe('registered table widgets', () => {
       }
       let allowed = true
       let boundQuery: JsonObject = {}
-      const definition = defineTableWidget('recent').authorize(() => allowed).compile()
+      const definition = defineTableWidget('recent').table({ compile: () => resource }).authorize(() => allowed).compile()
       const widget = { ...definition, server: { ...definition.server, table: { resource: () => resource, query: () => boundQuery } } }
       const panel = definePanel('admin').compile()
       const page = defineCustomPage('overview').headerWidgets('recent').compile()

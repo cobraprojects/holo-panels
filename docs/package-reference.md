@@ -159,7 +159,7 @@ Currently contributed commands are:
 | `make:table-column` | `holo make:table-column <Name> [--panel admin]` |
 | `make:filter` | `holo make:filter <Name> [--panel admin]` |
 | `make:action` | `holo make:action <Name> [--panel admin]` |
-| `make:widget` | `holo make:widget <Name> [--panel admin]` |
+| `make:widget` | `holo make:widget <Name> [--panel admin] [--resource PostResource]` |
 | `make:cluster` | `holo make:cluster <Name> [--panel admin]` |
 | `make:importer` | `holo make:importer <Name> [--panel admin]` |
 | `make:exporter` | `holo make:exporter <Name> [--panel admin]` |

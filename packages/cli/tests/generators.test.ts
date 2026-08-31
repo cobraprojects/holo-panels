@@ -9,6 +9,17 @@ import { generate, type FrameworkId, type GeneratorKind, type GeneratorProject }
 const temporaryDirectories: string[] = []
 const originalPath = process.env.PATH
 
+it.each(['next', 'nuxt', 'sveltekit'] as const)('generates bound Table widgets and serializable Custom widgets for %s', async framework => {
+  const root = await fixture(framework)
+  const table = await run(root, 'widget', ['RecentPosts'], { panel: 'admin', resource: 'PostResource' }, project(framework))
+  expect(await readFile(join(root, table[0]!), 'utf8')).toContain("defineTableWidget('recent-posts').table(PostResource)")
+  const custom = await run(root, 'widget', ['Notice'], { panel: 'admin' }, project(framework))
+  expect(custom).toHaveLength(2)
+  expect(await readFile(join(root, custom[0]!), 'utf8')).toContain("component: 'app.widgets.admin-notice'")
+  expect(await readFile(join(root, custom[1]!), 'utf8')).not.toContain('server/')
+  await expect(run(root, 'widget', ['Notice'], { panel: 'admin' }, project(framework))).rejects.toThrow('overwrite')
+})
+
 async function fixture(framework: FrameworkId = 'next'): Promise<string> {
   const projectRoot = await mkdtemp(join(tmpdir(), 'holo-panels-generators-'))
   temporaryDirectories.push(projectRoot)

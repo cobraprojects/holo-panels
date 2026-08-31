@@ -63,7 +63,7 @@ export const generatorCommands: readonly GeneratorCommand[] = Object.freeze([
   command('table-column', 'holo make:table-column <Name> [--panel admin]'),
   command('filter', 'holo make:filter <Name> [--panel admin]'),
   command('action', 'holo make:action <Name> [--panel admin]'),
-  command('widget', 'holo make:widget <Name> [--panel admin]'),
+  command('widget', 'holo make:widget <Name> [--panel admin] [--resource PostResource]'),
   command('cluster', 'holo make:cluster <Name> [--panel admin]'),
   command('importer', 'holo make:importer <Name> --resource <Resource> [--panel admin]'),
   command('exporter', 'holo make:exporter <Name> --resource <Resource> [--panel admin]'),

@@ -5,6 +5,7 @@ import { toJsonValue } from '../protocol/serialization'
 import type { JsonValue } from '../protocol/json'
 import type { ResourceAttributes, ResourceCompositionTypes } from '../resources/contracts'
 import type { ExtensionTypeId } from '../plugins/type-id'
+import { widgetTableQuery } from './table-query'
 import type { ContextTypeSources, OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import type {
   ChartWidgetData,
@@ -38,6 +39,7 @@ interface WidgetState<TData extends JsonValue, TActor, TTenant, TServices, TReco
   lazy: boolean
   pollingInterval: number | null
   sort: number
+  table?: WidgetServerHandles<TData, TActor, TTenant, TServices, TRecord>['table']
   visible: WidgetServerHandles<TData, TActor, TTenant, TServices, TRecord>['visible']
 }
 
@@ -186,7 +188,7 @@ export class WidgetBuilder<
     return {
       kind: 'widget',
       manifest,
-      server: { actions: compileRegisteredActions(state.actions, 'page'), authorize: state.authorize, data: state.data, visible: state.visible },
+      server: { actions: compileRegisteredActions(state.actions, 'page'), authorize: state.authorize, data: state.data, visible: state.visible, ...(state.table ? { table: state.table } : {}) },
     }
   }
 }
@@ -224,7 +226,25 @@ function widgetFactory<TData extends JsonValue>(family: WidgetFamily, type: stri
 
 export const defineStatsWidget: WidgetFactory<StatsWidgetData> = widgetFactory('stats', 'panels.widgets.stats')
 export const defineChartWidget: WidgetFactory<ChartWidgetData> = widgetFactory('chart', 'panels.widgets.chart')
-export const defineTableWidget: WidgetFactory<TableWidgetData> = widgetFactory('table', 'panels.widgets.table')
+export class TableWidgetBuilder<TActor = unknown, TTenant = unknown, TServices = unknown, TRecord extends object = object> extends WidgetBuilder<TableWidgetData, TActor, TTenant, TServices, TRecord> {
+  constructor(id: string) {
+    super(id, 'table', 'panels.widgets.table')
+  }
+
+  table(resource: { compile(): { readonly id: string } }): this {
+    return this.writeState('table', { resource: () => resource.compile(), query: context => widgetTableQuery(context.filters, false) })
+  }
+}
+
+export function defineTableWidget<
+  TActorSource extends RuntimeTypeSource,
+  TTenantSource extends RuntimeTypeSource | undefined = undefined,
+  TServicesSource extends RuntimeTypeSource | undefined = undefined,
+>(id: string, sources: ContextTypeSources<TActorSource, TTenantSource, TServicesSource>): TableWidgetBuilder<RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>
+export function defineTableWidget(id: string): TableWidgetBuilder
+export function defineTableWidget<TActor = unknown, TTenant = unknown, TServices = unknown>(id: string): TableWidgetBuilder<TActor, TTenant, TServices> {
+  return new TableWidgetBuilder(id)
+}
 export function defineCustomWidget<
   TActorSource extends RuntimeTypeSource,
   TTenantSource extends RuntimeTypeSource | undefined = undefined,
@@ -296,7 +316,14 @@ function resourceWidgetFactory<TData extends JsonValue>(family: WidgetFamily, ty
 
 export const defineResourceStatsWidget = resourceWidgetFactory<StatsWidgetData>('stats', 'panels.widgets.stats')
 export const defineResourceChartWidget = resourceWidgetFactory<ChartWidgetData>('chart', 'panels.widgets.chart')
-export const defineResourceTableWidget = resourceWidgetFactory<TableWidgetData>('table', 'panels.widgets.table')
+export function defineResourceTableWidget<
+  TRecordSource extends RecordTypeSource,
+  TActorSource extends RuntimeTypeSource | undefined = undefined,
+  TTenantSource extends RuntimeTypeSource | undefined = undefined,
+  TServicesSource extends RuntimeTypeSource | undefined = undefined,
+>(id: string, _sources: ResourceWidgetTypeSources<TRecordSource, TActorSource, TTenantSource, TServicesSource>): TableWidgetBuilder<OptionalRuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>, Readonly<ResourceAttributes<RecordTypeValue<TRecordSource>>>> {
+  return new TableWidgetBuilder(id)
+}
 
 export function defineResourceCustomWidget<
   TRecordSource extends RecordTypeSource,

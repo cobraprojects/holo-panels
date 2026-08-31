@@ -190,6 +190,10 @@ Public builders include:
 - resource variants of each widget
 - `defineDashboard`
 
+Bind a Table widget to an existing resource with `defineTableWidget('recent-posts').table(PostResource)`. It uses the resource's columns, filters, actions, selection, query engine, and server authorization. Widget and dashboard filters named after table query fields, such as `search`, constrain that query. Resource page `getHeaderWidgets()` and `getFooterWidgets()` methods place widgets on that page; resource `getWidgets()` applies to all its pages.
+
+`holo make:widget RecentPosts --panel admin --resource PostResource` generates a resource-bound Table widget. Without `--resource`, the command generates a Custom widget and a framework renderer under `resources/panels/renderers/<framework>/widgets/`. Preparation registers these renderers by stable file name and development watch updates the registrations when files change. Custom widget payloads contain only the registered component ID and serializable properties; renderer files never import server definitions. Existing application renderer registration modules remain supported and are not overwritten.
+
 Widgets have server visibility, authorization, and data callbacks. The client `WidgetStore` handles loading, polling, errors, hidden/unauthorized states, and filters; `WidgetFilterPersistence` stores filter state; `resolveWidgetGrid` creates responsive placement. Charts have accessible tabular fallbacks through `createAccessibleChartModel` and `renderAccessibleChart`.
 
 Stats accept optional `progress: { value, max }`. Values must be finite, with a positive maximum and a value between zero and the maximum. Renderers show a labeled native progress indicator alongside the stat icon, trend, and sparkline.

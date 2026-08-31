@@ -358,8 +358,8 @@ function resourceDefinition(value: object): RuntimeDefinition {
   return compiled as RuntimeDefinition
 }
 
-function resourceWidgetIds(definition: RuntimeDefinition): readonly string[] {
-  const ids = compositionArrayMember(definition, 'widgets').flatMap((widget) => {
+function widgetIds(widgets: readonly object[]): readonly string[] {
+  const ids = widgets.flatMap((widget) => {
     const compiled = 'compile' in widget && typeof widget.compile === 'function' ? widget.compile() : widget
     if (!compiled || typeof compiled !== 'object') return []
     const manifest = objectMember(compiled, 'manifest')
@@ -1389,8 +1389,9 @@ function pageManifest(
   const id = listPage ? definition.id : `${definition.id}-${pageType}`
   const navigation = definition.navigation ?? {}
   const plural = typeof navigation.label === 'string' ? navigation.label : label(slug)
-  const widgetIds = resourceWidgetIds(definition)
   const explicitPage = explicitResourcePages(definition).find(page => Reflect.get(page, 'pageType') === pageType)
+  const pageWidgets = objectMember(explicitPage ?? {}, 'widgets')
+  const globalWidgets = compositionArrayMember(definition, Reflect.has(definition, 'globalWidgets') ? 'globalWidgets' : 'widgets')
   const explicitActions = explicitPage ? resourcePageActions(definition, pageType) : []
   return Object.freeze({
     actions: {
@@ -1413,7 +1414,7 @@ function pageManifest(
     path: `${listPath}${suffix}`,
     renderer: null,
     schemaId: null,
-    widgets: { footer: [], header: widgetIds },
+    widgets: { footer: widgetIds(arrayMember(pageWidgets, 'footer')), header: widgetIds([...globalWidgets, ...arrayMember(pageWidgets, 'header')]) },
   })
 }
 

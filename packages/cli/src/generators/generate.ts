@@ -296,13 +296,14 @@ async function createFiles(request: GeneratorRequest): Promise<readonly Generate
   const name = request.kind === 'panel'
     ? panel.split('-').map(part => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`).join('')
     : assertDefinitionName(request.args[0])
-  const resourceRequired = ['exporter', 'importer', 'resource-page', 'relation-manager'].includes(request.kind)
   const resourceFlag = flag(request, 'resource')
+  if (request.kind === 'widget' && request.flags.resource !== undefined && !resourceFlag) throw new Error('[Holo Panels] --resource requires a resource name.')
+  const resourceRequired = ['exporter', 'importer', 'resource-page', 'relation-manager'].includes(request.kind) || request.kind === 'widget' && resourceFlag !== undefined
   if (resourceRequired && !resourceFlag) throw new Error(`[Holo Panels] make:${request.kind} requires --resource <Resource>.`)
   const resource = resourceRequired
     ? assertDefinitionName(resourceFlag)
     : undefined
-  const framework = ['form-field', 'infolist-entry', 'table-column'].includes(request.kind)
+  const framework = ['form-field', 'infolist-entry', 'table-column'].includes(request.kind) || request.kind === 'widget' && !resource
     ? await detectFramework(request.projectRoot, request.project)
     : undefined
   const split = booleanFlag(request, 'split')

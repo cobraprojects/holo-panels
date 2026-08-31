@@ -37,6 +37,14 @@ const context = {
 }
 
 describe('P12 widget definitions and resolution', () => {
+  it('keeps fluent table bindings lazy and excludes their resource from discovery manifests', () => {
+    const resource = { compile: vi.fn(() => ({ id: 'posts', secret: 'server-only' })) }
+    const widget = defineTableWidget('posts', { actor: Actor }).heading('Posts').table(resource).poll(5000)
+    expectTypeOf(widget.authorize(scope => scope.actor.role === 'admin')).toEqualTypeOf(widget)
+    expect(JSON.stringify(widget.compileDiscoveryDefinition())).not.toContain('server-only')
+    expect(resource.compile).not.toHaveBeenCalled()
+    expect(widget.compile().server.table?.resource()).toEqual({ id: 'posts', secret: 'server-only' })
+  })
   it('keeps authorized lazy action metadata while deferring data resolution', async () => {
     const data = vi.fn(() => ({ stats: [] }))
     const widget = defineStatsWidget('lazy').lazy().data(data).compile()

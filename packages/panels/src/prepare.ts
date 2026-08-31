@@ -25,6 +25,7 @@ import {
 import { resolveFrameworkProjectDirectories } from './framework-project-directories'
 import { preparePanelPlugins, type PanelPluginPreparationInput } from './plugin-preparation'
 import { renderResourceTypeBindings, renderResourceTypeChecks } from './resource-type-bindings'
+import { applicationWidgetRenderers } from './application-widget-renderers'
 
 const compilers = new Map<string, DiscoveryCompiler>()
 const frameworkIds = new Set<string>(['next', 'nuxt', 'sveltekit'])
@@ -133,10 +134,13 @@ async function applicationRendererModule(projectRoot: string, framework: Framewo
   const registryType = rendererRegistryType(renderer)
   const rendererPackage = `@holo-js/panels-${renderer}`
   const lines = [`import type { ${registryType} } from '${rendererPackage}'`]
+  const widgets = await applicationWidgetRenderers(projectRoot, framework)
+  lines.push(...widgets.imports)
   if (extensions.length > 0) lines.unshift(`import registerApplicationRenderers from '../../../resources/panels/renderers/${renderer}'`)
   lines.push(
     '',
     `export function registerPanelApplicationRenderers(registry: ${registryType}): ${registryType} {`,
+    ...widgets.registrations,
     extensions.length > 0 ? '  return registerApplicationRenderers(registry)' : '  return registry',
     '}',
     '',

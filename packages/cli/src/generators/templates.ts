@@ -199,6 +199,7 @@ function rendererFile(kind: SimpleKind, context: TemplateContext): GeneratedFile
 }
 
 export function renderTemplates(kind: string, context: TemplateContext): readonly GeneratedFile[] {
+  if (kind === 'widget') return widgetFiles(context)
   if (kind === 'panel') {
     return [{ path: `server/${context.panel}/${context.name}Panel.ts`, contents: panelTemplate(context) }]
   }
@@ -209,4 +210,20 @@ export function renderTemplates(kind: string, context: TemplateContext): readonl
   const definition = simpleDefinition(simpleKind, context)
   const renderer = rendererFile(simpleKind, context)
   return renderer ? [definition, renderer] : [definition]
+}
+
+function widgetFiles(context: TemplateContext): readonly GeneratedFile[] {
+  const id = kebabCase(context.name)
+  const path = `server/${context.panel}/widgets/${context.name}.ts`
+  if (context.resource) {
+    const name = context.resource.replace(/Resource$/u, '')
+    const resource = `${name}Resource`
+    return [{ path, contents: `import { defineTableWidget } from '@holo-js/panels'\nimport ${resource} from '../resources/${kebabCase(pluralPascal(name))}/${resource}'\n\nexport default defineTableWidget('${id}').table(${resource})\n  .heading('${context.name}')\n  .columnSpan('full')\n` }]
+  }
+  const component = `app.widgets.${context.panel}-${id}`
+  const base = `resources/panels/renderers/${context.framework}/widgets/${context.panel}-${id}`
+  const definition = { path, contents: `import { defineCustomWidget } from '@holo-js/panels'\n\nexport default defineCustomWidget('${id}')\n  .heading('${context.name}')\n  .data(() => ({ component: '${component}', properties: { message: '${context.name}' } }))\n` }
+  if (context.framework === 'nuxt') return [definition, { path: `${base}.vue`, contents: `<script setup lang="ts">\nimport type { VueCustomWidgetProps } from '@holo-js/panels-vue'\n\ndefineProps<VueCustomWidgetProps>()\n</script>\n\n<template>\n  <p>{{ data.properties.message }}</p>\n</template>\n` }]
+  if (context.framework === 'sveltekit') return [definition, { path: `${base}.svelte`, contents: `<script lang="ts">\n  import type { JsonObject } from '@holo-js/panels-core'\n\n  let { properties }: { properties: JsonObject } = $props()\n</script>\n\n<p>{String(properties.message ?? '')}</p>\n` }]
+  return [definition, { path: `${base}.tsx`, contents: `import type { ReactCustomWidgetProps } from '@holo-js/panels-react'\n\nexport default function ${context.name}({ properties }: ReactCustomWidgetProps) {\n  return <p>{String(properties.message ?? '')}</p>\n}\n` }]
 }

@@ -3,6 +3,7 @@ import {
   defineCustomPage as defineCoreCustomPage,
   defineStatsWidget as defineCoreStatsWidget,
   defineTableWidget as defineCoreTableWidget,
+  type TableWidgetBuilder,
   type ChartWidgetData,
   type ContextTypeSources,
   type DefaultPanelActor,
@@ -16,7 +17,6 @@ import {
   type RuntimeTypeSource,
   type RuntimeTypeValue,
   type StatsWidgetData,
-  type TableWidgetData,
   type WidgetBuilder,
 } from '@holo-js/panels-core'
 
@@ -48,4 +48,7 @@ interface WidgetFactory<TData extends JsonValue> {
 export const defineCustomPage = defineCoreCustomPage as PageFactory
 export const defineChartWidget = defineCoreChartWidget as WidgetFactory<ChartWidgetData>
 export const defineStatsWidget = defineCoreStatsWidget as WidgetFactory<StatsWidgetData>
-export const defineTableWidget = defineCoreTableWidget as WidgetFactory<TableWidgetData>
+export const defineTableWidget = defineCoreTableWidget as {
+  (id: string): TableWidgetBuilder<DefaultPanelActor, DefaultPanelTenant, DefaultPanelServices>
+  <TActorSource extends RuntimeTypeSource, TTenantSource extends RuntimeTypeSource | undefined = undefined, TServicesSource extends RuntimeTypeSource | undefined = undefined>(id: string, sources: ContextTypeSources<TActorSource, TTenantSource, TServicesSource>): TableWidgetBuilder<RuntimeTypeValue<TActorSource>, OptionalRuntimeTypeValue<TTenantSource>, OptionalRuntimeTypeValue<TServicesSource>>
+}

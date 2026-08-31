@@ -67,6 +67,7 @@ export {
   UploadStore,
   WidgetStore,
   createWidgetLoader,
+  createWidgetRuntime,
   createDashboardFilterStore,
   DashboardFilterStore,
   createRequestEnvelope,

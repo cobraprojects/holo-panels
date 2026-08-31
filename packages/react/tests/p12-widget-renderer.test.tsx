@@ -1,7 +1,7 @@
 import { act, createElement, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
-import { WidgetStore, type WidgetLoadResult } from '@holo-js/panels-client'
+import { WidgetStore, WidgetTableController, type WidgetLoadResult } from '@holo-js/panels-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createComponentRegistry } from '../src/registry'
 import {
@@ -54,6 +54,26 @@ afterEach(() => {
 })
 
 describe('P12 React widget renderer', () => {
+  it('resolves the renderer registered for a custom widget extension ID', () => {
+    const widget = manifest({ family: 'custom', type: 'app:widget:summary' })
+    const registry = createComponentRegistry().register('widget.app.widget.summary', () => createElement('p', {}, 'Registered summary'), 'test')
+    const store = new WidgetStore(widget, async () => ({ status: 'ready' }), { initialResult: { status: 'ready', data: { component: 'summary', properties: {} } } })
+    expect(renderToString(createElement(ReactWidgetRenderer, { manifest: widget, registry, store }))).toContain('Registered summary')
+  })
+  it('renders the shared table and keeps its selection visible during a widget reload', async () => {
+    const widget = manifest({ family: 'table', heading: 'Recent posts' })
+    const data = { tableId: 'posts', result: { records: [{ id: 'one', title: 'First post' }], total: 1, resource: { id: 'posts', routeKey: 'id', labels: { plural: 'Posts' }, table: { actions: [{ id: 'publish', label: 'Publish', scope: 'bulk' }], columns: [{ path: 'title', type: 'text', label: 'Title' }] } } } }
+    const store = new WidgetStore(widget, async () => ({ status: 'ready', data }), { initialResult: { status: 'ready', data } })
+    const table = new WidgetTableController(store, { panelId: 'admin', request: () => ({ pageId: 'overview', widgetId: widget.id }), execute: async () => ({}) })
+    const container = mount({ manifest: widget, store, table })
+    expect(container.querySelector('table')?.textContent).toContain('First post')
+    const checkbox = container.querySelector<HTMLElement>('[aria-label="Select record one"]')
+    expect(checkbox).not.toBeNull()
+    await act(async () => checkbox?.click())
+    await act(async () => store.load())
+    expect(container.querySelector('[aria-label="Select record one"]')?.getAttribute('aria-checked')).toBe('true')
+    table.dispose()
+  })
   it('lazily renders complete stats and dispatches only configured links and actions', async () => {
     const widget = manifest()
     const action = vi.fn()

@@ -1,4 +1,5 @@
 import type {
+  WidgetTableController,
   ClientActionManifest,
   ClientActionStore,
   ChartWidgetData,
@@ -40,6 +41,7 @@ export interface VueCustomWidgetProps {
 }
 
 export interface VueWidgetRendererProps {
+  readonly table?: WidgetTableController
   readonly actions?: readonly ClientActionManifest[]
   readonly actionStore?: ClientActionStore<unknown>
   readonly manifest: VueWidgetManifest

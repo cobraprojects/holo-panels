@@ -1,4 +1,5 @@
 import type { JsonValue, WidgetClientState, WidgetStateListener } from '@holo-js/panels-client'
+import { WidgetStore, WidgetTableController } from '@holo-js/panels-client'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createComponentRegistry } from '../src/registry'
@@ -77,6 +78,27 @@ afterEach(() => {
 })
 
 describe('P12 Vue widget renderer', () => {
+  it('resolves the renderer registered for a custom widget extension ID', () => {
+    const registry = createComponentRegistry().register('widget.app.widget.summary', defineComponent(() => () => h('p', 'Registered summary')), 'test')
+    const container = mountWidget({ manifest: manifest('summary', 'custom', { type: 'app:widget:summary' }), registry, store: new WidgetStoreFixture('ready', { component: 'summary', properties: {} }) })
+    expect(container.textContent).toContain('Registered summary')
+  })
+  it('renders the shared table and retains selected rows after widget refresh', async () => {
+    const definition = manifest('recent', 'table', { lazy: true })
+    const data = { tableId: 'posts', result: { records: [{ id: 'one', title: 'First post' }], total: 1, resource: { id: 'posts', routeKey: 'id', labels: { plural: 'Posts' }, table: { actions: [{ id: 'publish', label: 'Publish', scope: 'bulk' }], columns: [{ path: 'title', type: 'text', label: 'Title' }] } } } }
+    const store = new WidgetStore(definition, async () => ({ status: 'ready', data }), { initialResult: { status: 'ready', data } })
+    const table = new WidgetTableController(store, { panelId: 'admin', request: () => ({ pageId: 'overview', widgetId: definition.id }), execute: async () => ({}) })
+    const container = mountWidget({ manifest: definition, store, table })
+    expect(container.querySelector('table')?.textContent).toContain('First post')
+    const checkbox = container.querySelector<HTMLElement>('[aria-label="Select record one"]')
+    expect(checkbox).not.toBeNull()
+    checkbox?.click()
+    await nextTick()
+    await store.load()
+    await nextTick()
+    expect(container.querySelector('[aria-label="Select record one"]')?.getAttribute('aria-checked')).toBe('true')
+    table.dispose()
+  })
   it('renders complete stats and accessible dependency-free charts', () => {
     const action = vi.fn()
     const stats = new WidgetStoreFixture('ready', {

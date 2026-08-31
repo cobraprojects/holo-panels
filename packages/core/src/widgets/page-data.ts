@@ -10,7 +10,7 @@ import type { CompiledWidgetDefinition, WidgetContext } from './contracts'
 import { DashboardFilterValidationError, resolveDashboardFilters, resolveDashboardFilterForm, type DashboardFilterSchema } from './filter-form'
 import { dashboardFilterSession } from './filter-session'
 import { normalizeDashboardPage } from './page'
-import { resolveWidget } from './resolution'
+import { resolveRegisteredWidget } from './table'
 
 type Registry = Readonly<Record<string, () => Promise<object>>>
 type Context = WidgetContext<object, unknown, unknown> & Pick<GeneratedResourceOperationInput['context'], 'scopeTenantQuery' | 'tenantBindings'>
@@ -51,7 +51,7 @@ async function dashboardFilters(page: Awaited<ReturnType<typeof resolvePageData>
   return filters
 }
 
-export async function executeWidgetDataOperation(registry: Registry, payload: JsonObject, context: Context, panel: CompiledPanelDefinition<object>): Promise<JsonObject> {
+export async function resolveWidgetRequestData(registry: Registry, payload: JsonObject, context: Context, panel: CompiledPanelDefinition<object>): Promise<{ readonly data: JsonObject, readonly definition?: CompiledWidgetDefinition<JsonValue, object, unknown, unknown> }> {
   if (payload.widgetId !== undefined && payload.resetFilters !== undefined) throw new Error('Widget refresh cannot reset dashboard filters')
   if (context.panelId !== panel.manifest.id || typeof payload.pageId !== 'string') throw new Error('Widget requests require their registered page')
   const pageLoader = registry[`${context.panelId}:page:${payload.pageId}`]
@@ -66,10 +66,10 @@ export async function executeWidgetDataOperation(registry: Registry, payload: Js
   let filters: JsonObject
   const source = Reflect.get(compiledPage, 'kind') === 'dashboard' ? Reflect.get(Reflect.get(compiledPage, 'server'), 'filters') as DashboardFilterSchema | undefined : undefined
   try { filters = await dashboardFilters(page, payload, context, panel.guard, source) } catch (error) {
-    if (error instanceof DashboardFilterValidationError) return { errors: jsonObject(error.errors), status: 'invalid' }
+    if (error instanceof DashboardFilterValidationError) return { data: { errors: jsonObject(error.errors), status: 'invalid' } }
     throw error
   }
-  if (payload.widgetId === undefined) return { filters, status: 'ready' }
+  if (payload.widgetId === undefined) return { data: { filters, status: 'ready' } }
   const widgetId = payload.widgetId
   const placement = page.manifest.widgets.header.includes(String(widgetId)) ? 'header' as const : 'footer' as const
   if (typeof widgetId !== 'string' || !page.manifest.widgets[placement].includes(widgetId)) throw new Error('The widget is not registered on this page')
@@ -86,14 +86,18 @@ export async function executeWidgetDataOperation(registry: Registry, payload: Js
   if (widgetDefinition.manifest.id !== widgetId) throw new Error('The widget is not registered under its ID')
   let tableState: Readonly<TableQueryState> | null = null
   if (resourceDefinition && (page.manifest.pageType === 'list' || page.manifest.pageType === 'manage')) {
-    if (!await widgetDefinition.server.authorize(context)) return jsonObject({ data: null, manifest: widgetDefinition.manifest, status: 'unauthorized' })
-    if (!await widgetDefinition.server.visible(context)) return jsonObject({ data: null, manifest: widgetDefinition.manifest, status: 'hidden' })
+    if (!await widgetDefinition.server.authorize(context)) return { data: jsonObject({ data: null, manifest: widgetDefinition.manifest, status: 'unauthorized' }) }
+    if (!await widgetDefinition.server.visible(context)) return { data: jsonObject({ data: null, manifest: widgetDefinition.manifest, status: 'hidden' }) }
     const table = await executeGeneratedResourceOperation(resourceDefinition, { context, operation: 'table-data', panel, panelId: context.panelId, strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false, payload: { ...jsonObject(payload.tableQuery ?? {}), resourceId } })
     const data = jsonObject(table.data)
     tableState = data.tableState as JsonObject & TableQueryState
   }
   const record = page.data.record
   const resourceContext = resourceId ? { ...context, pageId: page.manifest.id, placement, resourceId, record: record && typeof record === 'object' && !Array.isArray(record) ? record : null, tableState } : null
-  const resolved = await resolveWidget(widgetDefinition, context, jsonObject(payload.filters ?? {}), resourceContext, { dashboardFilters: filters })
-  return jsonObject(resolved)
+  const resolved = await resolveRegisteredWidget(widgetDefinition, context, jsonObject(payload.filters ?? {}), resourceContext, panel, { dashboardFilters: filters, tableQuery: jsonObject(payload.widgetTableQuery ?? {}) })
+  return { data: jsonObject(resolved), definition: widgetDefinition }
+}
+
+export async function executeWidgetDataOperation(registry: Registry, payload: JsonObject, context: Context, panel: CompiledPanelDefinition<object>): Promise<JsonObject> {
+  return (await resolveWidgetRequestData(registry, payload, context, panel)).data
 }

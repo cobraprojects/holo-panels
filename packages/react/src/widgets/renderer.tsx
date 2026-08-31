@@ -12,6 +12,7 @@ import {
 import { panelColorAppearance, panelColorValue, widgetChartMarks, widgetSparklinePoints } from '@holo-js/panels-ui'
 import {
   createAccessibleChartModel,
+  widgetExtensionRendererName,
   safeExternalUrl,
   resolveWidgetGrid,
   type ChartWidgetData,
@@ -25,6 +26,7 @@ import {
 } from '@holo-js/panels-client'
 import { Button, Input, PanelsIcon } from '../internal-ui'
 import { ReactActionRenderer } from '../actions/renderer'
+import { ReactTableRenderer } from '../tables/renderer'
 import {
   Card,
   CardContent,
@@ -146,7 +148,7 @@ function ChartWidget({ data }: { readonly data: ChartWidgetData }): ReactNode {
 
 function CustomWidget({ data, props }: { readonly data: CustomWidgetData, readonly props: ReactWidgetRendererProps }): ReactNode {
   if (!props.registry) throw new Error(`[Holo Panels] A React component registry is required for custom widget "${data.component}".`)
-  const name = `widget.${data.component}`
+  const name = widgetExtensionRendererName(props.manifest.type) ?? `widget.${data.component}`
   const component = props.registry.resolve<ReactCustomWidgetProps>(name, props.panelId, `widget "${props.manifest.id}"`)
   return createElement(component, { properties: data.properties, widget: props.manifest })
 }
@@ -156,6 +158,8 @@ function ReadyWidget({ props, state }: { readonly props: ReactWidgetRendererProp
   if (props.manifest.family === 'stats' && isStatsData(data)) return <StatsWidget data={data} props={props} />
   if (props.manifest.family === 'chart' && isChartData(data)) return <ChartWidget data={data} />
   if (props.manifest.family === 'table' && isTableData(data)) {
+    const presentation = props.table?.presentation
+    if (presentation) return <ReactTableRenderer {...presentation} registry={props.registry} emptyMessage={props.manifest.emptyState} />
     return props.renderTable ? props.renderTable({ data, widget: props.manifest }) : <p role="alert">Table widget renderer unavailable</p>
   }
   if (props.manifest.family === 'custom' && isCustomData(data)) return <CustomWidget data={data} props={props} />
@@ -206,7 +210,7 @@ export function ReactWidgetRenderer(props: ReactWidgetRendererProps): ReactNode 
     {state.status === 'loading' ? <p aria-live="polite" role="status">Loading widget…</p> : null}
     {state.status === 'unauthorized' ? <p role="status">Widget unavailable</p> : null}
     {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong><Button onClick={() => void props.store.load()} type="button">Retry</Button></div> : null}
-    {state.status === 'ready' ? <ReadyWidget props={props} state={state} /> : null}
+    {state.status === 'ready' || state.status === 'loading' && state.data !== null ? <ReadyWidget props={props} state={state} /> : null}
   </>
   if (props.manifest.family === 'stats') return <section
     ref={host}

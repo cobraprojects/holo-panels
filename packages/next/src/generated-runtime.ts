@@ -1,4 +1,5 @@
 import { createNextHoloHelpers } from '@holo-js/adapter-next/runtime'
+import { executeWidgetTableOperation } from '@holo-js/panels-react/server'
 import type { HoloAuth } from '@holo-js/panels-react'
 import { executeWidgetDataOperation, executeGeneratedGlobalSearch, executeGeneratedResourceOperation, executeGeneratedUploadOperation, executeGeneratedWidgetOperation, executePanelDatabaseNotificationOperation, toJsonValue, type CompiledPanelDefinition } from '@holo-js/panels-react/server'
 import type { NextPanelServerRegistry, NextPanelsRuntime } from './contracts'
@@ -19,6 +20,14 @@ export function createGeneratedNextPanelsRuntime(registry: NextPanelServerRegist
   const runtime: NextPanelsRuntime = {
     auth: generatedAuth,
     async execute(input) {
+      if (input.payload.widgetTable !== undefined) {
+        if (input.operation !== 'action' && input.operation !== 'table-data') throw new Error('Unsupported table widget operation')
+        const loader = registry[`${input.panelId}:panel:${input.panelId}`]
+        if (!loader) throw new Error('The panel is not registered')
+        const value = await loader()
+        const panel = ('compile' in value && typeof value.compile === 'function' ? value.compile() : value) as CompiledPanelDefinition<object>
+        return executeWidgetTableOperation(registry, input.operation, input.payload, input.scope, panel)
+      }
       if (input.operation === 'page-data' && input.payload.pageId !== undefined) {
         const loader = registry[`${input.panelId}:panel:${input.panelId}`]
         if (!loader) throw new Error('The panel is not registered')

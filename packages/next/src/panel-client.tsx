@@ -67,8 +67,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
-  WidgetStore,
-  createWidgetLoader,
+  createWidgetRuntime,
   createDashboardFilterStore,
   ReactDashboardFilters,
   type DashboardFilterStore,
@@ -212,10 +211,6 @@ function realtimeFallback(realtime: ClientNotificationRealtime): ClientNotificat
 
 type ResolvedPageWidget = NextPanelClientProps['payload']['widgets']['header'][number]
 
-function initialWidgetResult(widget: ResolvedPageWidget) {
-  return widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status }
-}
-
 function ResolvedWidgetView({ dashboardFilters, effects, panelId, registry, widget }: {
   readonly effects: ClientEffectSession
   readonly panelId: string
@@ -223,15 +218,13 @@ function ResolvedWidgetView({ dashboardFilters, effects, panelId, registry, widg
   readonly widget: ResolvedPageWidget
   readonly dashboardFilters: DashboardFilterStore | null
 }): ReactNode {
-  const store = useMemo(() => new WidgetStore(
-    widget.manifest,
-    createWidgetLoader(browserPanelsTransport(), panelId, widget.request ?? {}, dashboardFilters ? () => dashboardFilters.applied : undefined),
-    { initialResult: initialWidgetResult(widget) },
-  ), [widget, panelId, dashboardFilters])
+  const runtime = useMemo(() => createWidgetRuntime({ applyEffects: response => effects.apply(response), dashboardFilters: dashboardFilters ? () => dashboardFilters.applied : undefined, panelId, transport: browserPanelsTransport(), widget }), [widget, panelId, dashboardFilters, effects])
+  const { store } = runtime
+  useEffect(() => () => runtime.dispose(), [runtime])
   useEffect(() => dashboardFilters?.subscribe(() => store.load()), [dashboardFilters, store])
   const actionStore = useMemo(() => createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId, resourceId: widget.resourceId, transport: browserPanelsTransport(), widgetId: widget.manifest.id }), [effects, panelId, widget.manifest.id, widget.resourceId])
   useEffect(() => () => { while (actionStore.activeFrame) actionStore.close() }, [actionStore])
-  return <ReactWidgetRenderer actions={widget.actions} actionStore={actionStore} manifest={widget.manifest as ReactWidgetManifest} navigate={browserNavigate} panelId={panelId} registry={registry} store={store} />
+  return <ReactWidgetRenderer actions={widget.actions} actionStore={actionStore} manifest={widget.manifest as ReactWidgetManifest} navigate={browserNavigate} panelId={panelId} registry={registry} store={store} table={runtime.table} />
 }
 
 function ResolvedWidgetGrid({ dashboardFilters, effects, label, panelId, registry, widgets }: {

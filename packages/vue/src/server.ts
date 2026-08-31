@@ -61,3 +61,4 @@ export { bootPanel, executeGeneratedUploadOperation, executePanelPipeline, execu
 export type { PanelAuthOperation, PanelAuthRuntime, PanelTenantOperation } from '@holo-js/panels-core/server'
 
 export { resolveDashboardLanding, normalizeDashboardPage, executeWidgetDataOperation, resolvePageWidgetGroup } from '@holo-js/panels-core/server'
+export { executeWidgetTableOperation } from '@holo-js/panels-core/server'

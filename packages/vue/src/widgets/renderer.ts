@@ -1,3 +1,5 @@
+import { VueTableRenderer } from '../tables/renderer'
+import { widgetExtensionRendererName } from '@holo-js/panels-client'
 import {
   Alert,
   AlertDescription,
@@ -165,7 +167,7 @@ function renderChart(data: VueChartWidgetData): VNodeChild {
 
 function customRenderer(data: VueCustomWidgetData, props: VueWidgetRendererProps): VNodeChild {
   if (!props.registry) throw new Error(`[Holo Panels] A Vue component registry is required for custom widget "${props.manifest.id}".`)
-  const component = props.registry.resolve(widgetRendererName(data.component), props.panelId, `widget "${props.manifest.id}"`) as Component<VueCustomWidgetProps>
+  const component = props.registry.resolve(widgetExtensionRendererName(props.manifest.type) ?? widgetRendererName(data.component), props.panelId, `widget "${props.manifest.id}"`) as Component<VueCustomWidgetProps>
   return h(component, { data, manifest: props.manifest })
 }
 
@@ -179,6 +181,8 @@ function readyContent(props: VueWidgetRendererProps, data: unknown): VNodeChild 
     return parsed ? renderChart(parsed) : null
   }
   if (props.manifest.family === 'table') {
+    const presentation = props.table?.presentation
+    if (presentation) return h(VueTableRenderer, { table: { ...presentation, registry: props.registry, emptyMessage: props.manifest.emptyState } })
     const parsed = tableData(data)
     return parsed && props.renderTable ? props.renderTable(parsed) : null
   }
@@ -264,13 +268,13 @@ export const VueWidgetRenderer = defineComponent({
       if (state.value.status === 'hidden') return null
       const manifest = componentProps.widget.manifest
       const headingId = `hp-widget-${manifest.id}-heading`
-      const content = state.value.status === 'loading'
+      const content = state.value.status === 'loading' && state.value.data === null
         ? h(Skeleton, { 'aria-label': 'Loading widget', class: 'hp:h-24 hp:w-full', role: 'status' })
         : state.value.status === 'unauthorized'
           ? h('p', { role: 'status' }, 'Widget unavailable')
         : state.value.status === 'error'
           ? h(Alert, { variant: 'destructive' }, () => [h(AlertDescription, {}, () => manifest.errorState), h(Button, { type: 'button', onClick: () => void componentProps.widget.store.load() }, () => 'Retry')])
-          : state.value.status === 'ready'
+          : state.value.status === 'ready' || state.value.status === 'loading' && state.value.data !== null
             ? readyContent(componentProps.widget, state.value.data)
             : manifest.lazy
               ? h(Button, { type: 'button', onClick: activate }, `Load ${manifest.heading ?? manifest.id}`)

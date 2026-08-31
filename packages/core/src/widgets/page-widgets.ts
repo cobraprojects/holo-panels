@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from '../protocol/json'
 import { toJsonValue } from '../protocol/serialization'
 import type { CompiledWidgetDefinition, ResourceWidgetContext, ResolvedWidget, WidgetContext } from './contracts'
-import { resolveWidget } from './resolution'
+import { resolveRegisteredWidget } from './table'
 import { authorizePanelActionPermissions } from '../actions/authorization'
 import type { CompiledPanelDefinition } from '../panels/contracts'
 
@@ -30,11 +30,11 @@ export async function resolvePageWidgetGroup(
     let initial: ResolvedWidget<JsonValue> | undefined
     const resourceContext = resource ? { ...context, ...resource, placement } : null
     try {
-      initial = await resolveWidget(widget, context, {}, resourceContext, { dashboardFilters, defer: true })
+      initial = await resolveRegisteredWidget(widget, context, {}, resourceContext, panel, { dashboardFilters, defer: true })
       if (initial.status !== 'idle') return { ...initial, request: refresh }
       if (!filtersValid) return { ...initial, request: refresh, status: 'error' as const }
       if (widget.manifest.lazy) return { ...initial, request: refresh }
-      const result = await resolveWidget(widget, context, {}, resourceContext, { dashboardFilters })
+      const result = await resolveRegisteredWidget(widget, context, {}, resourceContext, panel, { dashboardFilters })
       return { ...result, request: refresh }
     } catch {
       if (context.signal.aborted) throw context.signal.reason

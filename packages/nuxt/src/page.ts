@@ -45,8 +45,7 @@ import {
   VueSchemaRenderer,
   VueTableRenderer,
   VueToastViewport,
-  WidgetStore,
-  createWidgetLoader,
+  createWidgetRuntime,
   createDashboardFilterStore,
   VueDashboardFilters,
   createPanelNotificationTransport,
@@ -1458,14 +1457,10 @@ export const PanelPage = defineComponent({
     const colorMode = ref<PanelColorMode>(panelColorMode(props.page.bootstrap.manifest.theme.darkMode))
     const widgetScope = computed(() => {
       const dashboardFilters = createDashboardFilterStore(transport, panelId, props.page.page)
-      const widgetStore = (widget: NuxtPanelPage['widgets']['header'][number]): WidgetStore => new WidgetStore(
-        widget.manifest,
-        createWidgetLoader(transport, panelId, widget.request ?? {}, dashboardFilters ? () => dashboardFilters.applied : undefined),
-        { initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status } },
-      )
+      const widgetRuntime = (widget: NuxtPanelPage['widgets']['header'][number]) => createWidgetRuntime({ applyEffects: response => effects.apply(response), dashboardFilters: dashboardFilters ? () => dashboardFilters.applied : undefined, panelId, transport, widget })
       const widgetActions = (widget: NuxtPanelPage['widgets']['header'][number]) => createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId, resourceId: widget.resourceId, signal: requestController.signal, transport, widgetId: widget.manifest.id })
-      const headerWidgets = props.page.widgets.header.map(widget => ({ actions: widget.actions, actionStore: widgetActions(widget), manifest: widget.manifest as VueWidgetManifest, panelId, registry, store: widgetStore(widget) }))
-      const footerWidgets = props.page.widgets.footer.map(widget => ({ actions: widget.actions, actionStore: widgetActions(widget), manifest: widget.manifest as VueWidgetManifest, panelId, registry, store: widgetStore(widget) }))
+      const headerWidgets = props.page.widgets.header.map(widget => ({ ...widgetRuntime(widget), actions: widget.actions, actionStore: widgetActions(widget), manifest: widget.manifest as VueWidgetManifest, panelId, registry }))
+      const footerWidgets = props.page.widgets.footer.map(widget => ({ ...widgetRuntime(widget), actions: widget.actions, actionStore: widgetActions(widget), manifest: widget.manifest as VueWidgetManifest, panelId, registry }))
       return { dashboardFilters, headerWidgets, footerWidgets, keys: { filters: Symbol(), header: Symbol(), footer: Symbol() } }
     })
     watch(widgetScope, (scope, _previous, onCleanup) => {
@@ -1475,7 +1470,7 @@ export const PanelPage = defineComponent({
         unsubscribe?.()
         scope.dashboardFilters?.stop()
         for (const widget of widgets) {
-          widget.store.stop()
+          widget.dispose()
           while (widget.actionStore.activeFrame) widget.actionStore.close()
         }
       })

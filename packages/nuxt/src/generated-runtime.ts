@@ -1,4 +1,5 @@
 import {
+  executeWidgetTableOperation,
   executeGeneratedWidgetOperation,
   executeWidgetDataOperation,
   createNavigationSeed,
@@ -178,6 +179,19 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
   return Object.freeze({
     async execute(context: NuxtPanelOperationContext<object>) {
       await context.getApp()
+      if (context.input.widgetTable !== undefined) {
+        if (context.operation !== 'action' && context.operation !== 'table-data') throw new Error('Unsupported table widget operation')
+        const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)
+        if (!panel) throw new Error('The panel is not registered')
+        const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
+        const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
+        return executeWidgetTableOperation(registry, context.operation, context.input, {
+          ...scope, locale: resolvePanelLocale(panel.manifest.locales, requestedLocales(context.event?.node?.req?.headers['accept-language'])).locale,
+          services: (await context.getApp()).runtime, tenant: context.tenant ?? tenancy?.tenantId,
+          ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+          ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+        }, panel)
+      }
       if (context.operation === 'page-data' && context.input.pageId !== undefined) {
         const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)
         if (!panel) throw new Error('The panel is not registered')

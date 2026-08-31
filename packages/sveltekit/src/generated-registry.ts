@@ -1,5 +1,6 @@
 import { createSvelteKitHoloHelpers } from '@holo-js/adapter-sveltekit'
 import {
+  executeWidgetTableOperation,
   executeGeneratedWidgetOperation,
   executeWidgetDataOperation,
   PanelRuntime,
@@ -180,6 +181,17 @@ async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, reg
 async function resourceOperation(input: PanelOperationInput<object>, registry: SvelteKitPanelServerRegistry) {
   await input.holo.getProject()
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw Object.assign(new Error('Resource input is invalid'), { status: 422 })
+  if (input.payload.widgetTable !== undefined) {
+    if (input.operation !== 'action' && input.operation !== 'table-data') throw new Error('Unsupported table widget operation')
+    const panel = await discoveredPanel(registry, input.panelId)
+    const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+    return executeWidgetTableOperation(registry, input.operation, input.payload, {
+      actor: input.scope.actor, locale: generatedLocale(panel, input), panelId: input.panelId,
+      services: await input.holo.getProject(), signal: input.scope.signal, tenant: input.tenant ?? tenancy?.tenantId,
+      ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+      ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+    }, panel)
+  }
   if (input.operation === 'action' && input.payload.widgetId !== undefined) {
     const panel = await discoveredPanel(registry, input.panelId)
     const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null

@@ -64,6 +64,10 @@ export interface WidgetDataContext<TActor, TTenant, TServices, TRecord extends o
 }
 
 export interface WidgetServerHandles<TData extends JsonValue, TActor, TTenant, TServices, TRecord extends object = object> {
+  readonly table?: {
+    readonly resource: () => object
+    readonly query?: (context: WidgetDataContext<TActor, TTenant, TServices, TRecord>) => JsonObject | Promise<JsonObject>
+  }
   readonly actions?: readonly RegisteredAction<TRecord>[]
   readonly authorize: (context: WidgetContext<TActor, TTenant, TServices>) => boolean | Promise<boolean>
   readonly data: (context: WidgetDataContext<TActor, TTenant, TServices, TRecord>) => TData | Promise<TData>

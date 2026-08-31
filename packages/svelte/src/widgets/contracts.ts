@@ -7,6 +7,7 @@ import type {
   WidgetClientState,
   WidgetGridPlacement,
   WidgetStateListener,
+  WidgetTableController,
 } from '@holo-js/panels-client'
 import type { Component } from 'svelte'
 import type { SvelteComponentRegistry } from '../registry'
@@ -44,6 +45,7 @@ export interface SvelteCustomWidgetProps extends Record<string, unknown> {
 }
 
 export interface SvelteWidgetRendererProps extends Record<string, unknown> {
+  readonly tableController?: WidgetTableController
   readonly actions?: readonly ClientActionManifest[]
   readonly actionStore?: ClientActionStore<unknown>
   readonly manifest: SvelteWidgetManifest

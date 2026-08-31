@@ -1,4 +1,5 @@
 import type { JsonValue, WidgetClientState, WidgetStateListener } from '@holo-js/panels-client'
+import { WidgetStore, WidgetTableController } from '@holo-js/panels-client'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import type { Component } from 'svelte'
 import type { render } from 'svelte/server'
@@ -101,6 +102,21 @@ afterEach(() => {
 })
 
 describe('P12 Svelte widget and dashboard renderer', () => {
+  it('resolves the renderer registered for a custom widget extension ID', () => {
+    const registry = registerSvelteWidgetRenderer(new SvelteComponentRegistry(), 'widget.app.widget.summary', ServerCustom)
+    const container = renderDashboard([widget('summary', 'custom', { component: 'summary', properties: { message: 'Registered summary' } }, { manifest: manifest('summary', 'custom', { type: 'app:widget:summary' }), registry })])
+    expect(container.textContent).toContain('Registered summary')
+  })
+  it('composes the shared table with its selection controls', () => {
+    const definition = manifest('recent', 'table')
+    const data = { tableId: 'posts', result: { records: [{ id: 'one', title: 'First post' }], total: 1, resource: { id: 'posts', routeKey: 'id', labels: { plural: 'Posts' }, table: { actions: [{ id: 'publish', label: 'Publish', scope: 'bulk' }], columns: [{ path: 'title', type: 'text', label: 'Title' }] } } } }
+    const store = new WidgetStore(definition, async () => ({ status: 'ready', data }), { initialResult: { status: 'ready', data } })
+    const tableController = new WidgetTableController(store, { panelId: 'admin', request: () => ({ pageId: 'overview', widgetId: definition.id }), execute: async () => ({}) })
+    const container = renderDashboard([{ manifest: definition, store, tableController, placement: 'dashboard' }])
+    expect(container.querySelector('table')?.textContent).toContain('First post')
+    expect(container.querySelector('[aria-label="Select record one"]')).not.toBeNull()
+    tableController.dispose()
+  })
   it('renders stats and charts with action, trend, SVG, and accessible table semantics', () => {
     const container = renderDashboard([
       widget('growth', 'stats', { stats: [

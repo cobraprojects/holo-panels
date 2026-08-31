@@ -16,6 +16,7 @@ import type {
 } from './contracts'
 
 const IDENTIFIER = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u
+const WIDGET_RENDERER_IDENTIFIER = /^[a-z][a-z0-9.-]*:widget:[a-z][a-z0-9._-]*$/u
 
 export class WidgetAccessError extends Error {
   constructor(readonly widgetId: string) {
@@ -64,6 +65,10 @@ export async function resolveWidget<TData extends JsonValue, TActor, TTenant, TS
   const data = await definition.server.data(dataContext)
   assertNotAborted(context.signal)
   toJsonValue(data)
+  if (definition.manifest.family === 'custom') {
+    if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.component !== 'string' || !IDENTIFIER.test(data.component) && !WIDGET_RENDERER_IDENTIFIER.test(data.component)) throw new Error('Custom widgets require a registered renderer identifier')
+    if (!data.properties || typeof data.properties !== 'object' || Array.isArray(data.properties)) throw new Error('Custom widgets require serializable properties')
+  }
   if (definition.manifest.family === 'stats' && data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.stats)) {
     for (const stat of data.stats) {
       if (!stat || typeof stat !== 'object' || Array.isArray(stat) || stat.progress === undefined || stat.progress === null) continue

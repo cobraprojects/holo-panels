@@ -37,7 +37,7 @@ Master phase checklist:
 - [x] P9: resources, pages, CRUD, framework adapters, and panel shell
 - [x] P10: relation managers
 - [x] P11: navigation, clusters, and global search
-- [x] P12: widgets and dashboards
+- [ ] P12: widgets and dashboards
 - [x] P13: notifications and database notifications
 - [x] P14: Shield, auth pages, multi-factor authentication, and tenancy
 - [x] P15: imports and exports
@@ -2149,16 +2149,18 @@ Tasks:
 - [x] Implement stats widgets with value, description, trend, chart sparkline, icon, color, progress, and URL/action.
 - [x] Implement chart data protocol and an accessible chart renderer abstraction.
 - [x] Select a chart implementation per renderer behind the shared contract; document bundle and accessibility tradeoffs.
-- [x] Implement table widgets by composing the table engine.
+- [ ] Implement table widgets by composing the table engine. Ticket #23 found that generated applications do not bind the shared table renderer to table widgets. Browser revalidation is required.
 - [x] Implement custom component widgets.
 - [x] Implement widget filters and persisted filter state.
 - [x] Implement multiple dashboards and default authorized dashboard selection.
 - [x] Implement resource page header/footer widgets with record/table context. Revalidated on 2026-08-31: generated Next, Nuxt, and SvelteKit pages pass the active list query and authorized current record into resource-widget context in production-browser acceptance.
 - [x] Add polling cancellation, unauthorized widget, filtered data, responsive grid, and cross-framework tests.
 
-- [x] **P12 phase gate:** stats, chart, table, and custom widgets render on dashboard and resource pages across all frameworks. Revalidated on 2026-08-31 through the shared renderer phase gate, generated dashboard-filter and resource-widget journeys, and complete workspace validation.
+- [ ] **P12 phase gate:** stats, chart, table, and custom widgets render on dashboard and resource pages across all frameworks. Reopened for ticket #23 because generated application table widgets lack a renderer binding. The earlier dashboard-filter and resource-widget journeys did not cover this behavior.
 
 Ticket #22 revalidation on 2026-08-31 corrected fresh widget loading, shared dashboard filters, Holo session persistence, stat progress, chart geometry, and renderer parity. Server tests cover authorization on refresh, protected filter fields and dependent callbacks, required defaults, hostile reset requests, tenant/session isolation, current-record/table context, and callback exclusion. Browser journeys observe filter apply/reset/session restoration, multiple dashboards, and resource context in all three frameworks. Standards and specification reviews passed. Validation passed with 1,332 workspace tests, 117 production-browser journeys, zero-error language-service diagnostics on 66 changed TypeScript files, full package and example typechecks, zero-warning Svelte diagnostics, ESLint, architecture/dependency/public API checks, 21 package builds, conditional exports, packed-package smoke and consumer typechecks, and packed lifecycle acceptance for Next, Nuxt, and SvelteKit. Browser server logs still contain an unrelated Vue Sonner SSR `requestAnimationFrame` error from unchanged notification code; all journeys pass.
+
+Ticket #23 work on 2026-08-31 adds internal resource-table bindings, shared table state and renderers, page/widget authorization for table requests, and registered Custom widget extension lookup. The Table widget authoring API, generator output, example definitions, and new Table/Custom browser journeys remain incomplete pending application-facing API approval. The ticket and P12 gate remain open. Existing dashboard-filter and resource-context journeys pass in all three built applications, but do not establish Table/Custom widget acceptance.
 
 Historical evidence: widget and dashboard builders now compile immutable client manifests, retain authorization, visibility, data, and dashboard access callbacks exclusively on the server, and participate in deterministic prepare-time discovery. The client store provides allow-listed persisted filters, lazy activation, stale-request cancellation, polling lifecycle cancellation, safe error state, and responsive grid placement. React, Vue, and Svelte render stats, dependency-free line, area, bar, and pie SVG charts with accessible data tables, composed table widgets, registry-backed custom widgets, loading/error/unauthorized states, sorted responsive dashboards, and resource header/footer placements. The chart implementation and accessibility/bundle tradeoff is recorded in `packages/ui/WIDGET_CHARTS.md`. Focused core, client, umbrella, and renderer suites, a shared Next/Nuxt/SvelteKit phase-gate journey, all workspace typechecks and zero-warning Svelte diagnostics, ESLint, all workspace tests, public API declaration validation, architecture/dependency/publish validation, example parity, all package builds, 13-package packed installation/import smoke tests, isolated consumer typechecks, and packed lifecycle acceptance for all three frameworks passed on 2026-07-27.
 

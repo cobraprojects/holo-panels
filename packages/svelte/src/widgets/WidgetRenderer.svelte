@@ -8,13 +8,15 @@
   import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
   import { panelColorAppearance, panelColorValue, widgetChartMarks, widgetSparklinePoints } from '@holo-js/panels-ui'
   import { type Component } from 'svelte'
+  import { widgetExtensionRendererName } from '@holo-js/panels-client'
   import { toSvelteSnapshot } from '../stores'
   import Icon from '../components/Icon.svelte'
   import ActionRenderer from '../actions/ActionRenderer.svelte'
+  import TableRenderer from '../tables/TableRenderer.svelte'
   import type { SvelteCustomWidgetProps, SvelteWidgetRendererProps } from './contracts'
   import { chartData, chartLabels, chartValue, customData, safeWidgetUrl, statsData, tableData, widgetLabel } from './helpers'
 
-  let { actions, actionStore, manifest, store, registry, panelId, placement = 'dashboard', tableRenderer, onAction }: SvelteWidgetRendererProps = $props()
+  let { actions, actionStore, manifest, store, registry, panelId, placement = 'dashboard', tableRenderer, tableController, onAction }: SvelteWidgetRendererProps = $props()
   const widgetState = $derived.by(() => toSvelteSnapshot(store))
   const stats = $derived(statsData($widgetState.data))
   const chart = $derived(chartData($widgetState.data))
@@ -23,7 +25,7 @@
   const Custom = $derived.by((): Component<SvelteCustomWidgetProps> | undefined => {
     if (manifest.family !== 'custom' || !custom) return undefined
     if (!registry) throw new Error(`[Holo Panels] A Svelte component registry is required for custom widget "${manifest.id}".`)
-    return registry.resolve<SvelteCustomWidgetProps>(custom.component, panelId, `widget "${manifest.id}"`)
+    return registry.resolve<SvelteCustomWidgetProps>(widgetExtensionRendererName(manifest.type) ?? custom.component, panelId, `widget "${manifest.id}"`)
   })
   let root = $state<HTMLElement | null>(null)
 
@@ -61,7 +63,7 @@
       <Empty role="status"><EmptyHeader><EmptyTitle>Widget unavailable</EmptyTitle><EmptyDescription>You do not have access to this widget.</EmptyDescription></EmptyHeader></Empty>
     {:else if $widgetState.status === 'error'}
       <Alert variant="destructive"><AlertTitle>{manifest.errorState}</AlertTitle><AlertDescription>The widget could not be loaded.</AlertDescription><Button type="button" onclick={() => void store.load()}>Retry</Button></Alert>
-    {:else if $widgetState.loading || $widgetState.status === 'idle'}
+    {:else if $widgetState.loading && $widgetState.data === null || $widgetState.status === 'idle'}
       <p aria-live="polite" class="hp:text-sm hp:text-muted-foreground" role="status">Loading widget</p>
     {:else if manifest.family === 'stats'}
       {#if stats.length === 0}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
@@ -114,7 +116,8 @@
         </figure>
       {:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {:else if manifest.family === 'table'}
-      {#if table && tableRenderer}{@const TableRenderer = tableRenderer}<TableRenderer result={table.result} tableId={table.tableId} widgetId={manifest.id} />{:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
+      {@const presentation = table && tableController?.presentation}
+      {#if presentation}<TableRenderer table={{ ...presentation, registry, emptyMessage: manifest.emptyState }} />{:else if table && tableRenderer}{@const CustomTableRenderer = tableRenderer}<CustomTableRenderer result={table.result} tableId={table.tableId} widgetId={manifest.id} />{:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {:else if manifest.family === 'custom'}
       {#if custom && Custom}<Custom properties={custom.properties} widgetId={manifest.id} />{:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {/if}

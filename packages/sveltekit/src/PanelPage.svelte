@@ -13,8 +13,7 @@
     PanelsRenderHookRenderer,
     PanelsTransport,
     PanelShellStore,
-    WidgetStore,
-    createWidgetLoader,
+    createWidgetRuntime,
     createDashboardFilterStore,
     DashboardFilters,
     createWidgetActionStore,
@@ -158,34 +157,34 @@
     keybindings: data.panel.manifest.globalSearchConfiguration?.keybindings,
   }) : null)
   const dashboardFilters = $derived(createDashboardFilterStore(browserTransport(), data.panel.manifest.id, data.page))
+  function widgetRuntime(widget: PanelPageProps['data']['widgets']['header'][number]) {
+    const runtime = createWidgetRuntime({ applyEffects: response => effects.apply(response), dashboardFilters: dashboardFilters ? () => dashboardFilters.applied : undefined, panelId: data.panel.manifest.id, transport: browserTransport(), widget })
+    return { dispose: runtime.dispose, store: runtime.store, tableController: runtime.table }
+  }
   const headerWidgets = $derived(data.widgets.header.map(widget => ({
+    ...widgetRuntime(widget),
     actions: widget.actions,
     actionStore: createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId: data.panel.manifest.id, resourceId: widget.resourceId, transport: browserTransport(), widgetId: widget.manifest.id }),
     manifest: widget.manifest as SvelteWidgetManifest,
     panelId: data.panel.manifest.id,
     placement: 'dashboard' as const,
     registry,
-    store: new WidgetStore(widget.manifest, createWidgetLoader(browserTransport(), data.panel.manifest.id, widget.request ?? {}, dashboardFilters ? () => dashboardFilters.applied : undefined), {
-      initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status },
-    }),
   })))
   const footerWidgets = $derived(data.widgets.footer.map(widget => ({
+    ...widgetRuntime(widget),
     actions: widget.actions,
     actionStore: createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId: data.panel.manifest.id, resourceId: widget.resourceId, transport: browserTransport(), widgetId: widget.manifest.id }),
     manifest: widget.manifest as SvelteWidgetManifest,
     panelId: data.panel.manifest.id,
     placement: 'dashboard' as const,
     registry,
-    store: new WidgetStore(widget.manifest, createWidgetLoader(browserTransport(), data.panel.manifest.id, widget.request ?? {}, dashboardFilters ? () => dashboardFilters.applied : undefined), {
-      initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status },
-    }),
   })))
 
   $effect(() => {
     const filters = dashboardFilters
     const widgets = [...headerWidgets, ...footerWidgets]
     const unsubscribe = filters?.subscribe(async () => { await Promise.all(widgets.map(widget => widget.store.load())) })
-    return () => { unsubscribe?.(); filters?.stop(); for (const widget of widgets) while (widget.actionStore.activeFrame) widget.actionStore.close() }
+    return () => { unsubscribe?.(); filters?.stop(); for (const widget of widgets) { widget.dispose(); while (widget.actionStore.activeFrame) widget.actionStore.close() } }
   })
 
   function searchResponse(value: unknown, panelId: string, term: string): ClientSearchResponse {

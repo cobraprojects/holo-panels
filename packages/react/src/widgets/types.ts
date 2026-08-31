@@ -5,6 +5,7 @@ import type {
   TableWidgetData,
   WidgetClientManifest,
   WidgetStore,
+  WidgetTableController,
 } from '@holo-js/panels-client'
 import type { ComponentRegistry } from '../registry'
 import type { ReactNode } from 'react'
@@ -30,6 +31,7 @@ export interface ReactTableWidgetProps {
 }
 
 export interface ReactWidgetRendererProps {
+  readonly table?: WidgetTableController
   readonly actions?: readonly ClientActionManifest[]
   readonly actionStore?: ClientActionStore<unknown>
   readonly action?: (action: string) => void | Promise<void>

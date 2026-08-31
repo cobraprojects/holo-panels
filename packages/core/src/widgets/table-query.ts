@@ -1,4 +1,5 @@
 import type { JsonObject } from '../protocol/json'
+import { toJsonValue } from '../protocol/serialization'
 
 const QUERY_FIELDS = new Set(['filters', 'grouping', 'page', 'panelId', 'perPage', 'queryVersion', 'search', 'selection', 'sort', 'tableId', 'visibleColumns'])
 
@@ -14,7 +15,8 @@ export function bindWidgetTableQuery(client: JsonObject, bound: JsonObject): Jso
   if (selection && typeof selection === 'object' && !Array.isArray(selection) && selection.mode === 'all-matching') {
     const selectedQuery = selection.query
     if (!selectedQuery || typeof selectedQuery !== 'object' || Array.isArray(selectedQuery)) throw new Error('Invalid table widget selection query')
-    query.selection = { ...selection, query: { ...widgetTableQuery(selectedQuery), ...widgetTableQuery(bound) } }
+    const scopeChanged = ['search', 'filters'].some(key => bound[key] !== undefined && JSON.stringify(toJsonValue(selectedQuery[key] ?? (key === 'search' ? '' : {}))) !== JSON.stringify(toJsonValue(bound[key])))
+    query.selection = scopeChanged ? { mode: 'explicit', recordIds: [] } : { ...selection, query: widgetTableQuery(selectedQuery) }
   }
   return query
 }

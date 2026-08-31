@@ -26,6 +26,7 @@ export async function executeWidgetTableOperation(
   const result = object(data.result)
   if (typeof data.tableId !== 'string' || payload.resourceId !== data.tableId) throw new Error('The resource does not belong to this table widget')
   if (operation === 'table-data') return { data: result, effects: [] }
+  if (payload.selection !== undefined && object(payload.selection).mode === 'all-matching' && object(object(result.query).selection).mode !== 'all-matching') throw new Error('The table widget selection scope changed; select records again')
   const binding = definition?.server.table
   if (!binding) throw new Error('The table widget resource is not registered')
   return executeGeneratedResourceOperation(binding.resource(), {

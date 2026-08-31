@@ -51,7 +51,15 @@ describe('registered table widgets', () => {
       await store.load()
       expect(controller.presentation!.store.snapshot).toMatchObject({ search: 'First', records: [{ id: 'first' }] })
       controller.presentation!.store.selectAllMatching()
-      expect((await executeWidgetTableOperation(registry, 'action', { widgetTable: request, actionId: 'queue', mount: 'bulk', resourceId: 'posts', source: 'table', tableQuery: controller.query, selection: { mode: 'all-matching', query: { search: '' }, excludedRecordIds: [] } }, context, panel)).data).toMatchObject({ items: [{ recordId: 'first', result: { queued: ['first'] } }] })
+      const selectedAction = { widgetTable: request, actionId: 'queue', mount: 'bulk', resourceId: 'posts', source: 'table', tableQuery: controller.query, selection: controller.query.selection! }
+      expect((await executeWidgetTableOperation(registry, 'action', selectedAction, context, panel)).data).toMatchObject({ items: [{ recordId: 'first', result: { queued: ['first'] } }] })
+      await expect(executeWidgetTableOperation(registry, 'action', { ...selectedAction, selection: { mode: 'all-matching', query: { search: '' }, excludedRecordIds: [] } }, context, panel)).rejects.toThrow('selection scope changed')
+      boundQuery = { search: '' }
+      await expect(executeWidgetTableOperation(registry, 'action', selectedAction, context, panel)).rejects.toThrow('selection scope changed')
+      await store.load()
+      expect(store.snapshot.status).toBe('ready')
+      expect(controller.presentation!.store.snapshot.records).toHaveLength(2)
+      expect(controller.presentation!.store.selectedCount).toBe(0)
       controller.dispose()
       boundQuery = {}
       await expect(executeWidgetDataOperation(registry, { ...request, widgetTableQuery: { intent: 'relation', managerId: 'comments', ownerId: 'foreign' } }, context, panel)).rejects.toThrow('query field')

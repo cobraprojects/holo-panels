@@ -79,6 +79,7 @@ export class WidgetTableController {
       this.#table = new TableStateStore({ filterMode: table.filterMode === 'deferred' ? 'deferred' : 'live', panelId: this.#options.panelId, perPage: typeof state.perPage === 'number' ? state.perPage : 25, records, selection: widgetTableObject(table.selection), tableId: data.tableId, total, visibleColumns: widgetTableColumns(table).filter(column => !column.manifest.hidden).map(column => column.manifest.path) })
     }
     const query = widgetTableObject(this.#result.query)
+    if (this.#table.snapshot.selection.mode === 'all-matching' && widgetTableObject(query.selection).mode === 'explicit') this.#table.clearSelection()
     this.restoreQuery(this.#table, { ...widgetTableObject(toJsonValue(this.#table.query)), ...query, ...widgetTableObject(this.#result.tableState), filters: query.filters ?? toJsonValue(this.#table.snapshot.filters.applied) })
     this.#table.applyData({ queryVersion: this.#table.query.queryVersion, records, selection: widgetTableObject(this.#result.selection), total })
     const presentationKey = JSON.stringify({ resource: this.#resource, tableActions: this.#result.tableActions, rowActions: this.#result.rowActions, groups: this.#result.groups, summaries: this.#result.summaries })

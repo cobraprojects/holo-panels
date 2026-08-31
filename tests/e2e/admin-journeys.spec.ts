@@ -973,6 +973,7 @@ test.describe('authenticated admin journeys', () => {
       'Overview',
       'Metrics',
       'Reports',
+      'Widgets',
       'Posts',
       'Categories',
       'Tags',

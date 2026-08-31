@@ -27,7 +27,7 @@ export interface WidgetClientState {
 
 export interface WidgetLoadResult {
   readonly data?: JsonValue
-  readonly status: 'hidden' | 'ready' | 'unauthorized'
+  readonly status: 'error' | 'hidden' | 'idle' | 'ready' | 'unauthorized'
 }
 
 export type WidgetLoader = (

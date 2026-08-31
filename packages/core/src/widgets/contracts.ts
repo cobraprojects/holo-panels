@@ -2,6 +2,7 @@ import type { JsonObject, JsonValue } from '../protocol/json'
 import type { ActionManifest } from '../actions/contracts'
 import type { RegisteredAction } from '../actions/registration'
 import type { TableQueryState } from '../tables/query/contracts'
+import type { DashboardFilterSchema } from './filter-form'
 
 export type WidgetFamily = 'chart' | 'custom' | 'stats' | 'table'
 export type WidgetColumnSpan = number | 'full'
@@ -75,7 +76,7 @@ export interface CompiledWidgetDefinition<TData extends JsonValue, TActor, TTena
   readonly server: WidgetServerHandles<TData, TActor, TTenant, TServices, TRecord>
 }
 
-export interface WidgetStat extends JsonObject {
+export type WidgetStat = JsonObject & {
   action: string | null
   chart: number[]
   color: string | null
@@ -83,6 +84,7 @@ export interface WidgetStat extends JsonObject {
   icon: string | null
   id: string
   label: string
+  progress?: { value: number, max: number } | null
   trend: 'down' | 'neutral' | 'up' | null
   url: string | null
   value: number | string
@@ -138,11 +140,12 @@ export interface CustomWidgetData extends JsonObject {
 }
 
 export interface ResolvedWidget<TData extends JsonValue> {
+  readonly request?: JsonObject
   readonly actions?: readonly Readonly<ActionManifest>[]
   readonly resourceId?: string
   readonly data: TData | null
   readonly manifest: WidgetManifest
-  readonly status: 'hidden' | 'ready' | 'unauthorized'
+  readonly status: 'error' | 'hidden' | 'idle' | 'ready' | 'unauthorized'
 }
 
 export interface DashboardNavigation extends JsonObject {
@@ -153,6 +156,8 @@ export interface DashboardNavigation extends JsonObject {
 
 export interface DashboardManifest extends JsonObject {
   default: boolean
+  filters: JsonObject | null
+  persistFilters: boolean
   id: string
   navigation: DashboardNavigation
   path: string
@@ -165,6 +170,7 @@ export interface CompiledDashboardDefinition<TActor, TTenant, TServices> {
   readonly kind: 'dashboard'
   readonly manifest: DashboardManifest
   readonly server: {
+    readonly filters?: DashboardFilterSchema | null
     readonly authorize: (context: DashboardContext<TActor, TTenant, TServices>) => boolean | Promise<boolean>
   }
 }

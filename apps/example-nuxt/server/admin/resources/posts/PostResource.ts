@@ -15,7 +15,7 @@ const activeQuery = defineResourceStatsWidget('active-query', { record: Post })
       action: null,
       chart: [],
       color: 'primary',
-      description: `Search: ${context.resource?.tableState?.search ?? ''}`,
+      description: context.resource?.record ? `Record: ${context.resource.record.title}` : `Search: ${context.resource?.tableState?.search ?? ''}`,
       icon: 'search',
       id: 'search',
       label: 'Search',

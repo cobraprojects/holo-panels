@@ -1,6 +1,7 @@
 import { ConstructionBuilder } from '../builders/construction-builder'
 import { DISCOVERY_MARKER, type DiscoverableBuilder, type DiscoverableDefinition } from '../discovery/types'
 import { toJsonValue } from '../protocol/serialization'
+import { dashboardFilterManifest, type DashboardFilterSchema } from './filter-form'
 import type {
   CompiledDashboardDefinition,
   DashboardContext,
@@ -18,6 +19,8 @@ const PATH = /^\/(?:[a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)*)?$/u
 interface DashboardState<TActor, TTenant, TServices> {
   authorize: (context: DashboardContext<TActor, TTenant, TServices>) => boolean | Promise<boolean>
   default: boolean
+  filters: DashboardFilterSchema | null
+  persistFilters: boolean
   navigation: DashboardNavigation
   path: string
   widgets: string[]
@@ -36,6 +39,8 @@ export class DashboardBuilder<TActor = unknown, TTenant = unknown, TServices = u
     super({
       authorize: () => true,
       default: false,
+      filters: null,
+      persistFilters: false,
       navigation: { icon: null, label: id, sort: 0 },
       path: `/${id}`,
       widgets: [],
@@ -45,6 +50,14 @@ export class DashboardBuilder<TActor = unknown, TTenant = unknown, TServices = u
   path(value: string): this {
     if (!PATH.test(value)) throw new Error('Dashboard paths must be normalized static paths')
     return this.writeState('path', value)
+  }
+
+  filtersForm<TSchema extends DashboardFilterSchema>(schema: TSchema): this {
+    return this.writeState('filters', schema)
+  }
+
+  persistFiltersInSession(enabled = true): this {
+    return this.writeState('persistFilters', enabled)
   }
 
   default(value = true): this {
@@ -83,13 +96,15 @@ export class DashboardBuilder<TActor = unknown, TTenant = unknown, TServices = u
   protected createDefinition(state: Readonly<DashboardState<TActor, TTenant, TServices>>): CompiledDashboardDefinition<TActor, TTenant, TServices> {
     const manifest: DashboardManifest = {
       default: state.default,
+      filters: state.filters ? dashboardFilterManifest(state.filters) : null,
+      persistFilters: state.persistFilters,
       id: this.id,
       navigation: state.navigation,
       path: state.path,
       widgets: state.widgets,
     }
     toJsonValue(manifest)
-    return { kind: 'dashboard', manifest, server: { authorize: state.authorize } }
+    return { kind: 'dashboard', manifest, server: { authorize: state.authorize, filters: state.filters } }
   }
 }
 

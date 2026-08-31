@@ -1,5 +1,6 @@
 import {
   executeGeneratedWidgetOperation,
+  executeWidgetDataOperation,
   createNavigationSeed,
   executeGeneratedGlobalSearch,
   executeGeneratedResourceOperation,
@@ -10,13 +11,14 @@ import {
   resolvePageData,
   requestedLocales,
   resolvePanelLocale,
-  resolveWidget,
+  normalizeDashboardPage,
+  resolvePageWidgetGroup,
+  resolveDashboardLanding,
   type CompiledPageDefinition,
   type CompiledPanelDefinition,
   type CompiledWidgetDefinition,
   type JsonObject,
   type JsonValue,
-  type ResolvedWidget,
   type TableQueryState,
 } from '@holo-js/panels-vue/server'
 import type { NuxtPanelOperationContext, NuxtPanelRuntime, NuxtPanelServerRegistry } from './contracts'
@@ -37,7 +39,7 @@ async function definitions(registry: NuxtPanelServerRegistry, panelId: string, k
 async function definitions(registry: NuxtPanelServerRegistry, panelId: string, kind: 'page' | 'panel' | 'widget'): Promise<readonly object[]> {
   const prefix = `${panelId}:${kind}:`
   const keys = Object.keys(registry).filter(key => key.startsWith(prefix) && IDENTIFIER.test(key.slice(prefix.length))).sort()
-  const values = (await Promise.all(keys.map(key => registry[key]!()))).map(compiled)
+  const values = (await Promise.all(keys.map(key => registry[key]!()))).map(value => normalizeDashboardPage(compiled(value)) as object)
   if (kind !== 'widget') return values.filter(value => Reflect.get(value, 'kind') === kind)
   return Object.freeze(values.filter(value => Reflect.get(value, 'kind') === 'widget') as CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[])
 }
@@ -49,28 +51,6 @@ async function resourceWidgets(registry: NuxtPanelServerRegistry, panelId: strin
   const resource = compiled(await loader())
   const widgets = Reflect.get(resource, 'widgets')
   return Object.freeze(Array.isArray(widgets) ? widgets.map(compiled).filter(value => Reflect.get(value, 'kind') === 'widget') as CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[] : [])
-}
-
-async function resolvedPageWidgets(
-  ids: readonly string[],
-  widgets: readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[],
-  context: {
-    readonly actor: object
-    readonly locale: string
-    readonly panelId: string
-    readonly services: unknown
-    readonly signal: AbortSignal
-    readonly tenant: unknown
-  },
-  resource: Readonly<{ readonly pageId: string, readonly record: JsonObject | null, readonly resourceId: string, readonly tableState: Readonly<TableQueryState> | null }> | null,
-  placement: 'footer' | 'header',
-): Promise<readonly ResolvedWidget<JsonValue>[]> {
-  const widgetsById = new Map(widgets.map(widget => [widget.manifest.id, widget]))
-  return Object.freeze(await Promise.all(ids.map(async id => {
-    const widget = widgetsById.get(id)
-    if (!widget) throw new Error(`[Holo Panels] Page references missing widget "${id}".`)
-    return await resolveWidget(widget, context, {}, resource ? { ...context, ...resource, placement } : null)
-  })))
 }
 
 function pageWidgetResource(
@@ -114,8 +94,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const panel = panelWithNavigation(discoveredPanel, pages)
   const location = typeof context.input.path === 'string' ? context.input.path : panel.manifest.path
   const url = new URL(location, 'http://panels.local')
-  const match = pages.map(definition => ({ definition, parameters: parameters(definition.manifest.path, url.pathname) })).find(item => item.parameters !== null)
-  if (!match?.parameters) throw Object.assign(new Error('Panel page not found'), { name: 'ResourceRecordNotFoundError' })
+  let match = pages.map(definition => ({ definition, parameters: parameters(definition.manifest.path, url.pathname) })).find(item => item.parameters !== null)
   const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
   const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
   const widgetDefinitions = await definitions(registry, context.panelId, 'widget')
@@ -123,6 +102,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const actorLocale = typeof context.actor === 'object' && context.actor !== null && 'locale' in context.actor && typeof context.actor.locale === 'string' ? context.actor.locale : undefined
   const { locale } = resolvePanelLocale(panel.manifest.locales, [...requestedLocale, actorLocale])
   const resolutionContext = {
+    guard: panel.guard,
     actor: context.actor,
     locale,
     panelId: context.panelId,
@@ -131,6 +111,11 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
     strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
     tenant: context.tenant ?? tenancy?.tenantId,
   }
+  if (!match) {
+    const dashboard = await resolveDashboardLanding(pages, url.pathname, panel.manifest.path, resolutionContext)
+    if (dashboard) match = { definition: dashboard, parameters: {} }
+  }
+  if (!match?.parameters) throw Object.assign(new Error('Panel page not found'), { name: 'ResourceRecordNotFoundError' })
   const page = await resolvePageData(match.definition, { ...resolutionContext, parameters: match.parameters })
   const search = url.searchParams.get('search')?.trim().toLocaleLowerCase() ?? ''
   const category = url.searchParams.get('category')?.trim() ?? ''
@@ -170,8 +155,8 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const resolvedWidgets = new Map(embeddedWidgets.map(widget => [widget.manifest.id, widget]))
   for (const widget of widgetDefinitions) resolvedWidgets.set(widget.manifest.id, widget)
   const [header, footer] = await Promise.all([
-    resolvedPageWidgets(match.definition.manifest.widgets.header, [...resolvedWidgets.values()], resolutionContext, widgetResource, 'header'),
-    resolvedPageWidgets(match.definition.manifest.widgets.footer, [...resolvedWidgets.values()], resolutionContext, widgetResource, 'footer'),
+    resolvePageWidgetGroup(match.definition.manifest.widgets.header, [...resolvedWidgets.values()], resolutionContext, widgetResource, 'header', { pageId: resolvedPage.manifest.id, parameters: match.parameters }, resolvedPage.data.filters as JsonObject | undefined, panel, resolvedPage.data.filtersValid !== false),
+    resolvePageWidgetGroup(match.definition.manifest.widgets.footer, [...resolvedWidgets.values()], resolutionContext, widgetResource, 'footer', { pageId: resolvedPage.manifest.id, parameters: match.parameters }, resolvedPage.data.filters as JsonObject | undefined, panel, resolvedPage.data.filtersValid !== false),
   ])
   const navigation = await resolvePanelNavigationSeed(discoveredPanel.manifest.navigation, pages, resolutionContext)
   return {
@@ -193,6 +178,18 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
   return Object.freeze({
     async execute(context: NuxtPanelOperationContext<object>) {
       await context.getApp()
+      if (context.operation === 'page-data' && context.input.pageId !== undefined) {
+        const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)
+        if (!panel) throw new Error('The panel is not registered')
+        const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
+        const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
+        const locale = resolvePanelLocale(panel.manifest.locales, requestedLocales(context.event?.node?.req?.headers['accept-language'])).locale
+        return { data: await executeWidgetDataOperation(registry, context.input, {
+          ...scope, locale, services: (await context.getApp()).runtime, tenant: context.tenant ?? tenancy?.tenantId,
+          ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+          ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+        }, panel) }
+      }
       if (context.operation === 'bootstrap' || context.operation === 'page-data') return { data: await pagePayload(context, registry) }
       if (context.operation === 'notification') {
         const panel = (await definitions(registry, context.panelId, 'panel')).find(item => item.manifest.id === context.panelId)

@@ -5,6 +5,7 @@ import type { CompiledSchema, SchemaManifest } from '../schemas/contracts'
 export type PageType = 'create' | 'custom' | 'edit' | 'list' | 'manage' | 'related-record' | 'singular' | 'view'
 
 export interface PageContext<TActor, TTenant, TServices> {
+  readonly guard?: string
   readonly actor: TActor
   readonly locale: string
   readonly panelId: string

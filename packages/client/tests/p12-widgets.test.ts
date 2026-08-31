@@ -30,6 +30,19 @@ class TestScheduler implements WidgetScheduler {
 }
 
 describe('P12 widget client state', () => {
+  it('discards denied data and never exposes loader exception details', async () => {
+    for (const status of ['hidden', 'unauthorized'] as const) {
+      const result = { data: { secret: 'private' }, status }
+      const store = new WidgetStore(manifest, async () => result, { initialResult: result })
+      expect(store.snapshot.data).toBeNull()
+      await store.load()
+      expect(store.snapshot.data).toBeNull()
+    }
+    const failed = new WidgetStore(manifest, async () => { throw new Error('SQL password at /srv/private.ts') })
+    await failed.load()
+    expect(failed.snapshot.error).toBe('Unable to load widget')
+  })
+
   it('uses server-resolved widget data without a duplicate client request', () => {
     const loader = vi.fn(async () => ({ data: null, status: 'ready' as const }))
     const store = new WidgetStore(manifest, loader, {
@@ -49,7 +62,7 @@ describe('P12 widget client state', () => {
 
     const failed = new WidgetStore({ ...manifest, polling: { enabled: false, interval: null } }, async () => { throw new Error('Network unavailable') })
     await failed.load()
-    expect(failed.snapshot).toMatchObject({ error: 'Network unavailable', status: 'error' })
+    expect(failed.snapshot).toMatchObject({ error: 'Unable to load widget', status: 'error' })
   })
 
   it('cancels stale requests during filter changes and keeps the latest filtered data', async () => {

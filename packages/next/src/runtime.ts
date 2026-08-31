@@ -16,9 +16,10 @@ import {
   resolvePanelNavigationSeed,
   requestedLocales,
   resolvePageData,
-  resolveWidget,
+  normalizeDashboardPage,
+  resolvePageWidgetGroup,
+  resolveDashboardLanding,
   type CompiledWidgetDefinition,
-  type ResolvedWidget,
   type TableQueryState,
 } from '@holo-js/panels-react/server'
 import type { NextPanelPagePayload, NextPanelsRuntime } from './contracts'
@@ -61,7 +62,7 @@ async function definitions(runtime: NextPanelsRuntime, panelId: string, kind: 'p
 async function definitions(runtime: NextPanelsRuntime, panelId: string, kind: 'widget'): Promise<readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[]>
 async function definitions(runtime: NextPanelsRuntime, panelId: string, kind: 'page' | 'panel' | 'widget'): Promise<readonly unknown[]> {
   const values = await Promise.all(registryKeys(runtime, panelId, kind).map(key => runtime.registry[key]!()))
-  const compiledValues = values.map(value => compiled(value))
+  const compiledValues = values.map(value => normalizeDashboardPage(compiled(value)))
   if (kind === 'panel') return compiledValues.filter(isPanel)
   if (kind === 'page') return compiledValues.filter(isPage)
   return Object.freeze(compiledValues.filter(isWidget))
@@ -78,28 +79,6 @@ async function resourceWidgets(
   const definition = compiled(await loader())
   const widgets = definition && typeof definition === 'object' ? Reflect.get(definition, 'widgets') : null
   return Object.freeze(Array.isArray(widgets) ? widgets.map(widget => compiled(widget)).filter(isWidget) : [])
-}
-
-async function resolvedPageWidgets(
-  ids: readonly string[],
-  widgets: readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[],
-  context: {
-    readonly actor: object
-    readonly locale: string
-    readonly panelId: string
-    readonly services: unknown
-    readonly signal: AbortSignal
-    readonly tenant: unknown
-  },
-  resource: Readonly<{ readonly pageId: string, readonly record: JsonObject | null, readonly resourceId: string, readonly tableState: Readonly<TableQueryState> | null }> | null,
-  placement: 'footer' | 'header',
-): Promise<readonly ResolvedWidget<JsonValue>[]> {
-  const widgetsById = new Map(widgets.map(widget => [widget.manifest.id, widget]))
-  return Object.freeze(await Promise.all(ids.map(async id => {
-    const widget = widgetsById.get(id)
-    if (!widget) throw new Error(`[Holo Panels] Page references missing widget "${id}".`)
-    return await resolveWidget(widget, context, {}, resource ? { ...context, ...resource, placement } : null)
-  })))
 }
 
 function pageWidgetResource(
@@ -267,9 +246,8 @@ export async function resolveNextPanelPage(
   const widgetDefinitions = await definitions(runtime, panelId, 'widget')
   const panel = panelWithDiscoveredNavigation(discoveredPanel, pages)
   const path = `${panel.manifest.path === '/' ? '' : panel.manifest.path}/${safeSegments(panelsPath).join('/')}`.replace(/\/$/u, '') || '/'
-  const match = pages.map(definition => ({ definition, parameters: pageParameters(definition.manifest.path, path) }))
+  let match = pages.map(definition => ({ definition, parameters: pageParameters(definition.manifest.path, path) }))
     .find(candidate => candidate.parameters !== null)
-  if (!match?.parameters) throw new NextPanelPageNotFoundError(path)
   const nextContext = createNextRequestContext(request)
   return runWithNextRequest(nextContext, async () => {
     const resolvedAuth = await auth(runtime)
@@ -280,6 +258,7 @@ export async function resolveNextPanelPage(
       const tenantContext = runtime.resolveTenant || !panel.server.tenancy ? undefined : await panel.server.tenancy.activeContext(scope)
       const context = {
         actor: scope.actor,
+        guard: panel.guard,
         locale: bootstrap.locale,
         panelId,
         services: await runtime.resolveServices?.(request),
@@ -288,6 +267,11 @@ export async function resolveNextPanelPage(
         tenant: runtime.resolveTenant ? await runtime.resolveTenant(request) : tenantContext?.tenantId,
       }
       const navigation = await resolvePanelNavigationSeed(discoveredPanel.manifest.navigation, pages, context)
+      if (!match) {
+        const dashboard = await resolveDashboardLanding(pages, path, panel.manifest.path, context)
+        if (dashboard) match = { definition: dashboard, parameters: {} }
+      }
+      if (!match?.parameters) throw new NextPanelPageNotFoundError(path)
       const loadedPage = await resolvePageData(match.definition, { ...context, parameters: match.parameters! })
       let page = loadedPage
       let tableState: Readonly<TableQueryState> | null = loadedPage.manifest.pageType === 'list' || loadedPage.manifest.pageType === 'manage'
@@ -327,8 +311,8 @@ export async function resolveNextPanelPage(
       const resolvedWidgets = new Map(embeddedWidgets.map(widget => [widget.manifest.id, widget]))
       for (const widget of widgetDefinitions) resolvedWidgets.set(widget.manifest.id, widget)
       const [header, footer] = await Promise.all([
-        resolvedPageWidgets(match.definition.manifest.widgets.header, [...resolvedWidgets.values()], context, widgetResource, 'header'),
-        resolvedPageWidgets(match.definition.manifest.widgets.footer, [...resolvedWidgets.values()], context, widgetResource, 'footer'),
+        resolvePageWidgetGroup(match.definition.manifest.widgets.header, [...resolvedWidgets.values()], context, widgetResource, 'header', { pageId: page.manifest.id, parameters: match.parameters! }, page.data.filters as JsonObject | undefined, panel, page.data.filtersValid !== false),
+        resolvePageWidgetGroup(match.definition.manifest.widgets.footer, [...resolvedWidgets.values()], context, widgetResource, 'footer', { pageId: page.manifest.id, parameters: match.parameters! }, page.data.filters as JsonObject | undefined, panel, page.data.filtersValid !== false),
       ])
       return { navigation, page, widgets: { footer, header } }
     })

@@ -161,6 +161,7 @@ export abstract class Field<
     return Object.freeze({
       ...super.compile(),
       server: Object.freeze({
+        ...Object.fromEntries(Object.entries({ defaultValue: this.#defaultValue, disabled: this.#disabled, readOnly: this.#readOnly, label: this.#label, placeholder: this.#placeholder, helperText: this.#helperText, hint: this.#hint }).filter(([, value]) => typeof value === 'function')),
         ...(this.#afterStateHydrated ? { afterStateHydrated: this.#afterStateHydrated } : {}),
         ...(this.#afterStateUpdated ? { afterStateUpdated: this.#afterStateUpdated } : {}),
         ...(this.#dehydrateStateUsing ? { dehydrateStateUsing: this.#dehydrateStateUsing } : {}),

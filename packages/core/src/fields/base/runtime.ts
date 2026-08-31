@@ -5,7 +5,7 @@ import type {
   FormFieldPath,
 } from './types'
 
-async function resolve<TValue, TContext>(
+export async function resolveFieldProperty<TValue, TContext>(
   literal: TValue,
   resolver: ((context: TContext) => TValue | Promise<TValue>) | undefined,
   context: TContext,
@@ -48,8 +48,8 @@ export async function dehydrateFieldValue<
   context: FieldResolverContext<TValues, TPath, TRecord>,
 ): Promise<TValue | undefined> {
   const [disabled, readOnly] = await Promise.all([
-    resolve(definition.disabled, definition.server.disabled, context),
-    resolve(definition.readOnly, definition.server.readOnly, context),
+    resolveFieldProperty(definition.disabled, definition.server.disabled, context),
+    resolveFieldProperty(definition.readOnly, definition.server.readOnly, context),
   ])
   if (disabled || readOnly) return undefined
   return definition.server.dehydrate ? definition.server.dehydrate(context) : context.value as TValue
@@ -67,13 +67,13 @@ export async function resolveFieldPresentationState<
 ): Promise<FieldPresentationState<TValue>> {
   const [value, visible, disabled, readOnly, label, helperText, hint, placeholder] = await Promise.all([
     hydrateFieldValue(definition, context),
-    resolve(definition.visible, definition.server.visible, context),
-    resolve(definition.disabled, definition.server.disabled, context),
-    resolve(definition.readOnly, definition.server.readOnly, context),
-    resolve(definition.label, definition.server.label, context),
-    resolve(definition.helperText, definition.server.helperText, context),
-    resolve(definition.hint, definition.server.hint, context),
-    resolve(definition.placeholder, definition.server.placeholder, context),
+    resolveFieldProperty(definition.visible, definition.server.visible, context),
+    resolveFieldProperty(definition.disabled, definition.server.disabled, context),
+    resolveFieldProperty(definition.readOnly, definition.server.readOnly, context),
+    resolveFieldProperty(definition.label, definition.server.label, context),
+    resolveFieldProperty(definition.helperText, definition.server.helperText, context),
+    resolveFieldProperty(definition.hint, definition.server.hint, context),
+    resolveFieldProperty(definition.placeholder, definition.server.placeholder, context),
   ])
   return Object.freeze({
     value,

@@ -1,4 +1,4 @@
-import { resolveWidgetGrid, type JsonObject, type JsonValue } from '@holo-js/panels-client'
+import { resolveWidgetGrid, safeExternalUrl, type JsonObject, type JsonValue } from '@holo-js/panels-client'
 import type {
   SvelteDashboardWidget,
   SvelteWidgetGridItem,
@@ -13,6 +13,7 @@ export interface SvelteWidgetStat {
   readonly icon: string | null
   readonly id: string
   readonly label: string
+  readonly progress: { readonly value: number, readonly max: number } | null
   readonly trend: 'down' | 'neutral' | 'up' | null
   readonly url: string | null
   readonly value: number | string
@@ -36,6 +37,12 @@ function objectValue(value: JsonValue | undefined): JsonObject | null {
   return value !== null && !Array.isArray(value) && typeof value === 'object' ? value : null
 }
 
+function statProgress(value: JsonValue | undefined): SvelteWidgetStat['progress'] {
+  const data = objectValue(value)
+  return data && typeof data.value === 'number' && typeof data.max === 'number' && Number.isFinite(data.value) && Number.isFinite(data.max) && data.max > 0 && data.value >= 0 && data.value <= data.max
+    ? { value: data.value, max: data.max } : null
+}
+
 export function statsData(value: JsonValue): readonly SvelteWidgetStat[] {
   const stats = objectValue(value)?.stats
   if (!Array.isArray(stats)) return []
@@ -54,6 +61,7 @@ export function statsData(value: JsonValue): readonly SvelteWidgetStat[] {
       icon: typeof record.icon === 'string' ? record.icon : null,
       id: record.id,
       label: record.label,
+      progress: statProgress(record.progress),
       trend: record.trend === 'down' || record.trend === 'neutral' || record.trend === 'up' ? record.trend : null,
       url: safeWidgetUrl(record.url),
       value: record.value,
@@ -106,15 +114,7 @@ export function customData(value: JsonValue): { readonly component: string, read
 }
 
 export function safeWidgetUrl(value: JsonValue | undefined): string | null {
-  if (typeof value !== 'string') return null
-  const candidate = value.trim()
-  if (candidate.startsWith('/') || candidate.startsWith('#')) return candidate
-  try {
-    const url = new URL(candidate)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? candidate : null
-  } catch {
-    return null
-  }
+  return typeof value === 'string' ? safeExternalUrl(value) : null
 }
 
 export function dashboardGrid(widgets: readonly SvelteDashboardWidget[], width: number): readonly SvelteWidgetGridItem[] {

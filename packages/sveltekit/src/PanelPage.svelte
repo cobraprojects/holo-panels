@@ -14,6 +14,9 @@
     PanelsTransport,
     PanelShellStore,
     WidgetStore,
+    createWidgetLoader,
+    createDashboardFilterStore,
+    DashboardFilters,
     createWidgetActionStore,
     panelConfigurationStyleAttribute,
     providePanelsRenderHooks,
@@ -110,7 +113,7 @@
     get scopes() { return pageScopes },
   })
   const resourceBody = $derived(body?.component === 'resource-page')
-  const Body = $derived(body && !resourceBody && registry
+  const Body = $derived(body && body.component !== 'dashboard' && !resourceBody && registry
     ? registry.resolve<Record<string, unknown>>(body.component, data.panel.manifest.id, `page "${data.page.manifest.id}"`)
     : null) as SveltePanelComponent<Record<string, unknown>> | null
   type ChromeProperties = PanelChromeComponentProps<PanelPageProps['data']['page']>
@@ -154,6 +157,7 @@
     debounceMilliseconds: data.panel.manifest.globalSearchConfiguration?.debounce,
     keybindings: data.panel.manifest.globalSearchConfiguration?.keybindings,
   }) : null)
+  const dashboardFilters = $derived(createDashboardFilterStore(browserTransport(), data.panel.manifest.id, data.page))
   const headerWidgets = $derived(data.widgets.header.map(widget => ({
     actions: widget.actions,
     actionStore: createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId: data.panel.manifest.id, resourceId: widget.resourceId, transport: browserTransport(), widgetId: widget.manifest.id }),
@@ -161,7 +165,7 @@
     panelId: data.panel.manifest.id,
     placement: 'dashboard' as const,
     registry,
-    store: new WidgetStore(widget.manifest, async () => widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status }, {
+    store: new WidgetStore(widget.manifest, createWidgetLoader(browserTransport(), data.panel.manifest.id, widget.request ?? {}, dashboardFilters ? () => dashboardFilters.applied : undefined), {
       initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status },
     }),
   })))
@@ -172,14 +176,16 @@
     panelId: data.panel.manifest.id,
     placement: 'dashboard' as const,
     registry,
-    store: new WidgetStore(widget.manifest, async () => widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status }, {
+    store: new WidgetStore(widget.manifest, createWidgetLoader(browserTransport(), data.panel.manifest.id, widget.request ?? {}, dashboardFilters ? () => dashboardFilters.applied : undefined), {
       initialResult: widget.data === null ? { status: widget.status } : { data: widget.data, status: widget.status },
     }),
   })))
 
   $effect(() => {
+    const filters = dashboardFilters
     const widgets = [...headerWidgets, ...footerWidgets]
-    return () => { for (const widget of widgets) while (widget.actionStore.activeFrame) widget.actionStore.close() }
+    const unsubscribe = filters?.subscribe(async () => { await Promise.all(widgets.map(widget => widget.store.load())) })
+    return () => { unsubscribe?.(); filters?.stop(); for (const widget of widgets) while (widget.actionStore.activeFrame) widget.actionStore.close() }
   })
 
   function searchResponse(value: unknown, panelId: string, term: string): ClientSearchResponse {
@@ -509,6 +515,7 @@
     <div class="hp-panel-main-body hp:flex hp:flex-col hp:gap-6">
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
+    {#if dashboardFilters && registry}<DashboardFilters store={dashboardFilters} panelId={data.panel.manifest.id} {registry} />{/if}
     {#if headerWidgets.length > 0}
       <DashboardRenderer label="Page header widgets" widgets={headerWidgets} width={viewportWidth} />
     {/if}

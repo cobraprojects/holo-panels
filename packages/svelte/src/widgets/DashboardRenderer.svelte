@@ -8,7 +8,7 @@
   const columns = $derived(items[0]?.placement.columns ?? (width < 640 ? 1 : width < 1024 ? 2 : 4))
 </script>
 
-<section aria-label={label} class="hp-dashboard" data-dashboard={dashboardId} data-placement={placement} style={`--hp-widget-columns:${columns}`}>
+<section aria-label={label} class="hp-dashboard hp:grid hp:gap-4" data-dashboard={dashboardId} data-placement={placement} style={`grid-template-columns:repeat(${columns}, minmax(0, 1fr)); --hp-widget-columns:${columns}`}>
   {#each items as item (item.widget.manifest.id)}
     <div class="hp-dashboard-widget" data-column-span={item.placement.columnSpan} data-column-start={item.placement.columnStart} style={gridStyle(item)}>
       <WidgetRenderer {...item.widget} />

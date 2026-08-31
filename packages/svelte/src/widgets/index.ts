@@ -2,6 +2,8 @@ import type { Component } from 'svelte'
 import type { SvelteComponentRegistry } from '../registry'
 import RawDashboardRenderer from './DashboardRenderer.svelte'
 import RawWidgetRenderer from './WidgetRenderer.svelte'
+import RawDashboardFilters from './DashboardFilters.svelte'
+import type { DashboardFilterStore } from '@holo-js/panels-client'
 import type {
   SvelteCustomWidgetProps,
   SvelteDashboardRendererProps,
@@ -22,3 +24,5 @@ export function registerSvelteWidgetRenderer(
 
 export * from './contracts'
 export * from './helpers'
+
+export const DashboardFilters: Component<{ readonly store: DashboardFilterStore, readonly panelId: string, readonly registry: SvelteComponentRegistry }> = RawDashboardFilters

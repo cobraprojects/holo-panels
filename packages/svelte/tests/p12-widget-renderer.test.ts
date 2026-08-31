@@ -104,7 +104,7 @@ describe('P12 Svelte widget and dashboard renderer', () => {
   it('renders stats and charts with action, trend, SVG, and accessible table semantics', () => {
     const container = renderDashboard([
       widget('growth', 'stats', { stats: [
-        { action: 'reports.open', chart: [4, 7, 9], color: 'success', description: 'This month', icon: 'arrow-up', id: 'revenue', label: 'Revenue', trend: 'up', url: '/reports', value: '$12k' },
+        { action: 'reports.open', chart: [4, 7, 9], color: 'success', description: 'This month', icon: 'arrow-up', id: 'revenue', label: 'Revenue', progress: { value: 75, max: 100 }, trend: 'up', url: '/reports', value: '$12k' },
         { action: null, chart: [], color: '#123456', description: null, icon: null, id: 'orders', label: 'Orders', trend: null, url: null, value: 42 },
       ] }),
       widget('revenue', 'chart', { description: 'Revenue for each month', series: [{ color: '#2563eb', id: 'net', label: 'Net', points: [{ label: 'Jan', value: 10 }, { label: 'Feb', value: 18 }] }], summary: 'Monthly revenue', type: 'line' }),
@@ -114,13 +114,16 @@ describe('P12 Svelte widget and dashboard renderer', () => {
     expect(container.querySelector('.hp-widget-stat')?.textContent).toContain('$12k')
     expect(container.querySelector('[aria-label="Trend up"]')?.textContent).toBe('↑')
     const stats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
+    expect(container.querySelector('svg[data-icon="arrow-up"]')).not.toBeNull()
+    expect(container.querySelector('.hp-widget-sparkline polyline')).not.toBeNull()
+    expect(container.querySelector('progress[aria-label="Revenue"]')?.getAttribute('value')).toBe('75')
     expect(stats[0]?.dataset.color).toBe('success')
-    expect(stats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('')
+    expect(stats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('inherit')
     expect(stats[1]?.dataset.color).toBe('#123456')
     expect(stats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('#123456')
     expect(container.querySelector('[data-action="reports.open"]')).not.toBeNull()
     expect(container.querySelector('a')?.getAttribute('href')).toBe('/reports')
-    expect(container.querySelector('[data-chart-geometry="line"] polyline')?.getAttribute('points')).toContain('100,2')
+    expect(container.querySelector('[data-chart-mark="line"]')?.getAttribute('d')).toContain('L')
     expect(container.querySelector('figure figcaption')?.textContent).toBe('Monthly revenue')
     expect(container.querySelector('figure table caption')?.textContent).toBe('Monthly revenue')
     expect(container.querySelector('th[scope="row"]')?.textContent).toBe('Jan')
@@ -140,10 +143,10 @@ describe('P12 Svelte widget and dashboard renderer', () => {
       widget('pie-chart', 'chart', chart('pie')),
     ])
 
-    expect(container.querySelector('[data-chart-type="line"] [data-chart-geometry="line"] polyline')).not.toBeNull()
-    expect(container.querySelector('[data-chart-type="area"] [data-chart-geometry="area"] polygon')).not.toBeNull()
-    expect(container.querySelectorAll('[data-chart-type="bar"] [data-chart-geometry="bar"] rect')).toHaveLength(2)
-    expect(container.querySelectorAll('[data-chart-type="pie"] [data-chart-geometry="pie"] path')).toHaveLength(2)
+    expect(container.querySelector('[data-chart-type="line"] [data-chart-mark="line"]')).not.toBeNull()
+    expect(container.querySelector('[data-chart-type="area"] [data-chart-mark="area"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-chart-type="bar"] [data-chart-mark="bar"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-chart-type="pie"] [data-chart-mark="slice"]')).toHaveLength(2)
     expect(container.querySelector('[data-chart-type="pie"] path')?.getAttribute('d')).toContain(' A ')
     expect(container.querySelectorAll('figure table')).toHaveLength(4)
   })
@@ -170,7 +173,7 @@ describe('P12 Svelte widget and dashboard renderer', () => {
 
     expect(container.querySelector('[data-panels-widget="lazy"] [role="status"]')?.textContent).toBe('Loading widget')
     expect(container.querySelector('form[aria-label="lazy filters"] input')?.getAttribute('value')).toBe('month')
-    expect(container.querySelector('[data-panels-widget="broken"] [role="alert"]')?.textContent).toContain('Request failed')
+    expect(container.querySelector('[data-panels-widget="broken"] [role="alert"]')?.textContent).toContain('Unable to load widget')
     expect(container.querySelector('[data-panels-widget="private"] [role="status"]')?.textContent).toContain('Widget unavailable')
     expect(container.querySelector('[data-panels-widget="hidden"]')).toBeNull()
   })

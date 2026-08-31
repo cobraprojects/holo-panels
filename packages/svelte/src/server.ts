@@ -58,3 +58,5 @@ export {
 } from '@holo-js/panels-core/server'
 export { bootPanel, executeGeneratedUploadOperation, panelErrorNotificationEffect, requestedLocales, resolvePanelLocale, resolvePanelRoute } from '@holo-js/panels-core/server'
 export type { PanelAuthOperation, PanelAuthRuntime, PanelTenantOperation } from '@holo-js/panels-core/server'
+
+export { resolveDashboardLanding, normalizeDashboardPage, executeWidgetDataOperation, resolvePageWidgetGroup } from '@holo-js/panels-core/server'

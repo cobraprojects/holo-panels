@@ -1,6 +1,7 @@
 import { createSvelteKitHoloHelpers } from '@holo-js/adapter-sveltekit'
 import {
   executeGeneratedWidgetOperation,
+  executeWidgetDataOperation,
   PanelRuntime,
   createNavigationSeed,
   executeGeneratedGlobalSearch,
@@ -12,7 +13,9 @@ import {
   resolvePageData,
   requestedLocales,
   resolvePanelLocale,
-  resolveWidget,
+  normalizeDashboardPage,
+  resolvePageWidgetGroup,
+  resolveDashboardLanding,
   toJsonValue,
   type CompiledPageDefinition,
   type CompiledPanelDefinition,
@@ -20,7 +23,6 @@ import {
   type HoloAuth,
   type JsonObject,
   type JsonValue,
-  type ResolvedWidget,
   type TableQueryState,
 } from '@holo-js/panels-svelte/server'
 import type {
@@ -52,7 +54,7 @@ async function definitions(registry: SvelteKitPanelServerRegistry, panelId: stri
 async function definitions(registry: SvelteKitPanelServerRegistry, panelId: string, kind: 'page' | 'panel' | 'widget'): Promise<readonly object[]> {
   const prefix = `${panelId}:${kind}:`
   const keys = Object.keys(registry).filter(key => key.startsWith(prefix) && IDENTIFIER.test(key.slice(prefix.length))).sort()
-  const values = (await Promise.all(keys.map(key => registry[key]!()))).map(compiled)
+  const values = (await Promise.all(keys.map(key => registry[key]!()))).map(value => normalizeDashboardPage(compiled(value)) as object)
   if (kind !== 'widget') return values.filter(value => Reflect.get(value, 'kind') === kind)
   return Object.freeze(values.filter(value => Reflect.get(value, 'kind') === 'widget') as CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[])
 }
@@ -64,28 +66,6 @@ async function resourceWidgets(registry: SvelteKitPanelServerRegistry, panelId: 
   const resource = compiled(await loader())
   const widgets = Reflect.get(resource, 'widgets')
   return Object.freeze(Array.isArray(widgets) ? widgets.map(compiled).filter(value => Reflect.get(value, 'kind') === 'widget') as CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[] : [])
-}
-
-async function resolvedPageWidgets(
-  ids: readonly string[],
-  widgets: readonly CompiledWidgetDefinition<JsonValue, object, unknown, unknown, object>[],
-  context: {
-    readonly actor: object
-    readonly locale: string
-    readonly panelId: string
-    readonly services: unknown
-    readonly signal: AbortSignal
-    readonly tenant: unknown
-  },
-  resource: Readonly<{ readonly pageId: string, readonly record: JsonObject | null, readonly resourceId: string, readonly tableState: Readonly<TableQueryState> | null }> | null,
-  placement: 'footer' | 'header',
-): Promise<readonly ResolvedWidget<JsonValue>[]> {
-  const widgetsById = new Map(widgets.map(widget => [widget.manifest.id, widget]))
-  return Object.freeze(await Promise.all(ids.map(async id => {
-    const widget = widgetsById.get(id)
-    if (!widget) throw new Error(`[Holo Panels] Page references missing widget "${id}".`)
-    return await resolveWidget(widget, context, {}, resource ? { ...context, ...resource, placement } : null)
-  })))
 }
 
 function pageWidgetResource(
@@ -156,20 +136,25 @@ function generatedLocale(panel: CompiledPanelDefinition<object>, input: PanelOpe
 
 async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, registry: SvelteKitPanelServerRegistry) {
   const pages = preparePageRoutes(await definitions(registry, input.panelId, 'page'))
-  const match = pages.map(definition => ({ definition, parameters: routeParameters(definition.manifest.path, input.path) })).find(item => item.parameters !== null)
-  if (!match?.parameters) throw Object.assign(new Error('Panel page not found'), { code: 'panel-not-found' })
+  let match = pages.map(definition => ({ definition, parameters: routeParameters(definition.manifest.path, input.path) })).find(item => item.parameters !== null)
   const panel = await discoveredPanel(registry, input.panelId)
   const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
-  const page = await resolvePageData(match.definition, {
+  const context = {
+    guard: panel.guard,
     actor: input.scope.actor,
     locale: generatedLocale(panel, input),
     panelId: input.panelId,
-    parameters: match.parameters,
     services: await input.holo.getProject(),
     signal: input.scope.signal,
     strictAuthorization: panel.manifest.runtime?.strictAuthorization ?? false,
     tenant: input.tenant ?? tenancy?.tenantId,
-  })
+  }
+  if (!match) {
+    const dashboard = await resolveDashboardLanding(pages, input.path, panel.manifest.path, context)
+    if (dashboard) match = { definition: dashboard, parameters: {} }
+  }
+  if (!match?.parameters) throw Object.assign(new Error('Panel page not found'), { code: 'panel-not-found' })
+  const page = await resolvePageData(match.definition, { ...context, parameters: match.parameters })
   const search = input.event.url.searchParams.get('search')?.trim().toLocaleLowerCase() ?? ''
   if (match.definition.manifest.pageType !== 'list' && match.definition.manifest.pageType !== 'manage') return page
   const resourceValue = match.definition.manifest.body?.properties.resource
@@ -325,6 +310,16 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
   return Object.freeze({
     [panelResolver]: (panelId: string) => discoveredPanel(serverRegistry, panelId),
     operations: {
+      'page-data': async (input: PanelOperationInput<object>) => {
+        const panel = await discoveredPanel(serverRegistry, input.panelId)
+        const tenancy = input.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(input.scope) : null
+        return { data: await executeWidgetDataOperation(serverRegistry, objectPayload(input.payload), {
+          actor: input.scope.actor, locale: generatedLocale(panel, input), panelId: input.panelId,
+          services: await input.holo.getProject(), signal: input.scope.signal, tenant: input.tenant ?? tenancy?.tenantId,
+          ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
+          ...(tenancy?.scopeTenantQuery ? { scopeTenantQuery: <TQuery>(query: TQuery): TQuery => tenancy.scopeTenantQuery(query as TQuery & TenantScopedQuery<TQuery>) } : {}),
+        }, panel) }
+      },
       action: (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       'form-submit': (input: PanelOperationInput<object>) => resourceOperation(input, serverRegistry),
       'global-search': (input: PanelOperationInput<object>) => globalSearchOperation(input, serverRegistry),
@@ -361,11 +356,16 @@ export function createGeneratedSvelteKitPanelsRegistry(serverRegistry: SvelteKit
       const resolvedWidgets = new Map(embeddedWidgets.map(widget => [widget.manifest.id, widget]))
       for (const widget of widgets) resolvedWidgets.set(widget.manifest.id, widget)
       const [header, footer] = await Promise.all([
-        resolvedPageWidgets(input.page.manifest.widgets.header, [...resolvedWidgets.values()], context, resource, 'header'),
-        resolvedPageWidgets(input.page.manifest.widgets.footer, [...resolvedWidgets.values()], context, resource, 'footer'),
+        resolvePageWidgetGroup(input.page.manifest.widgets.header, [...resolvedWidgets.values()], context, resource, 'header', { pageId: input.page.manifest.id, parameters: routeParameters(input.page.manifest.path, input.path) ?? {} }, input.page.data.filters as JsonObject | undefined, panel, input.page.data.filtersValid !== false),
+        resolvePageWidgetGroup(input.page.manifest.widgets.footer, [...resolvedWidgets.values()], context, resource, 'footer', { pageId: input.page.manifest.id, parameters: routeParameters(input.page.manifest.path, input.path) ?? {} }, input.page.data.filters as JsonObject | undefined, panel, input.page.data.filtersValid !== false),
       ])
       return Object.freeze({ footer, header })
     },
     runtime,
   })
+}
+
+function objectPayload(value: JsonValue): JsonObject {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Widget requests require objects')
+  return value
 }

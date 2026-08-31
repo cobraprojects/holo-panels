@@ -4,6 +4,13 @@ import { createResourceWidgetContext, defineDashboard, selectDefaultDashboard } 
 import { createAccessibleChartModel, renderAccessibleChart, requireResolvedWidget, resolveTableWidgetData, resolveWidget, WidgetAccessError } from '../src/widgets/resolution'
 import type { ChartWidgetData, StatsWidgetData } from '../src/widgets/contracts'
 import { createExtensionTypeId } from '../src/plugins/type-id'
+import { dashboardPage } from '../src/widgets/page'
+import { resolvePageData } from '../src/pages/resolution'
+import { executeWidgetDataOperation } from '../src/widgets/page-data'
+import { defineCustomPage } from '../src/pages/page'
+import { definePanel } from '../src/panels/panel'
+import { defineAction } from '../src/actions/builder'
+import { resolvePageWidgetGroup } from '../src/widgets/page-widgets'
 
 class Actor {
   declare readonly id: number
@@ -30,6 +37,63 @@ const context = {
 }
 
 describe('P12 widget definitions and resolution', () => {
+  it('keeps authorized lazy action metadata while deferring data resolution', async () => {
+    const data = vi.fn(() => ({ stats: [] }))
+    const widget = defineStatsWidget('lazy').lazy().data(data).compile()
+    const action = defineAction('open').authorize(() => true).action((_input, context) => context.actor).compile()
+    const resolved = await resolveWidget({ ...widget, server: { ...widget.server, actions: [action] } }, context, {}, createResourceWidgetContext(context, 'posts', 'posts.view', 'header'), { defer: true })
+    expect(resolved).toMatchObject({ status: 'idle', data: null, resourceId: 'posts', actions: [{ id: 'open' }] })
+    expect(data).not.toHaveBeenCalled()
+    const failed = { ...widget, manifest: { ...widget.manifest, lazy: false }, server: { ...widget.server, actions: [action], data: () => { throw new Error('Private source path') } } }
+    for (const filtersValid of [false, true]) {
+      const [result] = await resolvePageWidgetGroup(['lazy'], [failed], context, { pageId: 'posts.view', resourceId: 'posts', record: null, tableState: null }, 'header', {}, {}, definePanel('admin').compile(), filtersValid)
+      expect(result).toMatchObject({ status: 'error', data: null, resourceId: 'posts', actions: [{ id: 'open' }] })
+      expect(JSON.stringify(result)).not.toContain('Private source path')
+    }
+  })
+
+  it('refreshes registered page widgets with validated filters and rechecks page access', async () => {
+    let allowed = true
+    let count = 0
+    const page = defineCustomPage('overview').authorize(() => allowed).headerWidgets('sales').compile()
+    const widget = defineStatsWidget('sales').filter('period', 'Period', 'month').data(scope => ({ stats: [{ action: null, chart: [], color: null, description: String(scope.filters.period), icon: null, id: 'count', label: 'Count', trend: null, url: null, value: ++count }] })).compile()
+    const registry = { 'admin:page:overview': async () => page, 'admin:widget:sales': async () => widget }
+    const panel = definePanel('admin').compile()
+    const payload = { pageId: 'overview', widgetId: 'sales', filters: { period: 'year' } }
+    expect(await executeWidgetDataOperation(registry, payload, context, panel)).toMatchObject({ status: 'ready', data: { stats: [{ value: 1, description: 'year' }] } })
+    expect(await executeWidgetDataOperation(registry, payload, context, panel)).toMatchObject({ data: { stats: [{ value: 2 }] } })
+    await expect(executeWidgetDataOperation(registry, { ...payload, widgetId: 'other' }, context, panel)).rejects.toThrow('registered')
+    allowed = false
+    await expect(executeWidgetDataOperation(registry, payload, context, panel)).rejects.toThrow('cannot access')
+    expect(count).toBe(2)
+  })
+
+  it('renders dashboards as authorized pages with shared filter schemas and no server callbacks', async () => {
+    const dashboard = defineDashboard('overview')
+      .filtersForm({ fields: [{ kind: 'field', key: 'period', path: 'period', type: 'text', defaultValue: 'month', server: { label: () => 'private source' } }] })
+      .persistFiltersInSession(false)
+      .widgets('sales')
+      .compile()
+    const page = dashboardPage(dashboard)
+    const resolved = await resolvePageData(page, { ...context, parameters: {} })
+    expect(resolved.manifest.widgets.header).toEqual(['sales'])
+    expect(resolved.data.filters).toEqual({ period: 'month' })
+    expect(JSON.stringify(resolved)).not.toContain('server')
+    expect(JSON.stringify(resolved)).toContain('private source')
+    const denied = dashboardPage(defineDashboard('private').authorize(() => false).compile())
+    await expect(resolvePageData(denied, { ...context, parameters: {} })).rejects.toThrow('cannot access')
+  })
+
+  it('validates stat progress before returning authorized widget data', async () => {
+    const stat = { action: null, chart: [], color: null, description: null, icon: null, id: 'goal', label: 'Goal', trend: null, url: null, value: 75 }
+    const valid = defineStatsWidget('goal').data(() => ({ stats: [{ ...stat, progress: { value: 75, max: 100 } }] })).compile()
+    expect(requireResolvedWidget(await resolveWidget(valid, context)).stats[0]?.progress).toEqual({ value: 75, max: 100 })
+    for (const progress of [{ value: -1, max: 100 }, { value: 101, max: 100 }, { value: 0, max: 0 }]) {
+      const invalid = defineStatsWidget('goal').data(() => ({ stats: [{ ...stat, progress }] })).compile()
+      await expect(resolveWidget(invalid, context)).rejects.toThrow('progress')
+    }
+  })
+
   it('builds stats, chart, table, and custom manifests with fluent layout and behavior contracts', () => {
     const stats = defineStatsWidget('sales')
       .heading('Sales')

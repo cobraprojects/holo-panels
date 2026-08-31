@@ -1,6 +1,6 @@
 # Widget chart rendering
 
-Holo Panels renders widget charts with a small framework-native SVG implementation in React, Vue, and Svelte. The shared chart protocol supplies the data, description, summary, and tabular accessibility model, so every renderer exposes the same information without adding a chart-library runtime dependency.
+Holo Panels renders widget charts with shared SVG geometry from `widgetChartMarks`, mounted by React, Vue, and Svelte. Category positions align across series, including sparse data; bars support positive and negative values; pie slices share one total across all series. The shared chart protocol supplies the data, description, summary, and tabular accessibility model, so every renderer exposes the same information without adding a chart-library runtime dependency.
 
 This choice keeps the initial renderer bundle small and avoids three framework-specific chart dependencies. The built-in charts intentionally provide only the approved area, bar, line, and pie presentation contract. Applications that need advanced interaction or specialized visualization can register a custom widget renderer without changing the shared protocol.
 

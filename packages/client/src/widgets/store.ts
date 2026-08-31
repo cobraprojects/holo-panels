@@ -22,10 +22,6 @@ function freezeState(state: WidgetClientState): WidgetClientState {
   return Object.freeze({ ...state, filters: Object.freeze({ ...state.filters }) })
 }
 
-function errorMessage(error: object): string {
-  return error instanceof Error && error.message.trim() ? error.message : 'Unable to load widget'
-}
-
 export class WidgetStore {
   readonly #listeners = new Set<WidgetStateListener>()
   readonly #loader: WidgetLoader
@@ -55,7 +51,7 @@ export class WidgetStore {
     this.#scheduler = options.scheduler ?? defaultScheduler
     const initialResult = options.initialResult
     this.#state = freezeState({
-      data: initialResult?.data === undefined ? null : toJsonValue(initialResult.data),
+      data: initialResult?.status !== 'ready' || initialResult.data === undefined ? null : toJsonValue(initialResult.data),
       error: null,
       filters: this.#persistence?.read(manifest.filters) ?? Object.fromEntries(manifest.filters.map(filter => [filter.id, filter.defaultValue])),
       loading: false,
@@ -86,11 +82,11 @@ export class WidgetStore {
     try {
       const result = await this.#loader(this.#manifest.id, this.#state.filters, controller.signal)
       if (controller.signal.aborted || request !== this.#request) return
-      const serialized = result.data === undefined ? null : toJsonValue(result.data)
+      const serialized = result.status !== 'ready' || result.data === undefined ? null : toJsonValue(result.data)
       this.update({ data: serialized, error: null, loading: false, status: result.status })
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted || request !== this.#request) return
-      this.update({ data: null, error: errorMessage(Object(error)), loading: false, status: 'error' })
+      this.update({ data: null, error: 'Unable to load widget', loading: false, status: 'error' })
     } finally {
       if (this.#controller === controller) this.#controller = null
     }
@@ -115,6 +111,7 @@ export class WidgetStore {
   startPolling(): void {
     if (this.#polling || !this.#manifest.polling.enabled || this.#manifest.polling.interval === null) return
     this.#polling = this.#scheduler.every(() => {
+      if (this.#state.loading) return
       void this.load()
     }, this.#manifest.polling.interval)
   }

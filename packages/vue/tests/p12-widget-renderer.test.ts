@@ -81,7 +81,7 @@ describe('P12 Vue widget renderer', () => {
     const action = vi.fn()
     const stats = new WidgetStoreFixture('ready', {
       stats: [
-        { action: null, chart: [12, 18, 15], color: '#336699', description: 'This month', icon: 'currency', id: 'revenue', label: 'Revenue', trend: 'up', url: '/reports', value: '$18k' },
+        { action: null, chart: [12, 18, 15], color: '#336699', description: 'This month', icon: 'currency', id: 'revenue', label: 'Revenue', progress: { value: 75, max: 100 }, trend: 'up', url: '/reports', value: '$18k' },
         { action: 'orders.open', chart: [], color: 'success', description: null, icon: null, id: 'orders', label: 'Orders', trend: 'neutral', url: null, value: 42 },
       ],
     })
@@ -101,6 +101,7 @@ describe('P12 Vue widget renderer', () => {
 
     expect(container.querySelector('[data-widget-id="sales"] a')?.getAttribute('href')).toBe('/reports')
     expect(container.querySelector('[data-icon="currency"]')).not.toBeNull()
+    expect(container.querySelector('progress[aria-label="Revenue"]')?.getAttribute('value')).toBe('75')
     expect(container.querySelector('.hp-widget-stat__trend')?.textContent).toBe('Trend: up')
     const renderedStats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
     expect(renderedStats[0]?.dataset.color).toBe('#336699')
@@ -113,7 +114,7 @@ describe('P12 Vue widget renderer', () => {
     expect(action).toHaveBeenCalledWith('orders.open', expect.objectContaining({ id: 'orders' }))
     expect(container.querySelector('.hp-widget-chart svg')?.getAttribute('aria-hidden')).toBe('true')
     expect(container.querySelector('.hp-widget-chart figcaption')?.textContent).toContain('Monthly revenue')
-    expect(container.querySelector('.hp-widget-chart table')?.getAttribute('aria-label')).toBe('revenue chart chart data')
+    expect(container.querySelector('.hp-widget-chart table')?.getAttribute('aria-label')).toBe('Monthly revenue')
     expect(Array.from(container.querySelectorAll('.hp-widget-chart tbody tr')).map(row => row.textContent)).toEqual(['Jan1012', 'Feb14—'])
   })
 
@@ -133,10 +134,10 @@ describe('P12 Vue widget renderer', () => {
       widget: { manifest: manifest(`${type}-chart`, 'chart'), store: new WidgetStoreFixture('ready', data(type)) },
     })))))
 
-    expect(container.querySelectorAll('.hp-widget-chart--line polyline[data-chart-mark="line"]')).toHaveLength(2)
-    expect(container.querySelectorAll('.hp-widget-chart--area polygon[data-chart-mark="area"]')).toHaveLength(2)
-    expect(container.querySelectorAll('.hp-widget-chart--bar rect[data-chart-mark="bar"]')).toHaveLength(4)
-    expect(container.querySelectorAll('.hp-widget-chart--pie path[data-chart-mark="pie"]')).toHaveLength(4)
+    expect(container.querySelectorAll('.hp-widget-chart--line path[data-chart-mark="line"]')).toHaveLength(2)
+    expect(container.querySelectorAll('.hp-widget-chart--area path[data-chart-mark="area"]')).toHaveLength(2)
+    expect(container.querySelectorAll('.hp-widget-chart--bar path[data-chart-mark="bar"]')).toHaveLength(4)
+    expect(container.querySelectorAll('.hp-widget-chart--pie path[data-chart-mark="slice"]')).toHaveLength(4)
     expect(container.querySelectorAll('.hp-widget-chart svg[aria-hidden="true"]')).toHaveLength(4)
     expect(container.querySelectorAll('.hp-widget-chart table')).toHaveLength(4)
     expect(container.querySelector('.hp-widget-chart--pie table')?.textContent).toContain('Jan1012')
@@ -179,8 +180,8 @@ describe('P12 Vue widget renderer', () => {
     ])))
 
     expect(container.querySelector('[data-widget-id="hidden"]')).toBeNull()
-    expect(container.querySelector('[data-widget-id="secret"]')).toBeNull()
-    expect(container.querySelector('[data-widget-id="failed"] [role="alert"]')?.textContent).toBe('Filtered request failed')
+    expect(container.querySelector('[data-widget-id="secret"]')?.textContent).toContain('Widget unavailable')
+    expect(container.querySelector('[data-widget-id="failed"] [role="alert"]')?.textContent).toContain('Unable to load')
     expect(container.querySelector('[data-widget-id="empty"] .hp-widget-empty')?.textContent).toContain('Nothing to show')
     expect(lazy.activate).not.toHaveBeenCalled()
     container.querySelector<HTMLButtonElement>('[data-widget-id="lazy-sales"] button')?.click()

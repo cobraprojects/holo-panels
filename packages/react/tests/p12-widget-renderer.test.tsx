@@ -60,7 +60,7 @@ describe('P12 React widget renderer', () => {
     const navigate = vi.fn()
     const store = createStore(widget, {
       data: { stats: [
-        { action: 'sales.refresh', chart: [2, 4, 3], color: '#123456', description: 'Since last month', icon: 'currency', id: 'revenue', label: 'Revenue', trend: 'up', url: null, value: '$42' },
+        { action: 'sales.refresh', chart: [2, 4, 3], color: '#123456', description: 'Since last month', icon: 'currency', id: 'revenue', label: 'Revenue', progress: { value: 75, max: 100 }, trend: 'up', url: null, value: '$42' },
         { action: null, chart: [], color: 'success', description: null, icon: null, id: 'orders', label: 'Orders', trend: null, url: '/orders', value: 8 },
       ] },
       status: 'ready',
@@ -80,6 +80,8 @@ describe('P12 React widget renderer', () => {
     expect(stats[1]?.dataset.color).toBe('success')
     expect(stats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('')
     expect(container.querySelector('svg[aria-hidden="true"] polyline')).not.toBeNull()
+    expect(container.querySelector('svg[data-icon="currency"]')).not.toBeNull()
+    expect(container.querySelector('progress[aria-label="Revenue"]')?.getAttribute('value')).toBe('75')
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Revenue'))?.click())
     expect(action).toHaveBeenCalledWith('sales.refresh')
     act(() => container.querySelector<HTMLAnchorElement>('a[href="/orders"]')?.click())
@@ -161,7 +163,7 @@ describe('P12 React widget renderer', () => {
     const failedWidget = manifest({ id: 'failed' })
     const failed = mount({ manifest: failedWidget, store: createStore(failedWidget, async () => { throw new Error('Try later') }) })
     await act(async () => failed.querySelector<HTMLButtonElement>('button')?.click())
-    expect(failed.querySelector('[role="alert"]')?.textContent).toContain('Widget failedTry laterRetry')
+    expect(failed.querySelector('[role="alert"]')?.textContent).toContain('Widget failedRetry')
   })
 
   it('places dashboard and resource widgets in ordered responsive semantic grids', () => {

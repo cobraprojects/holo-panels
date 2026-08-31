@@ -192,6 +192,12 @@ Public builders include:
 
 Widgets have server visibility, authorization, and data callbacks. The client `WidgetStore` handles loading, polling, errors, hidden/unauthorized states, and filters; `WidgetFilterPersistence` stores filter state; `resolveWidgetGrid` creates responsive placement. Charts have accessible tabular fallbacks through `createAccessibleChartModel` and `renderAccessibleChart`.
 
+Stats accept optional `progress: { value, max }`. Values must be finite, with a positive maximum and a value between zero and the maximum. Renderers show a labeled native progress indicator alongside the stat icon, trend, and sparkline.
+
+Dashboards are discovered as pages. Use `.filtersForm(new Schema().components([...]).compile())` for shared form controls and `.persistFiltersInSession()` to save validated filters in the authenticated Holo session. Saved values are scoped by actor, panel, tenant, and dashboard. Reset removes that scope's saved values and restores schema defaults. A widget's local filters override dashboard filters with the same name. See the [Metrics dashboard](../apps/example-next/server/admin/pages/MetricsDashboard.ts) and its [filtered publishing widget](../apps/example-next/server/admin/widgets/FilteredPublishing.ts).
+
+Lazy loading, filter changes, retries, and polling fetch fresh data through the existing `page-data` operation. Each request rechecks page, widget, tenant, and resource access. Widgets receive the authorized current record or normalized parent-table state when placed on resource pages. Server failures clear widget data and display the configured error state without exception details.
+
 ## Notifications
 
 `Notification.make()` builds a fluent notification with status, title, body, duration, persistence, icon/color, shared actions, and `send()`, `sendToDatabase()`, or `broadcast()` delivery methods. `PanelNotification` integrates with Holo Notifications delivery, and toast effects are consumed by `ClientToastStore`.

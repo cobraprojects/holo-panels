@@ -1413,7 +1413,7 @@ function pageManifest(
     path: `${listPath}${suffix}`,
     renderer: null,
     schemaId: null,
-    widgets: { footer: [], header: listPage ? widgetIds : [] },
+    widgets: { footer: [], header: widgetIds },
   })
 }
 

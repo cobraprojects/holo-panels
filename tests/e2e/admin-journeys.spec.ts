@@ -628,7 +628,8 @@ test.describe('authenticated admin journeys', () => {
 
     const postRouteKey = generatedResources[0]!.id
     await gotoPanelPage(page, `/admin/posts/${postRouteKey}/edit`)
-    await expect(page.getByRole('heading', { name: 'Active query' })).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Page header widgets' })).toContainText('Active query')
+    await expect(page.getByRole('region', { name: 'Page header widgets' })).toContainText('Record: Building with Holo Panels')
     await expect(page.locator('[data-slot="page-actions"] a, [data-slot="page-actions"] button')).toHaveCount(2)
     const actionGeometry = await page.locator('.hp-panel-page-header').evaluate((header) => {
       const heading = header.querySelector('h1')
@@ -646,7 +647,9 @@ test.describe('authenticated admin journeys', () => {
     const commentsRelation = page.locator('[data-relation-manager="comments"]')
     await expect(commentsRelation.getByRole('table')).toBeVisible()
     await expect(commentsRelation.getByRole('columnheader', { name: 'Author Name' })).toBeVisible()
-    await expect(commentsRelation.getByRole('button', { name: 'Edit' }).first()).toBeVisible()
+    await commentsRelation.getByRole('button', { name: 'Row actions', exact: true }).first().click()
+    await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
 
     const styles = await page.locator('body').evaluate((body) => {
       const root = body.querySelector('[data-holo-panel]')
@@ -968,6 +971,8 @@ test.describe('authenticated admin journeys', () => {
     const navigation = page.getByRole('navigation', { name: 'Panel navigation' })
     await expect(navigation.getByRole('link')).toHaveText([
       'Overview',
+      'Metrics',
+      'Reports',
       'Posts',
       'Categories',
       'Tags',
@@ -1054,12 +1059,41 @@ test.describe('authenticated admin journeys', () => {
     await expect(page).toHaveURL(/\/admin\/posts\/(?:post-)?acme-draft$/u)
   })
 
+  test('refreshes shared dashboard filters and restores the scoped session', async ({ page }) => {
+    await login(page)
+    await gotoPanelPage(page, '/admin/metrics')
+    await expect(page.getByRole('progressbar', { name: 'Matching posts' })).toBeVisible()
+    await expect(page.getByRole('table', { name: 'Publishing totals' })).toBeVisible()
+    await page.getByLabel('Search posts').fill('draft')
+    await page.getByRole('button', { name: 'Apply filters' }).click()
+    await expect(page.getByText('Matching draft', { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Search posts')).toHaveValue('draft')
+    await expect(page.getByText('Matching draft', { exact: true })).toBeVisible()
+    await gotoPanelPage(page, '/admin/reports')
+    await expect(page.getByRole('table', { name: 'Publishing totals' })).toBeVisible()
+    await gotoPanelPage(page, '/admin/metrics')
+    await page.getByRole('button', { name: 'Reset filters' }).click()
+    await expect(page.getByLabel('Search posts')).toHaveValue('')
+    await expect(page.getByText('All tenant posts', { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page.getByLabel('Search posts')).toHaveValue('')
+  })
+
   test('passes the active list query to resource widgets', async ({ page }) => {
     await login(page)
     await gotoPanelPage(page, '/admin/posts?search=draft')
 
     await expect(page.getByText('Search: draft', { exact: true })).toBeVisible()
     await expect(page.getByRole('row').filter({ hasText: 'Acme draft' })).toBeVisible()
+  })
+
+  test('passes the authorized current record to resource widgets', async ({ page }) => {
+    await login(page)
+    await gotoPanelPage(page, '/admin/posts?search=draft')
+    await page.getByRole('row').filter({ hasText: 'Acme draft' }).getByRole('button', { name: 'Row actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
+    await expect(page.getByText('Record: Acme draft', { exact: true })).toBeVisible()
   })
 
   test('rejects wrong-owner and wrong-tenant relation mutations at the framework route', async ({ page }) => {
@@ -1193,7 +1227,7 @@ test.describe('authenticated admin journeys', () => {
     await page.unrouteAll({ behavior: 'wait' })
     await expect(page.locator('[data-resource-crud="edit"]')).toHaveCount(0)
     await page.getByRole('group', { name: 'Page actions', exact: true }).getByRole('button', { name: 'Create', exact: true }).click()
-    await expect(page).toHaveURL(/\/admin\/posts\/create$/u)
+    await expect(page).toHaveURL(url => url.pathname === '/admin/posts/create')
     await waitForPanelReady(page)
     await expectSameDocument(page, document)
     await titleInput.fill(`Session still active ${suffix}`)

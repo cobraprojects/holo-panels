@@ -46,22 +46,34 @@ export async function resolveWidget<TData extends JsonValue, TActor, TTenant, TS
   context: WidgetContext<TActor, TTenant, TServices>,
   filters: WidgetFilterState = {},
   resource: ResourceWidgetContext<TRecord, TActor, TTenant, TServices> | null = null,
+  options: { readonly dashboardFilters?: WidgetFilterState, readonly defer?: boolean } = {},
 ): Promise<ResolvedWidget<TData>> {
   assertNotAborted(context.signal)
   if (!await definition.server.authorize(context)) return { data: null, manifest: definition.manifest, status: 'unauthorized' }
   assertNotAborted(context.signal)
   if (!await definition.server.visible(context)) return { data: null, manifest: definition.manifest, status: 'hidden' }
   assertNotAborted(context.signal)
-  const dataContext: WidgetDataContext<TActor, TTenant, TServices, TRecord> = { ...context, filters: validatedFilters(definition, filters), resource }
-  const data = await definition.server.data(dataContext)
-  assertNotAborted(context.signal)
-  toJsonValue(data)
   const actions = await Promise.all((definition.server.actions ?? []).map(async (action) => {
-    const scope = { ...context, mount: action.mount, record: null }
+    const scope = { ...context, mount: action.mount, record: resource?.record ?? null }
     const state = await resolveActionState(action, scope)
     return compileActionManifest(action, state.label, scope, state)
   }))
-  return { ...(actions.length > 0 ? { actions } : {}), ...(resource ? { resourceId: resource.resourceId } : {}), data, manifest: definition.manifest, status: 'ready' }
+  const metadata = { ...(actions.length > 0 ? { actions } : {}), ...(resource ? { resourceId: resource.resourceId } : {}) }
+  if (options.defer) return { ...metadata, data: null, manifest: definition.manifest, status: 'idle' }
+  const dataContext: WidgetDataContext<TActor, TTenant, TServices, TRecord> = { ...context, filters: { ...options.dashboardFilters, ...validatedFilters(definition, filters) }, resource }
+  const data = await definition.server.data(dataContext)
+  assertNotAborted(context.signal)
+  toJsonValue(data)
+  if (definition.manifest.family === 'stats' && data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.stats)) {
+    for (const stat of data.stats) {
+      if (!stat || typeof stat !== 'object' || Array.isArray(stat) || stat.progress === undefined || stat.progress === null) continue
+      const progress = stat.progress
+      if (typeof progress !== 'object' || Array.isArray(progress) || typeof progress.value !== 'number' || typeof progress.max !== 'number' || !Number.isFinite(progress.value) || !Number.isFinite(progress.max) || progress.max <= 0 || progress.value < 0 || progress.value > progress.max) {
+        throw new Error('Stat progress requires a value between zero and a positive maximum')
+      }
+    }
+  }
+  return { ...metadata, data, manifest: definition.manifest, status: 'ready' }
 }
 
 export interface TableWidgetExecutor<TRecord, TContext> {

@@ -183,7 +183,7 @@ describe('P7-B column inference and built-ins', () => {
 })
 
 describe('P7-B text formatting and manifest security', () => {
-  it('places resource widgets on the list page without leaking them into record forms', () => {
+  it('places configured resource widgets on list and record pages', () => {
     const manifests = generatedResourcePageManifests({
       panelPath: '/admin',
       resource: {
@@ -203,7 +203,7 @@ describe('P7-B text formatting and manifest security', () => {
 
     expect(manifests).toHaveLength(4)
     expect(manifests.find(manifest => manifest.pageType === 'list')?.widgets.header).toEqual(['post-stats', 'recent-comments'])
-    expect(manifests.filter(manifest => manifest.pageType !== 'list').every(manifest => manifest.widgets.header.length === 0)).toBe(true)
+    expect(manifests.filter(manifest => manifest.pageType !== 'list').every(manifest => manifest.widgets.header.join(',') === 'post-stats,recent-comments')).toBe(true)
   })
 
   it('reactively derives a conventional slug field from the title without extra resource configuration', () => {

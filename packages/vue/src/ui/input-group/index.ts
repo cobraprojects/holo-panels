@@ -11,8 +11,8 @@ export const inputGroupAddonVariants = cva(
   {
     variants: {
       align: {
-        'inline-start': 'hp:order-first hp:pl-3',
-        'inline-end': 'hp:order-last hp:pr-3',
+        'inline-start': 'hp:order-first hp:ps-3',
+        'inline-end': 'hp:order-last hp:pe-3',
         'block-start': 'hp:order-first hp:w-full hp:justify-start hp:px-3 hp:pt-3',
         'block-end': 'hp:order-last hp:w-full hp:justify-start hp:px-3 hp:pb-3',
       },

@@ -10,8 +10,10 @@ import {
   type ActionResolvable,
   type ActionSize,
   builtInActionPresentation,
+  builtInActionTranslationKeys,
   type JsonObject,
   type PanelNotificationPresentation,
+  type PanelTranslationKey,
   type RegisteredPanelRecord,
   toJsonValue,
 } from '@holo-js/panels-core'
@@ -110,6 +112,8 @@ export class Action<
   #buttonStyle: ActionButtonStyle = 'button'
   #color: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, ActionColor | null> = null
   #confirmation: string | null = null
+  #confirmationTranslationKey: PanelTranslationKey | undefined
+  #customLabel = false
   #disabled: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, boolean> = false
   #extraAttributes: JsonObject = {}
   #failureNotification: PanelNotificationPresentation | null = null
@@ -130,6 +134,9 @@ export class Action<
   readonly #schemaFactory: TSchemaFactory | undefined
 
   constructor(id: string, kind: ActionKind = 'custom', mount: ActionMount = 'record', schemaFactory?: TSchemaFactory) {
+    this.#confirmation = builtInActionPresentation(kind)?.confirmation ?? null
+    this.#requiresConfirmation = this.#confirmation !== null
+    this.#confirmationTranslationKey = builtInActionTranslationKeys(kind)?.confirmation
     this.id = id
     this.kind = kind
     this.mount = mount
@@ -223,6 +230,7 @@ export class Action<
   }
 
   label(value: Resolvable<ActionPresentationContext<TRecord, TData, TActor, TTenant, TServices>, string>): this {
+    this.#customLabel = true
     this.#label = value
     return this
   }
@@ -304,6 +312,7 @@ export class Action<
 
   requiresConfirmation(value: boolean | string = true): this {
     this.#requiresConfirmation = value !== false
+    this.#confirmationTranslationKey = value === true ? 'actions.confirmQuestion' : undefined
     this.#confirmation = typeof value === 'string' ? value : value ? 'Are you sure?' : null
     return this
   }
@@ -436,12 +445,14 @@ export class Action<
       color: this.coreResolver(this.#color),
       confirmation: this.#confirmation,
       disabled: this.coreResolver(this.#disabled),
+      confirmationTranslationKey: this.#confirmationTranslationKey,
       failureNotification: this.#failureNotification ?? undefined,
       handle: (data: TData & JsonObject, context: CoreActionContext<TRecord, TActor, TTenant, TServices>) => this.#handler(data, this.executionContext(data, context)),
       icon: this.coreResolver(this.#icon),
       id: this.id,
       kind: this.kind,
       label: this.coreResolver(this.#label),
+      labelTranslationKey: this.#customLabel ? undefined : builtInActionTranslationKeys(this.kind)?.label,
       modal: this.compiledModal(),
       nestedActions: this.#modal?.nestedActions.map(action => action.compile()),
       mount: this.mount,
@@ -660,7 +671,6 @@ function makeBuiltInBulk<TRecord extends object>(id: string, kind: ActionKind): 
 interface BuiltInActionPresenter {
   color(value: ActionColor | null): unknown
   icon(value: string | null): unknown
-  requiresConfirmation(value: boolean | string): unknown
 }
 
 function applyBuiltInPresentation<TAction extends BuiltInActionPresenter>(action: TAction, name: string): TAction {
@@ -668,7 +678,6 @@ function applyBuiltInPresentation<TAction extends BuiltInActionPresenter>(action
   if (!presentation) return action
   action.color(presentation.color)
   action.icon(presentation.icon)
-  if (presentation.confirmation) action.requiresConfirmation(presentation.confirmation)
   return action
 }
 

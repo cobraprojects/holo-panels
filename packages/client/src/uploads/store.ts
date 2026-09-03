@@ -1,3 +1,4 @@
+import { createPanelTranslator, type PanelTranslator } from '../locales/presentation'
 import type { TemporaryUploadDescriptor, UploadPolicy } from '@holo-js/panels-core'
 import type {
   ClientUploadFile,
@@ -19,10 +20,10 @@ function normalizedExtension(name: string): string {
   return index < 0 ? '' : name.slice(index + 1).toLowerCase()
 }
 
-function validateClientFile(file: ClientUploadFile, policy: UploadPolicy): void {
-  if (!policy.acceptedExtensions.includes(normalizedExtension(file.name))) throw new Error('File extension is not allowed')
-  if (!policy.acceptedMimeTypes.includes(file.type.toLowerCase())) throw new Error('File type is not allowed')
-  if (file.size < 1 || file.size > policy.maximumSize) throw new Error('File size exceeds the configured limit')
+function validateClientFile(file: ClientUploadFile, policy: UploadPolicy, translate: PanelTranslator): void {
+  if (!policy.acceptedExtensions.includes(normalizedExtension(file.name))) throw new Error(translate('uploads.extensionRejected'))
+  if (!policy.acceptedMimeTypes.includes(file.type.toLowerCase())) throw new Error(translate('uploads.typeRejected'))
+  if (file.size < 1 || file.size > policy.maximumSize) throw new Error(translate('uploads.sizeRejected'))
 }
 
 function existingItem(item: ExistingMediaItem): ClientUploadItem {
@@ -38,11 +39,12 @@ function existingItem(item: ExistingMediaItem): ClientUploadItem {
   })
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim() ? error.message : 'Upload failed'
+function errorMessage(error: unknown, translate: PanelTranslator): string {
+  return error instanceof Error && error.message.trim() ? error.message : translate('uploads.failure')
 }
 
 export class UploadStore {
+  #locale: string
   #active = 0
   readonly #adapter: UploadStoreOptions['adapter']
   readonly #context: UploadStoreOptions['context']
@@ -55,6 +57,7 @@ export class UploadStore {
   #state: UploadStoreState
 
   constructor(options: UploadStoreOptions) {
+    this.#locale = options.locale ?? 'en'
     const maximumConcurrency = options.maximumConcurrency ?? 3
     if (!Number.isSafeInteger(maximumConcurrency) || maximumConcurrency < 1 || maximumConcurrency > 10) {
       throw new Error('Upload concurrency must be an integer from 1 to 10')
@@ -71,6 +74,10 @@ export class UploadStore {
     })
   }
 
+  setLocale(locale: string): void {
+    this.#locale = locale
+  }
+
   get state(): UploadStoreState {
     return this.#state
   }
@@ -81,13 +88,14 @@ export class UploadStore {
   }
 
   add(files: readonly ClientUploadFile[]): readonly string[] {
+    const translate = createPanelTranslator(this.#locale)
     try {
       if (this.#state.items.length + files.length > this.#policy.maximumFiles) {
-        throw new Error('File count exceeds the configured limit')
+        throw new Error(translate('uploads.countRejected'))
       }
-      files.forEach(file => validateClientFile(file, this.#policy))
+      files.forEach(file => validateClientFile(file, this.#policy, translate))
     } catch (cause) {
-      this.publish(this.#state.items, errorMessage(cause))
+      this.publish(this.#state.items, errorMessage(cause, createPanelTranslator(this.#locale)))
       return []
     }
     const queued = files.map(file => {
@@ -125,7 +133,7 @@ export class UploadStore {
       }
       this.publish(this.#state.items.filter(candidate => candidate.id !== id), null)
     } catch (cause) {
-      this.replace(id, current => ({ ...current, error: errorMessage(cause), status: current.status === 'existing' ? 'existing' : 'failed' }))
+      this.replace(id, current => ({ ...current, error: errorMessage(cause, createPanelTranslator(this.#locale)), status: current.status === 'existing' ? 'existing' : 'failed' }))
     }
   }
 
@@ -224,7 +232,7 @@ export class UploadStore {
     } catch (error) {
       if (queued.controller.signal.aborted) return
       if (this.#state.items.some(item => item.id === activeId)) {
-        this.replace(activeId, item => ({ ...item, error: errorMessage(error), status: 'failed' }))
+        this.replace(activeId, item => ({ ...item, error: errorMessage(error, createPanelTranslator(this.#locale)), status: 'failed' }))
       }
     } finally {
       this.#controllers.delete(activeId)

@@ -238,7 +238,7 @@ function defaultNotification(item: VueDatabaseNotification, controls: VueNotific
 export const VueNotificationInbox = defineComponent({
   name: 'HoloPanelsNotificationInbox',
   props: {
-    emptyMessage: { default: 'No notifications', type: String },
+    emptyMessage: { type: String },
     locale: { default: 'en', type: String },
     navigate: Function as PropType<VueNotificationInboxProps['navigate']>,
     panelId: String,
@@ -273,9 +273,9 @@ export const VueNotificationInbox = defineComponent({
           h(Button, { disabled: state.value.unread === 0, onClick: () => ignoreFailure(props.store.markAllRead()), size: 'sm', type: 'button', variant: 'outline' }, () => [PanelsIcon('check-check'), translate('notifications.markAllRead')]),
         ]),
         h(CardContent, { class: props.placement === 'page' ? null : 'hp:max-h-[min(36rem,calc(100vh-8rem))] hp:overflow-y-auto' }, () => [
-          state.value.error ? h(Alert, { 'data-slot': 'notification-error', variant: 'destructive' }, () => h(AlertDescription, {}, () => state.value.error)) : null,
+          state.value.error ? h(Alert, { 'data-slot': 'notification-error', variant: 'destructive' }, () => h(AlertDescription, {}, () => translate(state.value.error === 'Unable to update notifications' ? 'notifications.updateFailed' : 'notifications.loadFailed'))) : null,
           state.value.loading ? h('p', { 'aria-live': 'polite', class: 'hp:text-sm hp:text-muted-foreground', 'data-slot': 'notification-loading', role: 'status' }, translate('notifications.loading')) : null,
-          !state.value.loading && !state.value.error && items.length === 0 ? h(Empty, { 'data-slot': 'notification-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => props.emptyMessage), h(EmptyDescription, {}, () => translate('notifications.noneDescription'))])) : null,
+          !state.value.loading && !state.value.error && items.length === 0 ? h(Empty, { 'data-slot': 'notification-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => props.emptyMessage ?? translate('notifications.empty')), h(EmptyDescription, {}, () => translate('notifications.noneDescription'))])) : null,
           items.length > 0 ? h('ol', { class: 'hp:grid hp:gap-3', 'data-slot': 'notification-list' }, items) : null,
         ]),
         pages > 1 ? h(CardFooter, { class: 'hp-notification-pagination' }, () => [

@@ -46,7 +46,7 @@
 		{:else if singleErrorMessage}
 			{singleErrorMessage}
 		{:else if isMultipleErrors}
-			<ul class="hp:ml-4 hp:flex hp:list-disc hp:flex-col hp:gap-1">
+			<ul class="hp:ms-4 hp:flex hp:list-disc hp:flex-col hp:gap-1">
 				{#each errors ?? [] as error, index (index)}
 					{#if error?.message}
 						<li>{error.message}</li>

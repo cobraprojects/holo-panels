@@ -1,4 +1,5 @@
 import type { ExporterManifest, ImporterManifest } from '@holo-js/panels-core'
+import { createPanelTranslator, type PanelTranslator } from '../locales/presentation'
 import type { ClientUploadFile } from '../uploads'
 import type { TableSelectionPayload, TableRecordId } from '../tables'
 
@@ -63,12 +64,14 @@ export class ClientTransferStore {
   readonly #listeners = new Set<ClientTransferStateListener>()
   readonly #manifest: ClientTransferManifest
   readonly #transport: ClientTransferTransport
+  readonly #translate: PanelTranslator
   #controller: AbortController | null = null
   #state = initialState()
 
-  constructor(manifest: ClientTransferManifest, transport: ClientTransferTransport) {
+  constructor(manifest: ClientTransferManifest, transport: ClientTransferTransport, translate: PanelTranslator = createPanelTranslator('en')) {
     this.#manifest = manifest
     this.#transport = transport
+    this.#translate = translate
   }
 
   get state(): ClientTransferState {
@@ -94,7 +97,7 @@ export class ClientTransferStore {
       this.publish({ error: null, inspection, uploadProgress: 100 })
       return inspection
     } catch (cause) {
-      this.publish({ error: cause instanceof Error ? cause.message : 'Import inspection failed' })
+      this.publish({ error: cause instanceof Error ? cause.message : this.#translate('transfers.inspectionFailed') })
       throw cause
     } finally {
       if (this.#controller === controller) this.#controller = null
@@ -139,7 +142,7 @@ export class ClientTransferStore {
       this.publish({ error: null, progress })
       return progress
     } catch (cause) {
-      this.publish({ error: cause instanceof Error ? cause.message : 'Transfer failed' })
+      this.publish({ error: cause instanceof Error ? cause.message : this.#translate('transfers.failed') })
       throw cause
     } finally {
       if (this.#controller === controller) this.#controller = null

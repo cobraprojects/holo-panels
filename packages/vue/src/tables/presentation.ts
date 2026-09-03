@@ -1,3 +1,5 @@
+import type { PanelTranslator } from '@holo-js/panels-client'
+import { usePanelLocale, usePanelTranslator } from '../localization'
 import { Alert, AlertDescription, AlertTitle, Badge, Button, Checkbox, Empty, EmptyDescription, EmptyHeader, EmptyTitle, PanelsIcon, Skeleton, Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../internal-ui'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import type { FormPath, FormValueAtPath } from '@holo-js/panels-client'
@@ -36,7 +38,7 @@ function validDate(value: unknown): Date | null {
   return Number.isNaN(converted.getTime()) ? null : converted
 }
 
-function formattedValue(input: unknown, formatters: readonly Formatter[]): string {
+function formattedValue(input: unknown, formatters: readonly Formatter[], locale: string): string {
   let value: unknown = Array.isArray(input) ? input.map(item => String(item)) : input
   for (const formatter of formatters) {
     try {
@@ -50,7 +52,7 @@ function formattedValue(input: unknown, formatters: readonly Formatter[]): strin
             : formatter.kind === 'time'
               ? { timeStyle: 'short' }
               : { dateStyle: 'medium', timeStyle: 'short' }
-          value = new Intl.DateTimeFormat(undefined, { ...defaults, ...formatterOptions(formatter) }).format(date)
+          value = new Intl.DateTimeFormat(locale, { ...defaults, ...formatterOptions(formatter) }).format(date)
         }
       } else if (formatter.kind === 'relative-time') {
         const date = validDate(value)
@@ -64,13 +66,13 @@ function formattedValue(input: unknown, formatters: readonly Formatter[]): strin
             { amount: 60, unit: 'minute' },
           ].find(item => Math.abs(seconds) >= item.amount)
           const amount = division ? Math.round(seconds / division.amount) : seconds
-          value = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(amount, division?.unit as Intl.RelativeTimeFormatUnit ?? 'second')
+          value = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(amount, division?.unit as Intl.RelativeTimeFormatUnit ?? 'second')
         }
       } else if (formatter.kind === 'number' || formatter.kind === 'money') {
         const number = finiteNumber(value)
         if (number !== null) {
           const style = formatter.kind === 'money' ? { currency: String(formatter.currency), style: 'currency' as const } : {}
-          value = new Intl.NumberFormat(undefined, { ...formatterOptions(formatter), ...style }).format(number)
+          value = new Intl.NumberFormat(locale, { ...formatterOptions(formatter), ...style }).format(number)
         }
       } else if (formatter.kind === 'words') {
         value = String(value).trim().split(/\s+/u).slice(0, Number(formatter.count)).join(' ')
@@ -158,6 +160,7 @@ export interface VueTablePresentationGroup<TRecord extends object = object> {
 }
 
 export interface VueTablePresentationProps<TRecord extends object = object> {
+  readonly locale?: string
   readonly ariaLabel: string
   readonly caption: string
   readonly columns: readonly VueTablePresentationColumn<TRecord>[]
@@ -173,23 +176,24 @@ export interface VueTablePresentationProps<TRecord extends object = object> {
   rowKey(record: Readonly<TRecord>): number | string
 }
 
-function tableState(presentation: VueTablePresentationProps): VNode | null {
-  if (presentation.error) return h(Alert, { class: 'hp-table-error', 'data-slot': 'table-error', variant: 'destructive' }, () => [h(AlertTitle, {}, () => 'Unable to load table'), h(AlertDescription, {}, () => presentation.error)])
-  if (presentation.loading) return h('div', { 'aria-label': 'Loading records', 'aria-live': 'polite', class: 'hp-table-loading hp:space-y-2 hp:py-2', 'data-slot': 'table-loading', role: 'status' }, [h(Skeleton, { class: 'hp:h-8 hp:w-full' }), h(Skeleton, { class: 'hp:h-8 hp:w-full' }), h(Skeleton, { class: 'hp:h-8 hp:w-full' })])
-  if (presentation.records.length === 0) return h(Empty, { class: 'hp-table-empty hp:min-h-40', 'data-slot': 'table-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No records'), h(EmptyDescription, {}, () => presentation.emptyMessage ?? 'No records found.')]))
+function tableState(presentation: VueTablePresentationProps, translate: PanelTranslator): VNode | null {
+  if (presentation.error) return h(Alert, { class: 'hp-table-error', 'data-slot': 'table-error', variant: 'destructive' }, () => [h(AlertTitle, {}, () => translate('tables.loadFailed')), h(AlertDescription, {}, () => presentation.error)])
+  if (presentation.loading) return h('div', { 'aria-label': translate('tables.loading'), 'aria-live': 'polite', class: 'hp-table-loading hp:space-y-2 hp:py-2', 'data-slot': 'table-loading', role: 'status' }, [h(Skeleton, { class: 'hp:h-8 hp:w-full' }), h(Skeleton, { class: 'hp:h-8 hp:w-full' }), h(Skeleton, { class: 'hp:h-8 hp:w-full' })])
+  if (presentation.records.length === 0) return h(Empty, { class: 'hp-table-empty hp:min-h-40', 'data-slot': 'table-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => translate('tables.noRecords')), h(EmptyDescription, {}, () => presentation.emptyMessage ?? translate('tables.empty'))]))
   return null
 }
 
-function tableSummaryRows(columnCount: number, summaries: readonly VueTablePresentationSummary[]): VNode | null {
+function tableSummaryRows(columnCount: number, summaries: readonly VueTablePresentationSummary[], translate: PanelTranslator): VNode | null {
   if (summaries.length === 0) return null
   return h(TableFooter, {}, () => summaries.map(summary => h(TableRow, { class: 'hp-table-total-summary', key: summary.id }, () => [
-    h(TableHead, { colspan: Math.max(1, columnCount), scope: 'row' }, () => ['Total · ', summary.label, ': ', summary.value]),
+    h(TableHead, { colspan: Math.max(1, columnCount), scope: 'row' }, () => [translate('tables.total', { label: summary.label }), ' ', summary.value]),
   ])))
 }
 
 function presentationRows(
   presentation: VueTablePresentationProps,
   records: readonly Readonly<object>[],
+  translate: PanelTranslator,
   group?: VueTablePresentationGroup,
 ): VNodeChild[] {
   const nodes: VNodeChild[] = []
@@ -197,7 +201,7 @@ function presentationRows(
   if (group) {
     nodes.push(h(TableRow, { class: 'hp-table-group', key: `group-${group.key}` }, () => [
       h(TableHead, { colspan: Math.max(1, columnCount), scope: 'rowgroup' }, () => [
-        group.selection ? h(Checkbox, { 'aria-label': `Select group ${group.title}`, modelValue: group.selection.checked, disabled: group.selection.disabled, 'onUpdate:modelValue': (checked: boolean | 'indeterminate') => group.selection?.onChange(checked === true) }) : null,
+        group.selection ? h(Checkbox, { 'aria-label': translate('tables.selectGroup', { group: group.title }), modelValue: group.selection.checked, disabled: group.selection.disabled, 'onUpdate:modelValue': (checked: boolean | 'indeterminate') => group.selection?.onChange(checked === true) }) : null,
         group.collapsible
           ? h(Button, { 'aria-expanded': !group.collapsed, type: 'button', onClick: group.onToggle }, {
               default: () => [PanelsIcon('chevron-down'), h('span', group.title), h(Badge, { variant: 'secondary' }, () => records.length)],
@@ -226,7 +230,7 @@ function presentationRows(
   }
   for (const summary of group?.summaries ?? []) {
     nodes.push(h(TableRow, { class: 'hp-table-group-summary', key: `${group?.key}-${summary.id}` }, () => [
-      h(TableHead, { colspan: Math.max(1, columnCount), scope: 'row' }, () => [group?.title, ' subtotal · ', summary.label, ': ', summary.value]),
+      h(TableHead, { colspan: Math.max(1, columnCount), scope: 'row' }, () => [translate('tables.subtotal', { group: group?.title ?? '', label: summary.label }), ' ', summary.value]),
     ]))
   }
   return nodes
@@ -238,13 +242,14 @@ export const VueTablePresentation = defineComponent({
     presentation: { type: Object as PropType<VueTablePresentationProps>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator(() => componentProps.presentation.locale)
     return (): VNode => {
       const presentation = componentProps.presentation
       const columnCount = presentation.columns.length + (presentation.leading ? 1 : 0) + (presentation.trailing ? 1 : 0)
-      const state = tableState(presentation)
+      const state = tableState(presentation, translate)
       const rows = presentation.groups && presentation.groups.length > 0
-        ? presentation.groups.flatMap(group => presentationRows(presentation, group.records, group))
-        : presentationRows(presentation, presentation.records)
+        ? presentation.groups.flatMap(group => presentationRows(presentation, group.records, translate, group))
+        : presentationRows(presentation, presentation.records, translate)
       return h('div', {
         class: ['hp-table-responsive hp:w-full hp:max-w-full hp:rounded-lg hp:border hp:bg-card', presentation.containerClass],
         'data-panels-component': 'data-table',
@@ -258,7 +263,7 @@ export const VueTablePresentation = defineComponent({
             presentation.trailing ? h(TableHead, { scope: 'col' }, () => presentation.trailing?.header ?? presentation.trailing?.label) : null,
           ])),
           h(TableBody, {}, () => state ? h(TableRow, {}, () => h(TableCell, { colspan: Math.max(1, columnCount) }, () => state)) : rows),
-          state ? null : tableSummaryRows(columnCount, presentation.summaries ?? []),
+          state ? null : tableSummaryRows(columnCount, presentation.summaries ?? [], translate),
         ]),
       ])
     }
@@ -269,6 +274,7 @@ export const VueTableColumnPresentation = defineComponent({
   name: 'VueTableColumnPresentation',
   props: {
     presentation: { type: Object as PropType<{
+      readonly locale?: string
       readonly column: VueTableColumn<Record<string, unknown>>
       readonly panelId?: string
       readonly record: RuntimeRecord
@@ -277,13 +283,16 @@ export const VueTableColumnPresentation = defineComponent({
     }>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator(() => componentProps.presentation.locale)
+    const inheritedLocale = usePanelLocale()
+    const locale = () => componentProps.presentation.locale ?? inheritedLocale()
     const copyStatus = ref('')
     return (): VNode => {
       const { column, panelId, record, registry, value } = componentProps.presentation
       const inferredValue = value as FormValueAtPath<RuntimeRecord, FormPath<RuntimeRecord>>
       if (column.render) return h('span', [column.render(inferredValue, record)])
       const formatters = formatterList(column.manifest)
-      const formatted = formattedValue(value, formatters)
+      const formatted = formattedValue(value, formatters, locale())
       const type = column.manifest.type
       const tooltip = formatters.find(formatter => formatter.kind === 'tooltip')?.value
       const url = safeUrl(column.url?.(record)) ?? safeUrl(formatters.find(formatter => formatter.kind === 'url')?.value)
@@ -305,7 +314,7 @@ export const VueTableColumnPresentation = defineComponent({
         content = h(renderer, { ...properties, column, record, value: inferredValue } satisfies VueCustomColumnProps<RuntimeRecord>)
       } else if (type === 'boolean' || type === 'icon') {
         const active = Boolean(value)
-        content = h('span', { 'aria-label': active ? 'Yes' : 'No', 'data-icon': iconName(formatters, active), role: 'img' }, active ? '✓' : '✕')
+        content = h('span', { 'aria-label': translate(active ? 'filters.yes' : 'filters.no'), 'data-icon': iconName(formatters, active), role: 'img' }, active ? '✓' : '✕')
       } else if (type === 'image') {
         const source = safeUrl(value)
         const size = formatters.find(formatter => formatter.kind === 'size')?.pixels
@@ -326,20 +335,20 @@ export const VueTableColumnPresentation = defineComponent({
       const linked = url ? h('a', { href: url, rel: url.startsWith('/') ? undefined : 'noopener noreferrer' }, [content]) : content
       const copy = async (): Promise<void> => {
         if (!globalThis.navigator?.clipboard) {
-          copyStatus.value = 'Copy unavailable'
+          copyStatus.value = translate('copy.unavailable')
           return
         }
         try {
           await globalThis.navigator.clipboard.writeText(formatted)
-          copyStatus.value = 'Copied'
+          copyStatus.value = translate('copy.copied')
         } catch {
-          copyStatus.value = 'Copy failed'
+          copyStatus.value = translate('copy.failed')
         }
       }
       return h('span', { class: 'hp-table-cell', title: typeof tooltip === 'string' ? tooltip : undefined }, [
         linked,
         column.manifest.copyable && !column.manifest.inlineEditor
-          ? h(Button, { 'aria-label': `Copy ${column.manifest.label ?? column.manifest.path}`, class: 'hp-table-copy', size: 'icon', type: 'button', variant: 'ghost', onClick: () => void copy() }, { default: () => PanelsIcon('copy') })
+          ? h(Button, { 'aria-label': translate('copy.label', { label: column.manifest.label ?? column.manifest.path }), class: 'hp-table-copy', size: 'icon', type: 'button', variant: 'ghost', onClick: () => void copy() }, { default: () => PanelsIcon('copy') })
           : null,
         h('span', { 'aria-live': 'polite', class: 'hp-visually-hidden' }, copyStatus.value),
       ])

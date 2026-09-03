@@ -210,7 +210,7 @@ function successEnvelope(id: string, data: JsonValue, effects: readonly Effect[]
 
 function errorEnvelope(id: string, cause: unknown, status: number, panel?: CompiledPanelDefinition<object>, locale?: { readonly direction: 'ltr' | 'rtl', readonly locale: string }): Readonly<ResponseEnvelope> {
   const actionEffects = cause instanceof ActionExecutionError ? (cause as { readonly effects: readonly Effect[] }).effects : []
-  const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status) : null
+  const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status, locale?.locale) : null
   const effects = notification ? [...actionEffects, notification] : actionEffects
   return decodeResponseEnvelope({ effects, error: normalizeTransportError(cause, status), id, ok: false, protocolVersion: PROTOCOL_VERSION, ...locale }, id)
 }

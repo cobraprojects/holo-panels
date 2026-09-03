@@ -26,6 +26,6 @@
 >
 	<SwitchPrimitive.Thumb
 		data-slot="switch-thumb"
-		class="hp:rounded-full hp:bg-background hp:group-data-[size=default]/switch:size-4 hp:group-data-[size=sm]/switch:size-3 hp:group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] hp:group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] hp:dark:data-checked:bg-primary-foreground hp:group-data-[size=default]/switch:data-unchecked:translate-x-0 hp:group-data-[size=sm]/switch:data-unchecked:translate-x-0 hp:dark:data-unchecked:bg-foreground hp:pointer-events-none hp:block hp:ring-0 hp:transition-transform hp:rtl:data-[state=checked]:translate-x-[calc(-100%)]"
+		class="hp:rounded-full hp:bg-background hp:group-data-[size=default]/switch:size-4 hp:group-data-[size=sm]/switch:size-3 hp:group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] hp:rtl:group-data-[size=default]/switch:data-checked:translate-x-[calc(-100%+2px)] hp:group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] hp:rtl:group-data-[size=sm]/switch:data-checked:translate-x-[calc(-100%+2px)] hp:dark:data-checked:bg-primary-foreground hp:group-data-[size=default]/switch:data-unchecked:translate-x-0 hp:group-data-[size=sm]/switch:data-unchecked:translate-x-0 hp:dark:data-unchecked:bg-foreground hp:pointer-events-none hp:block hp:ring-0 hp:transition-transform"
 	/>
 </SwitchPrimitive.Root>

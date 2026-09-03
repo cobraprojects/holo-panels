@@ -1,3 +1,5 @@
+import type { PanelTranslator } from '@holo-js/panels-client'
+import { usePanelTranslator } from '../localization'
 import { Button } from '../internal-ui'
 import { VueActionRenderer } from '../actions/renderer'
 import { defineComponent, h, onScopeDispose, ref, shallowRef, type Component, type PropType, type VNode, type VNodeChild } from 'vue'
@@ -52,7 +54,7 @@ function valueList(value: VueEntrySnapshot['formattedState']): readonly VueEntry
   return Array.isArray(value) ? value : []
 }
 
-function builtInContent(entry: VueEntrySnapshot): VNodeChild {
+function builtInContent(entry: VueEntrySnapshot, translate: PanelTranslator): VNodeChild {
   const state = entry.formattedState
   const richContent = safeRichContent(entry)
   if (richContent) return richContent
@@ -62,7 +64,7 @@ function builtInContent(entry: VueEntrySnapshot): VNodeChild {
       ? entry.properties.icon
       : active ? entry.properties.truthyIcon : entry.properties.falsyIcon
     const icon = typeof configuredIcon === 'string' ? configuredIcon : active ? 'check' : 'x-mark'
-    return h('span', { 'aria-label': active ? 'Yes' : 'No', 'data-icon': icon, role: 'img' }, active ? '✓' : '✕')
+    return h('span', { 'aria-label': translate(active ? 'filters.yes' : 'filters.no'), 'data-icon': icon, role: 'img' }, active ? '✓' : '✕')
   }
   if (entry.type === 'image') {
     const source = safeEntryUrl(typeof entry.state === 'string' ? entry.state : null)
@@ -109,8 +111,8 @@ function slot(entry: VueEntrySnapshot, props: VueEntryRendererProps, placement: 
   }))
 }
 
-function content(entry: VueEntrySnapshot, props: VueEntryRendererProps): VNodeChild {
-  if (!entry.type.includes(':entry:')) return builtInContent(entry)
+function content(entry: VueEntrySnapshot, props: VueEntryRendererProps, translate: PanelTranslator): VNodeChild {
+  if (!entry.type.includes(':entry:')) return builtInContent(entry, translate)
   if (!props.registry) throw new Error(`[Holo Panels] A Vue component registry is required for custom entry "${entry.type}".`)
   const component = props.registry.resolve(
     entryRendererName(entry.type),
@@ -130,18 +132,19 @@ export const VueEntryRenderer = defineComponent({
     onScopeDispose(componentProps.entry.store.subscribe(next => {
       state.value = next
     }))
+    const translate = usePanelTranslator()
     const copyStatus = ref('')
     const actionError = ref<string | null>(null)
     const copy = async (): Promise<void> => {
       if (!globalThis.navigator?.clipboard) {
-        copyStatus.value = 'Copy unavailable'
+        copyStatus.value = translate('copy.unavailable')
         return
       }
       try {
         await globalThis.navigator.clipboard.writeText(entryText(state.value.formattedState))
-        copyStatus.value = 'Copied'
+        copyStatus.value = translate('copy.copied')
       } catch {
-        copyStatus.value = 'Copy failed'
+        copyStatus.value = translate('copy.failed')
       }
     }
     const runAction = async (id: string): Promise<void> => {
@@ -150,7 +153,7 @@ export const VueEntryRenderer = defineComponent({
       try {
         await componentProps.entry.action(id)
       } catch (cause) {
-        actionError.value = cause instanceof Error ? cause.message : 'Action failed'
+        actionError.value = cause instanceof Error ? cause.message : translate('feedback.actionFailed')
       }
     }
     return (): VNode => {
@@ -158,7 +161,7 @@ export const VueEntryRenderer = defineComponent({
       if (entry.visible === false) return h('template')
       const labelId = `${entry.id}-label`
       const safeUrl = safeEntryUrl(entry.url)
-      const rendered = content(entry, componentProps.entry)
+      const rendered = content(entry, componentProps.entry, translate)
       const linked = safeUrl
         ? h('a', { href: safeUrl, rel: safeUrl.startsWith('/') ? undefined : 'noopener noreferrer' }, [rendered])
         : rendered
@@ -176,7 +179,7 @@ export const VueEntryRenderer = defineComponent({
         slot(entry, componentProps.entry, 'before'),
         h('div', { class: 'hp-entry-state' }, [linked]),
         slot(entry, componentProps.entry, 'after'),
-        entry.copyable ? h(Button, { type: 'button', onClick: () => void copy() }, 'Copy') : null,
+        entry.copyable ? h(Button, { type: 'button', onClick: () => void copy() }, translate('actions.copy')) : null,
         ...(componentProps.entry.actionStore ? [] : entry.actions.map(action => h(Button, {
           disabled: entry.pending || !componentProps.entry.action,
           key: action,
@@ -192,7 +195,7 @@ export const VueEntryRenderer = defineComponent({
           store: componentProps.entry.actionStore,
         }) : null,
         h('span', { 'aria-live': 'polite', class: 'hp-visually-hidden' }, copyStatus.value),
-        entry.pending ? h('span', { role: 'status' }, 'Loading entry') : null,
+        entry.pending ? h('span', { role: 'status' }, translate('entries.loading')) : null,
         entry.error ? h('span', { role: 'alert' }, entry.error) : null,
         actionError.value ? h('span', { role: 'alert' }, actionError.value) : null,
         slot(entry, componentProps.entry, 'below'),

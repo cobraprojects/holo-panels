@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import {
   createElement,
   useState,
@@ -75,6 +76,7 @@ function valueList(value: ReactEntrySnapshot['formattedState']): readonly ReactE
 }
 
 function BuiltInContent({ entry }: { readonly entry: ReactEntrySnapshot }): ReactNode {
+  const translate = usePanelTranslator()
   const state = entry.formattedState
   const richContent = safeRichContent(entry)
   if (richContent) return richContent
@@ -84,7 +86,7 @@ function BuiltInContent({ entry }: { readonly entry: ReactEntrySnapshot }): Reac
       ? entry.properties.icon
       : active ? entry.properties.truthyIcon : entry.properties.falsyIcon
     const icon = typeof configuredIcon === 'string' ? configuredIcon : active ? 'check' : 'x-mark'
-    return <span aria-label={active ? 'Yes' : 'No'} data-icon={icon} role="img">{active ? '✓' : '✕'}</span>
+    return <span aria-label={translate(active ? 'filters.yes' : 'filters.no')} data-icon={icon} role="img">{active ? '✓' : '✕'}</span>
   }
   if (entry.type === 'image') {
     const source = safeEntryUrl(typeof entry.state === 'string' ? entry.state : null)
@@ -147,6 +149,7 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
     () => props.store.snapshot,
     () => props.store.snapshot,
   )
+  const translate = usePanelTranslator()
   const [copyStatus, setCopyStatus] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const safeUrl = safeEntryUrl(entry.url)
@@ -155,14 +158,14 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
   const content = <EntryContent {...props} entry={entry} />
   const copy = async (): Promise<void> => {
     if (!globalThis.navigator?.clipboard) {
-      setCopyStatus('Copy unavailable')
+      setCopyStatus(translate('copy.unavailable'))
       return
     }
     try {
       await globalThis.navigator.clipboard.writeText(entryText(entry.formattedState))
-      setCopyStatus('Copied')
+      setCopyStatus(translate('copy.copied'))
     } catch {
-      setCopyStatus('Copy failed')
+      setCopyStatus(translate('copy.failed'))
     }
   }
   const runAction = async (id: string): Promise<void> => {
@@ -171,7 +174,7 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
     try {
       await props.action(id)
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : 'Action failed')
+      setActionError(cause instanceof Error ? cause.message : translate('feedback.actionFailed'))
     }
   }
   const attributes = entryAttributes(entry)
@@ -191,10 +194,10 @@ export function ReactEntryRenderer(props: ReactEntryRendererProps): ReactNode {
       ? <a href={safeUrl} rel={safeUrl.startsWith('/') ? undefined : 'noopener noreferrer'}>{content}</a>
       : content}</div>
     <EntrySlot entry={entry} placement="after" props={props} />
-    {entry.copyable ? <Button onClick={() => void copy()} type="button">Copy</Button> : null}
+    {entry.copyable ? <Button onClick={() => void copy()} type="button">{translate('actions.copy')}</Button> : null}
     {props.actionStore ? null : entry.actions.map(action => <Button disabled={entry.pending || !props.action} key={action} onClick={() => void runAction(action)} type="button">{action}</Button>)}
     <span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>
-    {entry.pending ? <span role="status">Loading entry</span> : null}
+    {entry.pending ? <span role="status">{translate('entries.loading')}</span> : null}
     {entry.error ? <span role="alert">{entry.error}</span> : null}
     {actionError ? <span role="alert">{actionError}</span> : null}
     <EntrySlot entry={entry} placement="below" props={props} />

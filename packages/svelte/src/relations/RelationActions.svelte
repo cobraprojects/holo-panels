@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { usePanelLocale } from '../localization'
   import { createRelationActionHost, type ClientRelationManager, type ClientRelationRecord } from '@holo-js/panels-client'
   import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { SvelteRelationManagerRendererProps } from './contracts'
@@ -9,9 +10,10 @@
     readonly selectedIds?: readonly (number | string)[]
     readonly relations: SvelteRelationManagerRendererProps
   } = $props()
+  const locale = usePanelLocale()
   const host = $derived(createRelationActionHost({
     execute: async (request, signal) => relations.onOperation?.(request, signal),
-    loadOptions: relations.loadOptions, manager, panelId: relations.panelId, record, selectedIds,
+    locale: locale(), loadOptions: relations.loadOptions, manager, panelId: relations.panelId, record, selectedIds,
   }))
   $effect(() => {
     const current = host

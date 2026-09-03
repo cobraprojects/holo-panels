@@ -90,8 +90,8 @@
 			class={cn(
 				"hp:fixed hp:inset-y-0 hp:z-10 hp:hidden hp:h-svh hp:w-(--sidebar-width) hp:transition-[left,right,width] hp:duration-200 hp:ease-linear hp:md:flex",
 				side === "left"
-					? "hp:start-0 hp:group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]"
-					: "hp:end-0 hp:group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]",
+					? "hp:start-0 hp:rtl:start-auto hp:rtl:end-0 hp:group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)] hp:rtl:group-data-[collapsible=offcanvas]:start-auto hp:rtl:group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]"
+					: "hp:end-0 hp:rtl:end-auto hp:rtl:start-0 hp:group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)] hp:rtl:group-data-[collapsible=offcanvas]:end-auto hp:rtl:group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]",
 				// Adjust the padding for floating and inset variants.
 				variant === "floating" || variant === "inset"
 					? "hp:p-2 hp:group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"

@@ -47,6 +47,20 @@ afterEach(() => {
 })
 
 describe('P16 React compiled schema renderer', () => {
+  it('moves tab focus in the visual direction in RTL', () => {
+    const tabs = component('tabs', {
+      children: ['First', 'Second', 'Third'].map(label => component('tab', { id: label, key: label, properties: { label } })),
+    })
+    const container = mount(<div dir="rtl"><ReactSchemaRenderer panelId="admin" registry={createComponentRegistry()} schema={schema([tabs])} /></div>)
+    const buttons = container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    buttons[0]?.focus()
+
+    act(() => buttons[0]?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowLeft' })))
+
+    expect(document.activeElement).toBe(buttons[1])
+    expect(buttons[1]?.getAttribute('aria-selected')).toBe('true')
+  })
+
   it('renders shared entry, filter, and widget leaves through inferred content hooks', () => {
     const leaves = (['entry', 'filter', 'widget'] as const).map(kind => component(kind, {
       properties: { leaf: { definition: { id: `${kind}-definition` }, kind } },

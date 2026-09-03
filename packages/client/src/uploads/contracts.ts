@@ -54,6 +54,7 @@ export interface UploadClientAdapter {
 }
 
 export interface UploadStoreOptions {
+  readonly locale?: string
   readonly adapter: UploadClientAdapter
   readonly context: UploadActorContext
   readonly existing?: readonly ExistingMediaItem[]

@@ -100,6 +100,7 @@ export interface FormRequestResult {
 }
 
 export interface FormStoreOptions<TValues> {
+  readonly locale?: string
   readonly fields?: readonly FormValidationField[]
   readonly schema?: SchemaManifest<TValues>
   readonly dependencies?: readonly FormDependency<TValues>[]

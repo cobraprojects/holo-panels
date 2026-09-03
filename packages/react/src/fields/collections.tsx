@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { CollectionStore, EditorAdapterInstance } from '@holo-js/panels-client'
 import { Button, Input, Textarea } from '../internal-ui'
@@ -47,11 +48,12 @@ function CollectionActions<TValue>({ disabled, index, length, store }: {
   readonly length: number
   readonly store: CollectionStore<TValue>
 }): ReactNode {
+  const translate = usePanelTranslator()
   return <span className="hp-collection-actions">
-    <Button aria-label={`Move item ${index + 1} up`} disabled={disabled || index === 0} onClick={() => store.move(index, index - 1)} type="button">↑</Button>
-    <Button aria-label={`Move item ${index + 1} down`} disabled={disabled || index === length - 1} onClick={() => store.move(index, index + 1)} type="button">↓</Button>
-    <Button aria-label={`Clone item ${index + 1}`} disabled={disabled} onClick={() => store.clone(index)} type="button">Clone</Button>
-    <Button aria-label={`Remove item ${index + 1}`} disabled={disabled} onClick={() => store.delete(index)} type="button">Remove</Button>
+    <Button aria-label={translate('fields.moveUp', { number: index + 1 })} disabled={disabled || index === 0} onClick={() => store.move(index, index - 1)} type="button">↑</Button>
+    <Button aria-label={translate('fields.moveDown', { number: index + 1 })} disabled={disabled || index === length - 1} onClick={() => store.move(index, index + 1)} type="button">↓</Button>
+    <Button aria-label={translate('fields.cloneItem', { number: index + 1 })} disabled={disabled} onClick={() => store.clone(index)} type="button">{translate('fields.clone')}</Button>
+    <Button aria-label={translate('fields.removeItem', { number: index + 1 })} disabled={disabled} onClick={() => store.delete(index)} type="button">{translate('fields.remove')}</Button>
   </span>
 }
 
@@ -61,11 +63,12 @@ function KeyValueEditor({ disabled, index, store, value }: {
   readonly store: CollectionStore<unknown>
   readonly value: unknown
 }): ReactNode {
+  const translate = usePanelTranslator()
   const key = typeof value === 'object' && value !== null ? asString(Reflect.get(value, 'key')) : ''
   const entryValue = typeof value === 'object' && value !== null ? asString(Reflect.get(value, 'value')) : ''
   return <span className="hp-key-value-entry">
-    <Input aria-label={`Key ${index + 1}`} disabled={disabled} onChange={event => store.replace(index, { key: event.currentTarget.value, value: entryValue })} value={key} />
-    <Input aria-label={`Value ${index + 1}`} disabled={disabled} onChange={event => store.replace(index, { key, value: event.currentTarget.value })} value={entryValue} />
+    <Input aria-label={translate('fields.key', { number: index + 1 })} disabled={disabled} onChange={event => store.replace(index, { key: event.currentTarget.value, value: entryValue })} value={key} />
+    <Input aria-label={translate('fields.value', { number: index + 1 })} disabled={disabled} onChange={event => store.replace(index, { key, value: event.currentTarget.value })} value={entryValue} />
   </span>
 }
 
@@ -134,6 +137,7 @@ function NestedFieldsEditor({ definitions, disabled, onChange, value }: {
 }
 
 export function ReactCollectionField<TValues extends object>(props: ReactFieldControlProps<TValues>): ReactNode {
+  const translate = usePanelTranslator()
   if (['code', 'markdown', 'rich-editor'].includes(props.context.definition.type)) return <EditorField {...props} />
   if (props.context.definition.type === 'tags') {
     const separator = property(props.context, 'separator', ',')
@@ -173,12 +177,12 @@ export function ReactCollectionField<TValues extends object>(props: ReactFieldCo
                 const data = item.value && typeof item.value === 'object' && !Array.isArray(item.value) ? Reflect.get(item.value, 'data') : {}
                 return definitions.length > 0
                   ? <NestedFieldsEditor definitions={definitions} disabled={disabled} onChange={next => store.replace(index, { data: next, type: typeof type === 'string' ? type : '' })} value={data} />
-                  : <span>{typeof type === 'string' ? type : `Block ${index + 1}`}</span>
+                  : <span>{typeof type === 'string' ? type : translate('fields.block', { number: index + 1 })}</span>
               })()
             : props.renderRepeaterItem?.(item.value, index) ?? (repeaterFields.length > 0
                 ? <NestedFieldsEditor definitions={repeaterFields} disabled={disabled} onChange={next => store.replace(index, next)} value={item.value} />
-                : <span>{`Item ${index + 1}`}</span>) : null}
-        <Button aria-expanded={!item.collapsed} disabled={disabled} onClick={() => store.toggleCollapsed(index)} type="button">{item.collapsed ? 'Expand' : 'Collapse'}</Button>
+                : <span>{translate('fields.item', { number: index + 1 })}</span>) : null}
+        <Button aria-expanded={!item.collapsed} disabled={disabled} onClick={() => store.toggleCollapsed(index)} type="button">{item.collapsed ? translate('fields.expand') : translate('fields.collapse')}</Button>
         <CollectionActions disabled={disabled} index={index} length={state.items.length} store={store} />
       </li>)}
     </ol>
@@ -193,13 +197,13 @@ export function ReactCollectionField<TValues extends object>(props: ReactFieldCo
             key={type}
             onClick={() => add(type)}
             type="button"
-          >Add {typeof label === 'string' ? label : `block ${index + 1}`}</Button>
+          >{translate('fields.addBlock', { label: typeof label === 'string' ? label : translate('fields.block', { number: index + 1 }) })}</Button>
         })
       : <Button
           disabled={disabled || (props.context.definition.type !== 'key-value' && !props.createCollectionItem) || (maximum !== null && state.items.length >= maximum)}
           onClick={() => add()}
           type="button"
-        >Add item</Button>}
+        >{translate('fields.addItem')}</Button>}
     {props.context.errors.length > 0 ? <ul role="alert">{props.context.errors.map(error => <li key={error}>{error}</li>)}</ul> : null}
   </div>
 }

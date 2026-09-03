@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import {
   Fragment,
   createElement,
@@ -74,9 +75,10 @@ function isCustomData(value: unknown): value is CustomWidgetData {
 }
 
 function Sparkline({ stat }: { readonly stat: WidgetStat }): ReactNode {
+  const translate = usePanelTranslator()
   const points = widgetSparklinePoints(stat.chart)
   if (!points) return null
-  return <svg aria-hidden="true" className="hp-widget-sparkline hp:mt-4 hp:h-8 hp:w-full" preserveAspectRatio="none" viewBox="0 0 100 32">
+  return <svg aria-label={translate('widgets.trendValues', { label: stat.label, values: stat.chart.join(', ') })} role="img" className="hp-widget-sparkline hp:mt-4 hp:h-8 hp:w-full" preserveAspectRatio="none" viewBox="0 0 100 32">
     <polyline fill="none" points={points} stroke="currentColor" vectorEffect="non-scaling-stroke" />
   </svg>
 }
@@ -88,7 +90,8 @@ function StatContent({ action, actions, actionStore, navigate, stat }: {
   readonly navigate?: ReactWidgetRendererProps['navigate']
   readonly stat: WidgetStat
 }): ReactNode {
-  const content = <Card className="hp-widget-stat"><CardHeader className="hp:flex hp:flex-row hp:items-center hp:justify-between hp:space-y-0 hp:pb-2"><CardTitle className="hp:text-sm hp:font-medium">{stat.label}</CardTitle>{stat.icon ? <PanelsIcon className="hp:size-4 hp:text-muted-foreground" name={stat.icon} /> : null}</CardHeader><CardContent><div className="hp:text-2xl hp:font-bold">{stat.value}</div>{stat.description ? <p className="hp:text-xs hp:text-muted-foreground">{stat.description}</p> : null}{stat.trend ? <p className="hp:text-xs hp:text-muted-foreground">{stat.trend}</p> : null}{stat.progress ? <progress aria-label={stat.label} className="hp-widget-progress hp:w-full" max={stat.progress.max} value={stat.progress.value}>{stat.progress.value} / {stat.progress.max}</progress> : null}<Sparkline stat={stat} /></CardContent></Card>
+  const translate = usePanelTranslator()
+  const content = <Card className="hp-widget-stat"><CardHeader className="hp:flex hp:flex-row hp:items-center hp:justify-between hp:space-y-0 hp:pb-2"><CardTitle className="hp:text-sm hp:font-medium">{stat.label}</CardTitle>{stat.icon ? <PanelsIcon className="hp:size-4 hp:text-muted-foreground" name={stat.icon} /> : null}</CardHeader><CardContent><div className="hp:text-2xl hp:font-bold">{stat.value}</div>{stat.description ? <p className="hp:text-xs hp:text-muted-foreground">{stat.description}</p> : null}{stat.trend ? <p className="hp:text-xs hp:text-muted-foreground">{translate(`widgets.trend.${stat.trend}`)}</p> : null}{stat.progress ? <progress aria-label={stat.label} className="hp-widget-progress hp:w-full" max={stat.progress.max} value={stat.progress.value}>{stat.progress.value} / {stat.progress.max}</progress> : null}<Sparkline stat={stat} /></CardContent></Card>
   const url = stat.url ? safeExternalUrl(stat.url) : null
   if (url) {
     return <a href={url} onClick={navigate ? event => {
@@ -100,9 +103,9 @@ function StatContent({ action, actions, actionStore, navigate, stat }: {
   const statAction = stat.action
   if (statAction && actionStore) {
     const registered = actions?.find(candidate => candidate.id === statAction && candidate.visible)
-    return registered ? <Button className="hp:h-auto hp:w-full hp:block hp:whitespace-normal hp:p-0 hp:text-left" disabled={registered.disabled} onClick={() => actionStore.mount(registered)} type="button">{content}</Button> : content
+    return registered ? <Button className="hp:h-auto hp:w-full hp:block hp:whitespace-normal hp:p-0 hp:text-start" disabled={registered.disabled} onClick={() => actionStore.mount(registered)} type="button">{content}</Button> : content
   }
-  if (statAction && action) return <Button className="hp:h-auto hp:w-full hp:block hp:whitespace-normal hp:p-0 hp:text-left" onClick={() => void action(statAction)} type="button">{content}</Button>
+  if (statAction && action) return <Button className="hp:h-auto hp:w-full hp:block hp:whitespace-normal hp:p-0 hp:text-start" onClick={() => void action(statAction)} type="button">{content}</Button>
   return content
 }
 
@@ -129,6 +132,7 @@ function ChartGraphic({ data }: { readonly data: ChartWidgetData }): ReactNode {
 }
 
 function ChartWidget({ data }: { readonly data: ChartWidgetData }): ReactNode {
+  const translate = usePanelTranslator()
   const model = createAccessibleChartModel(data)
   const descriptionId = useId()
   return <figure className="hp-widget-chart" data-chart-type={data.type}>
@@ -139,7 +143,7 @@ function ChartWidget({ data }: { readonly data: ChartWidgetData }): ReactNode {
     <div className="hp-table-responsive" role="region" aria-label={model.caption} tabIndex={0}>
       <Table>
         <TableCaption>{model.caption}</TableCaption>
-        <TableHeader><TableRow><TableHead scope="col">Label</TableHead>{model.columns.map(column => <TableHead key={column} scope="col">{column}</TableHead>)}</TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead scope="col">{translate('widgets.label')}</TableHead>{model.columns.map(column => <TableHead key={column} scope="col">{column}</TableHead>)}</TableRow></TableHeader>
         <TableBody>{model.rows.map(row => <TableRow key={row.label}><TableHead scope="row">{row.label}</TableHead>{row.values.map((value, index) => <TableCell key={`${row.label}-${model.columns[index] ?? index}`}>{value ?? '—'}</TableCell>)}</TableRow>)}</TableBody>
       </Table>
     </div>
@@ -154,21 +158,23 @@ function CustomWidget({ data, props }: { readonly data: CustomWidgetData, readon
 }
 
 function ReadyWidget({ props, state }: { readonly props: ReactWidgetRendererProps, readonly state: WidgetClientState }): ReactNode {
+  const translate = usePanelTranslator()
   const data = state.data
   if (props.manifest.family === 'stats' && isStatsData(data)) return <StatsWidget data={data} props={props} />
   if (props.manifest.family === 'chart' && isChartData(data)) return <ChartWidget data={data} />
   if (props.manifest.family === 'table' && isTableData(data)) {
     const presentation = props.table?.presentation
     if (presentation) return <ReactTableRenderer {...presentation} registry={props.registry} emptyMessage={props.manifest.emptyState} />
-    return props.renderTable ? props.renderTable({ data, widget: props.manifest }) : <p role="alert">Table widget renderer unavailable</p>
+    return props.renderTable ? props.renderTable({ data, widget: props.manifest }) : <p role="alert">{translate('widgets.tableUnavailable')}</p>
   }
   if (props.manifest.family === 'custom' && isCustomData(data)) return <CustomWidget data={data} props={props} />
   return <p role="alert">{props.manifest.errorState}</p>
 }
 
 function WidgetFilters({ props, state }: { readonly props: ReactWidgetRendererProps, readonly state: WidgetClientState }): ReactNode {
+  const translate = usePanelTranslator()
   if (props.manifest.filters.length === 0) return null
-  return <form aria-label={`${props.manifest.heading ?? props.manifest.id} filters`} className="hp-widget-filters" onSubmit={event => event.preventDefault()}>
+  return <form aria-label={translate('widgets.filters', { heading: props.manifest.heading ?? props.manifest.id })} className="hp-widget-filters" onSubmit={event => event.preventDefault()}>
     {props.manifest.filters.map(filter => {
       const value = state.filters[filter.id] ?? filter.defaultValue
       const id = `${props.manifest.id}-${filter.id}`
@@ -178,11 +184,12 @@ function WidgetFilters({ props, state }: { readonly props: ReactWidgetRendererPr
           : <Input id={id} onChange={event => void props.store.setFilter(filter.id, event.currentTarget.value)} type="search" value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} />}
       </label>
     })}
-    <Button onClick={() => void props.store.resetFilters()} type="button">Reset filters</Button>
+    <Button onClick={() => void props.store.resetFilters()} type="button">{translate('tables.resetFilters')}</Button>
   </form>
 }
 
 export function ReactWidgetRenderer(props: ReactWidgetRendererProps): ReactNode {
+  const translate = usePanelTranslator()
   const state = useSyncExternalStore(
     listener => props.store.subscribe(listener),
     () => props.store.snapshot,
@@ -206,10 +213,10 @@ export function ReactWidgetRenderer(props: ReactWidgetRendererProps): ReactNode 
   const content = <>
     {state.status === 'ready' && props.actions?.[0] && props.actionStore ? <ReactActionRenderer actions={props.actions} manifest={props.actions[0]} panelId={props.panelId} registry={props.registry} store={props.actionStore} /> : null}
     <WidgetFilters props={props} state={state} />
-    {state.status === 'idle' ? <Button onClick={() => void props.store.activate()} type="button">Load widget</Button> : null}
-    {state.status === 'loading' ? <p aria-live="polite" role="status">Loading widget…</p> : null}
-    {state.status === 'unauthorized' ? <p role="status">Widget unavailable</p> : null}
-    {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong><Button onClick={() => void props.store.load()} type="button">Retry</Button></div> : null}
+    {state.status === 'idle' ? <Button onClick={() => void props.store.activate()} type="button">{translate('widgets.load')}</Button> : null}
+    {state.status === 'loading' ? <p aria-live="polite" role="status">{translate('widgets.loading')}</p> : null}
+    {state.status === 'unauthorized' ? <p role="status">{translate('widgets.unavailable')}</p> : null}
+    {state.status === 'error' ? <div role="alert"><strong>{props.manifest.errorState}</strong><Button onClick={() => void props.store.load()} type="button">{translate('widgets.retry')}</Button></div> : null}
     {state.status === 'ready' || state.status === 'loading' && state.data !== null ? <ReadyWidget props={props} state={state} /> : null}
   </>
   if (props.manifest.family === 'stats') return <section
@@ -250,12 +257,13 @@ export function ReactDashboardRenderer(props: ReactDashboardRendererProps): Reac
 }
 
 export function ReactResourceWidgets(props: ReactResourceWidgetsProps): ReactNode {
+  const translate = usePanelTranslator()
   const headers = props.widgets.filter(widget => widget.placement === 'header')
   const footers = props.widgets.filter(widget => widget.placement === 'footer')
   return <Fragment>
-    {headers.length > 0 ? <WidgetGrid label={props.headerLabel ?? 'Resource header widgets'} widgets={headers} width={props.width} /> : null}
+    {headers.length > 0 ? <WidgetGrid label={props.headerLabel ?? translate('widgets.resourceHeader')} widgets={headers} width={props.width} /> : null}
     {props.children}
-    {footers.length > 0 ? <WidgetGrid label={props.footerLabel ?? 'Resource footer widgets'} widgets={footers} width={props.width} /> : null}
+    {footers.length > 0 ? <WidgetGrid label={props.footerLabel ?? translate('widgets.resourceFooter')} widgets={footers} width={props.width} /> : null}
   </Fragment>
 }
 

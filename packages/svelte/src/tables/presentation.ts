@@ -23,7 +23,7 @@ function validDate(value: unknown): Date | null {
   return Number.isNaN(converted.getTime()) ? null : converted
 }
 
-export function formattedTableValue(input: unknown, formatters: readonly TableFormatter[]): string {
+export function formattedTableValue(input: unknown, formatters: readonly TableFormatter[], locale = 'en'): string {
   let value: unknown = Array.isArray(input) ? input.map(item => String(item)) : input
   for (const formatter of formatters) {
     try {
@@ -37,7 +37,7 @@ export function formattedTableValue(input: unknown, formatters: readonly TableFo
             : formatter.kind === 'time'
               ? { timeStyle: 'short' }
               : { dateStyle: 'medium', timeStyle: 'short' }
-          value = new Intl.DateTimeFormat(undefined, { ...defaults, ...formatterOptions(formatter) }).format(date)
+          value = new Intl.DateTimeFormat(locale, { ...defaults, ...formatterOptions(formatter) }).format(date)
         }
       } else if (formatter.kind === 'relative-time') {
         const date = validDate(value)
@@ -51,13 +51,13 @@ export function formattedTableValue(input: unknown, formatters: readonly TableFo
             { amount: 60, unit: 'minute' },
           ].find(item => Math.abs(seconds) >= item.amount)
           const amount = division ? Math.round(seconds / division.amount) : seconds
-          value = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(amount, division?.unit as Intl.RelativeTimeFormatUnit ?? 'second')
+          value = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(amount, division?.unit as Intl.RelativeTimeFormatUnit ?? 'second')
         }
       } else if (formatter.kind === 'number' || formatter.kind === 'money') {
         const converted = typeof value === 'number' ? value : Number(value)
         if (Number.isFinite(converted)) {
           const style = formatter.kind === 'money' ? { currency: String(formatter.currency), style: 'currency' as const } : {}
-          value = new Intl.NumberFormat(undefined, { ...formatterOptions(formatter), ...style }).format(converted)
+          value = new Intl.NumberFormat(locale, { ...formatterOptions(formatter), ...style }).format(converted)
         }
       } else if (formatter.kind === 'words') {
         value = String(value).trim().split(/\s+/u).slice(0, Number(formatter.count)).join(' ')

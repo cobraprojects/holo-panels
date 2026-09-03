@@ -1,10 +1,9 @@
 import type {
   LocaleDirection,
-  PluralCategory,
   TranslationCatalogRegistry,
   TranslationReference,
-  TranslationReplacementValue,
 } from '@holo-js/panels-core'
+import { formatTranslation } from '@holo-js/panels-core'
 import { type PanelLocalePreferences, resolvePanelLocale, type ResolvedPanelLocale } from './resolution'
 
 export type MissingTranslationDiagnostic = {
@@ -21,18 +20,6 @@ export type LocaleManagerOptions = PanelLocalePreferences & {
 
 export type LocaleState = ResolvedPanelLocale & {
   readonly direction: LocaleDirection
-}
-
-function interpolate(message: string, replacements: Readonly<Record<string, TranslationReplacementValue>>): string {
-  return message.replace(/\{([A-Za-z_$][A-Za-z0-9_$]*)\}/g, (placeholder, name: string) => {
-    if (!(name in replacements)) return placeholder
-    const value = replacements[name]
-    return value === null ? '' : String(value)
-  })
-}
-
-function pluralCategory(locale: string, count: number): PluralCategory {
-  return new Intl.PluralRules(locale).select(count) as PluralCategory
 }
 
 export class LocaleManager {
@@ -77,12 +64,7 @@ export class LocaleManager {
       }
       return ''
     }
-    if (typeof lookup.message === 'string') return interpolate(lookup.message, reference.replacements)
-    const count = reference.replacements.count
-    const numericCount = typeof count === 'number' ? count : Number.NaN
-    const category = Number.isFinite(numericCount) ? pluralCategory(lookup.locale, numericCount) : 'other'
-    const message = lookup.message[category] ?? lookup.message.other
-    return interpolate(message, reference.replacements)
+    return formatTranslation(lookup, reference.replacements)
   }
 
   #resolve(requestedLocale?: string): LocaleState {

@@ -1,4 +1,5 @@
 import { field as holoField, schema, type FieldDefinition, type FieldRule } from '@holo-js/forms/schema'
+import { createPanelTranslator, type PanelTranslator, type PanelTranslationKey } from '../translations/presentation'
 import type { FieldClientHints } from './base/types'
 
 export interface FormValidationField {
@@ -61,7 +62,7 @@ function readClientHints(value: unknown): FieldClientHints | undefined {
   }
 }
 
-function validationDefinition(field: FormValidationField, value: unknown): FieldDefinition {
+function validationDefinition(field: FormValidationField, value: unknown, translate?: PanelTranslator): FieldDefinition {
   const properties = field.properties ?? {}
   const hints = field.clientHints ?? readClientHints(properties.validationHints)
   const mode = properties.inputMode
@@ -94,7 +95,19 @@ function validationDefinition(field: FormValidationField, value: unknown): Field
       if (name === 'length') rules.push({ name: 'size', args: [numeric] })
     }
   }
-  return { kind, rules }
+  return { kind, rules: translate ? rules.map(rule => ({ ...rule, message: validationMessage(rule, kind, translate) })) : rules }
+}
+
+function validationMessage(rule: FieldRule, kind: FieldDefinition['kind'], translate: PanelTranslator): string | undefined {
+  const simple = { required: 'validation.required', email: 'validation.email', url: 'validation.url', integer: 'validation.integer', in: 'validation.in' } as const
+  if (Object.hasOwn(simple, rule.name)) return translate(simple[rule.name as keyof typeof simple])
+  const limits = {
+    min: { number: 'validation.minNumber', string: 'validation.minString', array: 'validation.minArray' },
+    max: { number: 'validation.maxNumber', string: 'validation.maxString', array: 'validation.maxArray' },
+    size: { number: 'validation.sizeNumber', string: 'validation.sizeString', array: 'validation.sizeArray' },
+  } satisfies Record<string, Record<string, PanelTranslationKey>>
+  if (!Object.hasOwn(limits, rule.name) || !['number', 'string', 'array'].includes(kind)) return undefined
+  return translate(limits[rule.name as keyof typeof limits][kind as 'number' | 'string' | 'array'], { limit: String(rule.args[0]) })
 }
 
 function fieldValue(values: object, path: string): unknown {
@@ -107,15 +120,17 @@ function fieldValue(values: object, path: string): unknown {
   return value
 }
 
-export async function validateFormFields(fields: readonly FormValidationField[], values: object): Promise<Readonly<Record<string, readonly string[]>>> {
+export async function validateFormFields(fields: readonly FormValidationField[], values: object, locale = 'en'): Promise<Readonly<Record<string, readonly string[]>>> {
+  const translate = locale.split(/[-_]/)[0] === 'en' ? undefined : createPanelTranslator(locale)
   const entries = await Promise.all(fields.map(async field => {
     if (field.visible === false || field.disabled || field.readOnly) return []
     const value = fieldValue(values, field.path)
-    const validation = validationDefinition(field, value)
+    const validation = validationDefinition(field, value, translate)
     const errors = requiresPresenceValidation(field, value)
-      ? await validateFieldPresence(validation.rules.some(rule => rule.name === 'required'), value)
+      ? await validateFieldPresence(validation.rules.some(rule => rule.name === 'required'), value, translate)
       : (await schema({ value: { kind: 'field', definition: validation } })['~standard'].validate({ value })).issues?.map(issue => issue.message) ?? []
-    return errors.length ? [[field.path, errors] as const] : []
+    const localized = translate ? errors.map(message => validation.rules.some(rule => rule.message === message) || message === translate('validation.required') ? message : translate('validation.invalid')) : errors
+    return localized.length ? [[field.path, localized] as const] : []
   }))
   return Object.freeze(Object.fromEntries(entries.flat()))
 }
@@ -128,8 +143,8 @@ function requiresPresenceValidation(field: FormValidationField, value: unknown):
   return !hints && object && ['key-value', 'rich-editor', 'custom'].includes(type)
 }
 
-async function validateFieldPresence(required: boolean, value: unknown): Promise<readonly string[]> {
+async function validateFieldPresence(required: boolean, value: unknown, translate?: PanelTranslator): Promise<readonly string[]> {
   const present = value !== undefined && value !== null && value !== ''
-  const result = await schema({ present: holoField.boolean().custom(present => !required || present, 'This field is required.') })['~standard'].validate({ present })
+  const result = await schema({ present: holoField.boolean().custom(present => !required || present, translate?.('validation.required') ?? 'This field is required.') })['~standard'].validate({ present })
   return result.issues?.map(issue => issue.message) ?? []
 }

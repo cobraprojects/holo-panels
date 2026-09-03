@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { usePanelDirection, usePanelLocale, usePanelTranslator } from '../localization'
   import { Button } from '../ui/button'
   import Icon from '../components/Icon.svelte'
-  import { actionFormField, actionFormSchema, actionManifestCollection, createPanelTranslator, readOnlyPresentationStores, type JsonObject } from '@holo-js/panels-client'
+  import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores, type JsonObject } from '@holo-js/panels-client'
   import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference, type SchemaManifest } from '@holo-js/panels-core'
   import * as AlertDialog from '../ui/alert-dialog'
   import * as Dialog from '../ui/dialog'
@@ -15,15 +16,18 @@
   import { toSvelteState } from '../stores'
   import type { SvelteActionCustomProps, SvelteActionRendererProps, SvelteActionSlotProps } from './contracts'
 
-  let { action, actions = [action], direction = 'ltr', groups = [], input, locale = 'en', panelId, recordIds, registry, showTriggers = true, store }: SvelteActionRendererProps = $props()
+  let { action, actions = [action], direction, groups = [], input, locale, panelId, recordIds, registry, showTriggers = true, store }: SvelteActionRendererProps = $props()
   const actionState = $derived.by(() => toSvelteState(store))
   const formState = $derived.by(() => $actionState.frames.length && store.activeForm ? toSvelteState(store.activeForm) : undefined)
   const defaultSchemaRegistry = new SvelteComponentRegistry()
   const schemaRegistry = $derived(registry ?? defaultSchemaRegistry)
-  const translate = $derived(createPanelTranslator(locale))
+  const translate = usePanelTranslator(() => locale)
+  const inheritedDirection = usePanelDirection()
+  const inheritedLocale = usePanelLocale()
   async function submit(): Promise<void> {
     try {
       const current = store
+      current.activeForm?.setLocale(locale ?? inheritedLocale())
       const result = await current.submit(recordIds)
       if (current.activeFrame?.result === result) current.close()
     } catch {
@@ -94,7 +98,7 @@
     {@const titleId = `hp-action-${frame.manifest.id.replace(/[^a-z0-9_-]/giu, '-')}-title-${index}`}
     {@const typeId = customTypeId(frame.manifest.id)}
     {@const schema = actionFormSchema(frame.manifest.modal?.schema ?? null, frame.manifest.id)}
-    {@const readOnlyStores = readOnlyPresentationStores(frame.manifest.modal?.readOnlyPresentation)}
+    {@const readOnlyStores = readOnlyPresentationStores(frame.manifest.modal?.readOnlyPresentation, locale ?? inheritedLocale())}
     {@const contentReference = modalSlotReference(frame.manifest.modal?.content ?? null)}
     {@const footerReference = modalSlotReference(frame.manifest.modal?.footer ?? null)}
     {@const Custom = registry?.hasRenderer(typeId, panelId) ? registry.resolve<SvelteActionCustomProps>(typeId, panelId, 'action modal') : undefined}
@@ -143,7 +147,7 @@
       </AlertDialog.Root>
     {:else if frame.manifest.modal?.slideOver}
       <Sheet.Root open onOpenChange={(open) => { if (!open) store.close() }}>
-        <Sheet.Content {...dismiss} class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="slide-over" side={direction === 'rtl' ? 'left' : 'right'}>
+        <Sheet.Content {...dismiss} class={modalWidthClass(frame.manifest.modal?.width ?? 'medium')} data-holo-panel data-modal-width={frame.manifest.modal?.width ?? 'medium'} data-panels-component="slide-over" side={(direction ?? inheritedDirection()) === 'rtl' ? 'left' : 'right'}>
           <Sheet.Header><Sheet.Title id={titleId}>{frame.manifest.modal?.heading ?? frame.manifest.label}</Sheet.Title>{#if frame.manifest.modal?.description}<Sheet.Description>{frame.manifest.modal.description}</Sheet.Description>{/if}</Sheet.Header>
           <div class="hp:space-y-4 hp:p-4">{@render actionContent()}</div>
         </Sheet.Content>

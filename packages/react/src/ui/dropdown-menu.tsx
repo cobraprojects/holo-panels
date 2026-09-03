@@ -77,7 +77,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "hp:relative hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:px-2 hp:py-1.5 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:data-[inset]:pl-8 hp:data-[variant=destructive]:text-destructive hp:data-[variant=destructive]:focus:bg-destructive/10 hp:data-[variant=destructive]:focus:text-destructive hp:dark:data-[variant=destructive]:focus:bg-destructive/20 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4 hp:[&_svg:not([class*=text-])]:text-muted-foreground hp:data-[variant=destructive]:*:[svg]:text-destructive!",
+        "hp:relative hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:px-2 hp:py-1.5 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:data-[inset]:ps-8 hp:data-[variant=destructive]:text-destructive hp:data-[variant=destructive]:focus:bg-destructive/10 hp:data-[variant=destructive]:focus:text-destructive hp:dark:data-[variant=destructive]:focus:bg-destructive/20 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4 hp:[&_svg:not([class*=text-])]:text-muted-foreground hp:data-[variant=destructive]:*:[svg]:text-destructive!",
         className
       )}
       {...props}
@@ -95,13 +95,13 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "hp:relative hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:py-1.5 hp:pr-2 hp:pl-8 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4",
+        "hp:relative hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:py-1.5 hp:pe-2 hp:ps-8 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4",
         className
       )}
       checked={checked}
       {...props}
     >
-      <span className="hp:pointer-events-none hp:absolute hp:left-2 hp:flex hp:size-3.5 hp:items-center hp:justify-center">
+      <span className="hp:pointer-events-none hp:absolute hp:start-2 hp:flex hp:size-3.5 hp:items-center hp:justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <CheckIcon className="hp:size-4" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -131,12 +131,12 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "hp:relative hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:py-1.5 hp:pr-2 hp:pl-8 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4",
+        "hp:relative hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:py-1.5 hp:pe-2 hp:ps-8 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4",
         className
       )}
       {...props}
     >
-      <span className="hp:pointer-events-none hp:absolute hp:left-2 hp:flex hp:size-3.5 hp:items-center hp:justify-center">
+      <span className="hp:pointer-events-none hp:absolute hp:start-2 hp:flex hp:size-3.5 hp:items-center hp:justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <CircleIcon className="hp:size-2 hp:fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -158,7 +158,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        "hp:px-2 hp:py-1.5 hp:text-sm hp:font-medium hp:data-[inset]:pl-8",
+        "hp:px-2 hp:py-1.5 hp:text-sm hp:font-medium hp:data-[inset]:ps-8",
         className
       )}
       {...props}
@@ -187,7 +187,7 @@ function DropdownMenuShortcut({
     <span
       data-slot="dropdown-menu-shortcut"
       className={cn(
-        "hp:ml-auto hp:text-xs hp:tracking-widest hp:text-muted-foreground",
+        "hp:ms-auto hp:text-xs hp:tracking-widest hp:text-muted-foreground",
         className
       )}
       {...props}
@@ -214,13 +214,13 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:px-2 hp:py-1.5 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[inset]:pl-8 hp:data-[state=open]:bg-accent hp:data-[state=open]:text-accent-foreground hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4 hp:[&_svg:not([class*=text-])]:text-muted-foreground",
+        "hp:flex hp:cursor-default hp:items-center hp:gap-2 hp:rounded-sm hp:px-2 hp:py-1.5 hp:text-sm hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-[inset]:ps-8 hp:data-[state=open]:bg-accent hp:data-[state=open]:text-accent-foreground hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0 hp:[&_svg:not([class*=size-])]:size-4 hp:[&_svg:not([class*=text-])]:text-muted-foreground",
         className
       )}
       {...props}
     >
       {children}
-      <ChevronRightIcon className="hp:ml-auto hp:size-4" />
+      <ChevronRightIcon className="hp:ms-auto hp:size-4 hp:rtl:rotate-180" />
     </DropdownMenuPrimitive.SubTrigger>
   )
 }

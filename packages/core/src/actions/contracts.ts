@@ -1,4 +1,5 @@
 import type { JsonObject } from '../protocol/json'
+import type { PanelTranslationKey } from '../translations/presentation'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
 import type { Effect } from '../protocol/effects'
 import type { CompiledSchema, RenderSlotReference, SchemaJsonValue, SchemaLayoutProperties, SchemaRenderSlots } from '../schemas/contracts'
@@ -15,6 +16,7 @@ export interface ActionContract<TRecord extends object = object> {
 }
 
 export interface ActionContext<TRecord, TActor, TTenant, TServices> {
+  readonly locale?: string
   readonly actor: TActor
   readonly owner?: object
   readonly mount: ActionMount
@@ -152,12 +154,14 @@ export interface ActionDefinition<TRecord, TInput extends JsonObject, TResult, T
   readonly nestedActions?: readonly object[]
   readonly authorize: (context: ActionContext<TRecord, TActor, TTenant, TServices>, input: Readonly<TInput>) => boolean | Promise<boolean>
   readonly confirmation?: string | null
+  readonly confirmationTranslationKey?: PanelTranslationKey
   readonly disabled?: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, boolean>
   readonly failureNotification?: ActionFailureNotification<ActionContext<TRecord, TActor, TTenant, TServices>>
   readonly handle: (input: TInput, context: ActionContext<TRecord, TActor, TTenant, TServices>) => TResult | Promise<TResult>
   readonly id: string
   readonly kind: ActionKind
   readonly label: ActionResolvable<ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>, string>
+  readonly labelTranslationKey?: PanelTranslationKey
   readonly lifecycle?: {
     readonly after?: (result: TResult, context: ActionContext<TRecord, TActor, TTenant, TServices>) => void | Promise<void>
     readonly before?: (input: TInput, context: ActionContext<TRecord, TActor, TTenant, TServices>) => void | Promise<void>

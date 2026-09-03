@@ -126,7 +126,7 @@ function setPath(values: JsonObject, path: string, value: JsonValue): void {
   target[parts.at(-1)!] = value
 }
 
-export async function resolveDashboardFilters(schema: JsonObject | null, input: JsonObject = {}, validate = true): Promise<JsonObject> {
+export async function resolveDashboardFilters(schema: JsonObject | null, input: JsonObject = {}, validate = true, locale = 'en'): Promise<JsonObject> {
   if (!schema) {
     if (Object.keys(input).length > 0) throw new Error('The dashboard has no filter form')
     return {}
@@ -148,7 +148,7 @@ export async function resolveDashboardFilters(schema: JsonObject | null, input: 
     const value = field.disabled || field.readOnly || field.visible === false ? undefined : readPath(input, field.path)
     setPath(result, field.path, value ?? defaults.get(field.path) ?? '')
   }
-  const errors = validate ? await validateFormFields(fields, result) : {}
+  const errors = validate ? await validateFormFields(fields, result, locale) : {}
   if (Object.keys(errors).length > 0) throw new DashboardFilterValidationError(errors)
   return result
 }

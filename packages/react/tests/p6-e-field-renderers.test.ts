@@ -10,6 +10,7 @@ import {
   UploadStore,
 } from '@holo-js/panels-client'
 import { createComponentRegistry } from '../src/registry'
+import { PanelsLocaleProvider } from '../src/localization'
 import { ReactFieldRenderer, fieldRendererName } from '../src/fields/renderer'
 import type { ReactCompiledField, ReactFieldControlProps, ReactFieldRendererProps } from '../src/fields/types'
 
@@ -50,6 +51,21 @@ afterEach(() => {
 })
 
 describe('P6-E React field renderers', () => {
+  it('inherits Arabic labels for password controls while preserving authored field labels', () => {
+    const store = new FormStore<FormValues>({ attachment: null, sections: [], title: 'secret' })
+    const html = renderToString(createElement(PanelsLocaleProvider, {
+      locale: 'ar',
+      children: createElement(FormField, {
+        definition: definition('title', 'text', { inputMode: 'password', revealable: true }),
+        registry: createComponentRegistry(),
+        store,
+      }),
+    }))
+
+    expect(html).toContain('إظهار كلمة المرور')
+    expect(html).toContain('Title')
+  })
+
   it('uses panel registry overrides for built-in fields without affecting other panels', () => {
     const store = new FormStore<FormValues>({ attachment: null, sections: [], title: 'Initial' })
     const registry = createComponentRegistry().override('editor', 'field.text',

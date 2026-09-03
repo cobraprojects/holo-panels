@@ -1,9 +1,10 @@
+import { createPanelTranslator } from '../translations/presentation'
 import type { JsonObject, JsonValue } from '../protocol/json'
 import { ValidationException } from '@holo-js/forms/schema'
 import { validateFormFields } from '../fields/validation'
 import { toJsonValue } from '../protocol/serialization'
 import { getGeneratedTableDefinition, type RelationDefinition } from '@holo-js/db'
-import { ActionEngine, builtInActionPresentation, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionReadOnlyEntryManifest, type ActionReadOnlyPresentationManifest, type ActionSize } from '../actions'
+import { ActionEngine, builtInActionPresentation, builtInActionTranslationKeys, compileActionManifest, resolveActionState, type ActionDefinition, type ActionKind, type ActionManifest, type ActionModalWidth, type ActionMount, type ActionReadOnlyEntryManifest, type ActionReadOnlyPresentationManifest, type ActionSize } from '../actions'
 import type { Effect } from '../protocol/effects'
 import type { CompiledPanelDefinition } from '../panels/contracts'
 import { actionExecutionPermissions, resourceActionPermissions, authorizePanelActionPermissions } from '../actions/authorization'
@@ -88,6 +89,7 @@ interface GeneratedResourcePageOptions {
 
 export interface GeneratedResourceOperationInput {
   readonly context: {
+    readonly locale?: string
     readonly actor: object
     readonly signal: AbortSignal
     readonly strictAuthorization?: boolean
@@ -630,8 +632,11 @@ function relationActions(manager: object, relation: RelationDefinition): readonl
     const action = value as Partial<ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, undefined>>
     if (!action.id || !action.kind) throw new Error('Relation actions require registered IDs and kinds')
     const defaults = builtInActionPresentation(action.kind)
+    const keys = builtInActionTranslationKeys(action.kind)
     return {
       ...defaults,
+      ...(action.label === undefined ? { labelTranslationKey: keys?.label } : {}),
+      ...(action.confirmation === undefined ? { confirmationTranslationKey: keys?.confirmation } : {}),
       ...action,
       authorize: action.authorize ?? (() => true),
       handle: action.handle ?? (() => undefined),
@@ -1020,7 +1025,7 @@ function resourceFormActions(definition: RuntimeDefinition, pageType: PageType):
   const registered = (definition.actions ?? []).filter(action => Reflect.get(action, 'source') === `${pageType}:form`)
   if (explicitResourcePages(definition).length > 0 || registered.length > 0 || !['create', 'edit'].includes(pageType)) return registered
   const kind = pageType === 'create' ? 'create' : 'edit'
-  return [{ ...builtInActionPresentation(kind), authorize: () => true, formIntent: 'submit', handle: () => undefined, id: kind, kind, label: kind === 'create' ? 'Create' : 'Save', mount: kind === 'create' ? 'page' : 'record', source: `${pageType}:form`, usesDefaultHandler: true }]
+  return [{ ...builtInActionPresentation(kind), authorize: () => true, formIntent: 'submit', handle: () => undefined, id: kind, kind, label: kind === 'create' ? 'Create' : 'Save', labelTranslationKey: kind === 'create' ? 'actions.create' : 'actions.save', mount: kind === 'create' ? 'page' : 'record', source: `${pageType}:form`, usesDefaultHandler: true }]
 }
 
 function resourceRoutes(definition: RuntimeDefinition, basePath: string): JsonObject {
@@ -1238,7 +1243,7 @@ async function resolvedResourceInfolistEntries(definition: RuntimeDefinition, re
 
 async function resolvedResourceFormFields(
   definition: RuntimeDefinition,
-  context: Readonly<{ actor: object, services?: unknown, signal: AbortSignal, tenant: unknown }>,
+  context: Readonly<{ actor: object, locale?: string, services?: unknown, signal: AbortSignal, tenant: unknown }>,
   record: RuntimeRecord | null,
   mount: 'page' | 'record',
 ): Promise<ReturnType<typeof resourceFormFields>> {
@@ -1251,7 +1256,7 @@ async function resolvedResourceFormFields(
     const properties: Record<string, unknown> = { ...field.properties }
     for (const candidate of actions) {
       const action = { ...(candidate as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>), mount, source: `form-field:${field.path}` }
-      const scope = { actor: context.actor, mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+      const scope = { actor: context.actor, locale: context.locale, mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
       const state = await resolveActionState(action, scope)
       const manifest = await compileActionManifest(action, state.label, scope, state)
       const position = Reflect.get(candidate, 'position')
@@ -1285,7 +1290,7 @@ async function resourceModalAction<TServices>(
     kind: 'field',
     readOnly: Reflect.get(field, 'readOnly') === true,
   }))
-  const submitActionLabel = action.kind === 'create' ? 'Create' : 'Save'
+  const submitActionLabel = createPanelTranslator(locale)(action.kind === 'create' ? 'actions.create' : 'actions.save')
   return { ...action, modal: { ...action.modal, schema: jsonObject({ fields }), submitActionLabel } }
 }
 
@@ -1445,7 +1450,7 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
   const plural = typeof navigation.label === 'string' ? navigation.label : label(slug)
   const load = async (context: PageContext<object, unknown, unknown>): Promise<JsonObject> => {
     const executor = new ResourceExecutor(definition, { strictAuthorization: context.strictAuthorization })
-    const executionContext = { actor: context.actor, signal: context.signal, strictAuthorization: context.strictAuthorization, tenant: context.tenant }
+    const executionContext = { actor: context.actor, locale: context.locale, signal: context.signal, strictAuthorization: context.strictAuthorization, tenant: context.tenant }
     if (manifest.pageType === 'list' || manifest.pageType === 'manage') {
       const tableState = Object.freeze({ includeTotal: true, page: 1, pagination: 'page' as const, perPage: 25 })
       const table = await executor.table(tableState, executionContext, record => resolveGeneratedRowActions(definition, executionContext, record))
@@ -1473,7 +1478,15 @@ export function createGeneratedResourcePage(resource: object, manifest: PageMani
     server: {
       authorize: (context: PageContext<object, unknown, unknown>) => canHoloPolicy(context.actor, 'viewAny', definition.model, context.strictAuthorization),
       breadcrumbs: [{ label: plural, path: manifest.path.split('/:record')[0]! }],
-      heading: manifest.pageType === 'list' || manifest.pageType === 'manage' ? null : `${label(manifest.pageType)} ${label(singularize(plural))}`,
+      heading: (context: PageContext<object, unknown, unknown>) => {
+        if (manifest.pageType === 'list' || manifest.pageType === 'manage') return null
+        const resource = label(singularize(plural))
+        const translate = createPanelTranslator(context.locale)
+        if (manifest.pageType === 'create') return translate('resources.createHeading', { resource })
+        if (manifest.pageType === 'edit') return translate('resources.editHeading', { resource })
+        if (manifest.pageType === 'view') return translate('resources.viewHeading', { resource })
+        return `${label(manifest.pageType)} ${resource}`
+      },
       load,
       manifest: (context: PageContext<object, unknown, unknown>) => resolveGeneratedPageActions(definition, manifest, context),
       title: plural,
@@ -1529,13 +1542,13 @@ async function resolveGeneratedPageActions(
   const actions = await Promise.all(entries.map(async (entry) => {
     if (!entry.definition) return entry.manifest
     const compiled = await resourceModalAction(entry.definition as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>, definition, record, contextLocale(context))
-    const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+    const scope = { actor: context.actor, locale: context.locale, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
     const state = await resolveActionState(compiled, scope)
     return { ...entry.manifest, ...await compileActionManifest(compiled, state.label, scope, state) }
   }))
   const resolvedFormActions = await Promise.all(formActions.map(async (action) => {
     const compiled = action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>
-    const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+    const scope = { actor: context.actor, locale: context.locale, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
     const state = await resolveActionState(compiled, scope)
     return { ...await compileActionManifest(compiled, state.label, scope, state), formIntent: Reflect.get(action, 'formIntent') ?? 'submit' }
   }))
@@ -1544,7 +1557,7 @@ async function resolveGeneratedPageActions(
     const registered = infolistActions.filter(action => Reflect.get(action, 'source') === `infolist:${String(Reflect.get(entry, 'path'))}`)
     const actionManifests = await Promise.all(registered.map(async (action) => {
       const compiled = action as ActionDefinition<RuntimeRecord, JsonObject, unknown, object, unknown, unknown>
-      const scope = { actor: context.actor, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
+      const scope = { actor: context.actor, locale: context.locale, mount: compiled.mount, record, services: context.services, signal: context.signal, tenant: context.tenant }
       const state = await resolveActionState(compiled, scope)
       return compileActionManifest(compiled, state.label, scope, state)
     }))
@@ -1575,8 +1588,8 @@ function mutationValues(payload: JsonObject): Readonly<Record<string, JsonValue>
   return Object.freeze(Object.fromEntries(Object.entries(payload).filter(([key]) => !reserved.has(key))))
 }
 
-async function validateRequiredValues(definition: RuntimeDefinition, values: Readonly<Record<string, JsonValue>>, creating: boolean): Promise<void> {
-  const errors = await validateFormFields(resourceFormFields(definition).filter(field => creating || valueAtPath(values, field.path) !== undefined), values)
+async function validateRequiredValues(definition: RuntimeDefinition, values: Readonly<Record<string, JsonValue>>, creating: boolean, locale: string): Promise<void> {
+  const errors = await validateFormFields(resourceFormFields(definition).filter(field => creating || valueAtPath(values, field.path) !== undefined), values, locale)
   if (Object.keys(errors).length) throw new ValidationException({ ...errors })
   for (const field of resourceSchemaFields(definition.form)) {
     const path = Reflect.get(field, 'path')
@@ -1588,7 +1601,7 @@ async function validateRequiredValues(definition: RuntimeDefinition, values: Rea
       ? Reflect.apply(source.manifestOptions, source, [])
       : []
     if (Array.isArray(choices) && choices.length > 0 && !choices.some(option => option && typeof option === 'object' && Reflect.get(option, 'value') === value)) {
-      throw new ValidationException({ [path]: ['The selected option is unavailable.'] })
+      throw new ValidationException({ [path]: [createPanelTranslator(locale)('validation.in')] })
     }
   }
 }
@@ -1939,7 +1952,7 @@ function executableResourceAction(
       const identifier = recordIdentifier(input.payload)
       const resolved = await resolveFormDefinition(definition, submitted, input, context.record)
       const values = await normalizeValues(resolved.definition, resolved.values, input, context.record)
-      await validateRequiredValues(resolved.definition, values, identifier === null)
+      await validateRequiredValues(resolved.definition, values, identifier === null, contextLocale(input.context))
       await validateOptionValues(resolved.definition, values, input)
       const finalized = await finalizedUploadValues(resolved.definition, values, input, context.record)
       const result = identifier === null ? await executor.create(finalized, input.context) : await executor.update(identifier, finalized, input.context)
@@ -1953,7 +1966,7 @@ function executableResourceAction(
       const resolved = await resolveFormDefinition(definition, submitted, input, context.record)
       const values = await normalizeValues(resolved.definition, resolved.values, input, context.record)
       if (action.kind === 'create' || action.kind === 'edit') {
-        await validateRequiredValues(resolved.definition, values, action.kind === 'create')
+        await validateRequiredValues(resolved.definition, values, action.kind === 'create', contextLocale(input.context))
         await validateOptionValues(resolved.definition, values, input)
       }
       if (action.kind === 'create') {
@@ -2101,6 +2114,7 @@ async function executeCustomAction(
     recordIds: actionRecordIds(input.payload),
   }, {
     actor: input.context.actor,
+    locale: contextLocale(input.context),
     services: undefined,
     signal: input.context.signal,
     tenant: input.context.tenant,
@@ -2243,7 +2257,7 @@ async function performRelationOperation(
   const prefix = operation === 'create' || operation === 'edit' ? 'values' : 'pivot'
   const errors = await validateFormFields(fields.flatMap(field => typeof field.id === 'string' && typeof field.type === 'string' && (operation === 'create' || fieldValues[field.id] !== undefined)
     ? [{ path: field.id, required: field.required === true, type: field.type, properties: field.type === 'number' ? { inputMode: 'number' } : {} }]
-    : []), fieldValues)
+    : []), fieldValues, contextLocale(input.context))
   if (Object.keys(errors).length) throw new ValidationException(Object.fromEntries(Object.entries(errors).map(([path, messages]) => [`${prefix}.${path}`, messages])))
   let record: RuntimeRecord | null = null
   if (manager.runtime) {

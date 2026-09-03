@@ -1,4 +1,5 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
+  import { usePanelTranslator } from '../localization'
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { Input } from '../ui/input'
@@ -14,6 +15,7 @@
     readonly record: Readonly<TRecord>
     readonly table: SvelteTableRendererProps<TRecord, TRecordId>
   } = $props()
+  const translate = usePanelTranslator(() => table.locale)
   let editing = $state(false)
   let pending = $state(false)
   let error = $state<string | null>(null)
@@ -50,7 +52,7 @@
       }, new AbortController().signal)
       editing = false
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Inline edit failed'
+      error = cause instanceof Error ? cause.message : translate('tables.inlineFailed')
     } finally {
       pending = false
     }
@@ -76,9 +78,9 @@
 </script>
 
 {#if !validEditor}
-  <ColumnPresentation {column} panelId={table.panelId} {record} registry={table.registry} value={original} />
+  <ColumnPresentation {column} locale={table.locale} panelId={table.panelId} {record} registry={table.registry} value={original} />
 {:else if !editing}
-  <Button type="button" aria-label="Edit {column.manifest.label ?? column.manifest.path}" onclick={begin}><ColumnPresentation {column} panelId={table.panelId} {record} registry={table.registry} value={original} /></Button>
+  <Button type="button" aria-label={translate('tables.editValue', { label: column.manifest.label ?? column.manifest.path })} onclick={begin}><ColumnPresentation {column} locale={table.locale} panelId={table.panelId} {record} registry={table.registry} value={original} /></Button>
 {:else if kind === 'checkbox' || kind === 'toggle'}
   <span>
     {#if kind === 'toggle'}<Switch aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onCheckedChange={(checked) => { value = checked; void save(value) }} />{:else}<Checkbox aria-label={column.manifest.label ?? column.manifest.path} checked={value === true} disabled={pending} onCheckedChange={(checked) => { value = checked; void save(value) }} />{/if}
@@ -90,7 +92,7 @@
       {#each options as option, index}
         {@const next = optionValue(option)}
         {#if typeof next !== 'undefined'}
-          <option value={String(next ?? '')} disabled={typeof option === 'object' && option !== null && Reflect.get(option, 'disabled') === true}>{typeof option === 'object' && option !== null && typeof Reflect.get(option, 'label') === 'string' ? Reflect.get(option, 'label') : `Option ${index + 1}`}</option>
+          <option value={String(next ?? '')} disabled={typeof option === 'object' && option !== null && Reflect.get(option, 'disabled') === true}>{typeof option === 'object' && option !== null && typeof Reflect.get(option, 'label') === 'string' ? Reflect.get(option, 'label') : translate('fields.numberedOption', { number: index + 1 })}</option>
         {/if}
       {/each}
     </Select>

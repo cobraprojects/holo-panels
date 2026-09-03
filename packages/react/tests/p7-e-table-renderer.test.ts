@@ -3,6 +3,8 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { TableStateStore, type FilterCollectionPresentation } from '@holo-js/panels-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { PanelsLocaleProvider } from '../src/localization'
+import { ReactTableColumnPresentation } from '../src/tables/presentation'
 import { ReactTableRenderer } from '../src/tables/renderer'
 import { createComponentRegistry } from '../src/registry'
 import type { ReactCustomFilterProps, ReactFilterCollectionSlotProps, ReactTableColumn, ReactTableRendererProps } from '../src/tables/types'
@@ -75,6 +77,32 @@ function createStore(options: { readonly filterMode?: 'deferred' | 'live', reado
 function TableFixture(props: ReactTableRendererProps<Post, number>): ReactNode {
   return ReactTableRenderer(props)
 }
+
+it('formats table dates using the panel locale even when the host default is English', () => {
+  const date = new Date('2026-09-03T12:00:00Z')
+  const column: ReactTableColumn<Post> = {
+    manifest: { ...columns[0]!.manifest, formatters: [{ kind: 'date', options: { timeZone: 'UTC' } }] },
+  }
+  const html = renderToString(createElement(PanelsLocaleProvider, { locale: 'ar', direction: 'rtl', children: createElement(ReactTableColumnPresentation<Post>, { column, record: records[0]!, value: date }) }))
+  expect(html).toContain(new Intl.DateTimeFormat('ar', { dateStyle: 'medium', timeZone: 'UTC' }).format(date))
+})
+
+it('localizes table search and pagination in Arabic', () => {
+  const container = mount({ ...baseProps(createStore()), locale: 'ar' })
+
+  expect(container.querySelector('input[type="search"]')?.getAttribute('placeholder')).toBe('البحث في السجلات…')
+  expect(container.querySelector('nav')?.getAttribute('aria-label')).toBe('ترقيم صفحات الجدول')
+  expect(container.querySelector('button[aria-label="الصفحة التالية"]')).not.toBeNull()
+  expect(container.textContent).toContain('عرض 1 إلى 4 من 4 نتيجة')
+})
+
+it('localizes empty table states without changing application captions', () => {
+  const store = createStore({ records: [], total: 0 })
+  const container = mount({ ...baseProps(store), locale: 'ar' })
+
+  expect(container.textContent).toContain('Posts')
+  expect(container.textContent).toContain('لم يتم العثور على سجلات.')
+})
 
 function baseProps(store: TableStateStore<Post, number>): ReactTableRendererProps<Post, number> {
   return {

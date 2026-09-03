@@ -1,4 +1,5 @@
 export * from './internal-ui'
+export { PanelsLocaleProvider, usePanelDirection, usePanelLocale, usePanelTranslator } from './localization'
 export * from './error-boundary'
 export * from './ui'
 export * from './page-actions'

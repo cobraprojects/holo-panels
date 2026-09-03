@@ -11,7 +11,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<'div'>): React
   return <div
     className={cn(
       'hp:group/input-group hp:relative hp:flex hp:h-9 hp:w-full hp:min-w-0 hp:items-center hp:rounded-md hp:border hp:border-input hp:shadow-xs hp:outline-none hp:transition-[color,box-shadow] hp:has-[>textarea]:h-auto hp:dark:bg-input/30',
-      'hp:has-[>[data-align=inline-start]]:[&>input]:pl-2 hp:has-[>[data-align=inline-end]]:[&>input]:pr-2',
+      'hp:has-[>[data-align=inline-start]]:[&>input]:ps-2 hp:has-[>[data-align=inline-end]]:[&>input]:pe-2',
       'hp:has-[>[data-align=block-start]]:h-auto hp:has-[>[data-align=block-start]]:flex-col hp:has-[>[data-align=block-start]]:[&>input]:pb-3',
       'hp:has-[>[data-align=block-end]]:h-auto hp:has-[>[data-align=block-end]]:flex-col hp:has-[>[data-align=block-end]]:[&>input]:pt-3',
       'hp:has-[[data-slot=input-group-control]:focus-visible]:border-ring hp:has-[[data-slot=input-group-control]:focus-visible]:ring-[3px] hp:has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50',
@@ -29,8 +29,8 @@ const inputGroupAddonVariants = cva(
   {
     variants: {
       align: {
-        'inline-start': 'hp:order-first hp:pl-3 hp:has-[>button]:ml-[-0.45rem] hp:has-[>kbd]:ml-[-0.35rem]',
-        'inline-end': 'hp:order-last hp:pr-3 hp:has-[>button]:mr-[-0.45rem] hp:has-[>kbd]:mr-[-0.35rem]',
+        'inline-start': 'hp:order-first hp:ps-3 hp:has-[>button]:ms-[-0.45rem] hp:has-[>kbd]:ms-[-0.35rem]',
+        'inline-end': 'hp:order-last hp:pe-3 hp:has-[>button]:me-[-0.45rem] hp:has-[>kbd]:me-[-0.35rem]',
         'block-start': 'hp:order-first hp:w-full hp:justify-start hp:px-3 hp:pt-3 hp:group-has-[>input]/input-group:pt-2.5 hp:[.border-b]:pb-3',
         'block-end': 'hp:order-last hp:w-full hp:justify-start hp:px-3 hp:pb-3 hp:group-has-[>input]/input-group:pb-2.5 hp:[.border-t]:pt-3',
       },

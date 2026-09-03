@@ -35,6 +35,9 @@ describe('client locales', () => {
     expect(manager.setLocale('ar').direction).toBe('rtl')
     expect(manager.translate(trans('records.selected', { count: 0 }))).toBe('لم يتم تحديد أي سجلات')
     expect(manager.translate(trans('records.selected', { count: 3 }))).toBe('تم تحديد 3 سجلات')
+    expect(manager.translate(trans('actions.save'))).toBe(arCatalog.messages['actions.save'])
+    expect(manager.setLocale('EN').direction).toBe('ltr')
+    expect(manager.translate(trans('actions.save'))).toBe(enCatalog.messages['actions.save'])
   })
 
   it('uses locale fallback before reporting a missing key', () => {

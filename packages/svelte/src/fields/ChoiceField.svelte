@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { usePanelTranslator } from '../localization'
+  const translate = usePanelTranslator()
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { Input } from '../ui/input'
@@ -91,26 +93,26 @@
   <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type={kind}>
     {#snippet children(attributes)}
       {#if Boolean(definition.properties?.searchable)}
-        <InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput aria-label="Search {definition.label}" type="search" disabled={presentation.disabled || $optionState?.disabled} oninput={search} value={$optionState?.search ?? ''} /></InputGroup>
+        <InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput aria-label={translate('fields.searchOptions', { label: definition.label ?? translate('fields.options') })} type="search" disabled={presentation.disabled || $optionState?.disabled} oninput={search} value={$optionState?.search ?? ''} /></InputGroup>
       {/if}
       {#if kind === 'checkbox-list' || kind === 'toggle-buttons'}
         {#if multiple}<div {...attributes} class="hp:space-y-2" role="group" onfocusout={touch}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><Checkbox checked={selected(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} onCheckedChange={(checked) => toggle(option.value, checked)} />{option.label}</label>{/each}</div>{:else}<RadioGroup {...attributes} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} onfocusout={touch} onValueChange={(next) => { const option = options.find(candidate => String(candidate.value) === next); if (option) setSelection(option.value) }}>{#each options as option (option.value)}<label class="hp:flex hp:items-center hp:gap-2"><RadioGroupItem value={String(option.value)} disabled={presentation.disabled || presentation.readOnly || option.disabled || $optionState?.disabled} />{option.label}</label>{/each}</RadioGroup>{/if}
       {:else}
         <Select {...attributes} {multiple} value={selectValue()} disabled={presentation.disabled || presentation.readOnly || $optionState?.disabled} required={presentation.required} onblur={touch} onchange={changeSelect}>
-          {#if !multiple}<option value="">{definition.placeholder ?? 'Select an option'}</option>{/if}
+          {#if !multiple}<option value="">{definition.placeholder ?? translate('fields.selectOption')}</option>{/if}
           {#each options as option (option.value)}
             <option value={String(option.value)} disabled={option.disabled}>{option.label}</option>
           {/each}
         </Select>
       {/if}
-      {#if $optionState?.loading}<span role="status">Loading options</span>{/if}
+      {#if $optionState?.loading}<span role="status">{translate('fields.loadingOptions')}</span>{/if}
       {#if $optionState?.error}<span role="alert">{$optionState.error}</span>{/if}
-      {#if $optionState?.hasMore}<Button type="button" disabled={$optionState.loading} onclick={() => optionStore && void optionStore.load($optionState.search, $optionState.page + 1)}>Load more</Button>{/if}
+      {#if $optionState?.hasMore}<Button type="button" disabled={$optionState.loading} onclick={() => optionStore && void optionStore.load($optionState.search, $optionState.page + 1)}>{translate('fields.loadMore')}</Button>{/if}
       {#if Boolean(definition.properties?.canCreateOption)}
-        <div><Input aria-label="Create {definition.label} label" disabled={presentation.disabled || presentation.readOnly} bind:value={createLabel} /><Button type="button" disabled={!createLabel.trim()} onclick={() => void createOption()}>Create option</Button></div>
+        <div><Input aria-label={translate('fields.createOptionLabel', { label: definition.label ?? translate('fields.option') })} disabled={presentation.disabled || presentation.readOnly} bind:value={createLabel} /><Button type="button" disabled={!createLabel.trim()} onclick={() => void createOption()}>{translate('fields.createOption')}</Button></div>
       {/if}
       {#if Boolean(definition.properties?.canEditOption)}
-        <div><Input aria-label="Edit {definition.label} label" disabled={presentation.disabled || presentation.readOnly || selectedValues().length !== 1} bind:value={editLabel} /><Button type="button" disabled={!editLabel.trim() || selectedValues().length !== 1} onclick={() => void editOption()}>Edit option</Button></div>
+        <div><Input aria-label={translate('fields.editOptionLabel', { label: definition.label ?? translate('fields.option') })} disabled={presentation.disabled || presentation.readOnly || selectedValues().length !== 1} bind:value={editLabel} /><Button type="button" disabled={!editLabel.trim() || selectedValues().length !== 1} onclick={() => void editOption()}>{translate('fields.editOption')}</Button></div>
       {/if}
     {/snippet}
   </FieldFrame>

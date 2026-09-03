@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, Input, NativeSelect } from '../internal-ui'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui'
@@ -35,6 +36,7 @@ function manifestOptions(value: unknown): readonly ChoiceOption[] {
 }
 
 export function ReactOptionField<TValues extends object>(props: ReactFieldControlProps<TValues>): ReactNode {
+  const translate = usePanelTranslator()
   const optionStore = requireStore(props.optionStore, props.context.definition.type, 'OptionStore')
   const state = useStoreState(optionStore)
   const [createLabel, setCreateLabel] = useState('')
@@ -52,30 +54,30 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
   const multiple = props.context.definition.type === 'multiselect' || props.context.definition.type === 'checkbox-list'
   const searchAndPaging = <>
     {property(props.context, 'searchable', false) ? <InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput
-      aria-label={`Search ${props.context.definition.label ?? 'options'}`}
+      aria-label={translate('fields.searchOptions', { label: props.context.definition.label ?? translate('fields.options') })}
       disabled={props.context.disabled || state.disabled}
       onChange={event => void optionStore.load(event.currentTarget.value, 1)}
       type="search"
       value={state.search}
     /></InputGroup> : null}
-    {property(props.context, 'paginated', true) && (state.page > 1 || state.hasMore) ? <nav aria-label={`${props.context.definition.label ?? 'Option'} pages`}>
-      <Button disabled={state.page <= 1 || state.loading} onClick={() => void optionStore.load(state.search, state.page - 1)} type="button">Previous</Button>
-      <span aria-live="polite">Page {state.page}</span>
-      <Button disabled={!state.hasMore || state.loading} onClick={() => void optionStore.load(state.search, state.page + 1)} type="button">Next</Button>
+    {property(props.context, 'paginated', true) && (state.page > 1 || state.hasMore) ? <nav aria-label={translate('fields.optionPages', { label: props.context.definition.label ?? translate('fields.option') })}>
+      <Button disabled={state.page <= 1 || state.loading} onClick={() => void optionStore.load(state.search, state.page - 1)} type="button">{translate('pagination.previous')}</Button>
+      <span aria-live="polite">{translate('tables.page', { page: state.page })}</span>
+      <Button disabled={!state.hasMore || state.loading} onClick={() => void optionStore.load(state.search, state.page + 1)} type="button">{translate('pagination.next')}</Button>
     </nav> : null}
   </>
   const createAndEdit = <>
     {property(props.context, 'canCreateOption', false) ? <div>
-      <Input aria-label={`Create ${props.context.definition.label ?? 'option'} label`} disabled={props.context.disabled || props.context.readOnly} onChange={event => setCreateLabel(event.currentTarget.value)} value={createLabel} />
+      <Input aria-label={translate('fields.createOptionLabel', { label: props.context.definition.label ?? translate('fields.option') })} disabled={props.context.disabled || props.context.readOnly} onChange={event => setCreateLabel(event.currentTarget.value)} value={createLabel} />
       <Button disabled={!createLabel.trim()} onClick={() => void optionStore.create(createLabel).then(async (option) => {
         const next = multiple ? [...values, option.value] : option.value
         setCreateLabel('')
         updateField(props, next)
         await optionStore.hydrateSelected(multiple ? next as readonly OptionValue[] : [option.value])
-      })} type="button">Create option</Button>
+      })} type="button">{translate('fields.createOption')}</Button>
     </div> : null}
     {property(props.context, 'canEditOption', false) ? <div>
-      <Input aria-label={`Edit ${props.context.definition.label ?? 'option'} label`} disabled={props.context.disabled || props.context.readOnly || values.length !== 1} onChange={event => setEditLabel(event.currentTarget.value)} value={editLabel} />
+      <Input aria-label={translate('fields.editOptionLabel', { label: props.context.definition.label ?? translate('fields.option') })} disabled={props.context.disabled || props.context.readOnly || values.length !== 1} onChange={event => setEditLabel(event.currentTarget.value)} value={editLabel} />
       <Button disabled={!editLabel.trim() || values.length !== 1} onClick={() => {
         const value = values[0]
         if (typeof value === 'undefined') return
@@ -83,7 +85,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
           setEditLabel('')
           await optionStore.hydrateSelected([value])
         })
-      }} type="button">Edit option</Button>
+      }} type="button">{translate('fields.editOption')}</Button>
     </div> : null}
   </>
   if (props.context.definition.type === 'checkbox-list' || props.context.definition.type === 'toggle-buttons') {
@@ -112,7 +114,7 @@ export function ReactOptionField<TValues extends object>(props: ReactFieldContro
         : optionValue(event.currentTarget.value, options))}
       value={multiple ? values.map(String) : String(values[0] ?? '')}
     >
-      {!multiple ? <option value="">{state.loading ? 'Loading…' : 'Select an option'}</option> : null}
+      {!multiple ? <option value="">{state.loading ? translate('fields.loading') : translate('fields.selectOption')}</option> : null}
       {options.map(option => <option disabled={option.disabled} key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
     </NativeSelect></FieldFrame>{searchAndPaging}{createAndEdit}</div>
 }

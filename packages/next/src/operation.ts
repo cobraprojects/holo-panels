@@ -118,7 +118,7 @@ function failure(id: string, error: unknown, explicitStatus?: number, panel?: Co
   const status = explicitStatus ?? statusFor(error)
   const normalizedError = normalizeTransportError(error, status)
   const actionEffects = error instanceof ActionExecutionError ? [...error.effects] : []
-  const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status ?? 500) : null
+  const notification = panel && actionEffects.length === 0 ? panelErrorNotificationEffect(panel, status ?? 500, locale?.locale) : null
   const body = {
     effects: notification ? [...actionEffects, notification] : actionEffects,
     error: normalizedError,

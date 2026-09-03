@@ -3,7 +3,7 @@ import type { ExtensionTypeId } from '../plugins/type-id'
 import { ComponentDefaultsApplicator } from '../defaults/apply-defaults'
 import type { ContextTypeSources, OptionalRuntimeTypeValue, RecordTypeSource, RecordTypeValue, RuntimeTypeSource, RuntimeTypeValue } from '../inference/type-source'
 import type { ActionDefinition, ActionKind, ActionMount } from './contracts'
-import { builtInActionPresentation } from './presentation'
+import { builtInActionPresentation, builtInActionTranslationKeys } from './presentation'
 
 export interface ActionPersistence<TRecord, TInput extends JsonObject, TResult> {
   create?(input: TInput): Promise<TResult>
@@ -72,9 +72,11 @@ export function createBuiltinAction<TRecord, TInput extends JsonObject, TResult,
     id: options.id ?? kind,
     color: presentation?.color ?? undefined,
     confirmation: presentation?.confirmation ?? undefined,
+    confirmationTranslationKey: builtInActionTranslationKeys(kind)?.confirmation,
     icon: presentation?.icon,
     kind,
     label: options.label ?? defaultLabel ?? kind.split('-').map(value => value[0]?.toUpperCase() + value.slice(1)).join(' '),
+    labelTranslationKey: options.label || defaultLabel ? undefined : builtInActionTranslationKeys(kind)?.label,
     mount: options.mount ?? (kind === 'create' ? 'page' : 'record'),
     transactional: true,
   })
@@ -174,6 +176,7 @@ export function createViewAction<TRecord, TActor, TTenant, TServices>(
     icon: presentation?.icon,
     kind: 'view',
     label: options.label ?? defaultLabel ?? 'View',
+    labelTranslationKey: options.label || defaultLabel ? undefined : 'actions.view',
     mount: 'record',
     transactional: false,
   })

@@ -1,6 +1,7 @@
 import type { ExporterManifest, ImporterManifest } from '@holo-js/panels-core'
 import { describe, expect, it, vi } from 'vitest'
 import { ClientTransferStore } from '../src/actions/transfers'
+import { createPanelTranslator } from '../src/locales'
 
 const importer: ImporterManifest = {
   columns: [{ example: 'Ada', key: 'name', label: 'Name', required: true }],
@@ -35,6 +36,19 @@ function transport() {
 }
 
 describe('P16 transfer action client', () => {
+  it('uses the active locale for import and export failure messages', async () => {
+    const adapter = transport()
+    const translate = createPanelTranslator('ar')
+    adapter.inspectImport.mockRejectedValue('offline')
+    adapter.startExport.mockRejectedValue('offline')
+    const importStore = new ClientTransferStore(importer, adapter, translate)
+    const exportStore = new ClientTransferStore(exporter, adapter, translate)
+    await expect(importStore.inspect({ arrayBuffer: async () => new ArrayBuffer(1), name: 'users.csv', size: 12, type: 'text/csv' })).rejects.toBe('offline')
+    await expect(exportStore.startExport('csv', ['name'], { mode: 'explicit', recordIds: [1] })).rejects.toBe('offline')
+    expect(importStore.state.error).toBe('تعذر فحص ملف الاستيراد')
+    expect(exportStore.state.error).toBe('تعذر نقل البيانات')
+  })
+
   it('allow-lists inspected import mappings and publishes upload and operation progress', async () => {
     const adapter = transport()
     const store = new ClientTransferStore(importer, adapter)

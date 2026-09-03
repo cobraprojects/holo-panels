@@ -87,6 +87,12 @@ function panelWithNavigation(panel: CompiledPanelDefinition<object>, pages: read
   })
 }
 
+function generatedLocale(panel: CompiledPanelDefinition<object>, context: NuxtPanelOperationContext<object>): string {
+  const requestedLocale = requestedLocales(context.event?.node?.req?.headers['accept-language'])
+  const actorLocale = typeof context.actor === 'object' && context.actor !== null && 'locale' in context.actor && typeof context.actor.locale === 'string' ? context.actor.locale : undefined
+  return resolvePanelLocale(panel.manifest.locales, [...requestedLocale, actorLocale]).locale
+}
+
 async function pagePayload(context: NuxtPanelOperationContext<object>, registry: NuxtPanelServerRegistry): Promise<object> {
   const panelDefinitions = await definitions(registry, context.panelId, 'panel')
   const discoveredPanel = panelDefinitions.find(item => item.manifest.id === context.panelId)
@@ -99,9 +105,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
   const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
   const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
   const widgetDefinitions = await definitions(registry, context.panelId, 'widget')
-  const requestedLocale = requestedLocales(context.event?.node?.req?.headers['accept-language'])
-  const actorLocale = typeof context.actor === 'object' && context.actor !== null && 'locale' in context.actor && typeof context.actor.locale === 'string' ? context.actor.locale : undefined
-  const { locale } = resolvePanelLocale(panel.manifest.locales, [...requestedLocale, actorLocale])
+  const locale = generatedLocale(panel, context)
   const resolutionContext = {
     guard: panel.guard,
     actor: context.actor,
@@ -130,6 +134,7 @@ async function pagePayload(context: NuxtPanelOperationContext<object>, registry:
     const table = await executeGeneratedResourceOperation(await loader(), {
       context: {
         actor: context.actor,
+        locale,
         signal: context.signal,
         tenant: context.tenant ?? tenancy?.tenantId,
         ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
@@ -184,7 +189,7 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
         if (!panel) throw new Error('The panel is not registered')
         const scope = { actor: context.actor, guard: panel.guard, panelId: context.panelId, provider: context.provider, signal: context.signal }
         const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
-        const locale = resolvePanelLocale(panel.manifest.locales, requestedLocales(context.event?.node?.req?.headers['accept-language'])).locale
+        const locale = generatedLocale(panel, context)
         const widgetContext = {
           ...scope, locale, services: (await context.getApp()).runtime, tenant: context.tenant ?? tenancy?.tenantId,
           ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
@@ -272,7 +277,7 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
         const tenancy = context.tenant === undefined && panel.server.tenancy ? await panel.server.tenancy.activeContext(scope) : null
         return executeGeneratedWidgetOperation(registry, context.input, {
           actor: context.actor,
-          locale: 'en',
+          locale: generatedLocale(panel, context),
           panelId: context.panelId,
           provider: context.provider,
           services: (await context.getApp()).runtime,
@@ -293,6 +298,7 @@ export function createGeneratedNuxtPanelsRuntime(registry: NuxtPanelServerRegist
       const result = await executeGeneratedResourceOperation(await loader(), {
         context: {
           actor: context.actor,
+          locale: generatedLocale(panel, context),
           signal: context.signal,
           tenant: context.tenant ?? tenancy?.tenantId,
           ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),

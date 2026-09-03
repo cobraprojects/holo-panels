@@ -1,11 +1,12 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
+  import { usePanelTranslator } from '../localization'
   import { Button } from '../ui/button'
   import Icon from '../components/Icon.svelte'
   import { Input } from '../ui/input'
   import { Progress } from '../ui/progress'
   import { Checkbox } from '../ui/checkbox'
   import { NativeSelect as Select } from '../ui/native-select'
-  import { ClientTransferStore, createPanelTranslator, type ClientTransferManifest, type ClientTransferTransport, type TableRecordId } from '@holo-js/panels-client'
+  import { ClientTransferStore, type ClientTransferManifest, type ClientTransferTransport, type TableRecordId } from '@holo-js/panels-client'
   import { untrack } from 'svelte'
   import * as Dialog from '../ui/dialog'
   import { toSvelteState } from '../stores'
@@ -24,9 +25,9 @@
   let formatId = $state(initialManifest.formatIds[0] ?? '')
   let mappings = $state<Readonly<Record<string, string>>>({})
   let columns = $state(new Set(initialManifest.kind === 'export' ? initialManifest.columns.filter(column => column.visibleByDefault).map(column => column.id) : []))
-  const store = new ClientTransferStore(initialManifest, initialTable.transferTransport ?? unavailableTransport)
+  const translate = usePanelTranslator(() => table.locale)
+  const store = new ClientTransferStore(initialManifest, initialTable.transferTransport ?? unavailableTransport, translate)
   const transferState = toSvelteState(store)
-  const translate = $derived(createPanelTranslator(table.locale ?? 'en'))
   const kind = $derived(translate(`transfers.${manifest.kind}`))
 
   async function submit(): Promise<void> {

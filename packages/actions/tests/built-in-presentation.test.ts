@@ -26,6 +26,20 @@ import {
 } from '../src'
 
 describe('built-in action presentation', () => {
+  it('localizes built-in actions and preserves explicitly authored labels and confirmations', async () => {
+    const context = { actor: {}, locale: 'ar', mount: 'record' as const, record: {}, services: {}, signal: new AbortController().signal, tenant: null }
+    const builtIn = DeleteAction.make().compile()
+    const state = await resolveActionState(builtIn, context)
+    const manifest = await compileActionManifest(builtIn, state.label, context, state)
+
+    expect(manifest.label).toBe('حذف')
+    expect(manifest.confirmation).toBe('هل أنت متأكد من حذف هذا السجل؟')
+
+    const authored = DeleteAction.make().label('Delete').requiresConfirmation('Delete this entry?').compile()
+    const authoredState = await resolveActionState(authored, context)
+    expect(await compileActionManifest(authored, authoredState.label, context, authoredState)).toMatchObject({ label: 'Delete', confirmation: 'Delete this entry?' })
+  })
+
   it('preserves custom bulk-action methods after configuring a callback', () => {
     class AuditedBulkAction extends BulkAction<{ readonly id: number }> {
       audit(): this { return this }

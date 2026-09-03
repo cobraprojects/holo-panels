@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { usePanelTranslator } from '../localization'
+  const translate = usePanelTranslator()
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { Input } from '../ui/input'
@@ -135,7 +137,7 @@
             <article data-collection-key={item.key}>
               {#if !item.collapsed}
                 {#if kind === 'key-value'}
-                  <span class="hp-key-value-entry"><Input aria-label="Key {index + 1}" disabled={presentation.disabled || presentation.readOnly} value={entryPart(item.value, 'key')} oninput={(event) => replace(index, { key: event.currentTarget.value, value: entryPart(item.value, 'value') })} /><Input aria-label="Value {index + 1}" disabled={presentation.disabled || presentation.readOnly} value={entryPart(item.value, 'value')} oninput={(event) => replace(index, { key: entryPart(item.value, 'key'), value: event.currentTarget.value })} /></span>
+                  <span class="hp-key-value-entry"><Input aria-label={translate('fields.key', { number: index + 1 })} disabled={presentation.disabled || presentation.readOnly} value={entryPart(item.value, 'key')} oninput={(event) => replace(index, { key: event.currentTarget.value, value: entryPart(item.value, 'value') })} /><Input aria-label={translate('fields.value', { number: index + 1 })} disabled={presentation.disabled || presentation.readOnly} value={entryPart(item.value, 'value')} oninput={(event) => replace(index, { key: entryPart(item.value, 'key'), value: event.currentTarget.value })} /></span>
                 {:else if itemFields(item.value).length > 0}
                   <div class="hp-collection-fields">{#each itemFields(item.value) as field (field.path)}
                     {@const current = nestedValue(itemData(item.value), field.path)}
@@ -146,19 +148,19 @@
                   <Editor value={jsonValue(item.value)} disabled={presentation.disabled} readOnly={presentation.readOnly} label={`${definition.label} item ${index + 1}`} inputId={`${inputId}-${index}`} invalid={Boolean($collectionState?.errors[String(index)]?.length)} setValue={(next) => replace(index, next)} />
                 {/if}
               {/if}
-              {#if Boolean(definition.properties?.collapsible)}<Button type="button" disabled={presentation.disabled} onclick={() => collectionStore?.toggleCollapsed(index)}>{item.collapsed ? 'Expand' : 'Collapse'}</Button>{/if}
-              {#if Boolean(definition.properties?.cloneable)}<Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => clone(index)}>Clone</Button>{/if}
+              {#if Boolean(definition.properties?.collapsible)}<Button type="button" disabled={presentation.disabled} onclick={() => collectionStore?.toggleCollapsed(index)}>{item.collapsed ? translate('fields.expand') : translate('fields.collapse')}</Button>{/if}
+              {#if Boolean(definition.properties?.cloneable)}<Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => clone(index)}>{translate('fields.clone')}</Button>{/if}
               <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => move(index, index - 1)}>Move up</Button>
               <Button type="button" disabled={presentation.disabled || presentation.readOnly || index === ($collectionState?.items.length ?? 0) - 1} onclick={() => move(index, index + 1)}>Move down</Button>
-              <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => remove(index)}>Remove</Button>
+              <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => remove(index)}>{translate('fields.remove')}</Button>
             </article>
           {/each}
           {#if kind === 'builder'}
             {#each blocks as block}
-              {#if block && typeof block === 'object' && !Array.isArray(block) && typeof block.type === 'string'}<Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => add(String(block.type))}>Add {typeof block.label === 'string' ? block.label : String(block.type)}</Button>{/if}
+              {#if block && typeof block === 'object' && !Array.isArray(block) && typeof block.type === 'string'}<Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => add(String(block.type))}>{translate('fields.addBlock', { label: typeof block.label === 'string' ? block.label : String(block.type) })}</Button>{/if}
             {/each}
           {:else}
-            <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => add()}>Add item</Button>
+            <Button type="button" disabled={presentation.disabled || presentation.readOnly} onclick={() => add()}>{translate('fields.addItem')}</Button>
           {/if}
         </div>
       {:else}

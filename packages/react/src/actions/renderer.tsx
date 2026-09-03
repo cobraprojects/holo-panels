@@ -1,6 +1,7 @@
+import { usePanelDirection, usePanelLocale, usePanelTranslator } from '../localization'
 import { createElement, useMemo, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import type { ClientActionFrame, JsonObject } from '@holo-js/panels-client'
-import { actionFormField, actionFormSchema, actionManifestCollection, createPanelTranslator, readOnlyPresentationStores } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores } from '@holo-js/panels-client'
 import { ActionsRenderHook, type ActionModalWidth, type RenderSlotReference } from '@holo-js/panels-core'
 import { PanelsIcon } from '../internal-ui'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog'
@@ -65,7 +66,7 @@ function ActionTrigger<TResult>({ action, props }: { readonly action: ReactActio
 
 function ActionTriggers<TResult>(props: ReactActionRendererProps<TResult>): ReactNode {
   const actions = actionManifestCollection(props.actions ?? [props.manifest])
-  const translate = createPanelTranslator(props.locale ?? 'en')
+  const translate = usePanelTranslator(props.locale)
   const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
   const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
   return <div className="hp-action-collection">
@@ -93,18 +94,25 @@ function ModalSlot<TResult>({ frame, placement, props }: { readonly frame: Clien
 
 function ReadOnlyPresentation<TResult>({ frame, props }: { readonly frame: ClientActionFrame<TResult>, readonly props: ReactActionRendererProps<TResult> }): ReactNode {
   const presentation = frame.manifest.modal?.readOnlyPresentation
-  const stores = useMemo(() => readOnlyPresentationStores(presentation), [presentation])
+  const inheritedLocale = usePanelLocale()
+  const locale = props.locale ?? inheritedLocale
+  const stores = useMemo(() => readOnlyPresentationStores(presentation, locale), [presentation, locale])
   return <div className="hp:grid hp:gap-4" data-read-only-presentation="infolist">{stores.map(store => <ReactEntryRenderer key={store.snapshot.id} panelId={props.panelId} registry={props.registry} store={store} />)}</div>
 }
 
 export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendererProps<TResult>): ReactNode {
-  const translate = createPanelTranslator(props.locale ?? 'en')
+  const translate = usePanelTranslator(props.locale)
+  const inheritedDirection = usePanelDirection()
+  const inheritedLocale = usePanelLocale()
   const state = useSyncExternalStore(
     listener => props.store.subscribe(listener),
     () => props.store.state,
     () => props.store.state,
   )
-  const submit = (): Promise<void> => submitAction(props)
+  const submit = (): Promise<void> => {
+    props.store.activeForm?.setLocale(props.locale ?? inheritedLocale)
+    return submitAction(props)
+  }
   return <div className="hp-action" data-action-mount={props.manifest.mount}>
     {props.showTriggers === false ? null : <ActionTriggers {...props} />}
     {state.frames.slice(-1).map((frame, index) => {
@@ -170,7 +178,7 @@ export function ReactActionRenderer<TResult = unknown>(props: ReactActionRendere
       const modalWidth = frame.manifest.modal?.width ?? 'medium'
       return frame.manifest.modal?.slideOver
         ? <Sheet key={frame.manifest.id} onOpenChange={open => { if (!open) props.store.close() }} open>
-          <SheetContent {...dismiss} className={modalWidthClass(modalWidth)} closeLabel={translate('actions.close')} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="slide-over" side={props.direction === 'rtl' ? 'left' : 'right'}>
+          <SheetContent {...dismiss} className={modalWidthClass(modalWidth)} closeLabel={translate('actions.close')} data-holo-panel="" data-modal-width={modalWidth} data-panels-component="slide-over" side={(props.direction ?? inheritedDirection) === 'rtl' ? 'left' : 'right'}>
             <SheetHeader><SheetTitle id={titleId}>{heading}</SheetTitle>{description ? <SheetDescription>{description}</SheetDescription> : null}</SheetHeader>
             <div className="hp:flex-1 hp:overflow-y-auto hp:px-4">{content}</div>
             <SheetFooter><Button onClick={() => props.store.close()} variant="outline">{frame.manifest.modal?.cancelActionLabel ?? translate('actions.close')}</Button></SheetFooter>

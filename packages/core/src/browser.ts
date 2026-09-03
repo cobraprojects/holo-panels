@@ -112,6 +112,8 @@ export type {
   TranslationReplacementValue,
 } from './translations/contracts'
 export { TranslationCatalogRegistry } from './translations/catalog-registry'
+export { createPanelTranslator, formatTranslation } from './translations/presentation'
+export type { PanelTranslationKey, PanelTranslator } from './translations/presentation'
 export { arCatalog, EN_MESSAGES, enCatalog } from './translations/catalogs'
 export { panelNotification } from './notifications/notification'
 export { notificationExecution } from './notifications/presentation'
@@ -129,5 +131,5 @@ export {
   traverseSchemaManifest,
 } from './schemas/traversal'
 export { createAccessibleChartModel } from './widgets/resolution'
-export { builtInActionPresentation, type BuiltInActionPresentation } from './actions/presentation'
+export { builtInActionPresentation, builtInActionTranslationKeys, type BuiltInActionPresentation } from './actions/presentation'
 export { validateFormFields, type FormValidationField } from './fields/validation'

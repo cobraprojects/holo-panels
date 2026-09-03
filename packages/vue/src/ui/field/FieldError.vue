@@ -44,7 +44,7 @@ const content = computed(() => {
       {{ content }}
     </template>
 
-    <ul v-else-if="Array.isArray(content)" class="hp:ml-4 hp:flex hp:list-disc hp:flex-col hp:gap-1">
+    <ul v-else-if="Array.isArray(content)" class="hp:ms-4 hp:flex hp:list-disc hp:flex-col hp:gap-1">
       <li v-for="(error, index) in content" :key="index">
         {{ error }}
       </li>

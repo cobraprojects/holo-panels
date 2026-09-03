@@ -56,6 +56,7 @@ import {
   registerVueFieldRenderers,
   registerPanelNotificationStore,
   providePanelsRenderHooks,
+  PanelsLocaleProvider,
   renderPanelsHook,
   syncDocumentLocale,
   toJsonValue,
@@ -715,6 +716,7 @@ function formPage(page: NuxtPanelPageData, panelId: string, registry: ComponentR
   })
   const relations = shallowReactive([...relationManagers(page.data.relations)])
   const store = new FormStore(values, {
+    locale: runtime.locale,
     fields: schema.fields,
     dependencies: schema.fields.flatMap(field => field.reactive
       ? [{
@@ -1426,7 +1428,8 @@ export const PanelPage = defineComponent({
     const router = useRouter()
     const ready = ref(false)
     const panelId = props.page.bootstrap.manifest.id
-    const translate = createPanelTranslator(props.page.bootstrap.locale)
+    const translator = computed(() => createPanelTranslator(props.page.bootstrap.locale))
+    const translate: ReturnType<typeof createPanelTranslator> = (key, replacements) => translator.value(key, replacements)
     const registry = props.registry ?? createNuxtPanelComponentRegistry()
     providePanelsRenderHooks({ data: props.page.page.data, manifest: props.page.bootstrap.manifest, registry, scopes: [props.page.page.manifest.id, ...(typeof props.page.page.manifest.body?.properties.resourceId === 'string' ? [props.page.page.manifest.body.properties.resourceId] : [])] })
     const TopbarComponent = props.page.bootstrap.manifest.components?.topbar
@@ -1446,7 +1449,9 @@ export const PanelPage = defineComponent({
       return { store, transport: createPanelTenantSwitcherTransport(transport, panelId) }
     })() : null
     const toastStore = new ClientToastStore()
-    const unregisterNotificationStore = registerPanelNotificationStore(panelId, toastStore)
+    watch(() => props.page.bootstrap.locale, (locale, _previous, onCleanup) => {
+      onCleanup(registerPanelNotificationStore(panelId, toastStore, locale))
+    }, { immediate: true })
     const viewportWidth = ref(1280)
     const navigationOpen = ref(false)
     const sidebarCollapsed = ref(false)
@@ -1456,7 +1461,7 @@ export const PanelPage = defineComponent({
     const navigationToggleId = `hp-panel-navigation-toggle-${panelId}`
     const colorMode = ref<PanelColorMode>(panelColorMode(props.page.bootstrap.manifest.theme.darkMode))
     const widgetScope = computed(() => {
-      const dashboardFilters = createDashboardFilterStore(transport, panelId, props.page.page)
+      const dashboardFilters = createDashboardFilterStore(transport, panelId, props.page.page, props.page.bootstrap.locale)
       const widgetRuntime = (widget: NuxtPanelPage['widgets']['header'][number]) => createWidgetRuntime({ applyEffects: response => effects.apply(response), dashboardFilters: dashboardFilters ? () => dashboardFilters.applied : undefined, panelId, transport, widget })
       const widgetActions = (widget: NuxtPanelPage['widgets']['header'][number]) => createWidgetActionStore({ applyEffects: response => effects.apply(response), panelId, resourceId: widget.resourceId, signal: requestController.signal, transport, widgetId: widget.manifest.id })
       const headerWidgets = props.page.widgets.header.map(widget => ({ ...widgetRuntime(widget), actions: widget.actions, actionStore: widgetActions(widget), manifest: widget.manifest as VueWidgetManifest, panelId, registry }))
@@ -1583,7 +1588,6 @@ export const PanelPage = defineComponent({
       unregisterSearchShortcut?.()
       unregisterSpa?.()
       restoreDocumentLocale?.()
-      unregisterNotificationStore()
       portalContainer.value = null
       effects.dispose()
     })
@@ -1703,7 +1707,7 @@ export const PanelPage = defineComponent({
         }
         if (bootstrap.manifest.sidebarCollapsible) sidebarCollapsed.value = !sidebarCollapsed.value
       }
-      return h(PanelsErrorBoundary, {}, {
+      return h(PanelsLocaleProvider, { direction: bootstrap.direction, locale: bootstrap.locale }, () => h(PanelsErrorBoundary, {}, {
         default: () => h(PanelsPortalProvider, { container: portalContainer.value }, {
           default: () => h(SidebarProvider, {
             open: !sidebarCollapsed.value,
@@ -1792,7 +1796,7 @@ export const PanelPage = defineComponent({
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_BEFORE, page.data),
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_START, page.data),
               widgetScope.value.dashboardFilters ? h(VueDashboardFilters, { key: widgetScope.value.keys.filters, store: widgetScope.value.dashboardFilters, panelId, registry }) : null,
-              widgetScope.value.headerWidgets.length > 0 ? h(VueDashboardRenderer, { key: widgetScope.value.keys.header, dashboard: { dashboardId: `${page.manifest.id}-header`, label: 'Page header widgets', viewportWidth: viewportWidth.value, widgets: widgetScope.value.headerWidgets } }) : null,
+              widgetScope.value.headerWidgets.length > 0 ? h(VueDashboardRenderer, { key: widgetScope.value.keys.header, dashboard: { dashboardId: `${page.manifest.id}-header`, label: translate('widgets.pageHeader'), viewportWidth: viewportWidth.value, widgets: widgetScope.value.headerWidgets } }) : null,
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_END, page.data),
               renderHook(PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER, page.data),
               page.manifest.body?.component === 'dashboard' ? null : pageBody(props.page, registry, props.resolveResource, {
@@ -1810,7 +1814,7 @@ export const PanelPage = defineComponent({
               }),
               renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE, page.data),
               renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_START, page.data),
-              widgetScope.value.footerWidgets.length > 0 ? h(VueDashboardRenderer, { key: widgetScope.value.keys.footer, dashboard: { dashboardId: `${page.manifest.id}-footer`, label: 'Page footer widgets', viewportWidth: viewportWidth.value, widgets: widgetScope.value.footerWidgets } }) : null,
+              widgetScope.value.footerWidgets.length > 0 ? h(VueDashboardRenderer, { key: widgetScope.value.keys.footer, dashboard: { dashboardId: `${page.manifest.id}-footer`, label: translate('widgets.pageFooter'), viewportWidth: viewportWidth.value, widgets: widgetScope.value.footerWidgets } }) : null,
               renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_END, page.data),
               renderHook(PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER, page.data),
             ]),
@@ -1825,7 +1829,7 @@ export const PanelPage = defineComponent({
         ])),
         }),
         fallback: () => h('section', { role: 'alert', 'data-panels-error': '500' }, [h('h1', 'Panel unavailable')]),
-      })
+      }))
     }
   },
 })

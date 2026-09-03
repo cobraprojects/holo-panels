@@ -99,7 +99,7 @@ describe('P12 React widget renderer', () => {
     expect(stats[0]?.style.getPropertyValue('--hp-widget-color')).toBe('#123456')
     expect(stats[1]?.dataset.color).toBe('success')
     expect(stats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('')
-    expect(container.querySelector('svg[aria-hidden="true"] polyline')).not.toBeNull()
+    expect(container.querySelector('svg[role="img"][aria-label="Revenue trend: 2, 4, 3"] polyline')).not.toBeNull()
     expect(container.querySelector('svg[data-icon="currency"]')).not.toBeNull()
     expect(container.querySelector('progress[aria-label="Revenue"]')?.getAttribute('value')).toBe('75')
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Revenue'))?.click())

@@ -1,15 +1,15 @@
-import { panelNotification, type Effect } from '@holo-js/panels-core'
+import { createPanelTranslator, panelNotification, type Effect } from '@holo-js/panels-core'
 import type { ClientToastStore } from './toast-store'
 
 const PANEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/u
-const stores = new Map<string, Map<symbol, ClientToastStore>>()
+const stores = new Map<string, Map<symbol, { readonly store: ClientToastStore, readonly locale: string }>>()
 let notificationSequence = 0
 
-export function registerPanelNotificationStore(panelId: string, store: ClientToastStore): () => void {
+export function registerPanelNotificationStore(panelId: string, store: ClientToastStore, locale = 'en'): () => void {
   if (!PANEL_ID_PATTERN.test(panelId)) throw new Error('Panel notification stores require a canonical panel ID.')
   const registration = Symbol(panelId)
-  const registrations = stores.get(panelId) ?? new Map<symbol, ClientToastStore>()
-  registrations.set(registration, store)
+  const registrations = stores.get(panelId) ?? new Map<symbol, { readonly store: ClientToastStore, readonly locale: string }>()
+  registrations.set(registration, { store, locale })
   stores.set(panelId, registrations)
   return () => {
     const current = stores.get(panelId)
@@ -21,19 +21,21 @@ export function registerPanelNotificationStore(panelId: string, store: ClientToa
 export function publishPanelError(
   panelId: string,
   title: string,
-  body = 'The operation could not be completed.',
+  body?: string,
 ): boolean {
   const registrations = stores.get(panelId)
-  const store = registrations ? [...registrations.values()].at(-1) : undefined
-  if (!store) return false
-  publishPanelErrorTo(store, title, body)
+  const registration = registrations ? [...registrations.values()].at(-1) : undefined
+  if (!registration) return false
+  const { store, locale } = registration
+  publishPanelErrorTo(store, title, body ?? createPanelTranslator(locale)('feedback.failed'))
   return true
 }
 
 export function publishPanelActionFailure(panelId: string, effects: readonly Effect[] = []): boolean {
   const registrations = stores.get(panelId)
-  const store = registrations ? [...registrations.values()].at(-1) : undefined
-  if (!store) return false
+  const registration = registrations ? [...registrations.values()].at(-1) : undefined
+  if (!registration) return false
+  const { store, locale } = registration
   const deliveredIds = new Set(store.state.items.map(item => item.id))
   const richNotificationDelivered = effects.some(effect => (
     effect.kind === 'toast'
@@ -41,7 +43,7 @@ export function publishPanelActionFailure(panelId: string, effects: readonly Eff
     && deliveredIds.has(effect.presentation.id)
   ))
   if (richNotificationDelivered) return false
-  publishPanelErrorTo(store, 'Action failed')
+  publishPanelErrorTo(store, createPanelTranslator(locale)('feedback.actionFailed'), createPanelTranslator(locale)('feedback.failed'))
   return true
 }
 

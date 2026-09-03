@@ -1,3 +1,4 @@
+import { usePanelLocale } from '../localization'
 import { publishPanelError, registerPanelNotificationStore, type ClientToastStore } from '@holo-js/panels-client'
 import { createContext, createElement, useContext, useEffect, useMemo, type ReactNode } from 'react'
 
@@ -11,7 +12,8 @@ const fallbackFeedback: ReactFeedback = {
 }
 
 export function ReactFeedbackProvider({ children, panelId, store }: { readonly children: ReactNode, readonly panelId: string, readonly store: ClientToastStore }): ReactNode {
-  useEffect(() => registerPanelNotificationStore(panelId, store), [panelId, store])
+  const locale = usePanelLocale()
+  useEffect(() => registerPanelNotificationStore(panelId, store, locale), [locale, panelId, store])
   const feedback = useMemo<ReactFeedback>(() => ({
     error(title) {
       publishPanelError(panelId, title)

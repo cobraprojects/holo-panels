@@ -207,7 +207,7 @@ function FieldError({
     }
 
     return (
-      <ul className="hp:ml-4 hp:flex hp:list-disc hp:flex-col hp:gap-1">
+      <ul className="hp:ms-4 hp:flex hp:list-disc hp:flex-col hp:gap-1">
         {uniqueErrors.map(
           (error, index) =>
             error?.message && <li key={index}>{error.message}</li>

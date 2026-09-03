@@ -1,4 +1,5 @@
 import { toJsonValue } from '../protocol/serialization'
+import { createPanelTranslator } from '../translations/presentation'
 import { compileActionManifest, resolveActionState } from '../actions/action'
 import type { JsonValue } from '../protocol/json'
 import type { TableQueryResult, TableQueryState } from '../tables/query/contracts'
@@ -49,10 +50,16 @@ export async function resolveWidget<TData extends JsonValue, TActor, TTenant, TS
   resource: ResourceWidgetContext<TRecord, TActor, TTenant, TServices> | null = null,
   options: { readonly dashboardFilters?: WidgetFilterState, readonly defer?: boolean } = {},
 ): Promise<ResolvedWidget<TData>> {
+  const translate = createPanelTranslator(context.locale)
+  const manifest = {
+    ...definition.manifest,
+    emptyState: definition.server.defaultEmptyState ? translate('widgets.empty') : definition.manifest.emptyState,
+    errorState: definition.server.defaultErrorState ? translate('widgets.error') : definition.manifest.errorState,
+  }
   assertNotAborted(context.signal)
-  if (!await definition.server.authorize(context)) return { data: null, manifest: definition.manifest, status: 'unauthorized' }
+  if (!await definition.server.authorize(context)) return { data: null, manifest, status: 'unauthorized' }
   assertNotAborted(context.signal)
-  if (!await definition.server.visible(context)) return { data: null, manifest: definition.manifest, status: 'hidden' }
+  if (!await definition.server.visible(context)) return { data: null, manifest, status: 'hidden' }
   assertNotAborted(context.signal)
   const actions = await Promise.all((definition.server.actions ?? []).map(async (action) => {
     const scope = { ...context, mount: action.mount, record: resource?.record ?? null }
@@ -60,7 +67,7 @@ export async function resolveWidget<TData extends JsonValue, TActor, TTenant, TS
     return compileActionManifest(action, state.label, scope, state)
   }))
   const metadata = { ...(actions.length > 0 ? { actions } : {}), ...(resource ? { resourceId: resource.resourceId } : {}) }
-  if (options.defer) return { ...metadata, data: null, manifest: definition.manifest, status: 'idle' }
+  if (options.defer) return { ...metadata, data: null, manifest, status: 'idle' }
   const dataContext: WidgetDataContext<TActor, TTenant, TServices, TRecord> = { ...context, filters: { ...options.dashboardFilters, ...validatedFilters(definition, filters) }, resource }
   const data = await definition.server.data(dataContext)
   assertNotAborted(context.signal)
@@ -78,7 +85,7 @@ export async function resolveWidget<TData extends JsonValue, TActor, TTenant, TS
       }
     }
   }
-  return { ...metadata, data, manifest: definition.manifest, status: 'ready' }
+  return { ...metadata, data, manifest, status: 'ready' }
 }
 
 export interface TableWidgetExecutor<TRecord, TContext> {

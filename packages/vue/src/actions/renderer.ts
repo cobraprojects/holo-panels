@@ -1,3 +1,4 @@
+import { usePanelDirection, usePanelLocale, usePanelTranslator } from '../localization'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +29,7 @@ import {
 } from '../internal-ui'
 import { defineComponent, h, shallowRef, watch, type PropType, type VNode } from 'vue'
 import type { ClientActionFrame, ClientActionState, JsonObject } from '@holo-js/panels-client'
-import { actionFormField, actionFormSchema, actionManifestCollection, createPanelTranslator, readOnlyPresentationStores } from '@holo-js/panels-client'
+import { actionFormField, actionFormSchema, actionManifestCollection, readOnlyPresentationStores } from '@holo-js/panels-client'
 import { ActionsRenderHook } from '@holo-js/panels-core'
 import type { ActionModalWidth, RenderSlotReference } from '@holo-js/panels-core'
 import { createComponentRegistry } from '../registry'
@@ -72,6 +73,9 @@ export const VueActionRenderer = defineComponent({
     store: { type: Object as PropType<VueActionRendererProps['store']>, required: true },
   },
   setup(props) {
+    const translate = usePanelTranslator(() => props.locale)
+    const direction = usePanelDirection()
+    const locale = usePanelLocale()
     const renderHook = usePanelsRenderHook()
     const state = shallowRef<ClientActionState>(props.store.state)
     const openGroups = shallowRef<ReadonlySet<string>>(new Set())
@@ -83,6 +87,7 @@ export const VueActionRenderer = defineComponent({
     async function submit(): Promise<void> {
       try {
         const store = props.store
+        store.activeForm?.setLocale(props.locale ?? locale())
         const result = await store.submit(props.recordIds)
         if (store.activeFrame?.result === result) store.close()
       } catch {
@@ -97,7 +102,6 @@ export const VueActionRenderer = defineComponent({
 
     function form(frame: ClientActionFrame): VNode {
       const schema = actionFormSchema(frame.manifest.modal?.schema ?? null, frame.manifest.id)
-      const translate = createPanelTranslator(props.locale ?? 'en')
       return h('form', {
         class: 'hp-panel-form hp:grid hp:gap-6',
         novalidate: true,
@@ -146,12 +150,11 @@ export const VueActionRenderer = defineComponent({
     }
 
     function readOnlyPresentation(frame: ClientActionFrame): VNode {
-      const stores = readOnlyPresentationStores(frame.manifest.modal?.readOnlyPresentation)
+      const stores = readOnlyPresentationStores(frame.manifest.modal?.readOnlyPresentation, props.locale ?? locale())
       return h('div', { class: 'hp:grid hp:gap-4', 'data-read-only-presentation': 'infolist' }, stores.map(store => h(VueEntryRenderer, { entry: { panelId: props.panelId, registry: props.registry, store }, key: store.snapshot.id })))
     }
 
     return () => {
-      const translate = createPanelTranslator(props.locale ?? 'en')
       const actions = actionManifestCollection(props.actions ?? [props.action])
       const nestedIds = new Set(actions.flatMap(action => action.modal?.nestedActions ?? []))
       const grouped = new Set(props.groups?.flatMap(group => group.actions) ?? [])
@@ -228,7 +231,7 @@ export const VueActionRenderer = defineComponent({
           'data-holo-panel': '',
           'data-modal-width': modalWidth,
           'data-panels-component': slideOver ? 'slide-over' : 'modal',
-          ...(slideOver ? { side: props.direction === 'rtl' ? 'left' : 'right' } : {}),
+          ...(slideOver ? { side: (props.direction ?? direction()) === 'rtl' ? 'left' : 'right' } : {}),
         }, () => [
             h(Header, {}, () => [h(Title, {}, () => frame.manifest.modal?.heading ?? frame.manifest.label), frame.manifest.modal?.description ? h(Description, {}, () => frame.manifest.modal?.description) : null]),
             renderHook(ActionsRenderHook.MODAL_CUSTOM_CONTENT_BEFORE),

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { usePanelTranslator } from '../localization'
+  const translate = usePanelTranslator()
   import { Button } from '../ui/button'
   import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
   import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'
@@ -60,11 +62,11 @@
     </CardHeader>
     <CardContent>
     {#if $widgetState.status === 'unauthorized'}
-      <Empty role="status"><EmptyHeader><EmptyTitle>Widget unavailable</EmptyTitle><EmptyDescription>You do not have access to this widget.</EmptyDescription></EmptyHeader></Empty>
+      <Empty role="status"><EmptyHeader><EmptyTitle>{translate('widgets.unavailable')}</EmptyTitle><EmptyDescription>{translate('widgets.denied')}</EmptyDescription></EmptyHeader></Empty>
     {:else if $widgetState.status === 'error'}
-      <Alert variant="destructive"><AlertTitle>{manifest.errorState}</AlertTitle><AlertDescription>The widget could not be loaded.</AlertDescription><Button type="button" onclick={() => void store.load()}>Retry</Button></Alert>
+      <Alert variant="destructive"><AlertTitle>{manifest.errorState}</AlertTitle><AlertDescription>{translate('widgets.loadFailed')}</AlertDescription><Button type="button" onclick={() => void store.load()}>{translate('widgets.retry')}</Button></Alert>
     {:else if $widgetState.loading && $widgetState.data === null || $widgetState.status === 'idle'}
-      <p aria-live="polite" class="hp:text-sm hp:text-muted-foreground" role="status">Loading widget</p>
+      <p aria-live="polite" class="hp:text-sm hp:text-muted-foreground" role="status">{translate('widgets.loadingShort')}</p>
     {:else if manifest.family === 'stats'}
       {#if stats.length === 0}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
       <dl class="hp-widget-stats hp:grid hp:gap-4 hp:sm:grid-cols-2 hp:xl:grid-cols-4">
@@ -79,9 +81,9 @@
             <CardHeader>{#if stat.icon}<Icon name={stat.icon} />{/if}<dt><CardDescription class="hp-widget-stat-label">{stat.label}</CardDescription></dt><dd><CardTitle class="hp-widget-stat-value hp:text-2xl">{stat.value}</CardTitle></dd></CardHeader>
             <CardContent>
               {#if stat.description}<dd class="hp-widget-stat-description hp:text-sm hp:text-muted-foreground">{stat.description}</dd>{/if}
-              {#if stat.trend}<dd aria-label={`Trend ${stat.trend}`} class="hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}">{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
+              {#if stat.trend}<dd aria-label={translate('widgets.trendDescription', { trend: translate(`widgets.trend.${stat.trend}`) })} class="hp-widget-stat-trend hp-widget-stat-trend-${stat.trend}">{stat.trend === 'up' ? '↑' : stat.trend === 'down' ? '↓' : '→'}</dd>{/if}
               {@const points = widgetSparklinePoints(stat.chart)}
-              {#if points}<dd><svg aria-label={`${stat.label} trend: ${stat.chart.join(', ')}`} class="hp-widget-sparkline hp:h-8 hp:w-full" role="img" viewBox="0 0 100 32"><polyline fill="none" {points} stroke="currentColor" vector-effect="non-scaling-stroke" /></svg></dd>{/if}
+              {#if points}<dd><svg aria-label={translate('widgets.trendValues', { label: stat.label, values: stat.chart.join(', ') })} class="hp-widget-sparkline hp:h-8 hp:w-full" role="img" viewBox="0 0 100 32"><polyline fill="none" {points} stroke="currentColor" vector-effect="non-scaling-stroke" /></svg></dd>{/if}
               {#if stat.progress}<dd><progress aria-label={stat.label} class="hp-widget-progress hp:w-full" value={stat.progress.value} max={stat.progress.max}>{stat.progress.value} / {stat.progress.max}</progress></dd>{/if}
             </CardContent>
             {#if stat.action || safeWidgetUrl(stat.url)}
@@ -112,7 +114,7 @@
             </g>
           </svg>
           <p id={`${manifest.id}-chart-description`}>{chart.description}</p>
-          <Table aria-describedby={`${manifest.id}-chart-description`}><TableCaption>{chart.summary}</TableCaption><TableHeader><TableRow><TableHead scope="col">Label</TableHead>{#each chart.series as series (series.id)}<TableHead scope="col">{series.label}</TableHead>{/each}</TableRow></TableHeader><TableBody>{#each chartLabels(chart) as label (label)}<TableRow><TableHead scope="row">{label}</TableHead>{#each chart.series as series (series.id)}<TableCell>{chartValue(series, label) ?? '—'}</TableCell>{/each}</TableRow>{/each}</TableBody></Table>
+          <Table aria-describedby={`${manifest.id}-chart-description`}><TableCaption>{chart.summary}</TableCaption><TableHeader><TableRow><TableHead scope="col">{translate('widgets.label')}</TableHead>{#each chart.series as series (series.id)}<TableHead scope="col">{series.label}</TableHead>{/each}</TableRow></TableHeader><TableBody>{#each chartLabels(chart) as label (label)}<TableRow><TableHead scope="row">{label}</TableHead>{#each chart.series as series (series.id)}<TableCell>{chartValue(series, label) ?? '—'}</TableCell>{/each}</TableRow>{/each}</TableBody></Table>
         </figure>
       {:else}<Empty><EmptyHeader><EmptyTitle>{manifest.emptyState}</EmptyTitle></EmptyHeader></Empty>{/if}
     {:else if manifest.family === 'table'}
@@ -123,7 +125,7 @@
     {/if}
     </CardContent>
     {#if manifest.filters.length > 0}
-      <CardFooter><form class="hp:w-full" aria-label={`${widgetLabel(manifest)} filters`} onsubmit={(event) => event.preventDefault()}><FieldGroup>{#each manifest.filters as filter (filter.id)}<Field><FieldLabel for={`${manifest.id}-${filter.id}`}>{filter.label}</FieldLabel><Input id={`${manifest.id}-${filter.id}`} value={String($widgetState.filters[filter.id] ?? '')} onchange={(event) => void store.setFilter(filter.id, event.currentTarget.value)} /></Field>{/each}</FieldGroup></form></CardFooter>
+      <CardFooter><form class="hp:w-full" aria-label={translate('widgets.filters', { heading: widgetLabel(manifest) })} onsubmit={(event) => event.preventDefault()}><FieldGroup>{#each manifest.filters as filter (filter.id)}<Field><FieldLabel for={`${manifest.id}-${filter.id}`}>{filter.label}</FieldLabel><Input id={`${manifest.id}-${filter.id}`} value={String($widgetState.filters[filter.id] ?? '')} onchange={(event) => void store.setFilter(filter.id, event.currentTarget.value)} /></Field>{/each}</FieldGroup></form></CardFooter>
     {/if}
   </Card>
 {/if}

@@ -45,7 +45,7 @@ async function dashboardFilters(page: Awaited<ReturnType<typeof resolvePageData>
   const input = payload.resetFilters === true ? {} : payload.dashboardFilters === undefined ? jsonObject(page.data.filters ?? {}) : jsonObject(payload.dashboardFilters)
   const form = await resolveDashboardFilterForm(source, input)
   const schema = form?.schema ?? (dashboard.filters ? jsonObject(dashboard.filters) : null)
-  const filters = await resolveDashboardFilters(schema, form?.values ?? input, payload.resetFilters !== true)
+  const filters = await resolveDashboardFilters(schema, form?.values ?? input, payload.resetFilters !== true, context.locale)
   if (context.signal.aborted) throw context.signal.reason
   if (payload.widgetId === undefined && (payload.resetFilters === true || payload.dashboardFilters !== undefined)) await session?.write(payload.resetFilters === true ? null : filters)
   return filters

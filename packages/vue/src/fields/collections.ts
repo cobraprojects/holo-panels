@@ -1,3 +1,5 @@
+import type { PanelTranslator } from '@holo-js/panels-client'
+import { usePanelTranslator } from '../localization'
 import { Button, Checkbox, Input, Textarea } from '../internal-ui'
 import type { CollectionStore, EditorAdapterInstance } from '@holo-js/panels-client'
 import {
@@ -61,27 +63,28 @@ function collectionActions(
   disabled: boolean,
   index: number,
   length: number,
+  translate: PanelTranslator,
 ): VNode {
   return h('span', { class: 'hp-collection-actions' }, [
-    h(Button, { type: 'button', 'aria-label': `Move item ${index + 1} up`, disabled: disabled || index === 0, onClick: () => store.move(index, index - 1) }, '↑'),
-    h(Button, { type: 'button', 'aria-label': `Move item ${index + 1} down`, disabled: disabled || index === length - 1, onClick: () => store.move(index, index + 1) }, '↓'),
-    h(Button, { type: 'button', 'aria-label': `Clone item ${index + 1}`, disabled, onClick: () => store.clone(index) }, 'Clone'),
-    h(Button, { type: 'button', 'aria-label': `Remove item ${index + 1}`, disabled, onClick: () => store.delete(index) }, 'Remove'),
+    h(Button, { type: 'button', 'aria-label': translate('fields.moveUp', { number: index + 1 }), disabled: disabled || index === 0, onClick: () => store.move(index, index - 1) }, '↑'),
+    h(Button, { type: 'button', 'aria-label': translate('fields.moveDown', { number: index + 1 }), disabled: disabled || index === length - 1, onClick: () => store.move(index, index + 1) }, '↓'),
+    h(Button, { type: 'button', 'aria-label': translate('fields.cloneItem', { number: index + 1 }), disabled, onClick: () => store.clone(index) }, translate('fields.clone')),
+    h(Button, { type: 'button', 'aria-label': translate('fields.removeItem', { number: index + 1 }), disabled, onClick: () => store.delete(index) }, translate('fields.remove')),
   ])
 }
 
-function keyValueEditor(store: CollectionStore<unknown>, value: unknown, index: number, disabled: boolean): VNodeChild {
+function keyValueEditor(store: CollectionStore<unknown>, value: unknown, index: number, disabled: boolean, translate: PanelTranslator): VNodeChild {
   const key = typeof value === 'object' && value !== null ? asString(Reflect.get(value, 'key')) : ''
   const entryValue = typeof value === 'object' && value !== null ? asString(Reflect.get(value, 'value')) : ''
   return h('span', [
     h(Input, {
-      'aria-label': `Key ${index + 1}`,
+      'aria-label': translate('fields.key', { number: index + 1 }),
       disabled,
       modelValue: key,
       onInput: (event: Event) => store.replace(index, { key: (event.currentTarget as HTMLInputElement).value, value: entryValue }),
     }),
     h(Input, {
-      'aria-label': `Value ${index + 1}`,
+      'aria-label': translate('fields.value', { number: index + 1 }),
       disabled,
       modelValue: entryValue,
       onInput: (event: Event) => store.replace(index, { key, value: (event.currentTarget as HTMLInputElement).value }),
@@ -161,6 +164,7 @@ export const VueCollectionField = defineComponent({
     field: { type: Object as PropType<VueFieldControlProps<object>>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator()
     const field = new Proxy(componentProps.field, {
       get: (_target, property) => Reflect.get(componentProps.field, property),
     })
@@ -184,7 +188,7 @@ export const VueCollectionField = defineComponent({
     const state = usePanelsStore(store)
     watch(() => state.value.version, () => updateField(field, store.values))
     function itemContent(value: unknown, index: number): VNodeChild {
-      if (field.context.definition.type === 'key-value') return keyValueEditor(store, value, index, field.context.disabled || field.context.readOnly)
+      if (field.context.definition.type === 'key-value') return keyValueEditor(store, value, index, field.context.disabled || field.context.readOnly, translate)
       if (field.context.definition.type === 'builder') {
         if (field.renderBuilderBlock) return field.renderBuilderBlock(value, index)
         const type = value && typeof value === 'object' && !Array.isArray(value) ? Reflect.get(value, 'type') : null
@@ -194,13 +198,13 @@ export const VueCollectionField = defineComponent({
         const data = value && typeof value === 'object' && !Array.isArray(value) ? Reflect.get(value, 'data') : {}
         return definitions.length > 0
           ? nestedEditor(definitions, data, field.context.disabled || field.context.readOnly, next => store.replace(index, { data: next, type: typeof type === 'string' ? type : '' }))
-          : h('span', typeof type === 'string' ? type : `Block ${index + 1}`)
+          : h('span', typeof type === 'string' ? type : translate('fields.block', { number: index + 1 }))
       }
       if (field.renderRepeaterItem) return field.renderRepeaterItem(value, index)
       const definitions = nestedFields(field.context.definition.properties.fields)
       return definitions.length > 0
         ? nestedEditor(definitions, value, field.context.disabled || field.context.readOnly, next => store.replace(index, next))
-        : h('span', `Item ${index + 1}`)
+        : h('span', translate('fields.item', { number: index + 1 }))
     }
     return (): VNode => {
       const maximum = property(field.context, 'maximumItems', null as number | null)
@@ -218,8 +222,8 @@ export const VueCollectionField = defineComponent({
             'aria-expanded': String(!item.collapsed),
             disabled,
             onClick: () => store.toggleCollapsed(index),
-          }, item.collapsed ? 'Expand' : 'Collapse'),
-          collectionActions(store, disabled, index, state.value.items.length),
+          }, item.collapsed ? translate('fields.expand') : translate('fields.collapse')),
+          collectionActions(store, disabled, index, state.value.items.length, translate),
           Object.entries(state.value.errors).filter(([path]) => path === String(index) || path.startsWith(`${index}.`)).map(([path, errors]) => h('ul', { key: path, role: 'alert' }, errors.map(error => h('li', { key: error }, error)))),
         ]))),
         ...(field.context.definition.type === 'builder' && Array.isArray(field.context.definition.properties.blocks)
@@ -231,13 +235,13 @@ export const VueCollectionField = defineComponent({
                 type: 'button',
                 disabled: disabled || !field.createCollectionItem || (maximum !== null && state.value.items.length >= maximum),
                 onClick: () => store.add(field.createCollectionItem?.(type) ?? { data: {}, type }),
-              }, `Add ${label}`)]
+              }, translate('fields.addBlock', { label }))]
             })
           : [h(Button, {
               type: 'button',
               disabled: disabled || (maximum !== null && state.value.items.length >= maximum),
               onClick: () => store.add(field.context.definition.type === 'key-value' ? { key: '', value: '' } : field.createCollectionItem?.() ?? {}),
-            }, 'Add item')]),
+            }, translate('fields.addItem'))]),
         field.context.errors.length > 0 ? h('ul', { role: 'alert' }, field.context.errors.map(error => h('li', { key: error }, error))) : null,
       ])
     }

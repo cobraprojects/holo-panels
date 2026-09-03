@@ -30,13 +30,13 @@ function entryManifest(entry: ActionReadOnlyEntryManifest): EntryClientManifest 
   }
 }
 
-export function readOnlyPresentationStores(presentation: ActionReadOnlyPresentationManifest | null | undefined): readonly EntryStateStore[] {
+export function readOnlyPresentationStores(presentation: ActionReadOnlyPresentationManifest | null | undefined, locale = 'en'): readonly EntryStateStore[] {
   if (!presentation) return []
   if (presentation.kind !== 'infolist' || !Array.isArray(presentation.entries)) throw new TypeError('[Holo Panels] Invalid read-only presentation.')
   return Object.freeze(presentation.entries.map((value) => {
     if (!value || typeof value !== 'object' || typeof value.id !== 'string' || typeof value.type !== 'string') throw new TypeError('[Holo Panels] Invalid read-only presentation entry.')
     try {
-      const store = new EntryStateStore(value.id, entryManifest(value))
+      const store = new EntryStateStore(value.id, entryManifest(value), locale)
       store.setResolved({ tooltip: value.tooltip, url: value.url, visible: value.visible })
       return store
     } catch {

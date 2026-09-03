@@ -1,3 +1,4 @@
+import { createPanelTranslator } from '../translations/presentation'
 import { DB } from '@holo-js/db'
 import type { JsonObject } from '../protocol/json'
 import type { ToastEffect } from '../protocol/effects'
@@ -40,6 +41,7 @@ const BOOTED_PANELS = new WeakMap<object, Promise<void>>()
 export function panelErrorNotificationEffect<TActor>(
   panel: CompiledPanelDefinition<TActor>,
   statusCode: number,
+  locale = panel.manifest.locales.fallback,
 ): Readonly<ToastEffect> | null {
   if (statusCode === 422) return null
   const configuration = panel.manifest.errorNotifications
@@ -50,8 +52,8 @@ export function panelErrorNotificationEffect<TActor>(
   return Object.freeze({
     kind: 'toast',
     level: 'danger',
-    message: notification?.body ?? 'Please try again later.',
-    title: notification?.title ?? 'An error occurred',
+    message: notification?.body ?? createPanelTranslator(locale)('feedback.tryLater'),
+    title: notification?.title ?? createPanelTranslator(locale)('feedback.error'),
   })
 }
 

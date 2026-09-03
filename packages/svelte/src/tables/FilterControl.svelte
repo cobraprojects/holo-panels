@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { translateFilterOperator } from '@holo-js/panels-client'
+  import { usePanelTranslator } from '../localization'
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { Input } from '../ui/input'
@@ -11,11 +13,13 @@
 
   let {
     filter,
+    locale,
     panelId,
     registry,
     update,
     value,
   }: {
+    readonly locale?: string
     readonly filter: SvelteTableFilter
     readonly panelId?: string
     readonly registry?: SvelteComponentRegistry
@@ -23,6 +27,7 @@
     readonly value: JsonValue
   } = $props()
 
+  const translate = usePanelTranslator(() => locale)
   const id = $props.id()
   const layout = $derived(filter.manifest.layout ?? {})
   const range = $derived(dateRange(value))
@@ -95,18 +100,18 @@
   {#if filter.manifest.type === 'date-range'}
     <fieldset>
       <legend>{filter.manifest.label ?? filter.manifest.id}</legend>
-      <label for={`${id}-from`}>From<Input id={`${id}-from`} type="date" value={range.from} oninput={(event) => update({ from: event.currentTarget.value || null, to: range.to || null })} /></label>
-      <label for={`${id}-to`}>To<Input id={`${id}-to`} type="date" value={range.to} oninput={(event) => update({ from: range.from || null, to: event.currentTarget.value || null })} /></label>
+      <label for={`${id}-from`}>{translate('filters.from')}<Input id={`${id}-from`} type="date" value={range.from} oninput={(event) => update({ from: event.currentTarget.value || null, to: range.to || null })} /></label>
+      <label for={`${id}-to`}>{translate('filters.to')}<Input id={`${id}-to`} type="date" value={range.to} oninput={(event) => update({ from: range.from || null, to: event.currentTarget.value || null })} /></label>
     </fieldset>
   {:else if filter.manifest.type === 'ternary'}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
     <Select {id} value={typeof value === 'string' ? value : 'all'} onchange={(event) => update(event.currentTarget.value)}>
-      <option value="all">All</option><option value="true">Yes</option><option value="false">No</option>
+      <option value="all">{translate('filters.all')}</option><option value="true">{translate('filters.yes')}</option><option value="false">{translate('filters.no')}</option>
     </Select>
   {:else if filter.manifest.type === 'trashed'}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
     <Select {id} value={typeof value === 'string' ? value : 'without'} onchange={(event) => update(event.currentTarget.value)}>
-      <option value="without">Without trashed</option><option value="with">With trashed</option><option value="only">Only trashed</option>
+      <option value="without">{translate('filters.withoutTrashed')}</option><option value="with">{translate('filters.withTrashed')}</option><option value="only">{translate('filters.onlyTrashed')}</option>
     </Select>
   {:else if filter.manifest.type === 'advanced-query'}
     <fieldset>
@@ -120,21 +125,21 @@
           {@const scalarType = typeof column?.scalarType === 'string' ? column.scalarType : 'string'}
           {@const inputValue = Array.isArray(condition.value) ? condition.value.join(', ') : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''}
           <div data-advanced-condition>
-            <Select aria-label="Column" value={columnId} onchange={(event) => changeCondition(index, 'column', event.currentTarget.value)}>{#each columns as item (String(item.id))}<option value={String(item.id)}>{String(item.id)}</option>{/each}</Select>
-            <Select aria-label="Operator" value={operator} onchange={(event) => changeCondition(index, 'operator', event.currentTarget.value)}>{#each operators as item (item)}<option value={item}>{item}</option>{/each}</Select>
-            {#if !['null', 'not-null'].includes(operator)}<Input aria-label="Value" type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} oninput={(event) => changeCondition(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} />{/if}
-            <Button type="button" onclick={() => removeCondition(index)}>Remove condition</Button>
+            <Select aria-label={translate('filters.column')} value={columnId} onchange={(event) => changeCondition(index, 'column', event.currentTarget.value)}>{#each columns as item (String(item.id))}<option value={String(item.id)}>{String(item.id)}</option>{/each}</Select>
+            <Select aria-label={translate('filters.operator')} value={operator} onchange={(event) => changeCondition(index, 'operator', event.currentTarget.value)}>{#each operators as item (item)}<option value={item}>{translateFilterOperator(item, translate)}</option>{/each}</Select>
+            {#if !['null', 'not-null'].includes(operator)}<Input aria-label={translate('filters.value')} type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} oninput={(event) => changeCondition(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} />{/if}
+            <Button type="button" onclick={() => removeCondition(index)}>{translate('filters.removeCondition')}</Button>
           </div>
         {/if}
       {/each}
-      <Button type="button" disabled={columns.length === 0} onclick={addCondition}>Add condition</Button>
+      <Button type="button" disabled={columns.length === 0} onclick={addCondition}>{translate('filters.addCondition')}</Button>
     </fieldset>
   {:else if CustomFilter}
     <CustomFilter {filter} {update} {value} />
   {:else if filter.options}
     <label for={id}>{filter.manifest.label ?? filter.manifest.id}</label>
     <Select {id} {multiple} value={multiple ? selectedValues : selectedValues[0]} onchange={(event) => updateSelect(event.currentTarget)}>
-      {#if !multiple}<option value="">All</option>{/if}
+      {#if !multiple}<option value="">{translate('filters.all')}</option>{/if}
       {#each filter.options as option (String(option.value))}<option value={String(option.value ?? '')} disabled={option.disabled}>{option.label}</option>{/each}
     </Select>
   {:else if filter.manifest.type.includes('boolean') || typeof value === 'boolean'}

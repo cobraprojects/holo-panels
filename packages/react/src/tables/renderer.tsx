@@ -1,3 +1,5 @@
+import { translateFilterOperator } from '@holo-js/panels-client'
+import { usePanelTranslator } from '../localization'
 import {
   Fragment,
   createElement,
@@ -12,7 +14,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { ClientTransferStore, createPanelTranslator, createTableActionHost, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
+import { ClientTransferStore, createTableActionHost, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
 import { ReactActionRenderer } from '../actions/renderer'
 import { TablesRenderHook } from '@holo-js/panels-core'
 import { ChevronLeft, ChevronRight, Columns3, ListFilter, Search, X } from 'lucide-react'
@@ -119,7 +121,7 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
   const state = useTableStore(props.store)
   const modalTitleId = useId()
   const [open, setOpen] = useState(false)
-  const translate = createPanelTranslator(props.locale ?? 'en')
+  const translate = usePanelTranslator(props.locale)
   if (filters.length === 0) return null
   const presentation = props.filterPresentation
   const placement = presentation?.placement ?? 'inline'
@@ -155,21 +157,21 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
         const from = typeof Reflect.get(range, 'from') === 'string' ? String(Reflect.get(range, 'from')) : ''
         const to = typeof Reflect.get(range, 'to') === 'string' ? String(Reflect.get(range, 'to')) : ''
         return wrap(<fieldset><legend>{label}</legend>
-          <label htmlFor={`${id}-from`}>From<Input id={`${id}-from`} onChange={event => update({ from: event.currentTarget.value || null, to: to || null })} type="date" value={from} /></label>
-          <label htmlFor={`${id}-to`}>To<Input id={`${id}-to`} onChange={event => update({ from: from || null, to: event.currentTarget.value || null })} type="date" value={to} /></label>
+          <label htmlFor={`${id}-from`}>{translate('filters.from')}<Input id={`${id}-from`} onChange={event => update({ from: event.currentTarget.value || null, to: to || null })} type="date" value={from} /></label>
+          <label htmlFor={`${id}-to`}>{translate('filters.to')}<Input id={`${id}-to`} onChange={event => update({ from: from || null, to: event.currentTarget.value || null })} type="date" value={to} /></label>
         </fieldset>)
       }
       if (filter.manifest.type === 'ternary') {
         return wrap(<label htmlFor={id}>{label}<NativeSelect id={id} onChange={event => update(event.currentTarget.value)} value={typeof value === 'string' ? value : 'all'}>
-          <option value="all">All</option><option value="true">Yes</option><option value="false">No</option>
+          <option value="all">{translate('filters.all')}</option><option value="true">{translate('filters.yes')}</option><option value="false">{translate('filters.no')}</option>
         </NativeSelect></label>)
       }
       if (filter.manifest.type === 'trashed') {
         return wrap(<label htmlFor={id}>{label}<NativeSelect id={id} onChange={event => update(event.currentTarget.value)} value={typeof value === 'string' ? value : 'without'}>
-          <option value="without">Without trashed</option><option value="with">With trashed</option><option value="only">Only trashed</option>
+          <option value="without">{translate('filters.withoutTrashed')}</option><option value="with">{translate('filters.withTrashed')}</option><option value="only">{translate('filters.onlyTrashed')}</option>
         </NativeSelect></label>)
       }
-      if (filter.manifest.type === 'advanced-query') return wrap(<AdvancedFilter filter={filter} update={update} value={value} />)
+      if (filter.manifest.type === 'advanced-query') return wrap(<AdvancedFilter locale={props.locale} filter={filter} update={update} value={value} />)
       if (filter.manifest.type === 'custom' || filter.manifest.type.includes(':filter:')) {
         if (!props.registry) throw new Error(`[Holo Panels] A React component registry is required for filter "${filter.manifest.id}".`)
         const rendererName = filter.manifest.type === 'custom' ? 'filter.custom' : `filter.${filter.manifest.type.replaceAll(':', '.')}`
@@ -187,7 +189,7 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
               const option = filter.options?.find(item => String(item.value ?? '') === event.currentTarget.value)
               update(option?.value ?? null)
             }} value={multiple ? selectedValues : selectedValues[0]}>
-              {!multiple ? <option value="">All</option> : null}
+              {!multiple ? <option value="">{translate('filters.all')}</option> : null}
               {filter.options.map(option => <option disabled={option.disabled} key={String(option.value)} value={String(option.value ?? '')}>{option.label}</option>)}
             </NativeSelect>
           : filter.manifest.type.includes('boolean') || typeof value === 'boolean'
@@ -208,7 +210,8 @@ function TableFilters<TRecord extends object, TRecordId extends TableRecordId>({
   return <Fragment>{trigger}<Dialog onOpenChange={setOpen} open={open}><DialogContent aria-labelledby={modalTitleId} closeLabel={translate('actions.close')}><DialogHeader><DialogTitle id={modalTitleId}>{translate('tables.filters')}</DialogTitle><DialogDescription>{translate('tables.filterDescription')}</DialogDescription></DialogHeader>{content}</DialogContent></Dialog></Fragment>
 }
 
-function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): ReactNode {
+function AdvancedFilter({ filter, locale, update, value }: ReactCustomFilterProps & { readonly locale?: string }): ReactNode {
+  const translate = usePanelTranslator(locale)
   const columns = Array.isArray(filter.manifest.properties.columns) ? filter.manifest.properties.columns : []
   const conditions = typeof value === 'object' && value !== null && !Array.isArray(value) && Array.isArray(value.conditions) ? value.conditions : []
   const normalizedColumns = columns.filter((column): column is Readonly<Record<string, unknown>> => typeof column === 'object' && column !== null && !Array.isArray(column))
@@ -230,10 +233,10 @@ function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): Reac
         ? condition.value.join(', ')
         : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
       return <div className="hp:grid hp:grid-cols-1 hp:gap-2 hp:md:grid-cols-4" data-advanced-condition key={index}>
-        <NativeSelect aria-label="Column" onChange={event => change(index, 'column', event.currentTarget.value)} value={columnId}>{normalizedColumns.map(item => <option key={String(item.id)} value={String(item.id)}>{String(item.id)}</option>)}</NativeSelect>
-        <NativeSelect aria-label="Operator" onChange={event => change(index, 'operator', event.currentTarget.value)} value={operator}>{operators.map(item => <option key={item} value={item}>{item}</option>)}</NativeSelect>
-        {!['null', 'not-null'].includes(operator) ? <Input aria-label="Value" onChange={event => change(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} /> : null}
-        <Button onClick={() => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) })} type="button">Remove condition</Button>
+        <NativeSelect aria-label={translate('filters.column')} onChange={event => change(index, 'column', event.currentTarget.value)} value={columnId}>{normalizedColumns.map(item => <option key={String(item.id)} value={String(item.id)}>{String(item.id)}</option>)}</NativeSelect>
+        <NativeSelect aria-label={translate('filters.operator')} onChange={event => change(index, 'operator', event.currentTarget.value)} value={operator}>{operators.map(item => <option key={item} value={item}>{translateFilterOperator(item, translate)}</option>)}</NativeSelect>
+        {!['null', 'not-null'].includes(operator) ? <Input aria-label={translate('filters.value')} onChange={event => change(index, 'value', advancedInputValue(event.currentTarget.value, scalarType, operator))} type={scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text'} value={inputValue} /> : null}
+        <Button onClick={() => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) })} type="button">{translate('filters.removeCondition')}</Button>
       </div>
     })}
     <Button disabled={normalizedColumns.length === 0} onClick={() => {
@@ -241,7 +244,7 @@ function AdvancedFilter({ filter, update, value }: ReactCustomFilterProps): Reac
       const operator = Array.isArray(column?.operators) ? column.operators.find(item => typeof item === 'string') : undefined
       if (typeof column?.id !== 'string' || typeof operator !== 'string') return
       update({ conditions: [...conditions, { column: column.id, operator, value: null }] })
-    }} type="button">Add condition</Button>
+    }} type="button">{translate('filters.addCondition')}</Button>
   </fieldset>
 }
 
@@ -257,13 +260,14 @@ function ColumnManager<TRecord extends object, TRecordId extends TableRecordId>(
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
 }): ReactNode {
   const state = useTableStore(props.store)
+  const translate = usePanelTranslator(props.locale)
   const [open, setOpen] = useState(false)
   const current = state.visibleColumns.length > 0
     ? new Set(state.visibleColumns)
     : new Set(props.columns.filter(column => !column.manifest.hidden).map(column => column.manifest.path))
   return <Popover onOpenChange={setOpen} open={open}>
-    <PopoverTrigger asChild><Button aria-expanded={open} aria-haspopup="menu" className="hp-column-manager" type="button" variant="outline"><Columns3 aria-hidden="true" />Columns</Button></PopoverTrigger>
-    <PopoverContent align="end" aria-label="Visible columns" className="hp:w-64">{props.columns.filter(column => column.manifest.toggleable).map(column => {
+    <PopoverTrigger asChild><Button aria-expanded={open} aria-haspopup="menu" className="hp-column-manager" type="button" variant="outline"><Columns3 aria-hidden="true" />{translate('tables.columns')}</Button></PopoverTrigger>
+    <PopoverContent align="end" aria-label={translate('tables.visibleColumns')} className="hp:w-64">{props.columns.filter(column => column.manifest.toggleable).map(column => {
       const id = `hp-column-${column.manifest.path.replace(/[^a-z0-9_-]/giu, '-')}`
       return <div className="hp:flex hp:items-center hp:gap-2 hp:py-1.5 hp:text-sm" key={column.manifest.path}>
       <Checkbox checked={current.has(column.manifest.path)} id={id} onCheckedChange={checked => {
@@ -284,10 +288,11 @@ function TableActions<TRecord extends object, TRecordId extends TableRecordId>({
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
   readonly record?: Readonly<TRecord>
 }): ReactNode {
+  const translate = usePanelTranslator(props.locale)
   const feedback = useReactFeedback()
   const recordId = record ? props.getRecordId(record) : undefined
   const host = useMemo(() => createTableActionHost({
-    actions, group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined, recordId,
+    actions, group: group ? { ...group, label: group.label ?? translate(group.scope === 'row' ? 'actions.row' : group.scope === 'bulk' ? 'actions.bulk' : 'actions.group') } : undefined, recordId,
     selection: () => props.store.selectionPayload(),
     clearSelection: () => props.store.clearSelection(),
     execute: async (request, signal) => {
@@ -295,11 +300,11 @@ function TableActions<TRecord extends object, TRecordId extends TableRecordId>({
         if (!props.actionTransport) throw new Error('Table actions require an action transport')
         await props.actionTransport.execute(request, signal)
       } catch (cause) {
-        if (!signal.aborted) feedback.error(`${actions.find(action => action.id === request.actionId)?.label ?? 'Action'} failed`, cause)
+        if (!signal.aborted) feedback.error(translate('feedback.failedAction', { label: actions.find(action => action.id === request.actionId)?.label ?? translate('actions.action') }), cause)
         throw cause
       }
     },
-  }), [actions, feedback, group, props.actionTransport, props.store, recordId])
+  }), [actions, feedback, translate, group, props.actionTransport, props.store, recordId])
   useEffect(() => () => { while (host.store.activeFrame) host.store.close() }, [host])
   return host.actions[0] ? <ReactActionRenderer {...host} locale={props.locale} manifest={host.actions[0]} panelId={props.panelId} registry={props.registry} /> : null
 }
@@ -327,7 +332,8 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
 }): ReactNode {
   const transport = props.transferTransport
-  const store = useMemo(() => transport ? new ClientTransferStore(manifest, transport) : null, [manifest, transport])
+  const translate = usePanelTranslator(props.locale)
+  const store = useMemo(() => transport ? new ClientTransferStore(manifest, transport, translate) : null, [manifest, transport, translate])
   const state = useSyncExternalStore(
     listener => store?.subscribe(listener) ?? (() => undefined),
     () => store?.state ?? emptyTransferState,
@@ -337,7 +343,6 @@ function TransferAction<TRecord extends object, TRecordId extends TableRecordId>
   const [formatId, setFormatId] = useState(manifest.formatIds[0] ?? '')
   const [mappings, setMappings] = useState<Readonly<Record<string, string>>>({})
   const [columns, setColumns] = useState(() => new Set(manifest.kind === 'export' ? manifest.columns.filter(column => column.visibleByDefault).map(column => column.id) : []))
-  const translate = createPanelTranslator(props.locale ?? 'en')
   const kind = translate(`transfers.${manifest.kind}`)
   const submit = async (): Promise<void> => {
     if (!store) return
@@ -386,6 +391,7 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
   readonly props: ReactTableRendererProps<TRecord, TRecordId>
   readonly record: Readonly<TRecord>
 }): ReactNode {
+  const translate = usePanelTranslator(props.locale)
   const original = recordValue(record, column.manifest.path)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayValue(original) === '—' ? '' : displayValue(original))
@@ -395,6 +401,7 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
   const editor = column.manifest.inlineEditor
   const actionTransport = props.actionTransport
   const presentation = <ReactTableColumnPresentation
+    locale={props.locale}
     column={column}
     onAction={!editor && actionTransport ? actionId => actionTransport.execute({ actionId, recordId: props.getRecordId(record) }, new AbortController().signal) : undefined}
     panelId={props.panelId}
@@ -423,12 +430,12 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
       }, new AbortController().signal)
       setEditing(false)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Inline edit failed')
+      setError(cause instanceof Error ? cause.message : translate('tables.inlineFailed'))
     } finally {
       setPending(false)
     }
   }
-  if (!editing) return <Button aria-label={`Edit ${column.manifest.label ?? column.manifest.path}`} onClick={() => setEditing(true)} type="button">{presentation}</Button>
+  if (!editing) return <Button aria-label={translate('tables.editValue', { label: column.manifest.label ?? column.manifest.path })} onClick={() => setEditing(true)} type="button">{presentation}</Button>
   if (kind === 'checkbox' || kind === 'toggle') {
     const Toggle = kind === 'toggle' ? Switch : Checkbox
     return <Toggle
@@ -459,7 +466,7 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
       const optionValue = Reflect.get(option, 'value')
       if (typeof optionValue !== 'string' && typeof optionValue !== 'number' && typeof optionValue !== 'boolean') return null
       const label = Reflect.get(option, 'label')
-      return <option disabled={Reflect.get(option, 'disabled') === true} key={String(optionValue)} value={String(optionValue)}>{typeof label === 'string' ? label : `Option ${index + 1}`}</option>
+      return <option disabled={Reflect.get(option, 'disabled') === true} key={String(optionValue)} value={String(optionValue)}>{typeof label === 'string' ? label : translate('fields.numberedOption', { number: index + 1 })}</option>
     })}</NativeSelect>
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Escape') {
@@ -476,6 +483,7 @@ function InlineCell<TRecord extends object, TRecordId extends TableRecordId>({ c
 export function ReactTableRenderer<TRecord extends object, TRecordId extends TableRecordId>(
   props: ReactTableRendererProps<TRecord, TRecordId>,
 ): ReactNode {
+  const translate = usePanelTranslator(props.locale)
   const state = useTableStore(props.store)
   const captionId = useId()
   const columns = visibleColumns(props, state.visibleColumns)
@@ -509,7 +517,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
       alignment: column.manifest.alignment,
       ariaSort: direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none',
       header: column.manifest.sortable
-        ? <Button className="hp-table-sort hp:-ml-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground" data-sorted={direction ?? undefined} onClick={() => sort(column)} size="sm" type="button" variant="ghost">{label}<PanelsIcon name={direction === 'asc' ? 'chevron-up' : direction === 'desc' ? 'chevron-down' : 'sort'} /></Button>
+        ? <Button className="hp-table-sort hp:-ms-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground" data-sorted={direction ?? undefined} onClick={() => sort(column)} size="sm" type="button" variant="ghost">{label}<PanelsIcon name={direction === 'asc' ? 'chevron-up' : direction === 'desc' ? 'chevron-down' : 'sort'} /></Button>
         : label,
       key: column.manifest.path,
       label,
@@ -520,18 +528,18 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
   })
   const leading: TablePresentationPlacement<TRecord> | undefined = selectable
     ? {
-        header: props.store.selectionSettings.groupsOnly ? null : <Checkbox aria-label="Select page" checked={selectedOnPage ? true : recordIds.some(id => props.store.isSelected(id)) ? 'indeterminate' : false} disabled={state.loading} onCheckedChange={checked => props.store.selectPage(recordIds, checked === true)} />,
-        label: 'Select',
+        header: props.store.selectionSettings.groupsOnly ? null : <Checkbox aria-label={translate('tables.selectPage')} checked={selectedOnPage ? true : recordIds.some(id => props.store.isSelected(id)) ? 'indeterminate' : false} disabled={state.loading} onCheckedChange={checked => props.store.selectPage(recordIds, checked === true)} />,
+        label: translate('tables.select'),
         render: record => {
           const recordId = props.getRecordId(record)
-          return <Checkbox aria-label={`Select record ${String(recordId)}`} checked={props.store.isSelected(recordId)} disabled={state.loading || !props.store.canSelectRecord(recordId)} onCheckedChange={checked => props.store.selectRecord(recordId, checked === true, props.groups?.find(group => group.records.some(item => props.getRecordId(item) === recordId))?.key)} />
+          return <Checkbox aria-label={translate('tables.selectRecord', { record: String(recordId) })} checked={props.store.isSelected(recordId)} disabled={state.loading || !props.store.canSelectRecord(recordId)} onCheckedChange={checked => props.store.selectRecord(recordId, checked === true, props.groups?.find(group => group.records.some(item => props.getRecordId(item) === recordId))?.key)} />
         },
       }
     : undefined
   const trailing: TablePresentationPlacement<TRecord> | undefined = rowActions.length > 0
     ? {
-        header: 'Actions',
-        label: 'Actions',
+        header: translate('actions.group'),
+        label: translate('actions.group'),
         render: record => <div className="hp:flex hp:items-center hp:justify-end hp:gap-1">{ungroupedRowActions.length > 0 ? <ActionGroupButton group={defaultRowActionGroup} props={props} record={record} /> : null}{rowActionGroups.map(group => <ActionGroupButton group={group} key={group.id} props={props} record={record} />)}</div>,
       }
     : undefined
@@ -558,10 +566,10 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     <div className="hp-table-toolbar hp:flex hp:flex-wrap hp:items-center hp:gap-2">
       <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_START} />
       <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_BEFORE} />
-      <label className="hp:min-w-48 hp:flex-1"><span className="hp-visually-hidden">Search</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput onChange={(event: ChangeEvent<HTMLInputElement>) => {
+      <label className="hp:min-w-48 hp:flex-1"><span className="hp-visually-hidden">{translate('tables.search')}</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput onChange={(event: ChangeEvent<HTMLInputElement>) => {
         props.store.setSearch(event.currentTarget.value)
         notifyQueryChange(props.onQueryChange)
-      }} placeholder="Search records…" type="search" value={state.search} /></InputGroup></label>
+      }} placeholder={translate('tables.searchPlaceholder')} type="search" value={state.search} /></InputGroup></label>
       <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_AFTER} />
       <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE} />
       <ColumnManager props={props} />
@@ -573,14 +581,14 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
     </div>
     <ReactPanelsRenderHook hook={TablesRenderHook.TOOLBAR_AFTER} />
     {hasSelection ? <div aria-live="polite" className="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
-      <span>{state.selection.mode === 'all-matching' ? `All ${props.store.selectedCount} matching records selected` : `${props.store.selectedCount} records selected`}</span>
+      <span>{state.selection.mode === 'all-matching' ? translate('tables.allSelected', { count: props.store.selectedCount }) : translate('tables.selected', { count: props.store.selectedCount })}</span>
       <ReactPanelsRenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
       {bulkActions.map(action => actionItem(action, props))}
       <ReactPanelsRenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
-      <Button aria-label="Clear selection" onClick={() => props.store.clearSelection()} type="button" variant="outline"><X aria-hidden="true" />Clear selection</Button>
+      <Button aria-label={translate('tables.clearSelection')} onClick={() => props.store.clearSelection()} type="button" variant="outline"><X aria-hidden="true" />{translate('tables.clearSelection')}</Button>
     </div> : null}
     {props.store.canSelectAllMatching && state.selection.mode === 'explicit' && selectedOnPage && state.total > recordIds.length
-      ? <Button onClick={() => props.store.selectAllMatching()} type="button">Select all {state.total} matching records</Button>
+      ? <Button onClick={() => props.store.selectAllMatching()} type="button">{translate('tables.selectAll', { count: state.total })}</Button>
       : null}
     <TablePresentation
       caption={props.caption}
@@ -591,23 +599,24 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
       groups={presentationGroups}
       leading={leading}
       loading={state.loading}
+      locale={props.locale}
       records={state.records}
       summaries={props.summaries}
       trailing={trailing}
     />
-    <nav aria-label="Table pagination" className="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
-      <span aria-live="polite" className="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{state.total}</strong> results</span>
+    <nav aria-label={translate('tables.pagination')} className="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
+      <span aria-live="polite" className="hp-table-pagination-info">{translate('tables.summary', { from: paginationFrom, to: paginationTo, total: state.total })}</span>
       <label className="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
-        <NativeSelect aria-label="Results per page" disabled={state.loading} onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+        <NativeSelect aria-label={translate('tables.resultsPerPage')} disabled={state.loading} onChange={(event: ChangeEvent<HTMLSelectElement>) => {
           props.store.setPerPage(Number(event.currentTarget.value))
           notifyQueryChange(props.onQueryChange)
         }} value={state.perPage}>
           {perPageOptions(state.perPage).map(value => <option key={value} value={value}>{value}</option>)}
         </NativeSelect>
-        <span>per page</span>
+        <span>{translate('tables.perPage')}</span>
       </label>
       <span className="hp-table-pagination-pages hp:flex hp:items-center hp:gap-1">
-        <Button aria-label="Previous page" disabled={state.page <= 1 || state.loading} onClick={() => {
+        <Button aria-label={translate('tables.previousPage')} disabled={state.page <= 1 || state.loading} onClick={() => {
           props.store.setPage(state.page - 1)
           notifyQueryChange(props.onQueryChange)
         }} size="icon" type="button" variant="outline"><ChevronLeft aria-hidden="true" className="hp:rtl:rotate-180" /></Button>
@@ -615,7 +624,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
           ? <span aria-hidden="true" className="hp-table-pagination-ellipsis" key={`ellipsis-${index}`}>…</span>
           : <Button
               aria-current={item === state.page ? 'page' : undefined}
-              aria-label={`Page ${item}`}
+              aria-label={translate('tables.page', { page: item })}
               data-active={item === state.page ? 'true' : undefined}
               disabled={state.loading}
               key={item}
@@ -626,7 +635,7 @@ export function ReactTableRenderer<TRecord extends object, TRecordId extends Tab
               type="button"
               variant={item === state.page ? 'secondary' : 'ghost'}
             >{item}</Button>)}
-        <Button aria-label="Next page" disabled={state.page >= pageCount || state.loading} onClick={() => {
+        <Button aria-label={translate('tables.nextPage')} disabled={state.page >= pageCount || state.loading} onClick={() => {
           props.store.setPage(state.page + 1)
           notifyQueryChange(props.onQueryChange)
         }} size="icon" type="button" variant="outline"><ChevronRight aria-hidden="true" className="hp:rtl:rotate-180" /></Button>

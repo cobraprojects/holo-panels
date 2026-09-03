@@ -34,6 +34,8 @@ interface WidgetState<TData extends JsonValue, TActor, TTenant, TServices, TReco
   description: string | null
   emptyState: string
   errorState: string
+  defaultEmptyState: boolean
+  defaultErrorState: boolean
   filters: WidgetFilterDefinition[]
   heading: string | null
   lazy: boolean
@@ -78,6 +80,8 @@ export class WidgetBuilder<
       description: null,
       emptyState: 'No data available',
       errorState: 'Unable to load widget',
+      defaultEmptyState: true,
+      defaultErrorState: true,
       filters: [],
       heading: null,
       lazy: false,
@@ -148,12 +152,12 @@ export class WidgetBuilder<
 
   emptyState(message: string): this {
     if (!message.trim()) throw new Error('Widget empty states cannot be empty')
-    return this.writeState('emptyState', message.trim())
+    return this.writeState('defaultEmptyState', false).writeState('emptyState', message.trim())
   }
 
   errorState(message: string): this {
     if (!message.trim()) throw new Error('Widget error states cannot be empty')
-    return this.writeState('errorState', message.trim())
+    return this.writeState('defaultErrorState', false).writeState('errorState', message.trim())
   }
 
   compileDiscoveryDefinition(): DiscoverableDefinition<'widget'> {
@@ -188,7 +192,7 @@ export class WidgetBuilder<
     return {
       kind: 'widget',
       manifest,
-      server: { actions: compileRegisteredActions(state.actions, 'page'), authorize: state.authorize, data: state.data, visible: state.visible, ...(state.table ? { table: state.table } : {}) },
+      server: { actions: compileRegisteredActions(state.actions, 'page'), authorize: state.authorize, data: state.data, defaultEmptyState: state.defaultEmptyState, defaultErrorState: state.defaultErrorState, visible: state.visible, ...(state.table ? { table: state.table } : {}) },
     }
   }
 }

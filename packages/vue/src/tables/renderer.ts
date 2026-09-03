@@ -1,5 +1,8 @@
+import { translateFilterOperator } from '@holo-js/panels-client'
+import { usePanelTranslator } from '../localization'
+import type { PanelTranslator } from '@holo-js/panels-client'
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, PanelsIcon, Popover, PopoverContent, PopoverTrigger, Progress } from '../internal-ui'
-import { ClientTransferStore, createPanelTranslator, createTableActionHost, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
+import { ClientTransferStore, createTableActionHost, publishPanelError, publishPanelErrorTo, type ClientTransferManifest, type FilterCollectionPresentation, type JsonValue, type TableRecordId, type TableState } from '@holo-js/panels-client'
 import { VueActionRenderer } from '../actions/renderer'
 import { TablesRenderHook } from '@holo-js/panels-core'
 import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, ListFilter, Search } from 'lucide-vue-next'
@@ -91,13 +94,13 @@ const VueTransferAction = defineComponent({
     table: { type: Object as PropType<RuntimeTable>, required: true },
   },
   setup(props) {
-    const translate = createPanelTranslator(props.table.locale ?? 'en')
+    const translate = usePanelTranslator(() => props.table.locale)
     const kind = translate(`transfers.${props.manifest.kind}`)
     const open = ref(false)
     const formatId = ref(props.manifest.formatIds[0] ?? '')
     const mappings = ref<Readonly<Record<string, string>>>({})
     const columns = ref(new Set(props.manifest.kind === 'export' ? props.manifest.columns.filter(column => column.visibleByDefault).map(column => column.id) : []))
-    const store = props.table.transferTransport ? new ClientTransferStore(props.manifest, props.table.transferTransport) : null
+    const store = props.table.transferTransport ? new ClientTransferStore(props.manifest, props.table.transferTransport, translate) : null
     const state = shallowRef(store?.state)
     if (store) onScopeDispose(store.subscribe(next => { state.value = next }))
     async function submit(): Promise<void> {
@@ -123,7 +126,7 @@ const VueTransferAction = defineComponent({
   },
 })
 
-function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value: JsonValue) => void): VNode {
+function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value: JsonValue) => void, translate: PanelTranslator): VNode {
   const columns = Array.isArray(filter.manifest.properties.columns)
     ? filter.manifest.properties.columns.filter((column): column is Readonly<Record<string, unknown>> => typeof column === 'object' && column !== null && !Array.isArray(column))
     : []
@@ -144,10 +147,10 @@ function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value
       const scalarType = typeof column?.scalarType === 'string' ? column.scalarType : 'string'
       const inputValue = Array.isArray(condition.value) ? condition.value.join(', ') : typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
       return h('div', { 'data-advanced-condition': '', key: index }, [
-        h(NativeSelect, { 'aria-label': 'Column', modelValue: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
-        h(NativeSelect, { 'aria-label': 'Operator', modelValue: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, item))),
-        ['null', 'not-null'].includes(operator) ? null : h(Input, { 'aria-label': 'Value', type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', modelValue: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
-        h(Button, { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, 'Remove condition'),
+        h(NativeSelect, { 'aria-label': translate('filters.column'), modelValue: columnId, onChange: (event: Event) => change(index, 'column', eventTarget<HTMLSelectElement>(event).value) }, columns.map(item => h('option', { key: String(item.id), value: String(item.id) }, String(item.id)))),
+        h(NativeSelect, { 'aria-label': translate('filters.operator'), modelValue: operator, onChange: (event: Event) => change(index, 'operator', eventTarget<HTMLSelectElement>(event).value) }, operators.map(item => h('option', { key: item, value: item }, translateFilterOperator(item, translate)))),
+        ['null', 'not-null'].includes(operator) ? null : h(Input, { 'aria-label': translate('filters.value'), type: scalarType === 'number' ? 'number' : scalarType === 'date' ? 'date' : 'text', modelValue: inputValue, onInput: (event: Event) => change(index, 'value', advancedInputValue(eventTarget<HTMLInputElement>(event).value, scalarType, operator)) }),
+        h(Button, { type: 'button', onClick: () => update({ conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index) }) }, translate('filters.removeCondition')),
       ])
     }),
     h(Button, {
@@ -159,7 +162,7 @@ function advancedFilter(filter: VueTableFilter, value: JsonValue, update: (value
         if (typeof column?.id !== 'string' || typeof operator !== 'string') return
         update({ conditions: [...conditions, { column: column.id, operator, value: null }] })
       },
-    }, 'Add condition'),
+    }, translate('filters.addCondition')),
   ])
 }
 
@@ -204,12 +207,13 @@ const TableActionGroupButton = defineComponent({
     table: { type: Object as PropType<object>, required: true },
   },
   setup(props) {
+    const translate = usePanelTranslator(() => runtimeTable(props.table).locale)
     const host = computed(() => {
       const table = runtimeTable(props.table)
       const group = props.group
       return createTableActionHost({
         actions: group?.actions ?? (props.action ? [props.action] : []),
-        group: group ? { ...group, label: group.label ?? (group.scope === 'row' ? 'Row actions' : group.scope === 'bulk' ? 'Bulk actions' : 'Actions') } : undefined,
+        group: group ? { ...group, label: group.label ?? translate(group.scope === 'row' ? 'actions.row' : group.scope === 'bulk' ? 'actions.bulk' : 'actions.group') } : undefined,
         recordId: props.record ? table.getRecordId(props.record) : undefined,
         selection: () => table.store.selectionPayload(),
         clearSelection: () => table.store.clearSelection(),
@@ -219,7 +223,7 @@ const TableActionGroupButton = defineComponent({
             await table.actionTransport.execute(request, signal)
           } catch (cause) {
             const action = (group?.actions ?? (props.action ? [props.action] : [])).find(action => action.id === request.actionId)
-            if (!signal.aborted) reportTableError(table, `${action?.label ?? 'Action'} failed`)
+            if (!signal.aborted) reportTableError(table, translate('feedback.failedAction', { label: action?.label ?? translate('actions.action') }))
             throw cause
           }
         },
@@ -254,6 +258,7 @@ const InlineTableCell = defineComponent({
     table: { type: Object as PropType<object>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator(() => runtimeTable(componentProps.table).locale)
     const original = computed(() => recordValue(componentProps.record, componentProps.column.manifest.path))
     const editing = ref(false)
     const value = ref<boolean | number | string | null>(null)
@@ -294,7 +299,7 @@ const InlineTableCell = defineComponent({
         }, new AbortController().signal)
         editing.value = false
       } catch (cause) {
-        error.value = cause instanceof Error ? cause.message : 'Inline edit failed'
+        error.value = cause instanceof Error ? cause.message : translate('tables.inlineFailed')
       } finally {
         pending.value = false
       }
@@ -306,6 +311,7 @@ const InlineTableCell = defineComponent({
       const valid = typeof editor?.action === 'string' && ['checkbox', 'select', 'text-input', 'toggle'].includes(String(kind))
       const table = runtimeTable(componentProps.table)
       const rendered = h(VueTableColumnPresentation, { presentation: {
+        locale: table.locale,
         column,
         panelId: table.panelId,
         record: componentProps.record,
@@ -313,7 +319,7 @@ const InlineTableCell = defineComponent({
         value: original.value,
       } })
       if (!valid) return rendered
-      if (!editing.value) return h(Button, { 'aria-label': `Edit ${column.manifest.label ?? column.manifest.path}`, type: 'button', onClick: begin }, () => [rendered])
+      if (!editing.value) return h(Button, { 'aria-label': translate('tables.editValue', { label: column.manifest.label ?? column.manifest.path }), type: 'button', onClick: begin }, () => [rendered])
       const label = column.manifest.label ?? column.manifest.path
       if (kind === 'checkbox' || kind === 'toggle') {
         return h('span', [
@@ -352,7 +358,7 @@ const InlineTableCell = defineComponent({
               disabled: typeof option === 'object' && option !== null && Reflect.get(option, 'disabled') === true,
               key: String(next),
               value: String(next ?? ''),
-            }, typeof labelValue === 'string' ? labelValue : `Option ${index + 1}`)
+            }, typeof labelValue === 'string' ? labelValue : translate('fields.numberedOption', { number: index + 1 }))
           })),
           error.value ? h('span', { role: 'alert' }, error.value) : null,
         ])
@@ -387,8 +393,8 @@ function tableFilters(
   state: TableState<Record<string, unknown>, TableRecordId>,
   idPrefix: string,
   open: Ref<boolean>,
+  translate: PanelTranslator,
 ): VNodeChild {
-  const translate = createPanelTranslator(table.locale ?? 'en')
   const filters = table.filters ?? []
   if (filters.length === 0) return null
   const presentation = table.filterPresentation
@@ -415,13 +421,13 @@ function tableFilters(
       const to = typeof Reflect.get(range, 'to') === 'string' ? String(Reflect.get(range, 'to')) : ''
       return wrap(h('fieldset', [
         h('legend', filter.manifest.label ?? filter.manifest.id),
-        h('label', { for: `${id}-from` }, ['From', h(Input, {
+        h('label', { for: `${id}-from` }, [translate('filters.from'), h(Input, {
           id: `${id}-from`,
           type: 'date',
           modelValue: from,
           onInput: (event: Event) => update({ from: eventTarget<HTMLInputElement>(event).value || null, to: to || null }),
         })]),
-        h('label', { for: `${id}-to` }, ['To', h(Input, {
+        h('label', { for: `${id}-to` }, [translate('filters.to'), h(Input, {
           id: `${id}-to`,
           type: 'date',
           modelValue: to,
@@ -434,16 +440,16 @@ function tableFilters(
         id,
         modelValue: typeof current === 'string' ? current : 'all',
         onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
-      }, [h('option', { value: 'all' }, 'All'), h('option', { value: 'true' }, 'Yes'), h('option', { value: 'false' }, 'No')])]))
+      }, [h('option', { value: 'all' }, translate('filters.all')), h('option', { value: 'true' }, translate('filters.yes')), h('option', { value: 'false' }, translate('filters.no'))])]))
     }
     if (filter.manifest.type === 'trashed') {
       return wrap(h('label', { for: id }, [filter.manifest.label ?? filter.manifest.id, h(NativeSelect, {
         id,
         modelValue: typeof current === 'string' ? current : 'without',
         onChange: (event: Event) => update(eventTarget<HTMLSelectElement>(event).value),
-      }, [h('option', { value: 'without' }, 'Without trashed'), h('option', { value: 'with' }, 'With trashed'), h('option', { value: 'only' }, 'Only trashed')])]))
+      }, [h('option', { value: 'without' }, translate('filters.withoutTrashed')), h('option', { value: 'with' }, translate('filters.withTrashed')), h('option', { value: 'only' }, translate('filters.onlyTrashed'))])]))
     }
-    if (filter.manifest.type === 'advanced-query') return wrap(advancedFilter(filter, current, update))
+    if (filter.manifest.type === 'advanced-query') return wrap(advancedFilter(filter, current, update, translate))
     if (filter.manifest.type === 'custom' || filter.manifest.type.includes(':filter:')) {
       if (!table.registry) throw new Error(`[Holo Panels] A Vue component registry is required for filter "${filter.manifest.id}".`)
       const name = filter.manifest.type === 'custom' ? 'filter.custom' : `filter.${filter.manifest.type.replaceAll(':', '.')}`
@@ -467,7 +473,7 @@ function tableFilters(
             update(filter.options?.find(option => String(option.value ?? '') === select.value)?.value ?? null)
           },
         }, [
-          ...(!multiple ? [h('option', { key: 'all', value: '' }, 'All')] : []),
+          ...(!multiple ? [h('option', { key: 'all', value: '' }, translate('filters.all'))] : []),
           ...filter.options.map(option => h('option', { disabled: option.disabled, key: String(option.value), value: String(option.value ?? '') }, option.label)),
         ])
       : filter.manifest.type.includes('boolean') || typeof current === 'boolean'
@@ -522,6 +528,7 @@ export const VueTableRenderer = defineComponent({
   setup(componentProps) {
     const renderHook = usePanelsRenderHook()
     const table = runtimeTable(componentProps.table)
+    const translate = usePanelTranslator(() => table.locale)
     const state = shallowRef(table.store.snapshot)
     onScopeDispose(table.store.subscribe(next => {
       state.value = next
@@ -564,7 +571,8 @@ export const VueTableRenderer = defineComponent({
         notifyQueryChange(table.onQueryChange)
       }
       const tablePresentation: VueTablePresentationProps<RuntimeRecord> = {
-        ariaLabel: `${table.caption} data`,
+        ariaLabel: translate('tables.data', { caption: table.caption }),
+        locale: table.locale,
         caption: table.caption,
         emptyMessage: table.emptyMessage,
         error: snapshot.error?.message,
@@ -577,7 +585,7 @@ export const VueTableRenderer = defineComponent({
             ariaSort: active?.direction === 'asc' ? 'ascending' : active?.direction === 'desc' ? 'descending' : 'none',
             header: column.manifest.sortable
               ? h(Button, {
-                  class: 'hp-table-sort hp:-ml-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground',
+                  class: 'hp-table-sort hp:-ms-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground',
                   'data-sorted': active?.direction,
                   size: 'sm',
                   type: 'button',
@@ -611,16 +619,16 @@ export const VueTableRenderer = defineComponent({
         })) } : {}),
         ...(selectable ? { leading: {
           header: table.store.selectionSettings.groupsOnly ? null : h(Checkbox, {
-            'aria-label': 'Select page',
+            'aria-label': translate('tables.selectPage'),
             modelValue: selectedOnPage ? true : recordIds.some(id => table.store.isSelected(id)) ? 'indeterminate' : false,
             disabled: snapshot.loading,
             'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectPage(recordIds, checked === true),
           }),
-          label: 'Select',
+          label: translate('tables.select'),
           render(record: RuntimeRecord): VNodeChild {
             const recordId = table.getRecordId(record)
             return h(Checkbox, {
-              'aria-label': `Select record ${String(recordId)}`,
+              'aria-label': translate('tables.selectRecord', { record: String(recordId) }),
               modelValue: table.store.isSelected(recordId),
               disabled: snapshot.loading || !table.store.canSelectRecord(recordId),
               'onUpdate:modelValue': (checked: boolean | 'indeterminate') => table.store.selectRecord(recordId, checked === true, table.groups?.find(group => group.records.some(item => table.getRecordId(item) === recordId))?.key),
@@ -631,8 +639,8 @@ export const VueTableRenderer = defineComponent({
         rowKey: record => table.getRecordId(record),
         summaries: table.summaries,
         ...(rowActions.length > 0 ? { trailing: {
-          header: 'Actions',
-          label: 'Actions',
+          header: translate('actions.group'),
+          label: translate('actions.group'),
           render(record: RuntimeRecord): VNodeChild {
             return h('div', { class: 'hp:flex hp:items-center hp:justify-end hp:gap-1' }, [
               ungroupedRowActions.length > 0 ? h(TableActionGroupButton, { group: defaultRowActionGroup, record, table }) : null,
@@ -641,7 +649,7 @@ export const VueTableRenderer = defineComponent({
           },
         } } : {}),
       }
-      const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen)
+      const filtersNode = tableFilters(table, snapshot, filterPrefix, filtersOpen, translate)
       const children: VNodeChild[] = [
         renderHook(TablesRenderHook.HEADER_BEFORE),
         h('h2', { class: 'hp:text-xl hp:font-semibold', id: captionId }, table.caption),
@@ -650,8 +658,8 @@ export const VueTableRenderer = defineComponent({
         h('div', { class: 'hp-table-toolbar hp:flex hp:flex-wrap hp:items-center hp:gap-2' }, [
           renderHook(TablesRenderHook.TOOLBAR_START),
           renderHook(TablesRenderHook.TOOLBAR_SEARCH_BEFORE),
-          h('label', { class: 'hp:min-w-48 hp:flex-1' }, [h('span', { class: 'hp-visually-hidden' }, 'Search'), h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => h(Search, { 'aria-hidden': 'true' })), h(InputGroupInput, {
-            placeholder: 'Search records…',
+          h('label', { class: 'hp:min-w-48 hp:flex-1' }, [h('span', { class: 'hp-visually-hidden' }, translate('tables.search')), h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => h(Search, { 'aria-hidden': 'true' })), h(InputGroupInput, {
+            placeholder: translate('tables.searchPlaceholder'),
             type: 'search',
             modelValue: snapshot.search,
             onInput: (event: Event) => {
@@ -662,8 +670,8 @@ export const VueTableRenderer = defineComponent({
           renderHook(TablesRenderHook.TOOLBAR_SEARCH_AFTER),
           renderHook(TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE),
           h(DropdownMenu, { open: columnsOpen.value, 'onUpdate:open': (open: boolean) => { columnsOpen.value = open } }, () => [
-            h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', class: 'hp-column-manager', type: 'button', variant: 'outline' }, () => [h(Columns3, { 'aria-hidden': 'true' }), 'Columns'])),
-            h(DropdownMenuContent, { align: 'end', 'aria-label': 'Visible columns' }, () => table.columns.filter(column => column.manifest.toggleable).map(column => h(DropdownMenuCheckboxItem, {
+            h(DropdownMenuTrigger, { asChild: true }, () => h(Button, { 'aria-expanded': columnsOpen.value, 'aria-haspopup': 'menu', class: 'hp-column-manager', type: 'button', variant: 'outline' }, () => [h(Columns3, { 'aria-hidden': 'true' }), translate('tables.columns')])),
+            h(DropdownMenuContent, { align: 'end', 'aria-label': translate('tables.visibleColumns') }, () => table.columns.filter(column => column.manifest.toggleable).map(column => h(DropdownMenuCheckboxItem, {
               modelValue: currentColumns.has(column.manifest.path),
               key: column.manifest.path,
               'onUpdate:modelValue': (checked: boolean) => {
@@ -684,24 +692,22 @@ export const VueTableRenderer = defineComponent({
         renderHook(TablesRenderHook.TOOLBAR_AFTER),
         hasSelection ? h('div', { 'aria-live': 'polite', class: 'hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3' }, [
           h('span', snapshot.selection.mode === 'all-matching'
-            ? `All ${table.store.selectedCount} matching records selected`
-            : `${table.store.selectedCount} records selected`),
+            ? translate('tables.allSelected', { count: table.store.selectedCount })
+            : translate('tables.selected', { count: table.store.selectedCount })),
           renderHook(TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE),
           ...bulkActions.map(action => tableActionNode(action, table)),
           renderHook(TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER),
-          h(Button, { type: 'button', onClick: () => table.store.clearSelection() }, 'Clear selection'),
+          h(Button, { type: 'button', onClick: () => table.store.clearSelection() }, translate('tables.clearSelection')),
         ]) : null,
         table.store.canSelectAllMatching && snapshot.selection.mode === 'explicit' && selectedOnPage && snapshot.total > recordIds.length
-          ? h(Button, { type: 'button', onClick: () => table.store.selectAllMatching() }, `Select all ${snapshot.total} matching records`)
+          ? h(Button, { type: 'button', onClick: () => table.store.selectAllMatching() }, translate('tables.selectAll', { count: snapshot.total }))
           : null,
         h(VueTablePresentation, { presentation: tablePresentation }),
-        h('nav', { 'aria-label': 'Table pagination', class: 'hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground', 'data-slot': 'table-pagination' }, [
-          h('span', { 'aria-live': 'polite', class: 'hp-table-pagination-info' }, [
-            'Showing ', h('strong', String(paginationFrom)), ' to ', h('strong', String(paginationTo)), ' of ', h('strong', String(snapshot.total)), ' results',
-          ]),
+        h('nav', { 'aria-label': translate('tables.pagination'), class: 'hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground', 'data-slot': 'table-pagination' }, [
+          h('span', { 'aria-live': 'polite', class: 'hp-table-pagination-info' }, translate('tables.summary', { from: paginationFrom, to: paginationTo, total: snapshot.total })),
           typeof table.store.setPerPage === 'function' ? h('label', { class: 'hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2' }, [
             h(NativeSelect, {
-              'aria-label': 'Results per page',
+              'aria-label': translate('tables.resultsPerPage'),
               disabled: snapshot.loading,
               modelValue: String(snapshot.perPage),
               onChange: (event: Event) => {
@@ -709,11 +715,11 @@ export const VueTableRenderer = defineComponent({
                 notifyQueryChange(table.onQueryChange)
               },
             }, () => perPageOptions(snapshot.perPage).map(value => h('option', { key: value, value: String(value) }, String(value)))),
-            h('span', 'per page'),
+            h('span', translate('tables.perPage')),
           ]) : null,
           h('span', { class: 'hp-table-pagination-pages hp:flex hp:items-center hp:gap-1' }, [
             h(Button, {
-              'aria-label': 'Previous page',
+              'aria-label': translate('tables.previousPage'),
               disabled: snapshot.page <= 1 || snapshot.loading,
               size: 'icon',
               type: 'button',
@@ -727,7 +733,7 @@ export const VueTableRenderer = defineComponent({
               ? h('span', { 'aria-hidden': 'true', class: 'hp-table-pagination-ellipsis', key: `ellipsis-${index}` }, '…')
               : h(Button, {
                   'aria-current': item === snapshot.page ? 'page' : undefined,
-                  'aria-label': `Page ${item}`,
+                  'aria-label': translate('tables.page', { page: item }),
                   'data-active': item === snapshot.page ? 'true' : undefined,
                   disabled: snapshot.loading,
                   key: item,
@@ -739,7 +745,7 @@ export const VueTableRenderer = defineComponent({
                   },
                 }, () => [String(item)])),
             h(Button, {
-              'aria-label': 'Next page',
+              'aria-label': translate('tables.nextPage'),
               disabled: snapshot.page >= pageCount || snapshot.loading,
               size: 'icon',
               type: 'button',

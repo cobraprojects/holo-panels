@@ -1,4 +1,5 @@
 export * from './components'
+export { providePanelsLocale, usePanelDirection, usePanelLocale, usePanelTranslator } from './localization'
 export * from './fields'
 export * from './tables'
 export * from './actions'

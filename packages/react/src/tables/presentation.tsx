@@ -1,3 +1,4 @@
+import { usePanelLocale, usePanelTranslator } from '../localization'
 import { Fragment, useState, type AriaAttributes, type CSSProperties, type Key, type ReactNode } from 'react'
 import { rendererRegistryName, type ExtensionTypeId } from '@holo-js/panels-client'
 import { ChevronDown } from 'lucide-react'
@@ -43,6 +44,7 @@ export interface TablePresentationGroup<TRecord extends object> {
 }
 
 export interface TablePresentationProps<TRecord extends object> {
+  readonly locale?: string
   readonly caption: string
   readonly columns: readonly TablePresentationColumn<TRecord>[]
   readonly containerClassName?: string
@@ -66,24 +68,26 @@ export function TablePresentation<TRecord extends object>({
   caption,
   columns,
   containerClassName,
-  emptyMessage = 'No records found.',
+  emptyMessage,
   error,
   getRowKey,
   groups,
   leading,
   loading = false,
+  locale,
   records = [],
-  regionLabel = `${caption} data`,
+  regionLabel,
   summaries = [],
   trailing,
 }: TablePresentationProps<TRecord>): ReactNode {
+  const translate = usePanelTranslator(locale)
   const columnCount = columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0)
   const state = error
-    ? <Alert className="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+    ? <Alert className="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>{translate('tables.loadFailed')}</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
     : loading
-      ? <div aria-label="Loading records" aria-live="polite" className="hp-table-loading hp:space-y-2 hp:py-2" data-slot="table-loading" role="status"><Skeleton className="hp:h-8 hp:w-full" /><Skeleton className="hp:h-8 hp:w-full" /><Skeleton className="hp:h-8 hp:w-full" /></div>
+      ? <div aria-label={translate('tables.loading')} aria-live="polite" className="hp-table-loading hp:space-y-2 hp:py-2" data-slot="table-loading" role="status"><Skeleton className="hp:h-8 hp:w-full" /><Skeleton className="hp:h-8 hp:w-full" /><Skeleton className="hp:h-8 hp:w-full" /></div>
       : records.length === 0
-        ? <Empty className="hp-table-empty hp:min-h-40" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{emptyMessage}</EmptyDescription></EmptyHeader></Empty>
+        ? <Empty className="hp-table-empty hp:min-h-40" data-slot="table-empty"><EmptyHeader><EmptyTitle>{translate('tables.noRecords')}</EmptyTitle><EmptyDescription>{emptyMessage ?? translate('tables.empty')}</EmptyDescription></EmptyHeader></Empty>
         : null
   const row = (record: TRecord): ReactNode => {
     return <TableRow key={getRowKey(record)}>
@@ -99,14 +103,14 @@ export function TablePresentation<TRecord extends object>({
   const body = groups && groups.length > 0
     ? groups.map(group => <Fragment key={group.key}>
         <TableRow className="hp-table-group"><TableHead colSpan={columnCount}>
-          {group.selection ? <Checkbox aria-label={`Select group ${group.title}`} checked={group.selection.checked} disabled={group.selection.disabled} onCheckedChange={checked => group.selection?.onChange(checked === true)} /> : null}
+          {group.selection ? <Checkbox aria-label={translate('tables.selectGroup', { group: group.title })} checked={group.selection.checked} disabled={group.selection.disabled} onCheckedChange={checked => group.selection?.onChange(checked === true)} /> : null}
           {group.collapsible
             ? <Button aria-expanded={!group.collapsed} onClick={group.onToggle} type="button"><ChevronDown aria-hidden="true" /><span>{group.title}</span><span className="hp-table-group-count">{group.records.length}</span></Button>
             : group.title}
           {group.description ? <small>{group.description}</small> : null}
         </TableHead></TableRow>
         {!group.collapsed ? group.records.map(row) : null}
-        {group.summaries?.map(summary => <TableRow className="hp-table-group-summary" key={`${group.key}-${summary.id}`}><TableHead colSpan={columnCount}>{group.title} subtotal · {summary.label}: {summary.value}</TableHead></TableRow>)}
+        {group.summaries?.map(summary => <TableRow className="hp-table-group-summary" key={`${group.key}-${summary.id}`}><TableHead colSpan={columnCount}>{translate('tables.subtotal', { group: group.title, label: summary.label })} {summary.value}</TableHead></TableRow>)}
       </Fragment>)
     : records.map(row)
   return <div
@@ -114,7 +118,7 @@ export function TablePresentation<TRecord extends object>({
     data-panels-component="data-table"
     data-slot="table-container"
   >
-    <Table containerProps={{ 'aria-label': regionLabel, role: 'region', tabIndex: 0 }}>
+    <Table containerProps={{ 'aria-label': regionLabel ?? translate('tables.data', { caption }), role: 'region', tabIndex: 0 }}>
       <TableCaption className="hp:sr-only">{caption}</TableCaption>
       <TableHeader><TableRow>
         {leading ? <TableHead scope="col">{leading.header}</TableHead> : null}
@@ -122,7 +126,7 @@ export function TablePresentation<TRecord extends object>({
         {trailing ? <TableHead scope="col">{trailing.header}</TableHead> : null}
       </TableRow></TableHeader>
       <TableBody>{state ? <TableRow><TableCell colSpan={Math.max(1, columnCount)}>{state}</TableCell></TableRow> : body}</TableBody>
-      {!state && summaries.length > 0 ? <TableFooter>{summaries.map(summary => <TableRow className="hp-table-total-summary" key={summary.id}><TableHead colSpan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableHead></TableRow>)}</TableFooter> : null}
+      {!state && summaries.length > 0 ? <TableFooter>{summaries.map(summary => <TableRow className="hp-table-total-summary" key={summary.id}><TableHead colSpan={Math.max(1, columnCount)}>{translate('tables.total', { label: summary.label })} {summary.value}</TableHead></TableRow>)}</TableFooter> : null}
     </Table>
   </div>
 }
@@ -155,7 +159,7 @@ function validDate(value: unknown): Date | null {
   return Number.isNaN(converted.getTime()) ? null : converted
 }
 
-function formattedValue(input: unknown, formatters: readonly Formatter[]): string {
+function formattedValue(input: unknown, formatters: readonly Formatter[], locale: string): string {
   let value: unknown = Array.isArray(input) ? input.map(item => String(item)) : input
   for (const formatter of formatters) {
     try {
@@ -169,7 +173,7 @@ function formattedValue(input: unknown, formatters: readonly Formatter[]): strin
             : formatter.kind === 'time'
               ? { timeStyle: 'short' }
               : { dateStyle: 'medium', timeStyle: 'short' }
-          value = new Intl.DateTimeFormat(undefined, { ...defaults, ...formatterOptions(formatter) }).format(date)
+          value = new Intl.DateTimeFormat(locale, { ...defaults, ...formatterOptions(formatter) }).format(date)
         }
       } else if (formatter.kind === 'relative-time') {
         const date = validDate(value)
@@ -183,13 +187,13 @@ function formattedValue(input: unknown, formatters: readonly Formatter[]): strin
             { amount: 60, unit: 'minute' },
           ].find(item => Math.abs(seconds) >= item.amount)
           const amount = division ? Math.round(seconds / division.amount) : seconds
-          value = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(amount, division?.unit as Intl.RelativeTimeFormatUnit ?? 'second')
+          value = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(amount, division?.unit as Intl.RelativeTimeFormatUnit ?? 'second')
         }
       } else if (formatter.kind === 'number' || formatter.kind === 'money') {
         const number = finiteNumber(value)
         if (number !== null) {
           const style = formatter.kind === 'money' ? { currency: String(formatter.currency), style: 'currency' as const } : {}
-          value = new Intl.NumberFormat(undefined, { ...formatterOptions(formatter), ...style }).format(number)
+          value = new Intl.NumberFormat(locale, { ...formatterOptions(formatter), ...style }).format(number)
         }
       } else if (formatter.kind === 'words') {
         value = String(value).trim().split(/\s+/u).slice(0, Number(formatter.count)).join(' ')
@@ -239,21 +243,25 @@ function iconName(formatters: readonly Formatter[], active: boolean): string {
   return typeof configured === 'string' && /^[a-z][a-z0-9-]*$/u.test(configured) ? configured : active ? 'check' : 'x-mark'
 }
 
-export function ReactTableColumnPresentation<TRecord extends object>({ column, onAction, panelId, record, registry, value }: {
+export function ReactTableColumnPresentation<TRecord extends object>({ column, locale: localeOverride, onAction, panelId, record, registry, value }: {
   readonly column: ReactTableColumn<TRecord>
+  readonly locale?: string
   readonly onAction?: (actionId: string) => Promise<void>
   readonly panelId?: string
   readonly record: Readonly<TRecord>
   readonly registry?: ComponentRegistry
   readonly value: unknown
 }): ReactNode {
+  const inheritedLocale = usePanelLocale()
+  const locale = localeOverride ?? inheritedLocale
   const inferredValue = value as ReactTableColumnValue<TRecord, ReactTableColumnPath<TRecord>>
+  const translate = usePanelTranslator(locale)
   const [copyStatus, setCopyStatus] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState(false)
   if (column.render) return column.render(inferredValue, record)
   const formatters = formatterList(column.manifest)
-  const formatted = formattedValue(value, formatters)
+  const formatted = formattedValue(value, formatters, locale)
   const type = column.manifest.type
   const tooltip = formatters.find(formatter => formatter.kind === 'tooltip')?.value
   const url = safeUrl(column.url?.(record)) ?? safeUrl(formatters.find(formatter => formatter.kind === 'url')?.value)
@@ -278,7 +286,7 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     content = <Renderer {...properties} column={column} record={record} value={inferredValue} />
   } else if (type === 'boolean' || type === 'icon') {
     const active = Boolean(value)
-    content = <span aria-label={active ? 'Yes' : 'No'} data-icon={iconName(formatters, active)} role="img">{active ? '✓' : '✕'}</span>
+    content = <span aria-label={translate(active ? 'filters.yes' : 'filters.no')} data-icon={iconName(formatters, active)} role="img">{active ? '✓' : '✕'}</span>
   } else if (type === 'image') {
     const source = safeUrl(value)
     const size = formatters.find(formatter => formatter.kind === 'size')?.pixels
@@ -305,22 +313,22 @@ export function ReactTableColumnPresentation<TRecord extends object>({ column, o
     setActionPending(true)
     setActionError(null)
     void onAction(actionId).catch(cause => {
-      setActionError(cause instanceof Error ? cause.message : 'Column action failed')
+      setActionError(cause instanceof Error ? cause.message : translate('tables.actionFailed'))
     }).finally(() => setActionPending(false))
   }} type="button">{linked}</Button> : linked
   const copy = async (): Promise<void> => {
     if (!globalThis.navigator?.clipboard) {
-      setCopyStatus('Copy unavailable')
+      setCopyStatus(translate('copy.unavailable'))
       return
     }
     try {
       await globalThis.navigator.clipboard.writeText(formatted)
-      setCopyStatus('Copied')
+      setCopyStatus(translate('copy.copied'))
     } catch {
-      setCopyStatus('Copy failed')
+      setCopyStatus(translate('copy.failed'))
     }
   }
   return <span className="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{actionable}{column.manifest.copyable && !column.manifest.inlineEditor
-    ? <Button aria-label={`Copy ${column.manifest.label ?? column.manifest.path}`} className="hp-table-copy" onClick={() => void copy()} size="icon" type="button" variant="ghost"><PanelsIcon name="copy" /></Button>
+    ? <Button aria-label={translate('copy.label', { label: column.manifest.label ?? column.manifest.path })} className="hp-table-copy" onClick={() => void copy()} size="icon" type="button" variant="ghost"><PanelsIcon name="copy" /></Button>
     : null}<span aria-live="polite" className="hp-visually-hidden">{copyStatus}</span>{actionError ? <span role="alert">{actionError}</span> : null}</span>
 }

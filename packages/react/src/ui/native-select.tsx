@@ -17,7 +17,7 @@ function NativeSelect({
         data-slot="native-select"
         data-size={size}
         className={cn(
-          "hp:h-9 hp:w-full hp:min-w-0 hp:appearance-none hp:rounded-md hp:border hp:border-input hp:bg-transparent hp:px-3 hp:py-2 hp:pr-9 hp:text-sm hp:shadow-xs hp:transition-[color,box-shadow] hp:outline-none hp:selection:bg-primary hp:selection:text-primary-foreground hp:placeholder:text-muted-foreground hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed hp:data-[size=sm]:h-8 hp:data-[size=sm]:py-1 hp:dark:bg-input/30 hp:dark:hover:bg-input/50",
+          "hp:h-9 hp:w-full hp:min-w-0 hp:appearance-none hp:rounded-md hp:border hp:border-input hp:bg-transparent hp:px-3 hp:py-2 hp:pe-9 hp:text-sm hp:shadow-xs hp:transition-[color,box-shadow] hp:outline-none hp:selection:bg-primary hp:selection:text-primary-foreground hp:placeholder:text-muted-foreground hp:disabled:pointer-events-none hp:disabled:cursor-not-allowed hp:data-[size=sm]:h-8 hp:data-[size=sm]:py-1 hp:dark:bg-input/30 hp:dark:hover:bg-input/50",
           "hp:focus-visible:border-ring hp:focus-visible:ring-[3px] hp:focus-visible:ring-ring/50",
           "hp:aria-invalid:border-destructive hp:aria-invalid:ring-destructive/20 hp:dark:aria-invalid:ring-destructive/40",
           className

@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Checkbox, Input, Textarea } from '../internal-ui'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText, RadioGroup, RadioGroupItem, Switch } from '../ui'
@@ -14,6 +15,7 @@ function stringProperty<TValues extends object>(props: ReactFieldControlProps<TV
 }
 
 export function ReactBasicField<TValues extends object>(props: ReactFieldControlProps<TValues>): ReactNode {
+  const translate = usePanelTranslator()
   const { context } = props
   const [passwordVisible, setPasswordVisible] = useState(false)
   const common = {
@@ -120,7 +122,7 @@ export function ReactBasicField<TValues extends object>(props: ReactFieldControl
           {suffix || suffixAction || revealable ? <InputGroupAddon align="inline-end">
             {suffix ? <InputGroupText className="hp-field-suffix">{suffix}</InputGroupText> : null}
             {suffixAction}
-            {revealable ? <InputGroupButton aria-controls={context.inputId} aria-label={passwordVisible ? 'Hide password' : 'Show password'} onClick={() => setPasswordVisible(value => !value)}>{passwordVisible ? 'Hide' : 'Show'}</InputGroupButton> : null}
+            {revealable ? <InputGroupButton aria-controls={context.inputId} aria-label={passwordVisible ? translate('fields.hidePassword') : translate('fields.showPassword')} onClick={() => setPasswordVisible(value => !value)}>{passwordVisible ? translate('fields.hide') : translate('fields.show')}</InputGroupButton> : null}
           </InputGroupAddon> : null}
         </InputGroup>
       : <Input {...inputProps} {...controlProperties} data-slot={context.definition.type === 'slider' ? 'slider' : 'input'} />}

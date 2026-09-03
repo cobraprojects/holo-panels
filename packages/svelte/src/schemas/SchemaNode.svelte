@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { usePanelTranslator } from '../localization'
+  const translate = usePanelTranslator()
   import { Button } from '../ui/button'
-  import { onMount, untrack } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import type { Snippet } from 'svelte'
   import type { SchemaComponentManifest } from '@holo-js/panels-client'
   import type { SchemaRendererContext } from './contracts'
@@ -50,6 +52,17 @@
   function setCollapsed(value: boolean): void {
     collapsed = value
     persist(String(value))
+  }
+
+  async function moveTab(event: KeyboardEvent & { currentTarget: HTMLElement }, index: number): Promise<void> {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || tabs.length === 0) return
+    const rtl = (event.currentTarget.closest('[dir]')?.getAttribute('dir') ?? getComputedStyle(event.currentTarget).direction) === 'rtl'
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + ((event.key === 'ArrowRight') !== rtl ? 1 : -1) + tabs.length) % tabs.length
+    event.preventDefault()
+    const tablist = event.currentTarget.parentElement
+    selectTab(next)
+    await tick()
+    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
   }
 
   function selectTab(index: number): void {
@@ -125,17 +138,18 @@
     </fieldset>
   {:else if component.kind === 'tabs'}
     <div {...attributes} class={className}>
-      <div aria-label={component.properties.label ?? 'Sections'} role="tablist">
+      <div aria-label={component.properties.label ?? translate('schemas.tabs')} role="tablist">
         {#each tabs as tab, index (tab.key)}
           <Button
             aria-controls={contentId(context.schemaId, tab.id, 'panel')}
             aria-selected={selectedTab === index}
             id={contentId(context.schemaId, tab.id, 'tab')}
             onclick={() => selectTab(index)}
+            onkeydown={event => void moveTab(event, index)}
             role="tab"
             tabindex={selectedTab === index ? 0 : -1}
             type="button"
-          >{tab.properties.label ?? tab.properties.heading ?? `Tab ${index + 1}`}</Button>
+          >{tab.properties.label ?? tab.properties.heading ?? translate('schemas.tab', { number: index + 1 })}</Button>
         {/each}
       </div>
       {#each tabs as tab, index (tab.key)}
@@ -156,7 +170,7 @@
         {#each steps as step, index (step.key)}
           <li aria-current={selectedStep === index ? 'step' : undefined}>
             <Button disabled={index > selectedStep} onclick={() => selectStep(index)} type="button">
-              {step.properties.label ?? step.properties.heading ?? `Step ${index + 1}`}
+              {step.properties.label ?? step.properties.heading ?? translate('schemas.step', { number: index + 1 })}
             </Button>
           </li>
         {/each}
@@ -166,8 +180,8 @@
           <SchemaChildren components={[step]} {context} {renderNode} />
         {/if}
       {/each}
-      <Button disabled={selectedStep === 0} onclick={() => selectStep(selectedStep - 1)} type="button">Previous</Button>
-      <Button disabled={selectedStep >= steps.length - 1} onclick={() => selectStep(selectedStep + 1)} type="button">Next</Button>
+      <Button disabled={selectedStep === 0} onclick={() => selectStep(selectedStep - 1)} type="button">{translate('pagination.previous')}</Button>
+      <Button disabled={selectedStep >= steps.length - 1} onclick={() => selectStep(selectedStep + 1)} type="button">{translate('pagination.next')}</Button>
     </div>
   {:else if component.kind === 'split'}
     <div {...attributes} class={className} data-split-from={component.properties.splitFrom}>

@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { usePanelTranslator } from '../localization'
   import type { Snippet } from 'svelte'
 
   export interface TablePresentationColumn {
@@ -58,17 +59,19 @@
     cell,
     columns,
     containerClass,
-    emptyMessage = 'No records found.',
+    emptyMessage,
     error,
     getRecordId,
     groups,
     header,
     leading,
     loading = false,
+    locale,
     records,
     summaries,
     trailing,
   }: {
+    readonly locale?: string
     readonly caption: string
     readonly cell: Snippet<[Readonly<TRecord>, TablePresentationColumn]>
     readonly columns: readonly TablePresentationColumn[]
@@ -85,6 +88,7 @@
     readonly trailing?: TablePresentationPlacement<TRecord>
   } = $props()
 
+  const translate = usePanelTranslator(() => locale)
   const columnCount = $derived(columns.length + (leading ? 1 : 0) + (trailing ? 1 : 0))
   const responsiveClass = $derived(['hp-table-responsive hp:w-full hp:max-w-full hp:rounded-lg hp:border hp:bg-card', containerClass].filter(Boolean).join(' '))
 
@@ -99,7 +103,7 @@
   data-panels-component="data-table"
   data-slot="table-container"
 >
-  <Table containerProps={{ 'aria-label': `${caption} data`, role: 'region', tabindex: 0 }}>
+  <Table containerProps={{ 'aria-label': translate('tables.data', { caption }), role: 'region', tabindex: 0 }}>
     <TableCaption class="hp:sr-only">{caption}</TableCaption>
     <TableHeader>
       <TableRow>
@@ -112,16 +116,16 @@
     </TableHeader>
     <TableBody>
       {#if error}
-        <TableRow><TableCell colspan={Math.max(1, columnCount)}><Alert class="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>Unable to load table</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></TableCell></TableRow>
+        <TableRow><TableCell colspan={Math.max(1, columnCount)}><Alert class="hp-table-error" data-slot="table-error" variant="destructive"><AlertTitle>{translate('tables.loadFailed')}</AlertTitle><AlertDescription>{error}</AlertDescription></Alert></TableCell></TableRow>
       {:else if loading}
-        <TableRow><TableCell colspan={Math.max(1, columnCount)}><div aria-label="Loading records" aria-live="polite" class="hp-table-loading hp:space-y-2 hp:py-2" data-slot="table-loading" role="status"><Skeleton class="hp:h-8 hp:w-full" /><Skeleton class="hp:h-8 hp:w-full" /><Skeleton class="hp:h-8 hp:w-full" /></div></TableCell></TableRow>
+        <TableRow><TableCell colspan={Math.max(1, columnCount)}><div aria-label={translate('tables.loading')} aria-live="polite" class="hp-table-loading hp:space-y-2 hp:py-2" data-slot="table-loading" role="status"><Skeleton class="hp:h-8 hp:w-full" /><Skeleton class="hp:h-8 hp:w-full" /><Skeleton class="hp:h-8 hp:w-full" /></div></TableCell></TableRow>
       {:else if records.length === 0}
-        <TableRow><TableCell colspan={Math.max(1, columnCount)}><Empty class="hp-table-empty hp:min-h-40" data-slot="table-empty"><EmptyHeader><EmptyTitle>No records</EmptyTitle><EmptyDescription>{emptyMessage}</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>
+        <TableRow><TableCell colspan={Math.max(1, columnCount)}><Empty class="hp-table-empty hp:min-h-40" data-slot="table-empty"><EmptyHeader><EmptyTitle>{translate('tables.noRecords')}</EmptyTitle><EmptyDescription>{emptyMessage ?? translate('tables.empty')}</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>
       {:else if groups && groups.length > 0}
         {#each groups as group (group.key)}
           <TableRow class="hp-table-group">
             <TableCell colspan={columnCount}>
-              {#if group.selection}<Checkbox aria-label="Select group {group.title}" checked={group.selection.checked} disabled={group.selection.disabled} onCheckedChange={checked => group.selection?.onChange(checked === true)} />{/if}
+              {#if group.selection}<Checkbox aria-label={translate('tables.selectGroup', { group: group.title })} checked={group.selection.checked} disabled={group.selection.disabled} onCheckedChange={checked => group.selection?.onChange(checked === true)} />{/if}
               {#if group.collapsible}
                 <Button type="button" aria-expanded={!group.collapsed} onclick={group.onToggle}><ChevronDown aria-hidden="true" /><span>{group.title}</span><span class="hp-table-group-count">{group.records.length}</span></Button>
               {:else}
@@ -140,7 +144,7 @@
             {/each}
           {/if}
           {#each group.summaries ?? [] as summary (summary.id)}
-            <TableRow class="hp-table-group-summary"><TableCell colspan={columnCount}>{group.title} subtotal · {summary.label}: {summary.value}</TableCell></TableRow>
+            <TableRow class="hp-table-group-summary"><TableCell colspan={columnCount}>{translate('tables.subtotal', { group: group.title, label: summary.label })} {summary.value}</TableCell></TableRow>
           {/each}
         {/each}
       {:else}
@@ -154,7 +158,7 @@
       {/if}
     </TableBody>
     {#if !error && !loading && records.length > 0 && (summaries?.length ?? 0) > 0}
-      <TableFooter>{#each summaries ?? [] as summary (summary.id)}<TableRow class="hp-table-total-summary"><TableCell colspan={Math.max(1, columnCount)}>Total · {summary.label}: {summary.value}</TableCell></TableRow>{/each}</TableFooter>
+      <TableFooter>{#each summaries ?? [] as summary (summary.id)}<TableRow class="hp-table-total-summary"><TableCell colspan={Math.max(1, columnCount)}>{translate('tables.total', { label: summary.label })} {summary.value}</TableCell></TableRow>{/each}</TableFooter>
     {/if}
   </Table>
 </div>

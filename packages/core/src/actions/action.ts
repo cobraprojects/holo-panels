@@ -1,4 +1,5 @@
 import type { JsonObject } from '../protocol/json'
+import { createPanelTranslator } from '../translations/presentation'
 import { toJsonValue } from '../protocol/serialization'
 import { deepFreeze } from '../builders/deep-freeze'
 import { toSchemaManifest } from '../schemas/manifest'
@@ -33,12 +34,12 @@ async function modalSchema<TContext>(value: CompiledSchema<JsonObject, TContext>
 }
 
 export async function resolveActionState<TRecord, TInput extends JsonObject, TActor, TTenant, TServices>(
-  definition: Pick<ActionDefinition<TRecord, TInput, unknown, TActor, TTenant, TServices>, 'disabled' | 'label' | 'visible'>,
+  definition: Pick<ActionDefinition<TRecord, TInput, unknown, TActor, TTenant, TServices>, 'disabled' | 'label' | 'labelTranslationKey' | 'visible'>,
   context: ActionPresentationContext<TRecord, TInput, TActor, TTenant, TServices>,
 ): Promise<ActionResolvedState> {
   return Object.freeze({
     disabled: definition.disabled ? await resolve(definition.disabled, context) : false,
-    label: await resolve(definition.label, context),
+    label: definition.labelTranslationKey ? createPanelTranslator(context.locale ?? 'en')(definition.labelTranslationKey) : await resolve(definition.label, context),
     visible: definition.visible === undefined ? true : await resolve(definition.visible, context),
   })
 }
@@ -117,7 +118,9 @@ async function compileManifest<TRecord, TInput extends JsonObject, TResult, TAct
   const serialized = toJsonValue({
     ...presentation,
     ...(definition.mount === 'bulk' ? { deselectAfterCompletion: definition.bulk?.deselectAfterCompletion ?? false } : {}),
-    confirmation: definition.confirmation === undefined ? defaults?.confirmation ?? null : definition.confirmation,
+    confirmation: definition.confirmationTranslationKey
+      ? createPanelTranslator(context.locale ?? 'en')(definition.confirmationTranslationKey)
+      : definition.confirmation === undefined ? defaults?.confirmation ?? null : definition.confirmation,
     disabled: state.disabled,
     id: definition.id,
     kind: definition.kind,

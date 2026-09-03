@@ -58,6 +58,20 @@ function postContext<TPath extends FormFieldPath<PostValues>>(
 }
 
 describe('P6-A common field contracts', () => {
+  it('localizes built-in Holo validation without changing valid field values', async () => {
+    const definitions = [
+      { path: 'title', type: 'text', required: true },
+      { path: 'email', type: 'text', properties: { inputMode: 'email' } },
+      { path: 'age', type: 'number', properties: { minimum: 18 } },
+    ]
+    expect(await validateFormFields(definitions, { title: '', email: 'invalid', age: 12 }, 'ar')).toEqual({
+      title: ['هذا الحقل مطلوب.'],
+      email: ['أدخل عنوان بريد إلكتروني صحيحًا.'],
+      age: ['يجب ألا تقل القيمة عن 18.'],
+    })
+    expect(await validateFormFields(definitions, { title: 'عنوان', email: 'author@example.test', age: 21 }, 'ar')).toEqual({})
+  })
+
   it('preserves concrete nested form paths and values', () => {
     expectTypeOf<FormFieldPath<PostValues>>().toEqualTypeOf<
       'age' | 'color' | 'email' | 'profile.biography' | 'published' | 'publishedAt' | 'title'

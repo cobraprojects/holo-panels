@@ -131,7 +131,7 @@ describe('P12 Vue widget renderer', () => {
     expect(renderedStats[1]?.dataset.color).toBe('success')
     expect(renderedStats[1]?.style.getPropertyValue('--hp-widget-color')).toBe('')
     expect(container.querySelector('.hp-widget-sparkline polyline')?.getAttribute('stroke')).toBe('currentColor')
-    expect(container.querySelector('.hp-widget-sparkline')?.getAttribute('aria-label')).toBe('Revenue trend')
+    expect(container.querySelector('.hp-widget-sparkline')?.getAttribute('aria-label')).toBe('Revenue trend: 12, 18, 15')
     Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('Orders'))?.click()
     expect(action).toHaveBeenCalledWith('orders.open', expect.objectContaining({ id: 'orders' }))
     expect(container.querySelector('.hp-widget-chart svg')?.getAttribute('aria-hidden')).toBe('true')

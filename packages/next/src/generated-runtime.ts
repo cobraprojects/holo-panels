@@ -126,6 +126,7 @@ export function createGeneratedNextPanelsRuntime(registry: NextPanelServerRegist
       return await executeGeneratedResourceOperation(resource, {
         context: {
           actor: input.scope.actor,
+          locale: input.scope.locale,
           signal: input.scope.signal,
           tenant: input.scope.tenant,
           ...(input.scope.scopeTenantQuery ? { scopeTenantQuery: input.scope.scopeTenantQuery } : {}),

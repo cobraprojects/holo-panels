@@ -181,7 +181,7 @@ function errorEnvelope(id: string, cause: unknown, panel?: CompiledPanelDefiniti
       effects = Object.freeze([])
     }
   }
-  const notification = panel && effects.length === 0 ? panelErrorNotificationEffect(panel, error.status) : null
+  const notification = panel && effects.length === 0 ? panelErrorNotificationEffect(panel, error.status, locale?.locale) : null
   if (notification) effects = Object.freeze([...effects, notification])
   const body = {
       effects: [...effects],

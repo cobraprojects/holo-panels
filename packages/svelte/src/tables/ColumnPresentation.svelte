@@ -1,4 +1,5 @@
 <script lang="ts" generics="TRecord extends object">
+  import { usePanelLocale, usePanelTranslator } from '../localization'
   import Copy from 'lucide-svelte/icons/copy'
   import { Badge } from '../ui/badge'
   import { Button } from '../ui/button'
@@ -8,17 +9,21 @@
   import type { SvelteCustomColumnProps, SvelteTableColumn, SvelteTableColumnPath, SvelteTableColumnValue } from './types'
   import { formattedTableValue, safeTableColor, safeTableUrl, tableFormatters, tableIconName } from './presentation'
 
-  let { column, panelId, record, registry, value }: {
+  let { column, locale: localeOverride, panelId, record, registry, value }: {
+    readonly locale?: string
     readonly column: SvelteTableColumn<TRecord>
     readonly panelId?: string
     readonly record: Readonly<TRecord>
     readonly registry?: SvelteComponentRegistry
     readonly value: unknown
   } = $props()
+  const inheritedLocale = usePanelLocale()
+  const locale = () => localeOverride ?? inheritedLocale()
+  const translate = usePanelTranslator(locale)
   let copyStatus = $state('')
   const inferredValue = $derived(value as SvelteTableColumnValue<TRecord, SvelteTableColumnPath<TRecord>>)
   const formatters = $derived(tableFormatters(column.manifest))
-  const formatted = $derived(formattedTableValue(value, formatters))
+  const formatted = $derived(formattedTableValue(value, formatters, locale()))
   const rendered = $derived(column.render?.(inferredValue, record))
   const tooltip = $derived(formatters.find(formatter => formatter.kind === 'tooltip')?.value)
   const url = $derived(safeTableUrl(column.url?.(record)) ?? safeTableUrl(formatters.find(formatter => formatter.kind === 'url')?.value))
@@ -34,14 +39,14 @@
 
   async function copy(): Promise<void> {
     if (!globalThis.navigator?.clipboard) {
-      copyStatus = 'Copy unavailable'
+      copyStatus = translate('copy.unavailable')
       return
     }
     try {
       await globalThis.navigator.clipboard.writeText(formatted)
-      copyStatus = 'Copied'
+      copyStatus = translate('copy.copied')
     } catch {
-      copyStatus = 'Copy failed'
+      copyStatus = translate('copy.failed')
     }
   }
 </script>
@@ -58,7 +63,7 @@
     {/if}
   {:else if column.manifest.type === 'boolean' || column.manifest.type === 'icon'}
     {@const active = Boolean(value)}
-    <span role="img" aria-label={active ? 'Yes' : 'No'} data-icon={tableIconName(formatters, active)}>{active ? '✓' : '✕'}</span>
+    <span role="img" aria-label={translate(active ? 'filters.yes' : 'filters.no')} data-icon={tableIconName(formatters, active)}>{active ? '✓' : '✕'}</span>
   {:else if column.manifest.type === 'image'}
     {@const source = safeTableUrl(value)}
     {@const size = formatters.find(formatter => formatter.kind === 'size')?.pixels}
@@ -78,7 +83,7 @@
 {/snippet}
 
 {#if column.manifest.copyable && !column.manifest.inlineEditor}
-  <span class="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}<Button class="hp-table-copy" size="icon" variant="ghost" type="button" aria-label="Copy {column.manifest.label ?? column.manifest.path}" onclick={() => void copy()}><Copy aria-hidden="true" data-icon="copy" data-slot="icon" /></Button><span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span></span>
+  <span class="hp-table-cell" title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}<Button class="hp-table-copy" size="icon" variant="ghost" type="button" aria-label={translate('copy.label', { label: column.manifest.label ?? column.manifest.path })} onclick={() => void copy()}><Copy aria-hidden="true" data-icon="copy" data-slot="icon" /></Button><span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span></span>
 {:else}
   <span title={typeof tooltip === 'string' ? tooltip : undefined}>{#if url}<a href={url} rel={url.startsWith('/') ? undefined : 'noopener noreferrer'}>{@render content()}</a>{:else}{@render content()}{/if}</span>
 {/if}

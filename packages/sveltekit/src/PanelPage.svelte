@@ -26,6 +26,7 @@
     SvelteTenantSwitcher,
     createPanelNotificationTransport,
     createPanelTranslator,
+    providePanelsLocale,
     createPanelTenantSwitcherTransport,
     executePanelAuthRequest,
     syncDocumentLocale,
@@ -56,6 +57,7 @@
   type PanelColorMode = 'light' | 'dark' | 'system'
 
   let { data, notificationRealtime, registry }: PanelPageProps = $props()
+  providePanelsLocale(() => data.panel.locale, () => data.panel.direction)
   let searchState = $state<ClientSearchState | null>(null)
   let viewportWidth = $state(1280)
   let navigationOpen = $state(false)
@@ -65,7 +67,7 @@
   let shellElement = $state<HTMLDivElement>()
   setPanelsPortalTarget(() => shellElement)
   const initialPanelId = untrack(() => data.panel.manifest.id)
-  const translate = createPanelTranslator(untrack(() => data.panel.locale))
+  const translate = $derived(createPanelTranslator(data.panel.locale))
   const navigationId = `hp-panel-navigation-${initialPanelId}`
   const navigationToggleId = `hp-panel-navigation-toggle-${initialPanelId}`
   const tenantStore = new PanelShellStore(initialPanelId)
@@ -156,7 +158,7 @@
     debounceMilliseconds: data.panel.manifest.globalSearchConfiguration?.debounce,
     keybindings: data.panel.manifest.globalSearchConfiguration?.keybindings,
   }) : null)
-  const dashboardFilters = $derived(createDashboardFilterStore(browserTransport(), data.panel.manifest.id, data.page))
+  const dashboardFilters = $derived(createDashboardFilterStore(browserTransport(), data.panel.manifest.id, data.page, data.panel.locale))
   function widgetRuntime(widget: PanelPageProps['data']['widgets']['header'][number]) {
     const runtime = createWidgetRuntime({ applyEffects: response => effects.apply(response), dashboardFilters: dashboardFilters ? () => dashboardFilters.applied : undefined, panelId: data.panel.manifest.id, transport: browserTransport(), widget })
     return { dispose: runtime.dispose, store: runtime.store, tableController: runtime.table }
@@ -335,10 +337,11 @@
       void effects.apply({ data: null, effects: [...appliedEffects], id: `session-effects-${effectBatch}`, ok: true, protocolVersion: '1.0' }).catch(() => undefined)
     }
   })
+  $effect(() => registerPanelNotificationStore(data.panel.manifest.id, toastStore, data.panel.locale))
+
   onMount(() => {
     const panelElement = shellElement
     if (!panelElement) throw new Error('Panel shell did not mount')
-    const unregisterNotificationStore = registerPanelNotificationStore(data.panel.manifest.id, toastStore)
     const restoreDocumentLocale = syncDocumentLocale(data.panel, document)
     const storedColorMode = window.localStorage.getItem(`holo-panels:${data.panel.manifest.id}:color-mode`)
     if (isPanelColorMode(storedColorMode)) selectedColorMode = storedColorMode
@@ -361,7 +364,6 @@
       : undefined
     return () => {
       effects.dispose()
-      unregisterNotificationStore()
       restoreDocumentLocale()
       unregisterSpa?.()
       window.removeEventListener('keydown', searchShortcut)
@@ -516,7 +518,7 @@
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if dashboardFilters && registry}<DashboardFilters store={dashboardFilters} panelId={data.panel.manifest.id} {registry} />{/if}
     {#if headerWidgets.length > 0}
-      <DashboardRenderer label="Page header widgets" widgets={headerWidgets} width={viewportWidth} />
+      <DashboardRenderer label={translate('widgets.pageHeader')} widgets={headerWidgets} width={viewportWidth} />
     {/if}
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_HEADER_WIDGETS_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
@@ -534,7 +536,7 @@
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_BEFORE} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_START} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     {#if footerWidgets.length > 0}
-      <DashboardRenderer label="Page footer widgets" widgets={footerWidgets} width={viewportWidth} />
+      <DashboardRenderer label={translate('widgets.pageFooter')} widgets={footerWidgets} width={viewportWidth} />
     {/if}
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_END} manifest={data.panel.manifest} {registry} scopes={pageScopes} />
     <PanelsRenderHookRenderer data={data.page.data} hook={PanelsRenderHook.PAGE_FOOTER_WIDGETS_AFTER} manifest={data.panel.manifest} {registry} scopes={pageScopes} />

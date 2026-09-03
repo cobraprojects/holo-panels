@@ -6,6 +6,7 @@ import type {
   OptionQueryRequest,
   OptionValue,
 } from '@holo-js/panels-core'
+import { createPanelTranslator } from '../locales/presentation'
 import { createOptionCacheKey, OptionCache } from './cache'
 
 export interface OptionTransport<TValue extends OptionValue> {
@@ -173,7 +174,7 @@ export class OptionStore<TValue extends OptionValue> {
     } catch (error) {
       if (!this.isCurrent(controller, version)) return 'stale'
       if (controller.signal.aborted) return 'stale'
-      this.publish({ ...this.#state, loading: false, error: error instanceof Error ? error.message : 'Unable to load options.' })
+      this.publish({ ...this.#state, loading: false, error: error instanceof Error ? error.message : createPanelTranslator(this.#identity.locale)('fields.optionsFailed') })
       throw error
     }
   }

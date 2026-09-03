@@ -76,7 +76,7 @@ function AlertDialogHeader({
     <div
       data-slot="alert-dialog-header"
       className={cn(
-        "hp:grid hp:grid-rows-[auto_1fr] hp:place-items-center hp:gap-1.5 hp:text-center hp:has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr] hp:has-data-[slot=alert-dialog-media]:gap-x-6 hp:sm:group-data-[size=default]/alert-dialog-content:place-items-start hp:sm:group-data-[size=default]/alert-dialog-content:text-left hp:sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]",
+        "hp:grid hp:grid-rows-[auto_1fr] hp:place-items-center hp:gap-1.5 hp:text-center hp:has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr] hp:has-data-[slot=alert-dialog-media]:gap-x-6 hp:sm:group-data-[size=default]/alert-dialog-content:place-items-start hp:sm:group-data-[size=default]/alert-dialog-content:text-start hp:sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]",
         className
       )}
       {...props}

@@ -44,6 +44,14 @@ function actionManifest(readOnlyPresentation: JsonValue): JsonObject {
 }
 
 describe('read-only presentation', () => {
+  it('formats modal infolist values in the active panel locale', () => {
+    const stores = readOnlyPresentationStores({
+      entries: [{ actions: [], copyable: false, defaultValue: 1234.5, extraAttributes: {}, id: 'total', inlineLabel: false, label: 'Total', layout: {}, path: 'total', placeholder: null, properties: { formats: [{ kind: 'number' }] }, slots: {}, tooltip: null, type: 'text', url: null, visible: true }],
+      kind: 'infolist',
+    }, 'ar')
+    expect(stores[0]?.snapshot.formattedState).toBe(new Intl.NumberFormat('ar').format(1234.5))
+  })
+
   it('creates entry stores from a modal infolist manifest', () => {
     const stores = readOnlyPresentationStores({
       entries: [{

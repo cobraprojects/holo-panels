@@ -1,6 +1,6 @@
 import { FormClientState } from '@holo-js/forms/internal/client'
 import type { ValidationErrorBag } from '@holo-js/forms/schema'
-import { validateFormFields, type FormValidationField } from '@holo-js/panels-core'
+import { createPanelTranslator, validateFormFields, type FormValidationField } from '@holo-js/panels-core'
 import { formValidationErrors } from './validation'
 import { SchemaFocusIndex } from '../schema/focus'
 import {
@@ -136,6 +136,7 @@ function remapArrayRecord<TValue>(
 }
 
 export class FormStore<TValues extends object> {
+  #locale: string
   #editedPaths = new Set<string>()
   readonly #form: FormClientState<TValues>
   readonly #fields: readonly FormValidationField[]
@@ -152,6 +153,7 @@ export class FormStore<TValues extends object> {
   #serverPatchVersion = 0
 
   constructor(initialValues: TValues, options: FormStoreOptions<TValues> = {}) {
+    this.#locale = options.locale ?? 'en'
     const values = freezeValue(cloneFormValue(initialValues))
     this.#form = new FormClientState(values)
     this.#form.replace(values, values, {}, new Set())
@@ -172,6 +174,10 @@ export class FormStore<TValues extends object> {
       submitting: false,
       version: 0,
     })
+  }
+
+  setLocale(locale: string): void {
+    this.#locale = locale
   }
 
   get state(): FormState<TValues> {
@@ -365,13 +371,13 @@ export class FormStore<TValues extends object> {
       if (options.validate !== false) {
         const pendingErrors = Object.fromEntries(Object.entries(this.#state.pending)
           .filter(([, pending]) => pending)
-          .map(([path]) => [path, this.#state.errors[path]?.length ? this.#state.errors[path] : ['Wait for this field to finish before saving.']]))
+          .map(([path]) => [path, this.#state.errors[path]?.length ? this.#state.errors[path] : [createPanelTranslator(this.#locale)('validation.pending')]]))
         if (Object.keys(pendingErrors).length) {
           blocked = true
           return { errors: { ...this.#state.errors, ...pendingErrors }, focusFirstError: true }
         }
       }
-      const errors = options.validate === false ? {} : await validateFormFields(this.validationFields(), context.values)
+      const errors = options.validate === false ? {} : await validateFormFields(this.validationFields(), context.values, this.#locale)
       if (Object.keys(errors).length) return { errors, focusFirstError: true }
       if (context.signal.aborted) return {}
       try {
@@ -401,7 +407,7 @@ export class FormStore<TValues extends object> {
     if (!fields.length) return
     const sequence = ++this.#correctionSequence
     const values = this.#state.values
-    void validateFormFields(fields, values).then(errors => {
+    void validateFormFields(fields, values, this.#locale).then(errors => {
       if (sequence !== this.#correctionSequence || values !== this.#state.values || this.#state.submitting) return
       this.batch(fields.map(field => ({ kind: 'errors', path: field.path, errors: errors[field.path] ?? [] })))
     })

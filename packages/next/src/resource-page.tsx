@@ -838,7 +838,8 @@ function ResourceForm({ basePath, createRedirect, data, editRedirect, operation,
     }
     return values
   }, [configuredFields, formManifest, record])
-  const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { dependencies: dependencyDefinitions(formManifest), fields: configuredFields }), [configuredFields, formManifest, initialValues])
+  const { locale: formLocale } = useContext(ResourceLocaleContext)
+  const form = useMemo(() => new FormStore<ResourceValues>(initialValues, { locale: formLocale, dependencies: dependencyDefinitions(formManifest), fields: configuredFields }), [configuredFields, formManifest, formLocale, initialValues])
   const state = useFormStore<ResourceValues>(form)
   const [reactiveValues, setReactiveValues] = useState<ResourceValues | null>(null)
   const previousLifecycleValues = useRef(new WeakMap<FormStore<ResourceValues>, ResourceValues>())

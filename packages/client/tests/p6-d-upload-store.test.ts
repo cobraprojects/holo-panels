@@ -90,6 +90,19 @@ async function settled(): Promise<void> {
 }
 
 describe('upload client store', () => {
+  it('reports policy rejection in the active locale without starting an upload', () => {
+    const transport = adapter()
+    const create = vi.spyOn(transport, 'create')
+    const store = createUploadStore({ adapter: transport, context, locale: 'ar', policy })
+    expect(store.add([file('unsafe.exe')])).toEqual([])
+    expect(store.state.error).toBe('امتداد الملف غير مسموح به')
+    expect(store.state.items).toEqual([])
+    expect(create).not.toHaveBeenCalled()
+    store.setLocale('en')
+    store.add([file('unsafe.exe')])
+    expect(store.state.error).toBe('File extension is not allowed')
+  })
+
   it('keeps upload failures, pending work, completion, and removal in the resource form', async () => {
     const form = new FormStore<{ avatar: unknown }>({ avatar: '' })
     const store = createUploadStore({ adapter: adapter(), context, policy })

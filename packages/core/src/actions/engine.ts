@@ -1,3 +1,4 @@
+import { createPanelTranslator } from '../translations/presentation'
 import type { JsonObject } from '../protocol/json'
 import { isValidationException, ValidationException } from '@holo-js/forms/schema'
 import { formValidationFields, validateFormFields } from '../fields/validation'
@@ -94,7 +95,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   execute<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly locale?: string, readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
   ): Promise<ActionExecutionResult<TRecordId, TResult>> {
     const now = Date.now()
     this.pruneExecutions(now)
@@ -144,7 +145,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   private async run<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly locale?: string, readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
   ): Promise<ActionExecutionResult<TRecordId, TResult>> {
     if (request.mount !== definition.mount) throw new Error('Action requests cannot change their compiled mount')
     const recordIds = request.recordIds ?? []
@@ -198,7 +199,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   private async executeBulk<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly locale?: string, readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
   ): Promise<ActionExecutionResult<TRecordId, TResult>> {
     const recordIds = request.recordIds ?? []
     const usesRecordHandler = definition.kind !== 'custom' && definition.usesDefaultHandler !== false
@@ -292,7 +293,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   private async executeRecord<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly locale?: string, readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     recordId: TRecordId,
     record: TRecord | null,
     selectedRecords: readonly TRecord[],
@@ -316,7 +317,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
 
   private context<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
-    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly locale?: string, readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
     record: TRecord | null,
     selectedRecords: readonly TRecord[] = Object.freeze([]),
     selectedRecordIds: readonly TRecordId[] = Object.freeze([]),
@@ -334,7 +335,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     await this.enforceRateLimit(definition, context)
     const mutated = definition.mutateInput ? await definition.mutateInput(structuredClone(input), context) : structuredClone(input)
     const operation = async (): Promise<TResult> => {
-      const errors = await validateFormFields(formValidationFields(definition.modal?.schema), mutated)
+      const errors = await validateFormFields(formValidationFields(definition.modal?.schema), mutated, context.locale)
       if (Object.keys(errors).length) throw new ValidationException({ ...errors })
       await definition.lifecycle?.before?.(mutated, context)
       const result = await definition.handle(mutated, context)
@@ -360,7 +361,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   private async authorizeReplay<TInput extends JsonObject, TResult>(
     definition: ActionDefinition<TRecord, TInput, TResult, TActor, TTenant, TServices>,
     request: ActionExecutionRequest<TInput, TRecordId>,
-    scope: { readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
+    scope: { readonly locale?: string, readonly owner?: object, readonly actor: TActor, readonly services: TServices, readonly signal: AbortSignal, readonly tenant: TTenant },
   ): Promise<void> {
     if (request.mount !== definition.mount) throw new ActionExecutionError('denied', 'The action mount is no longer registered')
     const ids = request.recordIds ?? []
@@ -422,9 +423,10 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
       }
     }
     if (!definition.successNotification) {
+      const translate = createPanelTranslator(executions[0]?.context.locale ?? 'en')
       return [...this.notificationEffects([panelNotification(`${definition.id}.succeeded`)
-        .title('Action completed')
-        .body('The operation completed successfully.')
+        .title(translate('feedback.actionCompleted'))
+        .body(translate('feedback.completed'))
         .status('success')
         .presentation()]), ...navigation]
     }
@@ -447,9 +449,10 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
     contexts: readonly ActionContext<TRecord, TActor, TTenant, TServices>[],
   ): Promise<readonly Effect[]> {
     if (!definition.failureNotification) {
+      const translate = createPanelTranslator(contexts[0]?.locale ?? 'en')
       return this.notificationEffects([panelNotification(`${definition.id}.failed`)
-        .title('Action failed')
-        .body('The operation could not be completed.')
+        .title(translate('feedback.actionFailed'))
+        .body(translate('feedback.failed'))
         .status('danger')
         .presentation()])
     }

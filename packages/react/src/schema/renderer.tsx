@@ -1,3 +1,5 @@
+import type { PanelTranslator } from '@holo-js/panels-client'
+import { usePanelTranslator } from '../localization'
 import {
   Fragment,
   createElement,
@@ -140,19 +142,20 @@ interface ComponentRendererProps<TValues extends object = Record<string, unknown
 }
 
 function TabsRenderer<TValues extends object>({ component, ...props }: ComponentRendererProps<TValues>): ReactNode {
+  const translate = usePanelTranslator()
   const children = component.children.filter(child => child.visible)
   const persistence = component.properties.persistenceKey
   const [selected, select] = usePersistentIndex(persistence ? storageKey('tabs', persistence) : undefined, 0, children.length)
   const instanceId = useId().replaceAll(':', '')
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || children.length === 0) return
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? children.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + children.length) % children.length
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? children.length - 1 : (index + ((event.key === 'ArrowRight') !== (((event.currentTarget as HTMLElement).closest('[dir]')?.getAttribute('dir') ?? getComputedStyle(event.currentTarget as HTMLElement).direction) === 'rtl') ? 1 : -1) + children.length) % children.length
     event.preventDefault()
     select(next)
     event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
   }
   return <div className="hp-schema-tabs">
-    <div aria-label={component.properties.label ?? component.properties.heading ?? 'Tabs'} role="tablist">
+    <div aria-label={component.properties.label ?? component.properties.heading ?? translate('schemas.tabs')} role="tablist">
       {children.map((child, index) => <Button
         aria-controls={`${instanceId}-${child.id}-panel`}
         aria-selected={index === selected}
@@ -163,7 +166,7 @@ function TabsRenderer<TValues extends object>({ component, ...props }: Component
         role="tab"
         tabIndex={index === selected ? 0 : -1}
         type="button"
-      >{child.properties.label ?? `Tab ${index + 1}`}</Button>)}
+      >{child.properties.label ?? translate('schemas.tab', { number: index + 1 })}</Button>)}
     </div>
     {children.map((child, index) => <div
       aria-labelledby={`${instanceId}-${child.id}-tab`}
@@ -176,20 +179,21 @@ function TabsRenderer<TValues extends object>({ component, ...props }: Component
 }
 
 function WizardRenderer<TValues extends object>({ component, ...props }: ComponentRendererProps<TValues>): ReactNode {
+  const translate = usePanelTranslator()
   const children = component.children.filter(child => child.visible)
   const persistence = component.properties.persistenceKey
   const [selected, select] = usePersistentIndex(persistence ? storageKey('wizard', persistence) : undefined, 0, children.length)
   const active = children[selected]
   return <div className="hp-schema-wizard">
-    <nav aria-label={component.properties.label ?? component.properties.heading ?? 'Wizard progress'}>
+    <nav aria-label={component.properties.label ?? component.properties.heading ?? translate('schemas.wizardProgress')}>
       <ol>{children.map((child, index) => <li aria-current={index === selected ? 'step' : undefined} key={child.key}>
-        <Button onClick={() => select(index)} type="button">{child.properties.label ?? `Step ${index + 1}`}</Button>
+        <Button onClick={() => select(index)} type="button">{child.properties.label ?? translate('schemas.step', { number: index + 1 })}</Button>
       </li>)}</ol>
     </nav>
     {active ? <ComponentRenderer component={active} {...props} /> : null}
     {children.length > 1 ? <div className="hp-schema-wizard-navigation">
-      <Button disabled={selected === 0} onClick={() => select(selected - 1)} type="button">Previous</Button>
-      <Button disabled={selected === children.length - 1} onClick={() => select(selected + 1)} type="button">Next</Button>
+      <Button disabled={selected === 0} onClick={() => select(selected - 1)} type="button">{translate('pagination.previous')}</Button>
+      <Button disabled={selected === children.length - 1} onClick={() => select(selected + 1)} type="button">{translate('pagination.next')}</Button>
     </div> : null}
   </div>
 }
@@ -209,18 +213,18 @@ function slot(component: SchemaComponentManifest, placement: keyof SchemaCompone
   })
 }
 
-function semanticContent<TValues extends object>(component: SchemaComponentManifest, content: ReactNode, props: ComponentRendererProps<TValues>, attributes: HTMLAttributes<HTMLElement>): ReactNode {
+function semanticContent<TValues extends object>(component: SchemaComponentManifest, content: ReactNode, props: ComponentRendererProps<TValues>, attributes: HTMLAttributes<HTMLElement>, translate: PanelTranslator): ReactNode {
   const heading = component.properties.heading
   const body = <Fragment>{heading ? <h2>{icon(component)}{heading}</h2> : null}{description(component)}{content}</Fragment>
   if (component.kind === 'grid') return <div {...attributes} className={classes('hp-schema-node hp-schema-grid', attributes.className)} style={layoutStyle(component)}>{content}</div>
-  if (component.kind === 'section') return <section {...attributes} className={classes('hp-schema-node hp-schema-section', attributes.className)} data-compact={component.properties.compact || undefined} data-grow={component.properties.grow === false ? 'false' : undefined} style={layoutStyle(component)}><Collapsible component={component} label={heading ?? 'Section'}>{body}</Collapsible></section>
-  if (component.kind === 'group') return <div {...attributes} className={classes('hp-schema-node hp-schema-group', attributes.className)} style={layoutStyle(component)}><Collapsible component={component} label={component.properties.label ?? heading ?? 'Group'}>{body}</Collapsible></div>
-  if (component.kind === 'fieldset') return <fieldset {...attributes} className={classes('hp-schema-node hp-schema-fieldset', attributes.className)} data-contained={component.properties.contained === false ? 'false' : undefined} data-grow={component.properties.grow === false ? 'false' : undefined} style={layoutStyle(component)}><legend>{component.properties.label ?? heading ?? 'Fields'}</legend><Collapsible component={component} label={component.properties.label ?? heading ?? 'Fields'}>{description(component)}{content}</Collapsible></fieldset>
+  if (component.kind === 'section') return <section {...attributes} className={classes('hp-schema-node hp-schema-section', attributes.className)} data-compact={component.properties.compact || undefined} data-grow={component.properties.grow === false ? 'false' : undefined} style={layoutStyle(component)}><Collapsible component={component} label={heading ?? translate('schemas.section')}>{body}</Collapsible></section>
+  if (component.kind === 'group') return <div {...attributes} className={classes('hp-schema-node hp-schema-group', attributes.className)} style={layoutStyle(component)}><Collapsible component={component} label={component.properties.label ?? heading ?? translate('schemas.group')}>{body}</Collapsible></div>
+  if (component.kind === 'fieldset') return <fieldset {...attributes} className={classes('hp-schema-node hp-schema-fieldset', attributes.className)} data-contained={component.properties.contained === false ? 'false' : undefined} data-grow={component.properties.grow === false ? 'false' : undefined} style={layoutStyle(component)}><legend>{component.properties.label ?? heading ?? translate('schemas.fields')}</legend><Collapsible component={component} label={component.properties.label ?? heading ?? translate('schemas.fields')}>{description(component)}{content}</Collapsible></fieldset>
   if (component.kind === 'tabs') return <div {...attributes} className={classes('hp-schema-node', attributes.className)} style={layoutStyle(component)}><TabsRenderer {...props} /></div>
   if (component.kind === 'wizard') return <div {...attributes} className={classes('hp-schema-node', attributes.className)} style={layoutStyle(component)}><WizardRenderer {...props} /></div>
   if (component.kind === 'split') return <div {...attributes} className={classes('hp-schema-node hp-schema-split', attributes.className)} data-grow={component.properties.grow === false ? 'false' : undefined} data-split-from={component.properties.splitFrom ?? 'default'} style={layoutStyle(component)}>{content}</div>
   if (component.kind === 'callout') return <aside {...attributes} className={classes('hp-schema-node hp-schema-callout', attributes.className)} data-color={component.properties.color ?? undefined} role="note" style={layoutStyle(component)}>{body}</aside>
-  if (component.kind === 'empty-state') return <section {...attributes} aria-label={heading ?? 'Empty state'} className={classes('hp-schema-node hp-schema-empty-state', attributes.className)} style={layoutStyle(component)}>{body}</section>
+  if (component.kind === 'empty-state') return <section {...attributes} aria-label={heading ?? translate('schemas.emptyState')} className={classes('hp-schema-node hp-schema-empty-state', attributes.className)} style={layoutStyle(component)}>{body}</section>
   if (component.kind === 'entry' || component.kind === 'field' || component.kind === 'filter' || component.kind === 'widget') {
     return <div {...attributes} className={classes(`hp-schema-node hp-schema-${component.kind}`, attributes.className)} data-schema-leaf={component.kind} style={layoutStyle(component)}>{content}</div>
   }
@@ -229,6 +233,7 @@ function semanticContent<TValues extends object>(component: SchemaComponentManif
 }
 
 function ComponentRenderer<TValues extends object>({ component, panelId, registry, renderContent, schema }: ComponentRendererProps<TValues>): ReactNode {
+  const translate = usePanelTranslator()
   if (!component.visible) return null
   const attributes = safeAttributes(component.extraAttributes)
   const children = <Fragment>
@@ -239,7 +244,7 @@ function ComponentRenderer<TValues extends object>({ component, panelId, registr
   </Fragment>
   return <Fragment>
     {slot(component, 'above', registry, panelId)}
-    {semanticContent(component, children, { component, panelId, registry, renderContent, schema }, attributes)}
+    {semanticContent(component, children, { component, panelId, registry, renderContent, schema }, attributes, translate)}
     {slot(component, 'below', registry, panelId)}
   </Fragment>
 }

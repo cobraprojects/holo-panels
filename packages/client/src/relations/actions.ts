@@ -1,4 +1,4 @@
-import { builtInActionPresentation, toJsonValue, type ActionManifest, type JsonObject, type JsonValue } from '@holo-js/panels-core'
+import { builtInActionPresentation, builtInActionTranslationKeys, createPanelTranslator, toJsonValue, type ActionManifest, type JsonObject, type JsonValue } from '@holo-js/panels-core'
 import { ClientActionStore } from '../actions/store'
 import { actionManifestCollection, isActionManifest } from '../actions/manifest'
 import { OptionStore } from '../options/store'
@@ -40,15 +40,17 @@ export function relationActionPayload(request: ClientRelationActionRequest): Jso
   }
 }
 
-function defaults(manager: ClientRelationManager, record?: ClientRelationRecord): readonly ActionManifest[] {
+function defaults(manager: ClientRelationManager, record: ClientRelationRecord | undefined, locale: string): readonly ActionManifest[] {
   const kinds = record ? ['view', 'edit', 'delete', 'dissociate', 'detach', 'editPivot'] : ['create', 'associate', 'attach']
   return manager.operations.filter(operation => kinds.includes(operation) && operation !== 'list').map(operation => {
     const presentation = builtInActionPresentation(operation)
-    return { badge: null, color: presentation?.color ?? null, confirmation: presentation?.confirmation ?? null, disabled: false, icon: presentation?.icon ?? null, id: operation === 'editPivot' ? 'edit-pivot' : operation, kind: operation as ActionManifest['kind'], label: operation === 'editPivot' ? 'Edit pivot' : operation.charAt(0).toUpperCase() + operation.slice(1), modal: null, mount: record ? 'record' : 'page', size: 'medium', tooltip: null, type: operation, visible: true }
+    const keys = builtInActionTranslationKeys(operation)
+    const translate = createPanelTranslator(locale)
+    return { badge: null, color: presentation?.color ?? null, confirmation: keys?.confirmation ? translate(keys.confirmation) : presentation?.confirmation ?? null, disabled: false, icon: presentation?.icon ?? null, id: operation === 'editPivot' ? 'edit-pivot' : operation, kind: operation as ActionManifest['kind'], label: keys ? translate(keys.label) : operation === 'editPivot' ? 'Edit pivot' : operation.charAt(0).toUpperCase() + operation.slice(1), modal: null, mount: record ? 'record' : 'page', size: 'medium', tooltip: null, type: operation, visible: true }
   })
 }
 
-function formAction(action: ActionManifest, manager: ClientRelationManager, record: ClientRelationRecord | undefined, searchable: boolean): ActionManifest {
+function formAction(action: ActionManifest, manager: ClientRelationManager, record: ClientRelationRecord | undefined, searchable: boolean, locale: string): ActionManifest {
   if (action.modal?.schema || !['attach', 'associate', 'create', 'edit', 'editPivot', 'view'].includes(action.kind)) return action
   const pivot = action.kind === 'attach' || action.kind === 'editPivot'
   const fields = action.kind === 'view' ? manager.columns.map(column => ({ id: column.key, label: column.label, required: false, type: 'text' })) : pivot ? manager.pivotFields ?? [] : action.kind === 'create' || action.kind === 'edit' ? manager.fields ?? [] : []
@@ -59,7 +61,7 @@ function formAction(action: ActionManifest, manager: ClientRelationManager, reco
     properties: field.type === 'number' ? { inputMode: 'number' } : field.type === 'date-time' ? { mode: 'date-time' } : {},
     readOnly: action.kind === 'view', required: field.required, type: field.type === 'number' ? 'text' : field.type === 'date-time' ? 'date' : field.type,
   }))
-  if (action.kind === 'associate' || action.kind === 'attach') schemaFields.unshift({ key: 'relatedId', kind: 'field', label: searchable ? 'Related record' : 'Related record ID', path: 'relatedId', properties: { preload: true, searchable }, required: true, type: searchable ? 'select' : 'text' })
+  if (action.kind === 'associate' || action.kind === 'attach') schemaFields.unshift({ key: 'relatedId', kind: 'field', label: createPanelTranslator(locale)(searchable ? 'relations.record' : 'relations.recordId'), path: 'relatedId', properties: { preload: true, searchable }, required: true, type: searchable ? 'select' : 'text' })
   return { ...action, modal: {
     alignment: 'center', autofocus: true, cancelActionLabel: null, closeByClickingAway: true, closeByEscaping: true, content: null, description: null, footer: null, heading: null, icon: null, iconColor: null, nestedActions: [], schema: { fields: schemaFields }, slideOver: false, stickyFooter: false, stickyHeader: false, submitActionLabel: action.label, width: 'medium',
     ...action.modal,
@@ -67,25 +69,26 @@ function formAction(action: ActionManifest, manager: ClientRelationManager, reco
   } }
 }
 
-export function relationActionManifests(manager: ClientRelationManager, record?: ClientRelationRecord, searchable = false): readonly ActionManifest[] {
+export function relationActionManifests(manager: ClientRelationManager, record?: ClientRelationRecord, searchable = false, locale = 'en'): readonly ActionManifest[] {
   const configured = record ? manager.recordActions?.find(item => String(item.recordId) === String(record.id))?.actions ?? (manager.recordActions ? [] : undefined) : manager.actions
-  return (configured ?? defaults(manager, record)).map(action => formAction(action, manager, record, searchable))
+  return (configured ?? defaults(manager, record, locale)).map(action => formAction(action, manager, record, searchable, locale))
 }
 
 export function createRelationActionHost(options: {
   readonly execute: (request: ClientRelationActionRequest, signal: AbortSignal) => void | Promise<void>
   readonly loadOptions?: (managerId: string, search: string) => Promise<readonly ClientRelationOption[]>
+  readonly locale?: string
   readonly manager: ClientRelationManager
   readonly panelId?: string
   readonly record?: ClientRelationRecord
   readonly selectedIds?: readonly (number | string)[]
   readonly selection?: () => TableSelectionPayload<number | string>
 }) {
-  const actions = relationActionManifests(options.manager, options.record, !!options.loadOptions).map(action => action.mount === 'bulk' && !options.selection && !options.selectedIds?.length ? { ...action, disabled: true } : action)
+  const actions = relationActionManifests(options.manager, options.record, !!options.loadOptions, options.locale).map(action => action.mount === 'bulk' && !options.selection && !options.selectedIds?.length ? { ...action, disabled: true } : action)
   const store = new ClientActionStore({
     createIdempotencyKey: () => crypto.randomUUID(),
     createOptionStore: (field, actionId) => field.path === 'relatedId' && options.loadOptions ? new OptionStore({
-      fieldId: field.path, locale: 'en', panelId: options.panelId ?? 'default', resourceId: `${options.manager.id}:${actionId}`, tenantKey: crypto.randomUUID(),
+      fieldId: field.path, locale: options.locale ?? 'en', panelId: options.panelId ?? 'default', resourceId: `${options.manager.id}:${actionId}`, tenantKey: crypto.randomUUID(),
       transport: {
         list: async request => ({ hasMore: false, options: await options.loadOptions!(options.manager.id, request.search), page: request.page, perPage: request.perPage }),
         hydrateSelected: async (_request, values) => (await options.loadOptions!(options.manager.id, '')).filter(option => values.includes(option.value)),

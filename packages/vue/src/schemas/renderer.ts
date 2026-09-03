@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import { Button } from '../internal-ui'
 import {
   defineComponent,
@@ -160,6 +161,7 @@ const VueSchemaNode = defineComponent({
     schemaId: { type: String, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator()
     const collapse = componentProps.component.properties.collapse
     const collapseKey = storageKey(componentProps.schemaId, 'collapse', collapse?.persistenceKey)
     const open = ref(!(collapse?.collapsed ?? false))
@@ -207,7 +209,7 @@ const VueSchemaNode = defineComponent({
           ? 0
           : event.key === 'End'
             ? children.length - 1
-            : (index + (event.key === 'ArrowRight' ? 1 : -1) + children.length) % children.length
+            : (index + ((event.key === 'ArrowRight') !== (((event.currentTarget as HTMLElement).closest('[dir]')?.getAttribute('dir') ?? getComputedStyle(event.currentTarget as HTMLElement).direction) === 'rtl') ? 1 : -1) + children.length) % children.length
         event.preventDefault()
         const tablist = (event.currentTarget as HTMLElement).parentElement
         select(next)
@@ -216,7 +218,7 @@ const VueSchemaNode = defineComponent({
       return h('div', attributes, [
         slot(props, 'before'),
         props.renderContent?.({ component: props.component, panelId: props.panelId, schema: props.schema }),
-        h('div', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? 'Tabs', role: 'tablist' }, children.map((child, index) => h(Button, {
+        h('div', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? translate('schemas.tabs'), role: 'tablist' }, children.map((child, index) => h(Button, {
           'aria-controls': elementId(props.schemaId, child.id, 'panel'),
           'aria-selected': String(index === activeIndex),
           id: elementId(props.schemaId, child.id, 'tab'),
@@ -226,7 +228,7 @@ const VueSchemaNode = defineComponent({
           type: 'button',
           onClick: () => select(index),
           onKeydown: (event: KeyboardEvent) => onKeydown(event, index),
-        }, child.properties.label ?? `Tab ${index + 1}`))),
+        }, child.properties.label ?? translate('schemas.tab', { number: index + 1 })))),
         ...children.map((child, index) => h('div', {
           'aria-labelledby': elementId(props.schemaId, child.id, 'tab'),
           hidden: index !== activeIndex,
@@ -246,15 +248,15 @@ const VueSchemaNode = defineComponent({
       return h('div', attributes, [
         slot(props, 'before'),
         props.renderContent?.({ component: props.component, panelId: props.panelId, schema: props.schema }),
-        h('nav', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? 'Wizard progress' }, [
+        h('nav', { 'aria-label': props.component.properties.label ?? props.component.properties.heading ?? translate('schemas.wizardProgress') }, [
           h('ol', children.map((child, index) => h('li', { 'aria-current': index === activeIndex ? 'step' : undefined, key: child.key }, [
-            h(Button, { type: 'button', onClick: () => select(index) }, child.properties.label ?? `Step ${index + 1}`),
+            h(Button, { type: 'button', onClick: () => select(index) }, child.properties.label ?? translate('schemas.step', { number: index + 1 })),
           ]))),
         ]),
         active ? h(VueSchemaNode, { ...props, component: active, key: active.key }) : null,
         children.length > 1 ? h('div', { class: 'hp-schema-wizard-navigation' }, [
-          h(Button, { disabled: activeIndex === 0, type: 'button', onClick: () => select(activeIndex - 1) }, 'Previous'),
-          h(Button, { disabled: activeIndex === children.length - 1, type: 'button', onClick: () => select(activeIndex + 1) }, 'Next'),
+          h(Button, { disabled: activeIndex === 0, type: 'button', onClick: () => select(activeIndex - 1) }, translate('pagination.previous')),
+          h(Button, { disabled: activeIndex === children.length - 1, type: 'button', onClick: () => select(activeIndex + 1) }, translate('pagination.next')),
         ]) : null,
         slot(props, 'after'),
       ])
@@ -287,14 +289,14 @@ const VueSchemaNode = defineComponent({
       else if (component.kind === 'section') rendered = h('section', attributes, collapsibleBody(props, body, heading ?? 'section'))
       else if (component.kind === 'group') rendered = h('div', { ...attributes, role: 'group' }, collapsibleBody(props, body, component.properties.label ?? heading ?? 'group'))
       else if (component.kind === 'fieldset') rendered = h('fieldset', attributes, [
-        h('legend', component.properties.label ?? heading ?? 'Fields'),
+        h('legend', component.properties.label ?? heading ?? translate('schemas.fields')),
         ...collapsibleBody(props, [description(component), ...children], component.properties.label ?? heading ?? 'fields'),
       ])
       else if (component.kind === 'tabs') rendered = tabs(props, attributes)
       else if (component.kind === 'wizard') rendered = wizard(props, attributes)
       else if (component.kind === 'split') rendered = h('div', { ...attributes, 'data-split-from': component.properties.splitFrom ?? 'default' }, children)
       else if (component.kind === 'callout') rendered = h('aside', { ...attributes, 'data-color': component.properties.color ?? undefined, role: 'note' }, body)
-      else if (component.kind === 'empty-state') rendered = h('section', { ...attributes, 'aria-label': heading ?? 'Empty state' }, body)
+      else if (component.kind === 'empty-state') rendered = h('section', { ...attributes, 'aria-label': heading ?? translate('schemas.emptyState') }, body)
       else if (component.kind === 'custom') rendered = h('div', attributes, [custom(props, children)])
       else rendered = h('div', attributes, [description(component), ...children])
       return [slot(props, 'above'), rendered, slot(props, 'below')]

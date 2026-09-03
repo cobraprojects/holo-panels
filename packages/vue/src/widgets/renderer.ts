@@ -1,3 +1,5 @@
+import type { PanelTranslator } from '@holo-js/panels-client'
+import { usePanelTranslator } from '../localization'
 import { VueTableRenderer } from '../tables/renderer'
 import { widgetExtensionRendererName } from '@holo-js/panels-client'
 import {
@@ -11,7 +13,6 @@ import {
   CardTitle,
   Checkbox,
   Empty,
-  EmptyDescription,
   EmptyHeader,
   EmptyTitle,
   Field,
@@ -95,20 +96,20 @@ function sparkline(values: readonly number[], label: string): VNode | null {
   ])
 }
 
-function statContent(stat: VueWidgetStat, props: VueWidgetRendererProps): VNode {
+function statContent(stat: VueWidgetStat, props: VueWidgetRendererProps, translate: PanelTranslator): VNode {
   const content = [
     stat.icon ? PanelsIcon(stat.icon) : null,
     h('span', { class: 'hp-widget-stat__label' }, stat.label),
     h('strong', { class: 'hp-widget-stat__value' }, String(stat.value)),
     stat.description ? h('span', { class: 'hp-widget-stat__description' }, stat.description) : null,
-    stat.trend ? h('span', { class: `hp-widget-stat__trend hp-widget-stat__trend--${stat.trend}` }, `Trend: ${stat.trend}`) : null,
+    stat.trend ? h('span', { class: `hp-widget-stat__trend hp-widget-stat__trend--${stat.trend}` }, translate('widgets.trendDescription', { trend: translate(`widgets.trend.${stat.trend}`) })) : null,
     stat.progress ? h('progress', { 'aria-label': stat.label, class: 'hp-widget-progress hp:w-full', value: stat.progress.value, max: stat.progress.max }, `${stat.progress.value} / ${stat.progress.max}`) : null,
-    sparkline(stat.chart, `${stat.label} trend`),
+    sparkline(stat.chart, translate('widgets.trendValues', { label: stat.label, values: stat.chart.join(', ') })),
   ]
   const url = safeExternalUrl(stat.url)
   const appearance = panelColorAppearance(stat.color)
   const attributes = {
-    class: 'hp-widget-stat hp:h-auto hp:w-full hp:whitespace-normal hp:items-start hp:flex hp:flex-col hp:gap-2 hp:text-left',
+    class: 'hp-widget-stat hp:h-auto hp:w-full hp:whitespace-normal hp:items-start hp:flex hp:flex-col hp:gap-2 hp:text-start',
     'data-color': appearance.attribute,
     style: { '--hp-widget-color': appearance.custom, color: panelColorValue(stat.color) },
   }
@@ -127,9 +128,9 @@ function statContent(stat: VueWidgetStat, props: VueWidgetRendererProps): VNode 
   return h(Card, attributes, () => h(CardContent, {}, () => content))
 }
 
-function renderStats(data: VueStatsWidgetData, props: VueWidgetRendererProps): VNodeChild {
+function renderStats(data: VueStatsWidgetData, props: VueWidgetRendererProps, translate: PanelTranslator): VNodeChild {
   return data.stats.length > 0
-    ? h('div', { class: 'hp-widget-stats hp:grid hp:gap-4 hp:sm:grid-cols-2 hp:lg:grid-cols-4' }, data.stats.map(stat => h('div', { key: stat.id }, [statContent(stat, props)])))
+    ? h('div', { class: 'hp-widget-stats hp:grid hp:gap-4 hp:sm:grid-cols-2 hp:lg:grid-cols-4' }, data.stats.map(stat => h('div', { key: stat.id }, [statContent(stat, props, translate)])))
     : null
 }
 
@@ -149,14 +150,14 @@ function chartMarks(data: VueChartWidgetData): VNode[] {
   }))
 }
 
-function renderChart(data: VueChartWidgetData): VNodeChild {
+function renderChart(data: VueChartWidgetData, translate: PanelTranslator): VNodeChild {
   const labels = chartLabels(data)
   return h('figure', { class: `hp-widget-chart hp-widget-chart--${data.type}` }, [
     h('svg', { 'aria-hidden': 'true', focusable: 'false', class: 'hp:h-48 hp:w-full', viewBox: '0 0 100 100' }, chartMarks(data)),
     h('figcaption', [h('strong', data.summary), h('span', data.description)]),
     h(Table, { 'aria-label': data.summary }, () => [
       h(TableCaption, {}, () => data.summary),
-      h(TableHeader, {}, () => h(TableRow, {}, () => [h(TableHead, {}, () => 'Category'), ...data.series.map(series => h(TableHead, { key: series.id }, () => series.label))])),
+      h(TableHeader, {}, () => h(TableRow, {}, () => [h(TableHead, {}, () => translate('widgets.label')), ...data.series.map(series => h(TableHead, { key: series.id }, () => series.label))])),
       h(TableBody, {}, () => labels.map(label => h(TableRow, { key: label }, () => [
         h(TableHead, {}, () => label),
         ...data.series.map(series => h(TableCell, { key: series.id }, () => series.points.find(point => point.label === label)?.value ?? '—')),
@@ -171,14 +172,14 @@ function customRenderer(data: VueCustomWidgetData, props: VueWidgetRendererProps
   return h(component, { data, manifest: props.manifest })
 }
 
-function readyContent(props: VueWidgetRendererProps, data: unknown): VNodeChild {
+function readyContent(props: VueWidgetRendererProps, data: unknown, translate: PanelTranslator): VNodeChild {
   if (props.manifest.family === 'stats') {
     const parsed = statsData(data)
-    return parsed ? renderStats(parsed, props) : null
+    return parsed ? renderStats(parsed, props, translate) : null
   }
   if (props.manifest.family === 'chart') {
     const parsed = chartData(data)
-    return parsed ? renderChart(parsed) : null
+    return parsed ? renderChart(parsed, translate) : null
   }
   if (props.manifest.family === 'table') {
     const presentation = props.table?.presentation
@@ -221,11 +222,11 @@ function filterControl(props: VueWidgetRendererProps, state: VueWidgetStore['sna
   ])
 }
 
-function filterControls(props: VueWidgetRendererProps, state: VueWidgetStore['snapshot']): VNode | null {
+function filterControls(props: VueWidgetRendererProps, state: VueWidgetStore['snapshot'], translate: PanelTranslator): VNode | null {
   if (props.manifest.filters.length === 0) return null
   return h(FieldGroup, { class: 'hp-widget-filters' }, () => [
     ...props.manifest.filters.map(filter => h('div', { key: filter.id }, [filterControl(props, state, filter)])),
-    h(Button, { disabled: state.loading, type: 'button', variant: 'outline', onClick: () => void props.store.resetFilters() }, () => [PanelsIcon('restore'), 'Reset filters']),
+    h(Button, { disabled: state.loading, type: 'button', variant: 'outline', onClick: () => void props.store.resetFilters() }, () => [PanelsIcon('restore'), translate('tables.resetFilters')]),
   ])
 }
 
@@ -239,6 +240,7 @@ export const VueWidgetRenderer = defineComponent({
     widget: { type: Object as PropType<VueWidgetRendererProps>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator()
     const state = shallowRef(componentProps.widget.store.snapshot)
     const host = ref<HTMLElement>()
     let observer: IntersectionObserver | null = null
@@ -269,15 +271,15 @@ export const VueWidgetRenderer = defineComponent({
       const manifest = componentProps.widget.manifest
       const headingId = `hp-widget-${manifest.id}-heading`
       const content = state.value.status === 'loading' && state.value.data === null
-        ? h(Skeleton, { 'aria-label': 'Loading widget', class: 'hp:h-24 hp:w-full', role: 'status' })
+        ? h(Skeleton, { 'aria-label': translate('widgets.loadingShort'), class: 'hp:h-24 hp:w-full', role: 'status' })
         : state.value.status === 'unauthorized'
-          ? h('p', { role: 'status' }, 'Widget unavailable')
+          ? h('p', { role: 'status' }, translate('widgets.unavailable'))
         : state.value.status === 'error'
-          ? h(Alert, { variant: 'destructive' }, () => [h(AlertDescription, {}, () => manifest.errorState), h(Button, { type: 'button', onClick: () => void componentProps.widget.store.load() }, () => 'Retry')])
+          ? h(Alert, { variant: 'destructive' }, () => [h(AlertDescription, {}, () => manifest.errorState), h(Button, { type: 'button', onClick: () => void componentProps.widget.store.load() }, () => translate('widgets.retry'))])
           : state.value.status === 'ready' || state.value.status === 'loading' && state.value.data !== null
-            ? readyContent(componentProps.widget, state.value.data)
+            ? readyContent(componentProps.widget, state.value.data, translate)
             : manifest.lazy
-              ? h(Button, { type: 'button', onClick: activate }, `Load ${manifest.heading ?? manifest.id}`)
+              ? h(Button, { type: 'button', onClick: activate }, translate('widgets.load'))
               : null
       const empty = state.value.status === 'ready' && content === null
       return h(Card, {
@@ -296,8 +298,8 @@ export const VueWidgetRenderer = defineComponent({
         ]) : null,
         h(CardContent, {}, () => [
           state.value.status === 'ready' && componentProps.widget.actions?.[0] && componentProps.widget.actionStore ? h(VueActionRenderer, { action: componentProps.widget.actions[0], actions: componentProps.widget.actions, panelId: componentProps.widget.panelId, registry: componentProps.widget.registry, store: componentProps.widget.actionStore }) : null,
-          filterControls(componentProps.widget, state.value),
-          empty ? h(Empty, { class: 'hp-widget-empty' }, () => h(EmptyHeader, {}, () => [h(EmptyTitle, {}, () => 'No data'), h(EmptyDescription, {}, () => manifest.emptyState)])) : content,
+          filterControls(componentProps.widget, state.value, translate),
+          empty ? h(Empty, { class: 'hp-widget-empty' }, () => h(EmptyHeader, {}, () => h(EmptyTitle, {}, () => manifest.emptyState))) : content,
         ]),
       ])
     }
@@ -342,7 +344,8 @@ export const VueResourceWidgets = defineComponent({
   name: 'VueResourceWidgets',
   props: { area: { type: Object as PropType<VueResourceWidgetsProps>, required: true } },
   setup(props) {
-    return () => widgetGrid(`${props.area.placement} widgets`, props.area.viewportWidth, props.area.widgets, {
+    const translate = usePanelTranslator()
+    return () => widgetGrid(translate(props.area.placement === 'header' ? 'widgets.resourceHeader' : 'widgets.resourceFooter'), props.area.viewportWidth, props.area.widgets, {
       'data-page-id': props.area.pageId,
       'data-resource-id': props.area.resourceId,
       'data-widget-placement': props.area.placement,

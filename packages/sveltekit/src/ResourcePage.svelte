@@ -105,6 +105,7 @@
     return values
   })
   const form = $derived.by(() => new FormStore<Record<string, unknown>>(initialValues, {
+    locale: data.panel.locale,
     fields: resource?.fields ?? [],
     dependencies: (resource?.dependencies ?? []).map(dependency => ({
       id: dependency.id,

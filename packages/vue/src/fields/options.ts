@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import { Button, Checkbox, Input, InputGroup, InputGroupAddon, InputGroupInput, NativeSelect, RadioGroup, RadioGroupItem } from '../internal-ui'
 import { Search } from 'lucide-vue-next'
 import { computed, defineComponent, h, onMounted, ref, type PropType, type VNode } from 'vue'
@@ -28,6 +29,7 @@ export const VueOptionField = defineComponent({
     field: { type: Object as PropType<VueFieldControlProps<object>>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator()
     const props = new Proxy(componentProps.field, {
       get: (_target, property) => Reflect.get(componentProps.field, property),
     })
@@ -113,16 +115,16 @@ export const VueOptionField = defineComponent({
     function renderSearchAndPaging(): VNode[] {
       return [
         property(props.context, 'searchable', false) ? h(InputGroup, {}, () => [h(InputGroupAddon, {}, () => h(Search, { 'aria-hidden': 'true' })), h(InputGroupInput, {
-          'aria-label': `Search ${props.context.definition.label ?? 'options'}`,
+          'aria-label': translate('fields.searchOptions', { label: props.context.definition.label ?? translate('fields.options') }),
           disabled: props.context.disabled || state.value.disabled,
           type: 'search',
           modelValue: state.value.search,
           onInput: (event: Event) => void store.load((event.currentTarget as HTMLInputElement).value, 1),
         })]) : null,
-        property(props.context, 'paginated', true) && (state.value.page > 1 || state.value.hasMore) ? h('nav', { 'aria-label': `${props.context.definition.label ?? 'Option'} pages` }, [
-          h(Button, { type: 'button', disabled: state.value.page <= 1 || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page - 1) }, 'Previous'),
-          h('span', { 'aria-live': 'polite' }, `Page ${state.value.page}`),
-          h(Button, { type: 'button', disabled: !state.value.hasMore || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page + 1) }, 'Next'),
+        property(props.context, 'paginated', true) && (state.value.page > 1 || state.value.hasMore) ? h('nav', { 'aria-label': translate('fields.optionPages', { label: props.context.definition.label ?? translate('fields.option') }) }, [
+          h(Button, { type: 'button', disabled: state.value.page <= 1 || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page - 1) }, translate('pagination.previous')),
+          h('span', { 'aria-live': 'polite' }, translate('tables.page', { page: state.value.page })),
+          h(Button, { type: 'button', disabled: !state.value.hasMore || state.value.loading, onClick: () => void store.load(state.value.search, state.value.page + 1) }, translate('pagination.next')),
         ]) : null,
       ].filter((node): node is VNode => node !== null)
     }
@@ -130,21 +132,21 @@ export const VueOptionField = defineComponent({
       const controls: VNode[] = []
       if (property(props.context, 'canCreateOption', false)) controls.push(h('div', [
         h(Input, {
-          'aria-label': `Create ${props.context.definition.label ?? 'option'} label`,
+          'aria-label': translate('fields.createOptionLabel', { label: props.context.definition.label ?? translate('fields.option') }),
           disabled: props.context.disabled || props.context.readOnly,
           modelValue: createLabel.value,
           onInput: (event: Event) => { createLabel.value = (event.currentTarget as HTMLInputElement).value },
         }),
-        h(Button, { type: 'button', disabled: !createLabel.value.trim(), onClick: () => void createOption() }, 'Create option'),
+        h(Button, { type: 'button', disabled: !createLabel.value.trim(), onClick: () => void createOption() }, translate('fields.createOption')),
       ]))
       if (property(props.context, 'canEditOption', false)) controls.push(h('div', [
         h(Input, {
-          'aria-label': `Edit ${props.context.definition.label ?? 'option'} label`,
+          'aria-label': translate('fields.editOptionLabel', { label: props.context.definition.label ?? translate('fields.option') }),
           disabled: props.context.disabled || props.context.readOnly || values.value.length !== 1,
           modelValue: editLabel.value,
           onInput: (event: Event) => { editLabel.value = (event.currentTarget as HTMLInputElement).value },
         }),
-        h(Button, { type: 'button', disabled: !editLabel.value.trim() || values.value.length !== 1, onClick: () => void editOption() }, 'Edit option'),
+        h(Button, { type: 'button', disabled: !editLabel.value.trim() || values.value.length !== 1, onClick: () => void editOption() }, translate('fields.editOption')),
       ]))
       return controls
     }
@@ -162,7 +164,7 @@ export const VueOptionField = defineComponent({
             : optionValue(element.value, options.value))
         },
       }, [
-        !multiple() ? h('option', { value: '' }, state.value.loading ? 'Loading…' : 'Select an option') : null,
+        !multiple() ? h('option', { value: '' }, state.value.loading ? translate('fields.loading') : translate('fields.selectOption')) : null,
         ...options.value.map(option => h('option', { disabled: option.disabled, key: String(option.value), value: String(option.value) }, option.label)),
       ])
       return h('div', [fieldFrame(props.context, select), ...renderSearchAndPaging(), ...renderCreateEdit()])

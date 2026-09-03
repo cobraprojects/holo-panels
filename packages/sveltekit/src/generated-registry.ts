@@ -165,6 +165,7 @@ async function resolveGeneratedPage(input: PanelPageResolutionInput<object>, reg
   const table = await executeGeneratedResourceOperation(await loader(), {
     context: {
       actor: input.scope.actor,
+      locale: generatedLocale(panel, input),
       signal: input.scope.signal,
       tenant: input.tenant ?? tenancy?.tenantId,
       ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),
@@ -216,6 +217,7 @@ async function resourceOperation(input: PanelOperationInput<object>, registry: S
   return await executeGeneratedResourceOperation(await loader(), {
     context: {
       actor: input.scope.actor,
+      locale: generatedLocale(panel, input),
       signal: input.scope.signal,
       tenant: input.tenant ?? tenancy?.tenantId,
       ...(tenancy?.tenantBindings ? { tenantBindings: tenancy.tenantBindings } : {}),

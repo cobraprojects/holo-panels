@@ -1,3 +1,4 @@
+import { usePanelTranslator } from '../localization'
 import { Button, Checkbox, Input, InputGroup, InputGroupAddon, InputGroupInput, InputGroupText, RadioGroup, RadioGroupItem, Switch, Textarea } from '../internal-ui'
 import { FieldLegend, FieldSet } from '../ui/field'
 import { defineComponent, h, ref, type PropType, type VNode } from 'vue'
@@ -37,6 +38,7 @@ export const VueBasicField = defineComponent({
     field: { type: Object as PropType<VueFieldControlProps<object>>, required: true },
   },
   setup(componentProps) {
+    const translate = usePanelTranslator()
     const passwordVisible = ref(false)
     return (): VNode => {
       const props = componentProps.field
@@ -171,12 +173,12 @@ export const VueBasicField = defineComponent({
               suffixAction,
               revealable ? h(Button, {
                 'aria-controls': context.inputId,
-                'aria-label': passwordVisible.value ? 'Hide password' : 'Show password',
+                'aria-label': passwordVisible.value ? translate('fields.hidePassword') : translate('fields.showPassword'),
                 size: 'sm',
                 type: 'button',
                 variant: 'ghost',
                 onClick: () => { passwordVisible.value = !passwordVisible.value },
-              }, () => passwordVisible.value ? 'Hide' : 'Show') : null,
+              }, () => passwordVisible.value ? translate('fields.hide') : translate('fields.show')) : null,
             ]) : null,
           ])
         : h(Input, inputProps)

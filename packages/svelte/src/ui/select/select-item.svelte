@@ -18,7 +18,7 @@
 	{value}
 	data-slot="select-item"
 	class={cn(
-		"hp:gap-1.5 hp:rounded-md hp:py-1 hp:pr-8 hp:pl-1.5 hp:text-sm hp:focus:bg-accent hp:focus:text-accent-foreground hp:not-data-[variant=destructive]:focus:**:text-accent-foreground hp:[&_svg:not([class*='size-'])]:size-4 hp:*:[span]:last:flex hp:*:[span]:last:items-center hp:*:[span]:last:gap-2 hp:relative hp:flex hp:w-full hp:cursor-default hp:items-center hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-highlighted:bg-accent hp:data-highlighted:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0",
+		"hp:gap-1.5 hp:rounded-md hp:py-1 hp:pe-8 hp:ps-1.5 hp:text-sm hp:focus:bg-accent hp:focus:text-accent-foreground hp:not-data-[variant=destructive]:focus:**:text-accent-foreground hp:[&_svg:not([class*='size-'])]:size-4 hp:*:[span]:last:flex hp:*:[span]:last:items-center hp:*:[span]:last:gap-2 hp:relative hp:flex hp:w-full hp:cursor-default hp:items-center hp:outline-hidden hp:select-none hp:focus:bg-accent hp:focus:text-accent-foreground hp:data-highlighted:bg-accent hp:data-highlighted:text-accent-foreground hp:data-[disabled]:pointer-events-none hp:data-[disabled]:opacity-50 hp:[&_svg]:pointer-events-none hp:[&_svg]:shrink-0",
 		className
 	)}
 	{...restProps}

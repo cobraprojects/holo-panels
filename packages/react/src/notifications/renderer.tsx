@@ -194,7 +194,7 @@ function NotificationActions({ controls, item, locale, navigate, panelId, regist
 }
 
 export function ReactNotificationInbox({
-  emptyMessage = 'No notifications',
+  emptyMessage,
   locale = 'en',
   navigate,
   panelId,
@@ -214,9 +214,9 @@ export function ReactNotificationInbox({
   }, [store])
   const pages = Math.max(1, Math.ceil(state.total / state.pageSize))
   const content = <CardContent className="hp:space-y-4">
-    {state.error ? <p className="hp:rounded-md hp:border hp:border-destructive/50 hp:p-3 hp:text-sm hp:text-destructive" data-slot="notification-error" role="alert">{state.error}</p> : null}
+    {state.error ? <p className="hp:rounded-md hp:border hp:border-destructive/50 hp:p-3 hp:text-sm hp:text-destructive" data-slot="notification-error" role="alert">{translate(state.error === 'Unable to update notifications' ? 'notifications.updateFailed' : 'notifications.loadFailed')}</p> : null}
     {state.loading ? <p aria-live="polite" className="hp:text-sm hp:text-muted-foreground" data-slot="notification-loading" role="status">{translate('notifications.loading')}</p> : null}
-    {!state.loading && !state.error && state.items.length === 0 ? <Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>{translate('notifications.noneDescription')}</EmptyDescription></EmptyHeader></Empty> : null}
+    {!state.loading && !state.error && state.items.length === 0 ? <Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage ?? translate('notifications.empty')}</EmptyTitle><EmptyDescription>{translate('notifications.noneDescription')}</EmptyDescription></EmptyHeader></Empty> : null}
     {state.items.length > 0 ? <ol className="hp-notification-list hp:divide-y" data-slot="notification-list">{state.items.map(item => {
       const controls: ReactNotificationControls = {
         delete: () => store.delete([item.id]),

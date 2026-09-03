@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { usePanelTranslator } from '../localization'
   import { Button } from '../ui/button'
   import ActionRenderer from '../actions/ActionRenderer.svelte'
   import type { Component } from 'svelte'
@@ -23,19 +24,20 @@
     if (!registry) throw new Error(`[Holo Panels] A Svelte component registry is required for custom entry "${$entryState.type}".`)
     return registry.resolve<SvelteCustomEntryProps>(`entry.${$entryState.type.replaceAll(':', '.')}`, panelId, `entry "${$entryState.id}"`)
   })
+  const translate = usePanelTranslator()
   let copyStatus = $state('')
   let actionError = $state<string | null>(null)
 
   async function copy(): Promise<void> {
     if (!globalThis.navigator?.clipboard) {
-      copyStatus = 'Copy unavailable'
+      copyStatus = translate('copy.unavailable')
       return
     }
     try {
       await globalThis.navigator.clipboard.writeText(entryText($entryState.formattedState))
-      copyStatus = 'Copied'
+      copyStatus = translate('copy.copied')
     } catch {
-      copyStatus = 'Copy failed'
+      copyStatus = translate('copy.failed')
     }
   }
 
@@ -45,7 +47,7 @@
     try {
       await action(id)
     } catch (cause) {
-      actionError = cause instanceof Error ? cause.message : 'Action failed'
+      actionError = cause instanceof Error ? cause.message : translate('feedback.actionFailed')
     }
   }
 
@@ -57,7 +59,7 @@
   {:else if $entryState.type === 'boolean' || $entryState.type === 'icon'}
     <span
       role="img"
-      aria-label={$entryState.state ? 'Yes' : 'No'}
+      aria-label={translate($entryState.state ? 'filters.yes' : 'filters.no')}
       data-icon={typeof ($entryState.type === 'icon' ? $entryState.properties.icon : $entryState.state ? $entryState.properties.truthyIcon : $entryState.properties.falsyIcon) === 'string'
         ? ($entryState.type === 'icon' ? $entryState.properties.icon : $entryState.state ? $entryState.properties.truthyIcon : $entryState.properties.falsyIcon)
         : $entryState.state ? 'check' : 'x-mark'}
@@ -122,7 +124,7 @@
     {/if}
   </div>
   <EntrySlot entry={$entryState} {panelId} placement="after" {registry} />
-  {#if $entryState.copyable}<Button type="button" onclick={() => void copy()}>Copy</Button>{/if}
+  {#if $entryState.copyable}<Button type="button" onclick={() => void copy()}>{translate('actions.copy')}</Button>{/if}
   {#each actionStore ? [] : $entryState.actions as entryAction (entryAction)}
     <Button type="button" disabled={$entryState.pending || !action} onclick={() => void runAction(entryAction)}>{entryAction}</Button>
   {/each}
@@ -130,7 +132,7 @@
     <ActionRenderer action={actions[0]} actions={actions.filter(item => $entryState.actions.includes(item.id))} {panelId} {recordIds} {registry} store={actionStore} />
   {/if}
   <span aria-live="polite" class="hp-visually-hidden">{copyStatus}</span>
-  {#if $entryState.pending}<span role="status">Loading entry</span>{/if}
+  {#if $entryState.pending}<span role="status">{translate('entries.loading')}</span>{/if}
   {#if $entryState.error}<span role="alert">{$entryState.error}</span>{/if}
   {#if actionError}<span role="alert">{actionError}</span>{/if}
   <EntrySlot entry={$entryState} {panelId} placement="below" {registry} />

@@ -2,6 +2,8 @@ import type { EN_MESSAGES } from './catalogs/en'
 import { createTranslationReference, type RegisteredTranslations, type TranslationArguments, type TranslationMessage, type TranslationReference } from './contracts'
 
 export { TranslationCatalogRegistry, canonicalLocale } from './catalog-registry'
+export { createPanelTranslator, formatTranslation } from './presentation'
+export type { PanelTranslationKey, PanelTranslator } from './presentation'
 export { arCatalog, EN_MESSAGES, enCatalog } from './catalogs'
 export { normalizePanelLocaleConfiguration, requestedLocales, resolvePanelLocale } from './panel-locale'
 export type { ResolvedPanelLocale } from './panel-locale'

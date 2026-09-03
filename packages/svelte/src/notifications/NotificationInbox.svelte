@@ -22,7 +22,7 @@
   import { notificationActions, notificationUrl, svelteNotificationRendererName } from './helpers'
   import { createPanelTranslator } from '@holo-js/panels-client'
 
-  let { emptyMessage = 'No notifications', locale = 'en', navigate, panelId, placement = 'page', registry, store }: SvelteNotificationInboxProps = $props()
+  let { emptyMessage, locale = 'en', navigate, panelId, placement = 'page', registry, store }: SvelteNotificationInboxProps = $props()
   const translate = $derived(createPanelTranslator(typeof locale === 'string' ? locale : 'en'))
   const inboxState = $derived.by(() => toSvelteState(store))
   const pages = $derived(Math.max(1, Math.ceil($inboxState.total / $inboxState.pageSize)))
@@ -54,9 +54,9 @@
     <Button disabled={$inboxState.unread === 0} size="sm" type="button" variant="outline" onclick={() => ignoreFailure(store.markAllRead())}><CheckCheck />{translate('notifications.markAllRead')}</Button>
   </CardHeader>
   <CardContent class="hp:space-y-4 {placement === 'page' ? '' : 'hp:max-h-[min(36rem,calc(100vh-8rem))] hp:overflow-y-auto'}">
-    {#if $inboxState.error}<Alert variant="destructive" data-slot="notification-error"><AlertDescription>{$inboxState.error}</AlertDescription></Alert>{/if}
+    {#if $inboxState.error}<Alert variant="destructive" data-slot="notification-error"><AlertDescription>{translate($inboxState.error === 'Unable to update notifications' ? 'notifications.updateFailed' : 'notifications.loadFailed')}</AlertDescription></Alert>{/if}
     {#if $inboxState.loading}<p aria-live="polite" class="hp:text-sm hp:text-muted-foreground" data-slot="notification-loading" role="status">{translate('notifications.loading')}</p>{/if}
-    {#if !$inboxState.loading && !$inboxState.error && $inboxState.items.length === 0}<Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage}</EmptyTitle><EmptyDescription>{translate('notifications.noneDescription')}</EmptyDescription></EmptyHeader></Empty>{/if}
+    {#if !$inboxState.loading && !$inboxState.error && $inboxState.items.length === 0}<Empty data-slot="notification-empty"><EmptyHeader><EmptyTitle>{emptyMessage ?? translate('notifications.empty')}</EmptyTitle><EmptyDescription>{translate('notifications.noneDescription')}</EmptyDescription></EmptyHeader></Empty>{/if}
     {#if $inboxState.items.length > 0}<ol class="hp-notification-list hp:divide-y" data-slot="notification-list">
       {#each $inboxState.items as item (item.id)}
         {@const itemControls = controls(item.id)}

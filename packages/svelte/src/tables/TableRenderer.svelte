@@ -1,9 +1,10 @@
 <script lang="ts" generics="TRecord extends object, TRecordId extends TableRecordId">
+  import { usePanelTranslator } from '../localization'
   import { Button } from '../ui/button'
   import { Checkbox } from '../ui/checkbox'
   import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
   import { NativeSelect } from '../ui/native-select'
-  import { createPanelTranslator, type JsonValue, type TableRecordId } from '@holo-js/panels-client'
+  import { type JsonValue, type TableRecordId } from '@holo-js/panels-client'
   import { TablesRenderHook } from '@holo-js/panels-core'
   import * as Dialog from '../ui/dialog'
   import * as DropdownMenu from '../ui/dropdown-menu'
@@ -35,7 +36,7 @@
   } from './types'
 
   let { table }: { readonly table: SvelteTableRendererProps<TRecord, TRecordId> } = $props()
-  const translate = $derived(createPanelTranslator(table.locale ?? 'en'))
+  const translate = usePanelTranslator(() => table.locale)
   const snapshotStore = $derived.by(() => toSvelteSnapshot(table.store))
   const captionId = $props.id()
   let columnsOpen = $state(false)
@@ -179,7 +180,7 @@
     {#if filterPresentation}<FilterCollectionSlot panelId={table.panelId} placement="before" presentation={filterPresentation} registry={table.registry} />{/if}
     {#each orderedFilters as filter (filter.manifest.id)}
       {@const filterValue = $snapshotStore.filters.draft[filter.manifest.id] ?? filter.manifest.defaultValue}
-      <FilterControl {filter} panelId={table.panelId} registry={table.registry} value={filterValue} update={(value) => updateFilter(filter, value)} />
+      <FilterControl {filter} locale={table.locale} panelId={table.panelId} registry={table.registry} value={filterValue} update={(value) => updateFilter(filter, value)} />
     {/each}
     {#if $snapshotStore.filters.mode === 'deferred'}<Button type="submit">{translate('tables.applyFilters')}</Button>{/if}
     <Button type="button" onclick={resetFilters}>{translate('tables.resetFilters')}</Button>
@@ -201,13 +202,13 @@
   <div class="hp-table-toolbar hp:flex hp:flex-wrap hp:items-center hp:gap-2">
     <RenderHook hook={TablesRenderHook.TOOLBAR_START} />
     <RenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_BEFORE} />
-    <label class="hp:min-w-48 hp:flex-1"><span class="hp-visually-hidden">Search</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput placeholder="Search records…" type="search" value={$snapshotStore.search} oninput={search} /></InputGroup></label>
+    <label class="hp:min-w-48 hp:flex-1"><span class="hp-visually-hidden">{translate('tables.search')}</span><InputGroup><InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon><InputGroupInput placeholder={translate('tables.searchPlaceholder')} type="search" value={$snapshotStore.search} oninput={search} /></InputGroup></label>
     <RenderHook hook={TablesRenderHook.TOOLBAR_SEARCH_AFTER} />
     <RenderHook hook={TablesRenderHook.TOOLBAR_COLUMN_MANAGER_TRIGGER_BEFORE} />
     <div>
       <DropdownMenu.Root bind:open={columnsOpen}>
         <DropdownMenu.Trigger>
-          {#snippet child({ props })}<Button {...props} class="hp-column-manager" variant="outline"><Columns3 aria-hidden="true" />Columns</Button>{/snippet}
+          {#snippet child({ props })}<Button {...props} class="hp-column-manager" variant="outline"><Columns3 aria-hidden="true" />{translate('tables.columns')}</Button>{/snippet}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content align="end" data-holo-panel>
           {#each table.columns.filter(column => column.manifest.toggleable) as column (column.manifest.path)}
@@ -246,22 +247,22 @@
 
   {#if hasSelection}
     <div aria-live="polite" class="hp-table-bulk-actions hp:flex hp:flex-wrap hp:items-center hp:gap-2 hp:rounded-md hp:border hp:bg-muted/50 hp:p-3">
-      <span>{$snapshotStore.selection.mode === 'all-matching' ? `All ${selectionState.count} matching records selected` : `${selectionState.count} records selected`}</span>
+      <span>{$snapshotStore.selection.mode === 'all-matching' ? translate('tables.allSelected', { count: selectionState.count }) : translate('tables.selected', { count: selectionState.count })}</span>
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_BEFORE} />
       {#each bulkActions as action (action.id)}{#if isActionGroup(action)}<ActionGroupButton group={action} {table} />{:else}<ActionGroupButton {action} {table} />{/if}{/each}
       <RenderHook hook={TablesRenderHook.SELECTION_INDICATOR_ACTIONS_AFTER} />
-      <Button type="button" onclick={() => table.store.clearSelection()}>Clear selection</Button>
+      <Button type="button" onclick={() => table.store.clearSelection()}>{translate('tables.clearSelection')}</Button>
     </div>
   {/if}
   {#if selectionState.canSelectAllMatching && $snapshotStore.selection.mode === 'explicit' && selectedOnPage && $snapshotStore.total > recordIds.length}
-    <Button type="button" onclick={() => table.store.selectAllMatching()}>Select all {$snapshotStore.total} matching records</Button>
+    <Button type="button" onclick={() => table.store.selectAllMatching()}>{translate('tables.selectAll', { count: $snapshotStore.total })}</Button>
   {/if}
 
     {#snippet tableHeader(presentationColumn: TablePresentationColumn)}
       {@const column = columns.find(candidate => candidate.manifest.path === presentationColumn.key)}
       {@const direction = $snapshotStore.sort.find(item => item.column === presentationColumn.key)?.direction}
       {#if column?.manifest.sortable}
-        <Button class="hp-table-sort hp:-ml-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground" data-sorted={direction} size="sm" type="button" variant="ghost" onclick={() => sort(column)}>
+        <Button class="hp-table-sort hp:-ms-3 hp:h-8 hp:px-3 hp:text-muted-foreground hp:data-[sorted]:text-foreground" data-sorted={direction} size="sm" type="button" variant="ghost" onclick={() => sort(column)}>
           {presentationColumn.label}
           {#if direction === 'asc'}<ChevronUp aria-hidden="true" data-icon="chevron-up" data-slot="icon" />{:else if direction === 'desc'}<ChevronDown aria-hidden="true" data-icon="chevron-down" data-slot="icon" />{:else}<ArrowUpDown aria-hidden="true" data-icon="sort" data-slot="icon" />{/if}
         </Button>
@@ -270,11 +271,11 @@
       {/if}
     {/snippet}
     {#snippet leadingHeader()}
-      {#if !table.store.selectionSettings.groupsOnly}<Checkbox aria-label="Select page" checked={selectedOnPage} indeterminate={!selectedOnPage && recordIds.some(id => selectionState.selectedIds.has(id))} disabled={$snapshotStore.loading} onCheckedChange={(checked) => table.store.selectPage(recordIds, checked)} />{/if}
+      {#if !table.store.selectionSettings.groupsOnly}<Checkbox aria-label={translate('tables.selectPage')} checked={selectedOnPage} indeterminate={!selectedOnPage && recordIds.some(id => selectionState.selectedIds.has(id))} disabled={$snapshotStore.loading} onCheckedChange={(checked) => table.store.selectPage(recordIds, checked)} />{/if}
     {/snippet}
     {#snippet leadingCell(record: Readonly<TRecord>)}
       {@const recordId = table.getRecordId(record)}
-      <Checkbox aria-label="Select record {String(recordId)}" checked={selectionState.selectedIds.has(recordId)} disabled={$snapshotStore.loading || !selectionState.selectableIds.has(recordId)} onCheckedChange={(checked) => table.store.selectRecord(recordId, checked, table.groups?.find(group => group.records.some(item => table.getRecordId(item) === recordId))?.key)} />
+      <Checkbox aria-label={translate('tables.selectRecord', { record: String(recordId) })} checked={selectionState.selectedIds.has(recordId)} disabled={$snapshotStore.loading || !selectionState.selectableIds.has(recordId)} onCheckedChange={(checked) => table.store.selectRecord(recordId, checked, table.groups?.find(group => group.records.some(item => table.getRecordId(item) === recordId))?.key)} />
     {/snippet}
     {#snippet tableCell(record: Readonly<TRecord>, presentationColumn: { readonly key: string })}
       {@const column = columns.find(candidate => candidate.manifest.path === presentationColumn.key)}
@@ -292,35 +293,36 @@
       getRecordId={table.getRecordId}
       groups={presentationGroups}
       header={tableHeader}
-      leading={selectable ? { cell: leadingCell, header: leadingHeader, label: 'Select' } : undefined}
+      leading={selectable ? { cell: leadingCell, header: leadingHeader, label: translate('tables.select') } : undefined}
       loading={$snapshotStore.loading}
+      locale={table.locale}
       records={$snapshotStore.records}
       summaries={table.summaries}
-      trailing={rowActions.length > 0 ? { cell: trailingCell, label: 'Actions' } : undefined}
+      trailing={rowActions.length > 0 ? { cell: trailingCell, label: translate('actions.group') } : undefined}
     />
 
-  <nav aria-label="Table pagination" class="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
-    <span aria-live="polite" class="hp-table-pagination-info">Showing <strong>{paginationFrom}</strong> to <strong>{paginationTo}</strong> of <strong>{$snapshotStore.total}</strong> results</span>
+  <nav aria-label={translate('tables.pagination')} class="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
+    <span aria-live="polite" class="hp-table-pagination-info">{translate('tables.summary', { from: paginationFrom, to: paginationTo, total: $snapshotStore.total })}</span>
     {#if typeof table.store.setPerPage === 'function'}
       <label class="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
-        <NativeSelect aria-label="Results per page" disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
+        <NativeSelect aria-label={translate('tables.resultsPerPage')} disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
           {#each perPageOptions($snapshotStore.perPage) as value (value)}
             <option value={String(value)}>{value}</option>
           {/each}
         </NativeSelect>
-        <span>per page</span>
+        <span>{translate('tables.perPage')}</span>
       </label>
     {/if}
     <div class="hp-table-pagination-pages hp:flex hp:items-center hp:gap-1">
-      <Button type="button" aria-label="Previous page" size="icon" variant="outline" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
+      <Button type="button" aria-label={translate('tables.previousPage')} size="icon" variant="outline" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
       {#each pageNumbers as entry, i (typeof entry === 'number' ? entry : `ellipsis-${i}`)}
         {#if entry === 'ellipsis'}
           <span aria-hidden="true" class="hp-table-pagination-ellipsis">…</span>
         {:else}
-          <Button type="button" aria-label="Page {entry}" aria-current={entry === $snapshotStore.page ? 'page' : undefined} data-active={entry === $snapshotStore.page ? 'true' : undefined} variant={entry === $snapshotStore.page ? 'secondary' : 'ghost'} disabled={$snapshotStore.loading} onclick={() => changePage(entry)}>{entry}</Button>
+          <Button type="button" aria-label={translate('tables.page', { page: entry })} aria-current={entry === $snapshotStore.page ? 'page' : undefined} data-active={entry === $snapshotStore.page ? 'true' : undefined} variant={entry === $snapshotStore.page ? 'secondary' : 'ghost'} disabled={$snapshotStore.loading} onclick={() => changePage(entry)}>{entry}</Button>
         {/if}
       {/each}
-      <Button type="button" aria-label="Next page" size="icon" variant="outline" disabled={$snapshotStore.page >= pages || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page + 1)}><ChevronRight aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
+      <Button type="button" aria-label={translate('tables.nextPage')} size="icon" variant="outline" disabled={$snapshotStore.page >= pages || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page + 1)}><ChevronRight aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
     </div>
   </nav>
 </section>

@@ -1,3 +1,4 @@
+export { PanelsLocaleProvider, providePanelsLocale, usePanelDirection, usePanelLocale, usePanelTranslator } from './localization'
 export {
   PanelsErrorBoundary,
   PanelsPortalProvider,

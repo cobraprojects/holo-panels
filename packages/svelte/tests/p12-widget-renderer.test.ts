@@ -128,7 +128,7 @@ describe('P12 Svelte widget and dashboard renderer', () => {
 
     expect(container.querySelector('.hp-widget-stat')?.textContent).toContain('Revenue')
     expect(container.querySelector('.hp-widget-stat')?.textContent).toContain('$12k')
-    expect(container.querySelector('[aria-label="Trend up"]')?.textContent).toBe('↑')
+    expect(container.querySelector('[aria-label="Trend: up"]')?.textContent).toBe('↑')
     const stats = container.querySelectorAll<HTMLElement>('.hp-widget-stat')
     expect(container.querySelector('svg[data-icon="arrow-up"]')).not.toBeNull()
     expect(container.querySelector('.hp-widget-sparkline polyline')).not.toBeNull()

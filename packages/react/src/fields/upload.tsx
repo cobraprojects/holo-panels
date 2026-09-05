@@ -11,6 +11,7 @@ export function ReactUploadField<TValues extends object>(props: ReactFieldContro
   const store = requireStore(props.uploadStore, props.context.definition.type, 'UploadStore')
   useEffect(() => { store.setLocale(locale) }, [store, locale])
   const state = useStoreState(store)
+  const fieldErrors = new Set(props.context.errors)
   const disabled = props.context.disabled || props.context.readOnly
   const select = (event: ChangeEvent<HTMLInputElement>): void => {
     const files = event.currentTarget.files
@@ -28,14 +29,14 @@ export function ReactUploadField<TValues extends object>(props: ReactFieldContro
       onChange={select}
       type="file"
     />
-    {state.error ? <p role="alert">{state.error}</p> : null}
+    {state.error && !fieldErrors.has(state.error) ? <p role="alert">{state.error}</p> : null}
     <ul>
       {state.items.map((item, index) => <li key={item.id}>
         {item.previewUrl ? <img alt={translate('uploads.preview', { name: item.name })} src={item.previewUrl} /> : null}
         <span>{item.name}</span>
         <Progress aria-label={translate('uploads.progress', { name: item.name })} max={1} value={item.progress} />
         <span aria-live="polite">{translate(`uploads.${item.status}`)}</span>
-        {item.error ? <span role="alert">{item.error}</span> : null}
+        {item.error && !fieldErrors.has(item.error) ? <span role="alert">{item.error}</span> : null}
         <Button aria-label={translate('uploads.moveUp', { name: item.name })} disabled={disabled || index === 0} onClick={() => store.reorder(index, index - 1)} type="button">↑</Button>
         <Button aria-label={translate('uploads.moveDown', { name: item.name })} disabled={disabled || index === state.items.length - 1} onClick={() => store.reorder(index, index + 1)} type="button">↓</Button>
         <Button aria-label={translate(item.status === 'pending' || item.status === 'uploading' ? 'uploads.cancel' : 'uploads.remove', { name: item.name })} disabled={disabled} onClick={() => void store.remove(item.id)} type="button">{item.status === 'pending' || item.status === 'uploading' ? translate('actions.cancel') : translate('fields.remove')}</Button>

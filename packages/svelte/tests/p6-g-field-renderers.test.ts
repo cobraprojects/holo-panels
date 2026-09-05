@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   CollectionStore,
+  bindUploadStore,
   FormStore,
   OptionStore,
   UploadStore,
@@ -187,6 +188,12 @@ describe('P6-G Svelte field renderers', () => {
     const component = mountClient(P6GFieldFixture, { props, target: container })
     mounted.push({ component, container })
     flushClient()
+    const release = bindUploadStore(props.form, 'attachment', props.uploadStore, false)
+    props.uploadStore.add([{ arrayBuffer: async () => new ArrayBuffer(0), name: 'unsafe.exe', size: 10, type: 'image/png' }])
+    flushClient()
+    const upload = container.querySelector('[data-field-path="attachment"]')
+    expect(upload?.querySelectorAll('[role="alert"]')).toHaveLength(1)
+    release()
     const title = container.querySelector<HTMLInputElement>('#hp-field-basic-text')
     if (!title) throw new Error('Title field was not rendered')
     title.value = 'Updated title'

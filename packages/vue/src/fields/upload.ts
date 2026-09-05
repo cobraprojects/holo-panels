@@ -31,6 +31,7 @@ export const VueUploadField = defineComponent({
       const disabled = field.context.disabled || field.context.readOnly
       const description = field.context.definition.helperText ?? field.context.definition.hint
       const descriptionId = description ? `${field.context.inputId}-description` : undefined
+      const fieldErrors = new Set(field.context.errors)
       const errorId = field.context.errors.length > 0 ? `${field.context.inputId}-errors` : undefined
       return h('div', {
         class: 'hp-field hp-upload',
@@ -41,7 +42,7 @@ export const VueUploadField = defineComponent({
           field.context.definition.label ?? translate('uploads.label'),
           field.context.definition.required ? h('span', { 'aria-hidden': 'true' }, ' *') : null,
         ]),
-        state.value.error ? h('p', { role: 'alert' }, state.value.error) : null,
+        state.value.error && !fieldErrors.has(state.value.error) ? h('p', { role: 'alert' }, state.value.error) : null,
         description ? h('div', { id: descriptionId }, description) : null,
         h(Input, {
           id: field.context.inputId,
@@ -58,7 +59,7 @@ export const VueUploadField = defineComponent({
           h('span', item.name),
           h(Progress, { 'aria-label': translate('uploads.progress', { name: item.name }), max: 1, modelValue: item.progress }),
           h('span', { 'aria-live': 'polite' }, translate(`uploads.${item.status}`)),
-          item.error ? h('span', { role: 'alert' }, item.error) : null,
+          item.error && !fieldErrors.has(item.error) ? h('span', { role: 'alert' }, item.error) : null,
           h(Button, { type: 'button', 'aria-label': translate('uploads.moveUp', { name: item.name }), disabled: disabled || index === 0, onClick: () => store.reorder(index, index - 1) }, '↑'),
           h(Button, { type: 'button', 'aria-label': translate('uploads.moveDown', { name: item.name }), disabled: disabled || index === state.value.items.length - 1, onClick: () => store.reorder(index, index + 1) }, '↓'),
           h(Button, { type: 'button', 'aria-label': translate(item.status === 'pending' || item.status === 'uploading' ? 'uploads.cancel' : 'uploads.remove', { name: item.name }), disabled, onClick: () => void store.remove(item.id) }, item.status === 'pending' || item.status === 'uploading' ? translate('actions.cancel') : translate('fields.remove')),

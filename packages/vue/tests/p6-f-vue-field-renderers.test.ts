@@ -1,5 +1,6 @@
 import {
   CollectionStore,
+  bindUploadStore,
   EditorAdapterRegistry,
   FormStore,
   OptionStore,
@@ -291,6 +292,11 @@ describe('P6-F Vue field renderer contracts', () => {
       uploadStore,
     })
 
+    const release = bindUploadStore(formStore, 'attachment', uploadStore, false)
+    uploadStore.add([{ arrayBuffer: async () => new ArrayBuffer(0), name: 'unsafe.exe', size: 10, type: 'image/png' }])
+    await nextTick()
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1)
+    release()
     container.querySelector<HTMLButtonElement>('button[aria-label="Move two.png up"]')?.click()
     await nextTick()
     expect(uploadStore.state.items[0]?.name).toBe('two.png')

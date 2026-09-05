@@ -15,6 +15,7 @@
   const formState = $derived.by(() => toSvelteState(form))
   const uploadState = $derived.by(() => uploadStore ? toSvelteState(uploadStore) : undefined)
   const presentation = $derived(fieldPresentation(definition, $formState))
+  const fieldErrors = $derived(new Set(presentation.errors))
   const inputId = $derived(fieldInputId(definition.path))
 
   $effect(() => { uploadStore?.setLocale(locale()) })
@@ -32,7 +33,7 @@
   <FieldFrame description={definition.helperText} errors={presentation.errors} hint={definition.hint} {inputId} label={definition.label} path={definition.path} required={presentation.required} type="file-upload">
     {#snippet children(attributes)}
       <Input {...attributes} type="file" multiple disabled={presentation.disabled || presentation.readOnly} required={presentation.required && ($uploadState?.items.length ?? 0) === 0} onchange={choose} />
-      {#if $uploadState?.error}<p role="alert">{$uploadState.error}</p>{/if}
+      {#if $uploadState?.error && !fieldErrors.has($uploadState.error)}<p role="alert">{$uploadState.error}</p>{/if}
       <div aria-live="polite" data-panels-upload-list>
         {#each $uploadState?.items ?? [] as item, index (item.id)}
           <article data-upload-id={item.id}>
@@ -40,7 +41,7 @@
             <span>{item.name}</span>
             <Progress max={1} value={item.progress} aria-label={translate('uploads.progress', { name: item.name })} />
             <span>{translate(`uploads.${item.status}`)}</span>
-            {#if item.error}<span role="alert">{item.error}</span>{/if}
+            {#if item.error && !fieldErrors.has(item.error)}<span role="alert">{item.error}</span>{/if}
             <Button type="button" aria-label={translate('uploads.moveUp', { name: item.name })} disabled={presentation.disabled || presentation.readOnly || index === 0} onclick={() => uploadStore?.reorder(index, index - 1)}>{translate('uploads.up')}</Button>
             <Button type="button" aria-label={translate('uploads.moveDown', { name: item.name })} disabled={presentation.disabled || presentation.readOnly || index === ($uploadState?.items.length ?? 0) - 1} onclick={() => uploadStore?.reorder(index, index + 1)}>{translate('uploads.down')}</Button>
             <Button type="button" aria-label={translate(item.status === 'pending' || item.status === 'uploading' ? 'uploads.cancel' : 'uploads.remove', { name: item.name })} disabled={presentation.disabled || presentation.readOnly} onclick={() => void uploadStore?.remove(item.id)}>{item.status === 'pending' || item.status === 'uploading' ? translate('actions.cancel') : translate('fields.remove')}</Button>

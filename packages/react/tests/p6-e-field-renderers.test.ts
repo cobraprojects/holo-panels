@@ -4,6 +4,7 @@ import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CollectionStore,
+  bindUploadStore,
   EditorAdapterRegistry,
   FormStore,
   OptionStore,
@@ -441,6 +442,12 @@ describe('P6-E React field renderers', () => {
       store,
       uploadStore,
     })))
+    const release = bindUploadStore(store, 'attachment', uploadStore, false)
+    act(() => {
+      uploadStore.add([{ arrayBuffer: async () => new ArrayBuffer(0), name: 'unsafe.exe', size: 10, type: 'image/png' }])
+    })
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1)
+    release()
     act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Move two.png up"]')?.click())
     expect(uploadStore.state.items[0]?.name).toBe('two.png')
     expect(container.querySelector('img')?.getAttribute('alt')).toBe('Preview of one.png')

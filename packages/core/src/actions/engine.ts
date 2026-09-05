@@ -6,7 +6,7 @@ import { toJsonValue } from '../protocol/serialization'
 import { resolveActionState } from './action'
 import type { PanelNotificationPresentation } from '../notifications/contracts'
 import { panelNotification } from '../notifications/notification'
-import { validatedToastPresentation, type Effect, type RichToastEffect } from '../protocol/effects'
+import { validatedToastPresentation, type Effect, type ToastEffect } from '../protocol/effects'
 import type {
   ActionContext,
   ActionDefinition,
@@ -471,7 +471,7 @@ export class ActionEngine<TRecord, TRecordId extends number | string, TActor, TT
   }
 
   private notificationEffects(presentations: readonly Readonly<PanelNotificationPresentation>[]): readonly Effect[] {
-    const effects = new Map<string, RichToastEffect>()
+    const effects = new Map<string, ToastEffect>()
     for (const value of presentations) {
       const presentation = validatedToastPresentation(value)
       if (!presentation) continue

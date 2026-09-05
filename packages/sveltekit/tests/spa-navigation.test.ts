@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
+import { panelNotification } from '@holo-js/panels-core'
 import { ClientToastStore, type JsonObject } from '@holo-js/panels-svelte'
 import PanelPage from '../src/PanelPage.svelte'
 import type { PanelPageData } from '../src/contracts'
@@ -135,8 +136,8 @@ describe('SvelteKit panel SPA navigation', () => {
     await vi.waitFor(() => expect(pending).toHaveLength(2))
     expect(pending[1]?.signal?.aborted).toBe(false)
 
-    pending[0]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', level: 'danger', message: 'Obsolete response' }], id: pending[0].id, ok: true, protocolVersion: '1.0' }))
-    pending[1]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', level: 'success', message: 'Current response' }], id: pending[1].id, ok: true, protocolVersion: '1.0' }))
+    pending[0]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', presentation: panelNotification('response.obsolete').title('Obsolete response').status('danger').presentation() }], id: pending[0].id, ok: true, protocolVersion: '1.0' }))
+    pending[1]?.resolve(Response.json({ data: { saved: true }, effects: [{ kind: 'toast', presentation: panelNotification('response.current').title('Current response').status('success').presentation() }], id: pending[1].id, ok: true, protocolVersion: '1.0' }))
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1))
     expect(push.mock.calls[0]?.[0]).toMatchObject({ title: 'Current response' })
 

@@ -147,8 +147,11 @@ describe('internal panel auth controller', () => {
   it('creates a controller from compiled panel server state without client-selected auth configuration', async () => {
     const { auth } = fixture()
     const panel = definePanel('admin', Actor)
-      .guard('admin')
-      .auth({ login: true, logout: true, multiFactor: true, passwordReset: { broker: 'admins' } })
+      .authGuard('admin')
+      .login()
+      .multiFactorAuthentication()
+      .authPasswordBroker('admins')
+      .passwordReset()
       .compile()
     const controller = createPanelAuthController({ auth, panel, services: {}, tenant: null })
 

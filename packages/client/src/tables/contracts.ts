@@ -58,6 +58,30 @@ export type TableStateListener<TRecord extends object, TRecordId extends TableRe
   previous: TableState<TRecord, TRecordId>,
 ) => void
 
+export interface TableStore<TRecord extends object, TRecordId extends TableRecordId> {
+  readonly selectionSettings: Readonly<{ currentPageOnly: boolean, groupsOnly: boolean, maximum: number | null }>
+  readonly canSelectAllMatching: boolean
+  readonly selectedCount: number
+  readonly snapshot: TableState<TRecord, TRecordId>
+  applyDeferredFilters(): void
+  canSelectRecord(recordId: TRecordId): boolean
+  clearSelection(): void
+  isSelected(recordId: TRecordId): boolean
+  resetFilters(): void
+  selectAllMatching(): void
+  selectGroup(recordIds: readonly TRecordId[], groupKey: string, selected?: boolean): void
+  selectPage(recordIds: readonly TRecordId[], selected?: boolean): void
+  selectRecord(recordId: TRecordId, selected?: boolean, groupKey?: string): void
+  selectionPayload(): TableSelectionPayload<TRecordId>
+  setFilter(filterId: string, value: JsonValue): void
+  setPage(page: number): void
+  setPerPage(perPage: number): void
+  setSearch(search: string): void
+  setSort(sort: readonly TableSort[]): void
+  setVisibleColumns(columns: readonly string[]): void
+  subscribe(listener: TableStateListener<TRecord, TRecordId>): () => void
+}
+
 export type TableStateOptions<TRecord extends object> = {
   readonly panelId: string
   readonly tableId: string

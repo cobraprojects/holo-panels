@@ -84,7 +84,7 @@ class Actor {
 }
 
 const panel = definePanel('admin', Actor)
-  .guard('web')
+  .authGuard('web')
   .databaseNotifications()
   .databaseNotificationInbox({
     authorize: (_operation, scope) => scope.actor.id === 'user-7',

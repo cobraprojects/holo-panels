@@ -1,4 +1,4 @@
-import { createRequestEnvelope, type Effect, type JsonObject } from '@holo-js/panels-core'
+import { createRequestEnvelope, panelNotification, type Effect, type JsonObject } from '@holo-js/panels-core'
 import { ClientToastStore } from '@holo-js/panels-vue'
 import { createApp as createH3App, createRouter, defineEventHandler, toWebHandler } from 'h3'
 import { createApp, nextTick } from 'vue'
@@ -10,6 +10,10 @@ const authState = vi.hoisted(() => ({
   flashed: new Map<string, unknown>(),
   guardNames: [] as string[],
 }))
+
+function toast(id: string, title: string, status: 'danger' | 'info' | 'success' | 'warning' = 'success'): Effect {
+  return { kind: 'toast', presentation: panelNotification(id).title(title).status(status).presentation() }
+}
 
 vi.mock('@holo-js/security/nuxt/server', () => ({
   csrfProtection: () => defineEventHandler(() => undefined),
@@ -135,7 +139,7 @@ describe('Nuxt redirect toast session handoff', () => {
   it('rejects a multibyte operation envelope above 4 MiB without flashing success effects', async () => {
     const effects: readonly Effect[] = [
       { kind: 'redirect', url: '/admin' },
-      { kind: 'toast', level: 'success', message: 'Oversized success' },
+      toast('posts.oversized', 'Oversized success'),
     ]
     const emptyEnvelope = { data: { text: '' }, effects, id: 'request-1234567890', ok: true, protocolVersion: '1.0' }
     const remainingBytes = 4_194_305 - new TextEncoder().encode(JSON.stringify(emptyEnvelope)).byteLength
@@ -162,18 +166,18 @@ describe('Nuxt redirect toast session handoff', () => {
   })
 
   it('survives a redirect once and applies the consumed toast once on the client', async () => {
-    const toast: Effect = { kind: 'toast', level: 'success', message: 'Article saved' }
-    const effects: readonly Effect[] = [{ kind: 'redirect', url: '/admin' }, toast]
+    const effect = toast('posts.saved', 'Article saved')
+    const effects: readonly Effect[] = [{ kind: 'redirect', url: '/admin' }, effect]
     const fetch = webHandler(runtime(['admin'], context => context.operation === 'page-data' ? { data: page } : { data: { saved: true }, effects }))
 
     const mutation = await fetch(formRequest('admin', 'form-submit'))
     expect(mutation.status).toBe(200)
     expect(await mutation.json()).toMatchObject({ effects, ok: true })
-    expect(authState.flashed.get('panels.effects.admin')).toEqual([toast])
+    expect(authState.flashed.get('panels.effects.admin')).toEqual([effect])
 
     const redirected = await fetch(pageRequest('admin'))
     const redirectedPage = await redirected.json() as NuxtPanelPage
-    expect(redirectedPage.effects).toEqual([toast])
+    expect(redirectedPage.effects).toEqual([effect])
     expect(authState.flashed.has('panels.effects.admin')).toBe(false)
 
     const replay = await fetch(pageRequest('admin'))
@@ -193,7 +197,7 @@ describe('Nuxt redirect toast session handoff', () => {
   })
 
   it('rejects malformed and non-toast payloads without consuming another panel key', async () => {
-    const staffToast: Effect = { kind: 'toast', level: 'info', message: 'Staff only' }
+    const staffToast = toast('staff.info', 'Staff only', 'info')
     const fetch = webHandler(runtime(['admin', 'staff'], () => ({ data: page })), ['admin', 'staff'])
     authState.flashed.set('panels.effects.admin', [{ kind: 'toast', level: 'success' }])
     authState.flashed.set('panels.effects.staff', [staffToast])
@@ -209,8 +213,8 @@ describe('Nuxt redirect toast session handoff', () => {
   })
 
   it('preserves committed mutation responses and page rendering when flash or take fails', async () => {
-    const toast: Effect = { kind: 'toast', level: 'success', message: 'Saved' }
-    const effects: readonly Effect[] = [toast, { kind: 'redirect', url: '/admin' }]
+    const effect = toast('posts.saved', 'Saved')
+    const effects: readonly Effect[] = [effect, { kind: 'redirect', url: '/admin' }]
     const fetch = webHandler(runtime(['admin'], context => context.operation === 'page-data' ? { data: page } : { data: { saved: true }, effects }))
     authState.failFlash = true
 

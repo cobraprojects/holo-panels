@@ -70,22 +70,9 @@ function decodeEffect(value: unknown): Readonly<Effect> {
       if (typeof value.target !== 'undefined' && value.target !== 'page' && value.target !== 'schema') throw new TransportDecodingError('Invalid refresh target.')
       return Object.freeze({ kind: value.kind, ...(value.target ? { target: value.target } : {}) })
     case 'toast': {
-      if ('presentation' in value) {
-        const presentation = validatedToastPresentation(value.presentation)
-        if (!presentation) throw new TransportDecodingError('Invalid toast presentation.')
-        return Object.freeze({ kind: value.kind, presentation })
-      }
-      if (!['danger', 'info', 'success', 'warning'].includes(String(value.level))) throw new TransportDecodingError('Invalid toast level.')
-      if (typeof value.duration !== 'undefined' && (!Number.isInteger(value.duration) || (value.duration as number) < 0)) {
-        throw new TransportDecodingError('Invalid toast duration.')
-      }
-      return Object.freeze({
-        kind: value.kind,
-        level: value.level as 'danger' | 'info' | 'success' | 'warning',
-        message: requiredString(value.message, 'toast message'),
-        ...(optionalString(value.title, 'toast title') ? { title: value.title as string } : {}),
-        ...(typeof value.duration === 'number' ? { duration: value.duration } : {}),
-      })
+      const presentation = validatedToastPresentation(value.presentation)
+      if (!presentation) throw new TransportDecodingError('Invalid toast presentation.')
+      return Object.freeze({ kind: value.kind, presentation })
     }
     default:
       throw new TransportDecodingError(`Unsupported response effect: ${value.kind}.`)

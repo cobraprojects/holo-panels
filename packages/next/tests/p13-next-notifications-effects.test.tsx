@@ -7,7 +7,9 @@ import {
   createRequestEnvelope,
   definePage,
   definePanel,
+  panelNotification,
   TRANSPORT_REQUEST_FIELD,
+  type Effect,
   type HoloAuth,
   type JsonObject,
   type ResponseEnvelope,
@@ -62,6 +64,10 @@ const page = definePage('dashboard', { actor: Actor, load: () => ({ ready: true 
   .path('/admin')
   .title('Dashboard')
   .compile()
+
+function toast(id: string, title: string, status: 'danger' | 'info' | 'success' | 'warning' = 'success'): Effect {
+  return { kind: 'toast', presentation: panelNotification(id).title(title).status(status).presentation() }
+}
 
 function runtime(execute?: NextPanelsRuntime['execute']): NextPanelsRuntime {
   return {
@@ -173,7 +179,7 @@ describe('Next notification and effect integration', () => {
       const request = await decodedRequest(input, init)
       return Response.json({
         data: { record: { id: 1, slug: 'first-post', title: 'First post' } },
-        effects: [{ kind: 'toast', level: 'success', message: 'Post saved.' }],
+        effects: [toast('posts.saved', 'Post saved.')],
         id: request.id,
         ok: true,
         protocolVersion: '1.0',
@@ -262,14 +268,14 @@ describe('Next notification and effect integration', () => {
 
     requests[0]?.resolve(Response.json({
       data: { record: { id: 1, slug: 'first-post', title: 'Obsolete post' } },
-      effects: [{ kind: 'toast', level: 'danger', message: 'Obsolete response' }],
+      effects: [toast('posts.obsolete', 'Obsolete response', 'danger')],
       id: requests[0].id,
       ok: true,
       protocolVersion: '1.0',
     }))
     requests[1]?.resolve(Response.json({
       data: { record: { id: 1, slug: 'first-post', title: 'Current post' } },
-      effects: [{ kind: 'toast', level: 'success', message: 'Current response' }],
+      effects: [toast('posts.current', 'Current response')],
       id: requests[1].id,
       ok: true,
       protocolVersion: '1.0',
@@ -326,7 +332,7 @@ describe('Next notification and effect integration', () => {
   it('rejects a multibyte operation envelope above 4 MiB without flashing success effects', async () => {
     const effects = [
       { kind: 'redirect' as const, url: '/admin' },
-      { kind: 'toast' as const, level: 'success' as const, message: 'Oversized success' },
+      toast('posts.oversized', 'Oversized success'),
     ]
     const emptyEnvelope = { data: { text: '' }, effects, id: 'request-p13', ok: true, protocolVersion: '1.0' }
     const remainingBytes = 4_194_305 - new TextEncoder().encode(JSON.stringify(emptyEnvelope)).byteLength
@@ -423,8 +429,8 @@ describe('Next notification and effect integration', () => {
       const request = await decodedRequest(input, init)
       if (request.operation === 'options') return schemaResponse(request.id)
       const envelope: ResponseEnvelope = ok
-        ? { data: null, effects: [{ kind: 'redirect', url: '/admin' }, { kind: 'toast', level: 'success', message: 'Saved' }], id: request.id, ok: true, protocolVersion: '1.0' }
-        : { effects: [{ kind: 'redirect', url: '/admin' }, { kind: 'toast', level: 'danger', message: 'Failed safely' }], error: { category: 'internal', code: 'failed', message: 'The operation could not be completed.', retryable: false }, id: request.id, ok: false, protocolVersion: '1.0' }
+        ? { data: null, effects: [{ kind: 'redirect', url: '/admin' }, toast('posts.saved', 'Saved')], id: request.id, ok: true, protocolVersion: '1.0' }
+        : { effects: [{ kind: 'redirect', url: '/admin' }, toast('posts.failed', 'Failed safely', 'danger')], error: { category: 'internal', code: 'failed', message: 'The operation could not be completed.', retryable: false }, id: request.id, ok: false, protocolVersion: '1.0' }
       return Response.json(envelope, { status: ok ? 200 : 500 })
     }))
     const container = document.createElement('div')
@@ -441,7 +447,7 @@ describe('Next notification and effect integration', () => {
   })
 
   it('preserves validated ActionExecutionError effects without exposing causes or effects from ordinary errors', async () => {
-    const safeEffect = { kind: 'toast' as const, level: 'danger' as const, message: 'Try again' }
+    const safeEffect = toast('posts.try-again', 'Try again', 'danger')
     const actionFailure = new ActionExecutionError('failed', 'secret database cause', [safeEffect])
     Reflect.set(actionFailure, 'cause', new Error('credential=secret'))
     const route = createPanelOperationRoute({ panelIds: ['admin'], runtime: runtime(async () => { throw actionFailure }) })
@@ -455,7 +461,7 @@ describe('Next notification and effect integration', () => {
     Reflect.set(ordinary, 'effects', [safeEffect])
     const ordinaryRoute = createPanelOperationRoute({ panelIds: ['admin'], runtime: runtime(async () => { throw ordinary }) })
     const ordinaryBody = await (await ordinaryRoute.POST(operationRequest(), context)).json() as ResponseEnvelope
-    expect(ordinaryBody.effects).toEqual([{ kind: 'toast', level: 'danger', message: 'Please try again later.', title: 'An error occurred' }])
+    expect(ordinaryBody.effects).toMatchObject([{ kind: 'toast', presentation: { body: 'Please try again later.', status: 'danger', title: 'An error occurred' } }])
     expect(JSON.stringify(ordinaryBody)).not.toContain('ordinary secret')
 
     const invalidEffect = new ActionExecutionError('failed', 'invalid effect')
@@ -466,21 +472,21 @@ describe('Next notification and effect integration', () => {
   })
 
   it('atomically carries redirect toasts through the guard-scoped session into the next page', async () => {
-    const toast = { kind: 'toast' as const, level: 'success' as const, message: 'Saved across redirect' }
+    const effect = toast('posts.redirect-saved', 'Saved across redirect')
     const route = createPanelOperationRoute({
       panelIds: ['admin'],
       runtime: runtime(async () => ({
         data: null,
-        effects: [toast, { kind: 'redirect', url: '/admin' }],
+        effects: [effect, { kind: 'redirect', url: '/admin' }],
       })),
     })
     const context = { params: Promise.resolve({ operation: 'action', panelId: 'admin' }) }
 
     await expect(route.POST(operationRequest(), context).then(response => response.status)).resolves.toBe(200)
-    expect(flashed.get('panels.effects.admin')).toEqual([toast])
+    expect(flashed.get('panels.effects.admin')).toEqual([effect])
 
     const redirected = await payload()
-    expect(redirected.effects).toEqual([toast])
+    expect(redirected.effects).toEqual([effect])
     expect(flashed.has('panels.effects.admin')).toBe(false)
     const container = document.createElement('div')
     document.body.append(container)

@@ -18,18 +18,18 @@ class StaffActor {
 
 export const adminPanel = definePanel('admin', StaffActor)
   .path('/admin')
-  .guard('staff')
+  .authGuard('staff')
   .access(({ actor }) => actor.role === 'admin')
   .presentActor(actor => ({ id: actor.id, role: actor.role }))
 
 export const reportsPanel = definePanel('reports', StaffActor)
   .path('/reports')
-  .guard('staff')
+  .authGuard('staff')
   .access(({ actor }) => actor.role === 'admin' || actor.role === 'analyst')
   .presentActor(actor => ({ id: actor.id, role: actor.role }))
 ```
 
-The default guard is `web` when `.guard(...)` is omitted. `.presentActor(...)` is an explicit client projection: only return fields that the panel UI is allowed to receive. The default projection is an empty object.
+The default guard is `web` when `.authGuard(...)` is omitted. `.presentActor(...)` is an explicit client projection: only return fields that the panel UI is allowed to receive. The default projection is an empty object.
 
 Calling `.compile()` produces an immutable definition for runtime use. Normal applications usually let `holo prepare` discover and prepare panel definitions rather than constructing a separate routing or authentication system.
 
@@ -57,7 +57,7 @@ class VendorActor {
 
 export const vendorPanel = definePanel('vendor', VendorActor)
   .path('/vendor')
-  .guard('vendors')
+  .authGuard('vendors')
   .access(({ actor }) => actor.companyId.length > 0)
   .presentActor(actor => ({ id: actor.id }))
 ```

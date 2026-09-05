@@ -341,7 +341,7 @@ function createPanelRuntime(): { readonly ids: readonly string[], readonly runti
   const actor: BenchmarkActor = Object.freeze({ id: 7, name: 'Benchmark Actor' })
   const ids = Array.from({ length: 8 }, (_, index) => `benchmark-${index + 1}`)
   const panels = ids.map((id, index) => definePanel(id, BenchmarkActor)
-    .guard(index % 2 === 0 ? 'web' : 'vendor')
+    .authGuard(index % 2 === 0 ? 'web' : 'vendor')
     .presentActor(current => ({ id: current.id, name: current.name }))
     .compile())
   return {

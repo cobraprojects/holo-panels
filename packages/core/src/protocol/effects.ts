@@ -10,20 +10,10 @@ export interface RedirectEffect {
   url: string
 }
 
-export interface LegacyToastEffect {
-  duration?: number
-  kind: 'toast'
-  level: 'danger' | 'info' | 'success' | 'warning'
-  message: string
-  title?: string
-}
-
-export interface RichToastEffect {
+export interface ToastEffect {
   kind: 'toast'
   presentation: PanelNotificationPresentation
 }
-
-export type ToastEffect = LegacyToastEffect | RichToastEffect
 
 export interface CloseModalEffect {
   id?: string

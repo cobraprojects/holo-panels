@@ -1,4 +1,4 @@
-import { createGeneratedResourcePage, generatedResourcePageManifests, type JsonObject } from '@holo-js/panels'
+import { createGeneratedResourcePage, generatedResourcePageManifests, panelNotification, type JsonObject } from '@holo-js/panels'
 import { createGeneratedNextPanelsRuntime, type NextPanelOperationInput, type NextPanelsRuntime } from '@holo-js/panels-next'
 import '../.holo-js/generated/schema.generated'
 import serverRegistry from '../.holo-js/generated/panels/server-registry'
@@ -64,7 +64,13 @@ export async function createNextPanelsAcceptanceRuntime(overrides: AcceptanceOve
         })
         return {
           data: { resourceId: input.payload.resourceId ?? null, saved: true } as JsonObject,
-          effects: [{ kind: 'toast' as const, level: 'success' as const, message: input.payload.intent === 'delete' ? 'Post deleted.' : 'Post saved.' }],
+          effects: [{
+            kind: 'toast' as const,
+            presentation: panelNotification('posts.saved')
+              .title(input.payload.intent === 'delete' ? 'Post deleted.' : 'Post saved.')
+              .status('success')
+              .presentation(),
+          }],
         }
       },
     } : {}),

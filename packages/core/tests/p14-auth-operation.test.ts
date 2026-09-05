@@ -45,8 +45,12 @@ function fixture() {
     },
   }
   const panel = definePanel('admin', { prototype: actor })
-    .guard('admin')
-    .auth({ login: true, logout: true, multiFactor: true, passwordReset: { broker: 'admins' }, registration: true })
+    .authGuard('admin')
+    .login()
+    .registration()
+    .multiFactorAuthentication()
+    .authPasswordBroker('admins')
+    .passwordReset()
     .compile()
   const common = {
     auth,
@@ -161,7 +165,10 @@ describe('panel auth operation dispatcher', () => {
   it('returns only the public authentication presentation compiled from the panel', async () => {
     const { common } = fixture()
     const panel = definePanel('admin')
-      .auth({ login: true, passwordReset: { broker: 'admins' }, registration: true })
+      .login()
+      .registration()
+      .authPasswordBroker('admins')
+      .passwordReset()
       .brandName('Control Center')
       .colors({ primary: '#7c3aed' })
       .simplePageMaxContentWidth('screen-sm')

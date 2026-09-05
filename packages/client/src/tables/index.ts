@@ -18,5 +18,6 @@ export type {
   TableStateError,
   TableStateListener,
   TableStateOptions,
+  TableStore,
 } from './contracts'
 export type { RestoredTableQuery } from './query-parameters'

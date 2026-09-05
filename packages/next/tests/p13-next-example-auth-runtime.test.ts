@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { panelNotification } from '@holo-js/panels-core'
 
 const flash = vi.fn(async (_key = '', _values: readonly object[] = []) => undefined)
-const take = vi.fn(async <TValue>(_key: string): Promise<TValue | undefined> => [{ kind: 'toast', level: 'success', message: 'Saved' }] as TValue)
+const savedEffect = { kind: 'toast', presentation: panelNotification('posts.saved').title('Saved').status('success').presentation() }
+const take = vi.fn(async <TValue>(_key: string): Promise<TValue | undefined> => [savedEffect] as TValue)
 const login = vi.fn(async () => ({ cookies: ['session=next'], guard: 'admins', provider: 'users', sessionId: 'session-1', user: { id: 7 } }))
 const logout = vi.fn(async () => ({ cookies: ['session='], guard: 'admins' }))
 
@@ -35,7 +37,7 @@ describe('Next generated panel auth bridge', () => {
     await guard.flash?.('panels.effects.admin', [{ kind: 'toast' }])
 
     expect(await guard.provider()).toBe('admins')
-    expect(await guard.take?.('panels.effects.admin')).toEqual([{ kind: 'toast', level: 'success', message: 'Saved' }])
+    expect(await guard.take?.('panels.effects.admin')).toEqual([savedEffect])
     expect(await guard.user()).toEqual({ id: 7 })
     expect(flash).toHaveBeenCalledWith('panels.effects.admin', [{ kind: 'toast' }])
     expect(take).toHaveBeenCalledWith('panels.effects.admin')

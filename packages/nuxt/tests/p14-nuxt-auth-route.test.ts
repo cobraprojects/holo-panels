@@ -42,8 +42,9 @@ vi.mock('@holo-js/adapter-nuxt/runtime', () => ({
 const { createPanelAuthHandler, createPanelTenantHandler } = await import('../src/server')
 
 const panel = definePanel('admin', { prototype: { id: '' } })
-  .guard('admin')
-  .auth({ login: true, logout: true, multiFactor: true })
+  .authGuard('admin')
+  .login()
+  .multiFactorAuthentication()
   .compile()
 
 function endpoint(): (request: Request) => Promise<Response> {
@@ -92,7 +93,7 @@ describe('Nuxt panel auth handler', () => {
   it('dispatches the inferred tenant profile page through the native GET boundary', async () => {
     const actor = { id: 'user-7' }
     const tenant = { id: 'tenant-a', members: new Set([actor.id]), name: 'Acme', slug: 'acme' }
-    const tenantPanel = definePanel('admin', { prototype: actor }).guard('admin').tenancy({
+    const tenantPanel = definePanel('admin', { prototype: actor }).authGuard('admin').tenancy({
       authorize: (value, scope) => value.members.has(scope.actor.id),
       findMembershipById: id => id === tenant.id ? tenant : null,
       findMembershipByRouteKey: routeKey => routeKey === tenant.slug ? tenant : null,

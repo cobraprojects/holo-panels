@@ -18,7 +18,7 @@ import { definePanel } from '@holo-js/panels'
 export default definePanel('admin')
   .default()
   .path('/admin')
-  .guard('web')
+  .authGuard('web')
 ```
 
 Use the name of a guard that is already configured by Holo Auth. Panel page and operation requests are authenticated and authorized on the server; hiding navigation or controls is not authorization.

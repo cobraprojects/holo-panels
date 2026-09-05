@@ -63,7 +63,7 @@ function scope(actor: AcceptanceActor, guard: 'admin' | 'vendor'): PanelAuthenti
 
 function panel(guard: 'admin' | 'vendor') {
   return definePanel('commerce', AcceptanceActor)
-    .guard(guard)
+    .authGuard(guard)
     .databaseNotifications({ polling: 1_000, realtime: true })
     .databaseNotificationInbox({
       authorize: (_operation, authenticated) => authenticated.guard === guard && authenticated.actor.role === guard,

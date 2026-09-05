@@ -41,7 +41,7 @@ describe('Shield panel plugin', () => {
       repository,
       tenant: input => input.tenant,
     })
-    const panel = definePanel('admin', Actor).guard('admin').plugin(plugin).compile()
+    const panel = definePanel('admin', Actor).authGuard('admin').plugin(plugin).compile()
 
     expect(panel.server.plugins).toHaveLength(1)
     expect(panel.server.plugins[0]).toMatchObject({ id: 'shield', permissionNamespace: 'admin' })
@@ -58,7 +58,7 @@ describe('Shield panel plugin', () => {
       repository,
       tenant: input => input.tenant,
     })
-    const layer = definePanel('admin', Actor).guard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
+    const layer = definePanel('admin', Actor).authGuard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
 
     await expect(layer.authorize(request({ permission: 'admin.posts.view' }))).resolves.toBeUndefined()
     await expect(layer.authorize(request({ permission: 'backoffice.posts.view' }))).resolves.toBeUndefined()
@@ -72,8 +72,8 @@ describe('Shield panel plugin', () => {
       repository,
       tenant: input => input.tenant,
     })
-    const adminLayer = definePanel('admin', Actor).guard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
-    const vendorLayer = definePanel('vendor', Actor).guard('vendor').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
+    const adminLayer = definePanel('admin', Actor).authGuard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
+    const vendorLayer = definePanel('vendor', Actor).authGuard('vendor').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
 
     await expect(adminLayer.authorize(request())).resolves.toBeUndefined()
     await expect(vendorLayer.authorize(request({ guard: 'vendor', panelId: 'vendor' })))
@@ -85,7 +85,7 @@ describe('Shield panel plugin', () => {
     const actor = vi.fn(() => grants.actor)
     const tenant = vi.fn(() => grants.tenantId)
     const plugin = shield<Actor, number>({ actor, repository, tenant })
-    const layer = definePanel('admin', Actor).guard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
+    const layer = definePanel('admin', Actor).authGuard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
 
     await expect(layer.authorize(request({ panelId: 'vendor' }))).rejects.toThrow('installed panel and guard')
     expect(actor).not.toHaveBeenCalled()
@@ -96,7 +96,7 @@ describe('Shield panel plugin', () => {
       repository,
       tenant: () => 7,
     })
-    const invalidLayer = definePanel('admin', Actor).guard('admin').plugin(invalidPlugin).compile().server.plugins[0]!.authorizationLayer!
+    const invalidLayer = definePanel('admin', Actor).authGuard('admin').plugin(invalidPlugin).compile().server.plugins[0]!.authorizationLayer!
     await expect(invalidLayer.authorize(request())).rejects.toThrow('actor IDs')
   })
 
@@ -104,7 +104,7 @@ describe('Shield panel plugin', () => {
     const repository = createInMemoryShieldRepository()
     const actor = vi.fn(() => grants.actor)
     const plugin = shield<Actor, number>({ actor, repository, tenant: () => 7 })
-    const layer = definePanel('admin', Actor).guard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
+    const layer = definePanel('admin', Actor).authGuard('admin').plugin(plugin).compile().server.plugins[0]!.authorizationLayer!
     const controller = new AbortController()
     controller.abort(new Error('cancelled'))
 

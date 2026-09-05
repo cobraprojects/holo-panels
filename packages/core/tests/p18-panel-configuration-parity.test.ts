@@ -337,7 +337,7 @@ describe('Filament-shaped panel configuration', () => {
       definition: { hidden: [], table: { tableName: 'users' } },
       prototype: { id: '', tenantId: '' },
     }
-    const panel = definePanel('admin', UserModel).guard('staff').databaseNotifications({ realtime: true }).compile()
+    const panel = definePanel('admin', UserModel).authGuard('staff').databaseNotifications({ realtime: true }).compile()
     const identity = await panel.server.notifications?.inbox.resolve({
       actor: { id: 'user-1', tenantId: 'tenant-1' },
       guard: 'staff',
@@ -351,7 +351,7 @@ describe('Filament-shaped panel configuration', () => {
       recipient: { id: 'user-1', type: 'users' },
       tenantId: 'tenant-1',
     })
-    const quietPanel = definePanel('quiet', UserModel).guard('staff').databaseNotifications({ realtime: true }).broadcasting(false).compile()
+    const quietPanel = definePanel('quiet', UserModel).authGuard('staff').databaseNotifications({ realtime: true }).broadcasting(false).compile()
     const runtime = new PanelRuntime({
       guard: () => ({ provider: async () => 'users', user: async () => ({ id: 'user-1', tenantId: 'tenant-1' }) }),
     }, [quietPanel])
@@ -555,17 +555,31 @@ describe('Filament-shaped panel configuration', () => {
 
     expect(panelErrorNotificationEffect(panel, 404)).toMatchObject({
       kind: 'toast',
-      level: 'danger',
-      message: 'The requested record no longer exists.',
-      title: 'Missing record',
+      presentation: {
+        body: 'The requested record no longer exists.',
+        status: 'danger',
+        title: 'Missing record',
+      },
     })
-    expect(panelErrorNotificationEffect(panel, 500)).toMatchObject({ message: 'Try again.', title: 'Something failed' })
+    expect(panelErrorNotificationEffect(panel, 500)).toMatchObject({ presentation: { body: 'Try again.', title: 'Something failed' } })
     expect(panelErrorNotificationEffect(panel, 403)).toBeNull()
     expect(panelErrorNotificationEffect(panel, 503)).toBeNull()
     expect(panelErrorNotificationEffect(definePanel('quiet').errorNotifications(false).compile(), 500)).toBeNull()
     expect(panelErrorNotificationEffect(definePanel('default').compile(), 500)).toMatchObject({
-      message: 'Please try again later.',
-      title: 'An error occurred',
+      presentation: {
+        body: 'Please try again later.',
+        title: 'An error occurred',
+      },
     })
+  })
+
+  it('exposes only the approved Filament-shaped panel builder family', () => {
+    const panel = definePanel()
+
+    expect(panel).not.toHaveProperty('auth')
+    expect(panel).not.toHaveProperty('defaultPanel')
+    expect(panel).not.toHaveProperty('guard')
+    expect(panel).toHaveProperty('authGuard')
+    expect(panel).toHaveProperty('default')
   })
 })

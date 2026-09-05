@@ -118,9 +118,7 @@
   }
 
   function updateFilter(filter: SvelteTableFilter, value: JsonValue): void {
-    const setFilter: unknown = Reflect.get(table.store, 'setFilter')
-    if (typeof setFilter !== 'function') throw new Error('[Holo Panels] Svelte table filters require a compatible table store.')
-    Reflect.apply(setFilter, table.store, [filter.manifest.id, value])
+    table.store.setFilter(filter.manifest.id, value)
     if ($snapshotStore.filters.mode === 'live') notifyQueryChange()
   }
 
@@ -151,7 +149,7 @@
 
   function changePerPage(event: Event): void {
     const value = Number((event.currentTarget as HTMLSelectElement).value)
-    table.store.setPerPage?.(value)
+    table.store.setPerPage(value)
     notifyQueryChange()
   }
 
@@ -303,16 +301,14 @@
 
   <nav aria-label={translate('tables.pagination')} class="hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground" data-slot="table-pagination">
     <span aria-live="polite" class="hp-table-pagination-info">{translate('tables.summary', { from: paginationFrom, to: paginationTo, total: $snapshotStore.total })}</span>
-    {#if typeof table.store.setPerPage === 'function'}
-      <label class="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
-        <NativeSelect aria-label={translate('tables.resultsPerPage')} disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
-          {#each perPageOptions($snapshotStore.perPage) as value (value)}
-            <option value={String(value)}>{value}</option>
-          {/each}
-        </NativeSelect>
-        <span>{translate('tables.perPage')}</span>
-      </label>
-    {/if}
+    <label class="hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2">
+      <NativeSelect aria-label={translate('tables.resultsPerPage')} disabled={$snapshotStore.loading} onchange={changePerPage} value={String($snapshotStore.perPage)}>
+        {#each perPageOptions($snapshotStore.perPage) as value (value)}
+          <option value={String(value)}>{value}</option>
+        {/each}
+      </NativeSelect>
+      <span>{translate('tables.perPage')}</span>
+    </label>
     <div class="hp-table-pagination-pages hp:flex hp:items-center hp:gap-1">
       <Button type="button" aria-label={translate('tables.previousPage')} size="icon" variant="outline" disabled={$snapshotStore.page <= 1 || $snapshotStore.loading} onclick={() => changePage($snapshotStore.page - 1)}><ChevronLeft aria-hidden="true" class="hp:rtl:rotate-180" /></Button>
       {#each pageNumbers as entry, i (typeof entry === 'number' ? entry : `ellipsis-${i}`)}

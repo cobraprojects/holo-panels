@@ -41,7 +41,7 @@ const auth: HoloAuth<object> = {
   }),
 }
 const panel = definePanel('admin', Actor)
-  .guard('web')
+  .authGuard('web')
   .databaseNotifications()
   .databaseNotificationInbox({
     authorize(operation) {

@@ -262,7 +262,7 @@ describe('P7-G Svelte table renderer', () => {
     expect(container.querySelector('.hp-table-pagination-info')?.getAttribute('aria-live')).toBe('polite')
   })
 
-  it('preserves arbitrary page sizes and supports legacy stores without page-size mutation', () => {
+  it('preserves arbitrary page sizes', () => {
     const store = createStore({ perPage: 37, total: 250 })
     const container = mountTable(baseTable(store))
     const select = container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')
@@ -270,15 +270,6 @@ describe('P7-G Svelte table renderer', () => {
     expect(select?.value).toBe('37')
     expect(Array.from(select?.options ?? []).map(option => option.value)).toContain('37')
 
-    const legacyStore = new Proxy(store, {
-      get(target, property) {
-        if (property === 'setPerPage') return undefined
-        const value: unknown = Reflect.get(target, property, target)
-        return typeof value === 'function' ? value.bind(target) : value
-      },
-    }) as SvelteTableStore<Post, number>
-    const legacyContainer = mountTable(baseTable(legacyStore))
-    expect(legacyContainer.querySelector('select[aria-label="Results per page"]')).toBeNull()
   })
 
   it('reports an accessible zero-result range', () => {

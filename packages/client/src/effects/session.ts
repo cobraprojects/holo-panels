@@ -1,53 +1,16 @@
-import {
-  panelNotification,
-  type Effect,
-  type PanelNotificationPresentation,
-  type ResponseEnvelope,
-  type ToastEffect,
+import type {
+  Effect,
+  ResponseEnvelope,
 } from '@holo-js/panels-core'
 import type { ClientEffectHandler, ClientEffectSessionOptions } from './contracts'
 
-type LegacyToastEffect = Extract<ToastEffect, { readonly message: string }>
-type RichToastEffect = Extract<ToastEffect, { readonly presentation: PanelNotificationPresentation }>
-
 const PANEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/u
-
-function legacyIdentifierSegment(value: string): string {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '')
-  return normalized.slice(0, 80) || 'unknown'
-}
-
-function legacyPresentation(
-  panelId: string,
-  responseId: string,
-  index: number,
-  effect: Readonly<LegacyToastEffect>,
-) {
-  const notification = panelNotification(
-    `response.${legacyIdentifierSegment(panelId)}.${legacyIdentifierSegment(responseId)}.${index + 1}`,
-  )
-    .title(effect.title ?? effect.message)
-    .body(effect.title ? effect.message : null)
-    .status(effect.level)
-
-  if (effect.duration === 0) {
-    notification.persistent()
-  } else if (typeof effect.duration === 'number') {
-    notification.duration(Math.min(300_000, Math.max(1_000, effect.duration)))
-  }
-
-  return notification.presentation()
-}
-
-function isRichToast(effect: Readonly<ToastEffect>): effect is Readonly<RichToastEffect> {
-  return 'presentation' in effect
-}
 
 export class ClientEffectSession {
   readonly #activeResponses = new Map<string, Promise<void>>()
   readonly #options: ClientEffectSessionOptions
   readonly #responseProgress = new Map<string, {
-    readonly effects: readonly { readonly effect: Readonly<Effect>, readonly originalIndex: number }[]
+    readonly effects: readonly Readonly<Effect>[]
     nextIndex: number
   }>()
   #disposed = false
@@ -66,19 +29,15 @@ export class ClientEffectSession {
 
     const progress = this.#responseProgress.get(response.id) ?? {
       effects: Object.freeze([
-        ...response.effects
-          .map((effect, originalIndex) => ({ effect, originalIndex }))
-          .filter(entry => entry.effect.kind !== 'redirect'),
-        ...response.effects
-          .map((effect, originalIndex) => ({ effect, originalIndex }))
-          .filter(entry => entry.effect.kind === 'redirect'),
+        ...response.effects.filter(effect => effect.kind !== 'redirect'),
+        ...response.effects.filter(effect => effect.kind === 'redirect'),
       ]),
       nextIndex: 0,
     }
     this.#responseProgress.set(response.id, progress)
     if (progress.nextIndex >= progress.effects.length) return
 
-    const execution = this.applyRemaining(response.id, progress)
+    const execution = this.applyRemaining(progress)
     this.#activeResponses.set(response.id, execution)
     try {
       await execution
@@ -96,28 +55,23 @@ export class ClientEffectSession {
   }
 
   private async applyRemaining(
-    responseId: string,
     progress: {
-      readonly effects: readonly { readonly effect: Readonly<Effect>, readonly originalIndex: number }[]
+      readonly effects: readonly Readonly<Effect>[]
       nextIndex: number
     },
   ): Promise<void> {
     while (progress.nextIndex < progress.effects.length) {
-      const entry = progress.effects[progress.nextIndex]!
-      await this.applyEffect(entry.effect, responseId, entry.originalIndex)
+      const effect = progress.effects[progress.nextIndex]!
+      await this.applyEffect(effect)
       progress.nextIndex++
       if (this.#disposed) return
     }
   }
 
-  private async applyEffect(effect: Readonly<Effect>, responseId: string, index: number): Promise<void> {
+  private async applyEffect(effect: Readonly<Effect>): Promise<void> {
     switch (effect.kind) {
       case 'toast':
-        this.#options.toastStore.push(
-          isRichToast(effect)
-            ? effect.presentation
-            : legacyPresentation(this.#options.panelId, responseId, index, effect),
-        )
+        this.#options.toastStore.push(effect.presentation)
         return
       case 'close-modal':
         return await this.requireHandler('close-modal', this.#options.closeModal, effect)

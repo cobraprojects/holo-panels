@@ -1,4 +1,4 @@
-import { ActionExecutionError, createRequestEnvelope, definePanel, defineStatsWidget, PROTOCOL_VERSION, type JsonObject } from '@holo-js/panels-core'
+import { ActionExecutionError, createRequestEnvelope, definePanel, defineStatsWidget, panelNotification, PROTOCOL_VERSION, type Effect, type JsonObject } from '@holo-js/panels-core'
 import { createApp as createH3App, createRouter, defineEventHandler, toWebHandler } from 'h3'
 import { createApp, createSSRApp, defineComponent, effectScope, h, nextTick, shallowRef, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
@@ -25,6 +25,10 @@ vi.mock('@holo-js/adapter-nuxt/runtime', () => ({
 const { createNuxtPanelComponentRegistry, PanelPage, usePanelPage } = await import('../src')
 const { createGeneratedNuxtPanelRouteHandler, createPanelOperationHandler } = await import('../src/server')
 import type { NuxtPanelOperationContext, NuxtPanelOperationResult, NuxtPanelPage, NuxtPanelRuntime } from '../src'
+
+function toast(id: string, title: string, status: 'danger' | 'info' | 'success' | 'warning' = 'success'): Effect {
+  return { kind: 'toast', presentation: panelNotification(id).title(title).status(status).presentation() }
+}
 
 const page: NuxtPanelPage = {
   bootstrap: {
@@ -235,7 +239,7 @@ describe('P9-D Nuxt adapter', () => {
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toMatchObject({
-      effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      effects: [{ kind: 'toast', presentation: panelNotification('panel.error.500').title('Save failed').body('The post could not be saved.').status('danger').presentation() }],
       ok: false,
     })
   })
@@ -551,14 +555,14 @@ describe('P9-D Nuxt adapter', () => {
   it('decodes protocol mutations, binds route identity, invokes Holo accessors, and returns effects', async () => {
     const execute = vi.fn(async context => ({
       data: { deleted: context.input.id },
-      effects: [{ kind: 'toast' as const, level: 'success' as const, message: 'Deleted' }],
+      effects: [toast('posts.deleted', 'Deleted')],
     }))
     const fetch = webHandler(createPanelOperationHandler({ panelIds: ['admin', 'staff'], runtime: runtime(['admin', 'staff'], execute) }))
     const response = await fetch(formRequest('admin', 'action', { id: 42 }))
     const body = await response.json() as Record<string, unknown>
     expect(response.status, JSON.stringify(body)).toBe(200)
     expect(body).toMatchObject({ data: { deleted: 42 }, direction: 'ltr', id: 'request-1234567890', locale: 'en', ok: true, protocolVersion: PROTOCOL_VERSION })
-    expect(body.effects).toEqual([{ kind: 'toast', level: 'success', message: 'Deleted' }])
+    expect(body.effects).toEqual([toast('posts.deleted', 'Deleted')])
     expect(security.calls).toEqual(['POST'])
     const context = execute.mock.calls[0]?.[0]
     expect(context).toMatchObject({ operation: 'action', panelId: 'admin', requestId: 'request-1234567890' })
@@ -596,7 +600,7 @@ describe('P9-D Nuxt adapter', () => {
   })
 
   it('preserves only validated action execution effects on failure envelopes', async () => {
-    const effect = { kind: 'toast' as const, level: 'danger' as const, message: 'Could not save' }
+    const effect = toast('posts.failed', 'Could not save', 'danger')
     const actionFailure = webHandler(createPanelOperationHandler({
       panelIds: ['admin'],
       runtime: runtime(['admin'], async () => { throw new ActionExecutionError('failed', 'failed', [effect]) }),

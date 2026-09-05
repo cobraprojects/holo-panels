@@ -36,8 +36,11 @@ function fixture() {
   }
   const panel = definePanel('admin', { prototype: actor })
     .path('/admin')
-    .guard('admin')
-    .auth({ login: true, logout: true, multiFactor: true, passwordReset: { broker: 'admins' } })
+    .authGuard('admin')
+    .login()
+    .multiFactorAuthentication()
+    .authPasswordBroker('admins')
+    .passwordReset()
     .compile()
   const runtime = {
     auth,
@@ -113,7 +116,7 @@ describe('Next panel tenant route', () => {
     const actor = { id: 7 }
     const tenants = [{ id: 'tenant-a', members: new Set([7]), name: 'Acme', slug: 'acme' }]
     const panel = definePanel('admin', { prototype: actor })
-      .guard('admin')
+      .authGuard('admin')
       .tenancy({
         authorize: (tenant, scope) => tenant.members.has(scope.actor.id),
         findMembershipById: async (id, scope) => tenants.find(tenant => tenant.id === id && tenant.members.has(scope.actor.id)) ?? null,

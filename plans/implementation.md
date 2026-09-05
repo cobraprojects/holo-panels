@@ -404,7 +404,7 @@ The default panel file is fluent:
 export default definePanel('admin')
   .default()
   .path('/admin')
-  .guard('admin')
+  .authGuard('admin')
   .globalSearch()
   .databaseNotifications()
   .databaseNotificationsPolling('30s')
@@ -2138,6 +2138,10 @@ Ticket #21 closure audit on 2026-08-30: panels expose fluent locale allow-list a
 Ticket #24 scope clarification on 2026-09-03: the maintainer approved Holo Panels' existing translation support and shipped English/Arabic locale files. The selected locale determines interface messages and LTR/RTL direction, with English fallback per key. Application-authored labels retain their values. The proposed `Panel.translations()` API and application catalog configuration are excluded from this ticket.
 
 Ticket #24 closure audit on 2026-09-03: built-in form, table, action, relation, notification, upload, and widget text uses the saved English/Arabic catalogs. The resolved locale reaches generated Resource operations, validation, infolist and column formatting, and renderer providers. Shared components use logical layout, directional controls, and accessible chart descriptions. Validation passed builds and typechecks for all 21 packages, language-server diagnostics, ESLint, 1,361 workspace tests, 33 architecture tests, conditional-export isolation, packed installation lifecycles for all three frameworks, independent packed-consumer typechecks, and production example builds. All 15 affected Playwright journeys passed across Next.js, Nuxt, and SvelteKit, including Arabic desktop/mobile Resource CRUD, dashboard filtering, Stats/Chart/Table/Custom widgets, and relation attach/detach, plus the English Resource and relation lifecycle. Standards and specification reviews have no outstanding findings.
+
+- [x] #25 contraction: remove superseded panel-builder aliases and aggregate auth configuration, the legacy toast protocol and client conversion path, optional Vue/Svelte table-store fallbacks, the duplicated renderer store contract, and the obsolete aggregate-auth compilation suite.
+
+Ticket #25 closure audit on 2026-09-05: the umbrella and core declarations expose only the approved Filament-shaped panel builder family, every temporary notification uses the rich presentation contract, and Vue and Svelte renderers consume one required shared table-store interface. Fallow reports no introduced dead code, duplication, circular dependencies, or architecture-boundary violations. The generated API reference and public declaration fixtures match current builds; publish metadata, conditional exports, and maintained UI artifacts pass the packed-package gates. Validation passed ESLint, strict typechecks and builds for all 21 packages, zero-warning Svelte diagnostics, 1,361 workspace tests, 33 architecture tests, three packed framework lifecycles, independent packed-consumer typechecks, and production builds for Next.js, Nuxt, and SvelteKit. All 12 affected Playwright journeys passed across the three frameworks for notification states and appearance, table pagination and responsive behavior, and grouped action success and failure feedback.
 
 ## 44. Phase P12: widgets and dashboards
 

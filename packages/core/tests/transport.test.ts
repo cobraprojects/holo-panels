@@ -87,7 +87,6 @@ describe('server transport contracts', () => {
       direction: 'rtl',
       effects: [
         { kind: 'redirect', url: '/admin/posts', replace: true },
-        { kind: 'toast', level: 'success', message: 'Saved', duration: 2500 },
         { kind: 'toast', presentation },
         { kind: 'invalidate-table', tableId: 'posts' },
       ],
@@ -96,7 +95,6 @@ describe('server transport contracts', () => {
 
     expect(response.effects).toEqual([
       { kind: 'redirect', url: '/admin/posts', replace: true },
-      { kind: 'toast', level: 'success', message: 'Saved', duration: 2500 },
       { kind: 'toast', presentation },
       { kind: 'invalidate-table', tableId: 'posts' },
     ])
@@ -107,6 +105,13 @@ describe('server transport contracts', () => {
       protocolVersion: '1.0',
       data: null,
       effects: [{ kind: 'redirect', url: 'javascript:alert(1)' }],
+    })).toThrow(TransportDecodingError)
+    expect(() => decodeResponseEnvelope({
+      id: 'request-1',
+      ok: true,
+      protocolVersion: '1.0',
+      data: null,
+      effects: [{ kind: 'toast', level: 'success', message: 'Saved' }],
     })).toThrow(TransportDecodingError)
     expect(() => decodeResponseEnvelope({
       id: 'request-1',

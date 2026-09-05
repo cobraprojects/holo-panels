@@ -47,7 +47,7 @@ describe('P14 core panel integration', () => {
       permissionNamespace: panel.id,
     }))
     const plugin: PanelPlugin<Actor, number> = { compatibility, id: 'shield', install, packageName: '@holo-js/panels-shield' }
-    const panel = definePanel('admin', Actor).plugin(plugin).guard('staff').compile()
+    const panel = definePanel('admin', Actor).plugin(plugin).authGuard('staff').compile()
 
     expect(install).toHaveBeenCalledWith({ guard: 'staff', id: 'admin' })
     expect(panel.server.plugins).toHaveLength(1)

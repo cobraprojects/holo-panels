@@ -11,7 +11,7 @@ import { renderToString } from 'vue/server-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { VueTableRenderer } from '../src/tables/renderer'
 import { createComponentRegistry } from '../src/registry'
-import type { VueCustomFilterProps, VueTableColumn, VueTableRendererProps, VueTableStore } from '../src/tables/types'
+import type { VueCustomFilterProps, VueTableColumn, VueTableRendererProps } from '../src/tables/types'
 
 interface Post {
   readonly id: number
@@ -246,7 +246,7 @@ describe('P7-F Vue table renderer', () => {
     expect(container.querySelector('.hp-table-pagination-info')?.getAttribute('aria-live')).toBe('polite')
   })
 
-  it('preserves arbitrary page sizes and supports legacy stores without page-size mutation', () => {
+  it('preserves arbitrary page sizes', () => {
     const store = createStore({ perPage: 37, total: 250 })
     const container = mountTable(baseProps(store))
     const select = container.querySelector<HTMLSelectElement>('select[aria-label="Results per page"]')
@@ -254,15 +254,6 @@ describe('P7-F Vue table renderer', () => {
     expect(select?.value).toBe('37')
     expect(Array.from(select?.options ?? []).map(option => option.value)).toContain('37')
 
-    const legacyStore = new Proxy(store, {
-      get(target, property) {
-        if (property === 'setPerPage') return undefined
-        const value: unknown = Reflect.get(target, property, target)
-        return typeof value === 'function' ? value.bind(target) : value
-      },
-    }) as VueTableStore<Post, number>
-    const legacyContainer = mountTable({ ...baseProps(store), store: legacyStore })
-    expect(legacyContainer.querySelector('select[aria-label="Results per page"]')).toBeNull()
   })
 
   it('reports an accessible zero-result range', () => {

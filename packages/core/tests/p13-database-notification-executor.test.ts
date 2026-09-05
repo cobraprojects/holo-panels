@@ -60,7 +60,7 @@ describe('P13 database notification operation executor', () => {
     }))
     const authorize = vi.fn(async () => true)
     const builder = definePanel('admin', Actor)
-      .guard('staff')
+      .authGuard('staff')
       .databaseNotifications({ realtime: true })
       .databaseNotificationInbox({ authorize, resolve })
     const panel = builder.compile()
@@ -85,7 +85,7 @@ describe('P13 database notification operation executor', () => {
   it('uses the resolved identity for every store query and ignores hostile client identity fields', async () => {
     const persistence = store()
     const panel = definePanel('admin', Actor)
-      .guard('staff')
+      .authGuard('staff')
       .databaseNotifications()
       .databaseNotificationInbox({
         authorize: () => true,

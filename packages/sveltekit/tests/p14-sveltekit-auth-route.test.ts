@@ -48,8 +48,9 @@ vi.mock('@sveltejs/kit', () => ({
 const { createPanelAuthHandler, createPanelTenantHandler } = await import('../src/server')
 
 const panel = definePanel('admin', { prototype: { id: '' } })
-  .guard('admin')
-  .auth({ login: true, logout: true, multiFactor: true })
+  .authGuard('admin')
+  .login()
+  .multiFactorAuthentication()
   .compile()
 
 const registry: SvelteKitPanelRegistry<{ readonly id: string }> = {
@@ -106,7 +107,7 @@ describe('SvelteKit panel auth handler', () => {
     const actor = { id: 'user-7' }
     const tenants = [{ id: 'tenant-a', members: new Set([actor.id]), name: 'Acme', slug: 'acme' }]
     let active = tenants[0]?.id ?? null
-    const tenantPanel = definePanel('admin', { prototype: actor }).guard('admin').tenancy({
+    const tenantPanel = definePanel('admin', { prototype: actor }).authGuard('admin').tenancy({
       authorize: (tenant, scope) => tenant.members.has(scope.actor.id),
       findMembershipById: (id, scope) => tenants.find(tenant => tenant.id === id && tenant.members.has(scope.actor.id)) ?? null,
       findMembershipByRouteKey: (routeKey, scope) => tenants.find(tenant => tenant.slug === routeKey && tenant.members.has(scope.actor.id)) ?? null,

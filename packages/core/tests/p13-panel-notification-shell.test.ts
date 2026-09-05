@@ -104,7 +104,7 @@ describe('P13 panel database notification shell configuration', () => {
       tenantId: null,
     }))
     const panel = definePanel('admin', Actor)
-      .guard('staff')
+      .authGuard('staff')
       .presentActor(value => ({ id: value.id }))
       .databaseNotifications({ realtime: true })
       .databaseNotificationInbox({ authorize: () => true, resolve })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ActionExecutionError } from '@holo-js/panels-svelte/server'
-import { definePanel } from '@holo-js/panels-core'
+import { definePanel, panelNotification, type Effect } from '@holo-js/panels-core'
 import type { RequestEvent } from '@sveltejs/kit'
 import type {
   PanelBootstrapData,
@@ -18,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   flashed: new Map<string, unknown>(),
   guardNames: [] as string[],
 }))
+
+function toast(id: string, title: string, status: 'danger' | 'info' | 'success' | 'warning' = 'success'): Effect {
+  return { kind: 'toast', presentation: panelNotification(id).title(title).status(status).presentation() }
+}
 
 vi.mock('@holo-js/adapter-sveltekit', () => ({
   createSvelteKitHoloHelpers: () => ({
@@ -194,7 +198,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toMatchObject({
-      effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      effects: [{ kind: 'toast', presentation: panelNotification('panel.error.500').title('Save failed').body('The post could not be saved.').status('danger').presentation() }],
       ok: false,
     })
   })
@@ -225,7 +229,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     const configured = registry()
     const effects = [
       { kind: 'redirect' as const, url: '/admin' },
-      { kind: 'toast' as const, level: 'success' as const, message: 'Oversized success' },
+      toast('posts.oversized', 'Oversized success'),
     ]
     const emptyEnvelope = { data: { text: '' }, effects, id: 'request-12345678', ok: true, protocolVersion: '1.0' }
     const remainingBytes = 4_194_305 - new TextEncoder().encode(JSON.stringify(emptyEnvelope)).byteLength
@@ -485,7 +489,7 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
 
   it('preserves validated action failure effects without trusting arbitrary errors', async () => {
     const configured = registry(['action'])
-    const failureEffect = { kind: 'toast' as const, level: 'danger' as const, message: 'The action failed safely' }
+    const failureEffect = toast('action.failed', 'The action failed safely', 'danger')
     configured.value.runtime.execute = async () => {
       throw new ActionExecutionError('failed', 'The action could not be completed', [failureEffect])
     }
@@ -503,8 +507,8 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
   })
 
   it('hands redirect toasts through the authorized guard once', async () => {
-    const toast = { kind: 'toast' as const, level: 'success' as const, message: 'Article saved' }
-    const effects = [{ kind: 'redirect' as const, url: '/admin/posts' }, toast]
+    const effect = toast('articles.saved', 'Article saved')
+    const effects = [{ kind: 'redirect' as const, url: '/admin/posts' }, effect]
     const configured = registry()
     const value: SvelteKitPanelRegistry = {
       ...configured.value,
@@ -515,17 +519,17 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
 
     const mutation = await handler.POST(event('POST', { operation: 'form-submit', panelId: 'admin' }))
     await expect(mutation.json()).resolves.toMatchObject({ effects, ok: true })
-    expect(mocks.flashed.get('web:panels.effects.admin')).toEqual([toast])
+    expect(mocks.flashed.get('web:panels.effects.admin')).toEqual([effect])
 
     const load = createPanelPageLoad({ panelId: 'admin', registry: value })
-    await expect(load(event('GET', { path: 'posts' }))).resolves.toMatchObject({ effects: [toast] })
+    await expect(load(event('GET', { path: 'posts' }))).resolves.toMatchObject({ effects: [effect] })
     expect(mocks.flashed.has('web:panels.effects.admin')).toBe(false)
     await expect(load(event('GET', { path: 'posts' }))).resolves.toMatchObject({ effects: [] })
   })
 
   it('hands validated failure redirect toasts through the authorized guard', async () => {
-    const toast = { kind: 'toast' as const, level: 'danger' as const, message: 'The action failed safely' }
-    const effects = [{ kind: 'redirect' as const, url: '/admin/posts' }, toast]
+    const effect = toast('action.failed', 'The action failed safely', 'danger')
+    const effects = [{ kind: 'redirect' as const, url: '/admin/posts' }, effect]
     const configured = registry()
     const value: SvelteKitPanelRegistry = {
       ...configured.value,
@@ -537,14 +541,14 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
     const response = await createPanelOperationHandler({ panelIds: ['admin'], registry: value }).POST(event('POST', { operation: 'action', panelId: 'admin' }))
 
     await expect(response.json()).resolves.toMatchObject({ effects, ok: false })
-    expect(mocks.flashed.get('web:panels.effects.admin')).toEqual([toast])
+    expect(mocks.flashed.get('web:panels.effects.admin')).toEqual([effect])
   })
 
   it('rejects malformed and non-toast flash values without crossing panel or guard keys', async () => {
     const configured = registry()
     const { createPanelPageLoad } = await import('../src/server')
     const load = createPanelPageLoad({ panelId: 'admin', registry: configured.value })
-    const staffToast = { kind: 'toast' as const, level: 'info' as const, message: 'Staff only' }
+    const staffToast = toast('staff.info', 'Staff only', 'info')
     mocks.flashed.set('web:panels.effects.admin', [{ kind: 'toast', level: 'success' }])
     mocks.flashed.set('web:panels.effects.staff', [staffToast])
     mocks.flashed.set('other:panels.effects.admin', [staffToast])
@@ -559,8 +563,8 @@ describe('@holo-js/panels-sveltekit server adapter', () => {
   })
 
   it('preserves committed operations and page loads when flash or take fails', async () => {
-    const toast = { kind: 'toast' as const, level: 'success' as const, message: 'Saved' }
-    const effects = [toast, { kind: 'redirect' as const, url: '/admin' }]
+    const effect = toast('posts.saved', 'Saved')
+    const effects = [effect, { kind: 'redirect' as const, url: '/admin' }]
     const configured = registry()
     const value: SvelteKitPanelRegistry = {
       ...configured.value,

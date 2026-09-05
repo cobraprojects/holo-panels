@@ -184,7 +184,7 @@ describe('P9-B panel runtime', () => {
     const panel = definePanel('admin', Actor)
       .default()
       .path('/control/admin')
-      .guard('staff')
+      .authGuard('staff')
       .discoverResources()
       .discoverPages('custom-pages')
       .discoverWidgets()
@@ -224,8 +224,8 @@ describe('P9-B panel runtime', () => {
       accessCalls.push(context.panelId)
       return true
     }
-    const first = definePanel('admin', Actor).guard('staff').presentActor(actor => ({ id: actor.id })).access(access).compile()
-    const second = definePanel('reports', Actor).guard('staff').presentActor(actor => ({ id: actor.id })).access(access).compile()
+    const first = definePanel('admin', Actor).authGuard('staff').presentActor(actor => ({ id: actor.id })).access(access).compile()
+    const second = definePanel('reports', Actor).authGuard('staff').presentActor(actor => ({ id: actor.id })).access(access).compile()
     const fixture = auth({ staff: { id: 1, role: 'admin' } })
     const payloads = await new PanelRuntime(fixture.facade, [first, second]).bootstrap(['admin', 'reports'], signal)
 
@@ -236,8 +236,8 @@ describe('P9-B panel runtime', () => {
   })
 
   it('resolves different guards independently and never accepts a client-selected guard', async () => {
-    const admin = definePanel('admin', Actor).guard('staff').presentActor(actor => ({ id: actor.id })).compile()
-    const vendor = definePanel('vendor', Actor).guard('vendors').presentActor(actor => ({ id: actor.id })).compile()
+    const admin = definePanel('admin', Actor).authGuard('staff').presentActor(actor => ({ id: actor.id })).compile()
+    const vendor = definePanel('vendor', Actor).authGuard('vendors').presentActor(actor => ({ id: actor.id })).compile()
     const fixture = auth({ staff: { id: 1, role: 'admin' }, vendors: { id: 2, role: 'vendor' } })
     const runtime = new PanelRuntime(fixture.facade, [admin, vendor])
 
@@ -278,7 +278,7 @@ describe('P9-B panel runtime', () => {
   it('runs the fixed panel access policy for every operation and rejects unauthenticated or denied actors', async () => {
     const operations: readonly PanelOperation[] = ['action', 'bootstrap', 'form-submit', 'global-search', 'notification', 'options', 'page-data', 'resolver', 'table-data', 'upload']
     const checked: PanelOperation[] = []
-    const panel = definePanel('admin', Actor).guard('staff').access(context => {
+    const panel = definePanel('admin', Actor).authGuard('staff').access(context => {
       checked.push(context.operation)
       return context.actor.role === 'admin'
     }).compile()

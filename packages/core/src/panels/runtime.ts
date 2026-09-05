@@ -2,6 +2,7 @@ import { createPanelTranslator } from '../translations/presentation'
 import { DB } from '@holo-js/db'
 import type { JsonObject } from '../protocol/json'
 import type { ToastEffect } from '../protocol/effects'
+import { panelNotification } from '../notifications/notification'
 import { toJsonValue } from '../protocol/serialization'
 import { withPanelNotificationContext } from '../notifications/dispatch-context'
 import type {
@@ -51,9 +52,11 @@ export function panelErrorNotificationEffect<TActor>(
     ?? configuration.notifications.find(candidate => candidate.statusCode === null)
   return Object.freeze({
     kind: 'toast',
-    level: 'danger',
-    message: notification?.body ?? createPanelTranslator(locale)('feedback.tryLater'),
-    title: notification?.title ?? createPanelTranslator(locale)('feedback.error'),
+    presentation: panelNotification(`panel.error.${statusCode}`)
+      .body(notification?.body ?? createPanelTranslator(locale)('feedback.tryLater'))
+      .status('danger')
+      .title(notification?.title ?? createPanelTranslator(locale)('feedback.error'))
+      .presentation(),
   })
 }
 

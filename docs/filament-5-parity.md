@@ -262,8 +262,8 @@ Filament's pages in this section describe Livewire or Blade integration. Holo Pa
 
 | Official Filament 5 topic | Classification | Rationale | Holo Panels evidence |
 |---|---|---|---|
-| [Multi-factor authentication](https://filamentphp.com/docs/5.x/users/multi-factor-authentication) | Implemented | Panel enrollment, challenge, recovery-code regeneration/use, and disable flows delegate to Holo Auth with session rotation and native framework redirects. | [auth controller](../packages/core/src/auth/controller.ts), [auth tests](../packages/core/tests/p14-auth-pages.test.ts) |
-| [Overview](https://filamentphp.com/docs/5.x/users/overview) | Implemented | Public panel login, logout, reset, verification, profile, and MFA operations bind the configured Holo guard and password broker without serializing server callbacks. | [auth compiler](../packages/core/src/auth/compile.ts), [auth tests](../packages/core/tests/p14-auth-pages.test.ts) |
+| [Multi-factor authentication](https://filamentphp.com/docs/5.x/users/multi-factor-authentication) | Implemented | Panel enrollment, challenge, recovery-code regeneration/use, and disable flows delegate to Holo Auth with session rotation and native framework redirects. | [auth controller](../packages/core/src/auth/controller.ts), [auth controller tests](../packages/core/tests/p14-auth-controller.test.ts) |
+| [Overview](https://filamentphp.com/docs/5.x/users/overview) | Implemented | Public panel login, logout, reset, verification, profile, and MFA operations bind the configured Holo guard and password broker without serializing server callbacks. | [auth compiler](../packages/core/src/auth/compile.ts), [auth operation tests](../packages/core/tests/p14-auth-operation.test.ts) |
 | [Multi-tenancy](https://filamentphp.com/docs/5.x/users/tenancy) | Implemented | Membership, registration/profile pages, active-tenant switching, automatic resource scoping, cache rotation, and trusted propagation across server operations and queued work are supported. | [tenancy runtime](../packages/core/src/tenancy/runtime.ts), [tenant operation tests](../packages/core/tests/p14-tenant-operation.test.ts) |
 
 ## Widgets

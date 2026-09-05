@@ -1,4 +1,5 @@
 import { ClientActionStore, ClientToastStore, FormStore, TableStateStore, toJsonValue, type ClientActionManifest, type JsonObject } from '@holo-js/panels-svelte'
+import { panelNotification } from '@holo-js/panels-core'
 import { render } from 'svelte/server'
 import { describe, expect, it, vi } from 'vitest'
 import { createSvelteKitPanelComponentRegistry, PanelPage, type PanelPageData } from '../src'
@@ -461,7 +462,7 @@ describe('SvelteKit resource page acceptance', () => {
       props: {
         data: {
           ...data,
-          effects: [{ kind: 'toast', level: 'success', message: 'Article saved' }],
+          effects: [{ kind: 'toast', presentation: panelNotification('articles.saved').title('Article saved').status('success').presentation() }],
         },
       },
     }).body

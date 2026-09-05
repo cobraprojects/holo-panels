@@ -41,7 +41,7 @@ import { definePanel } from '@holo-js/panels'
 
 export default definePanel('admin')
   .path('/admin')
-  .guard('admin')
+  .authGuard('admin')
   .access(({ actor }) => actor !== null)
   .presentActor(actor => ({ id: actor.id, name: actor.name }))
 ```

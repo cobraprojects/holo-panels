@@ -104,7 +104,7 @@ export class PanelBuilder<TActor = unknown> {
 
 ## Exact behavior
 
-- `panel.guard(...)` is the only source of the auth guard. No page request contains a guard or provider field.
+- `panel.authGuard(...)` is the only source of the auth guard. No page request contains a guard or provider field.
 - `passwordReset.broker` is compiled into server-only panel state. It is never included in a client manifest or accepted in an operation payload.
 - `profile.fields` is the complete mutation allow-list. Unknown input fields reject the request before `update` runs. Panels never call a Holo provider adapter or model update method directly.
 - `profile.update` is application-owned persistence. After it succeeds, Panels calls the selected Holo Auth guard's `refreshUser()` and re-runs panel access.

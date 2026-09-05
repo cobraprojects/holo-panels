@@ -403,9 +403,7 @@ function tableFilters(
     const id = `${idPrefix}-${filter.manifest.id}`
     const current = state.filters.draft[filter.manifest.id] ?? filter.manifest.defaultValue
     const update = (next: JsonValue): void => {
-      const setFilter: unknown = Reflect.get(table.store, 'setFilter')
-      if (typeof setFilter !== 'function') throw new Error('[Holo Panels] Vue table filters require a compatible table store.')
-      Reflect.apply(setFilter, table.store, [filter.manifest.id, next])
+      table.store.setFilter(filter.manifest.id, next)
       if (state.filters.mode === 'live') notifyQueryChange(table.onQueryChange)
     }
     const layout = filter.manifest.layout ?? {}
@@ -705,18 +703,18 @@ export const VueTableRenderer = defineComponent({
         h(VueTablePresentation, { presentation: tablePresentation }),
         h('nav', { 'aria-label': translate('tables.pagination'), class: 'hp-table-pagination hp:flex hp:flex-wrap hp:items-center hp:justify-between hp:gap-4 hp:text-sm hp:text-muted-foreground', 'data-slot': 'table-pagination' }, [
           h('span', { 'aria-live': 'polite', class: 'hp-table-pagination-info' }, translate('tables.summary', { from: paginationFrom, to: paginationTo, total: snapshot.total })),
-          typeof table.store.setPerPage === 'function' ? h('label', { class: 'hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2' }, [
+          h('label', { class: 'hp-table-pagination-per-page hp:flex hp:items-center hp:gap-2' }, [
             h(NativeSelect, {
               'aria-label': translate('tables.resultsPerPage'),
               disabled: snapshot.loading,
               modelValue: String(snapshot.perPage),
               onChange: (event: Event) => {
-                table.store.setPerPage?.(Number(eventTarget<HTMLSelectElement>(event).value))
+                table.store.setPerPage(Number(eventTarget<HTMLSelectElement>(event).value))
                 notifyQueryChange(table.onQueryChange)
               },
             }, () => perPageOptions(snapshot.perPage).map(value => h('option', { key: value, value: String(value) }, String(value)))),
             h('span', translate('tables.perPage')),
-          ]) : null,
+          ]),
           h('span', { class: 'hp-table-pagination-pages hp:flex hp:items-center hp:gap-1' }, [
             h(Button, {
               'aria-label': translate('tables.previousPage'),

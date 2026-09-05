@@ -3,7 +3,7 @@ import { hydrateRoot } from 'react-dom/client'
 import { createRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createRequestEnvelope, definePage, definePanel, defineStatsWidget, TRANSPORT_REQUEST_FIELD, type HoloAuth, type JsonObject } from '@holo-js/panels-core'
+import { createRequestEnvelope, definePage, definePanel, defineStatsWidget, panelNotification, TRANSPORT_REQUEST_FIELD, type HoloAuth, type JsonObject } from '@holo-js/panels-core'
 import { ClientEffectSession, ClientToastStore, ReactFeedbackProvider, type PanelAvatarComponentProps, type PanelChromeComponentProps, type ReactNotificationInboxTriggerProps } from '@holo-js/panels-react'
 import { createNextPanelComponentRegistry, NextPanelClient } from '../src/panel-client'
 import { NextPanelResourcePage } from '../src/resource-page'
@@ -648,7 +648,7 @@ describe('Next panel adapter', () => {
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toMatchObject({
       direction: 'ltr',
-      effects: [{ kind: 'toast', level: 'danger', message: 'The post could not be saved.', title: 'Save failed' }],
+      effects: [{ kind: 'toast', presentation: panelNotification('panel.error.500').title('Save failed').body('The post could not be saved.').status('danger').presentation() }],
       locale: 'en',
       ok: false,
     })
@@ -922,10 +922,14 @@ describe('Next panel adapter', () => {
     expect(input('[data-field-path="slug"] input').value).toBe('edited-post')
     await click('Save')
     fail = true
+    const failedResponse = await route.POST(operationRequest('admin', 'action', { intent: 'delete', recordId: 1, resourceId: 'posts' }), { params: Promise.resolve({ operation: 'action', panelId: 'admin' }) })
+    expect(await failedResponse.json()).toMatchObject({
+      effects: [{ kind: 'toast', presentation: { body: 'Please try again later.', status: 'danger', title: 'An error occurred' } }],
+      ok: false,
+    })
     await renderResource(<NextPanelResourcePage data={{ record: { category: 'News', city: 'Cairo', id: 1, slug: 'first-post', title: 'First post' } }} panelId="admin" panelPath="/admin" properties={properties(3)} />)
     await click('Delete')
     await click('Confirm')
-    await vi.waitFor(() => expect(toastStore.state.items.at(-1)?.body).toBe('The operation could not be completed.'))
     expect(mutations.map(mutation => mutation.intent)).toEqual(['delete', 'create', 'edit'])
     await act(async () => root.unmount())
     effects.dispose()

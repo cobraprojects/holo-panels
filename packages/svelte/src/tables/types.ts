@@ -8,8 +8,7 @@ import type {
   TableActionDefinition,
   TableActionExecutionRequest,
   TableSelectionPayload,
-  TableState,
-  TableStateListener,
+  TableStore,
 } from '@holo-js/panels-client'
 import type { SvelteComponentRegistry } from '../registry'
 import type { JsonValue } from '@holo-js/panels-client'
@@ -147,29 +146,7 @@ export interface SvelteTableGroup<TRecord extends object> {
   readonly title: string
 }
 
-export interface SvelteTableStore<TRecord extends object, TRecordId extends TableRecordId> {
-  readonly selectionSettings: Readonly<{ currentPageOnly: boolean, groupsOnly: boolean, maximum: number | null }>
-  readonly canSelectAllMatching: boolean
-  readonly selectedCount: number
-  canSelectRecord(recordId: TRecordId): boolean
-  selectGroup(recordIds: readonly TRecordId[], groupKey: string, selected?: boolean): void
-  readonly snapshot: TableState<TRecord, TRecordId>
-  applyDeferredFilters(): void
-  clearSelection(): void
-  isSelected(recordId: TRecordId): boolean
-  resetFilters(): void
-  selectAllMatching(): void
-  selectPage(recordIds: readonly TRecordId[], selected?: boolean): void
-  selectRecord(recordId: TRecordId, selected?: boolean, groupKey?: string): void
-  selectionPayload(): TableSelectionPayload<TRecordId>
-  setFilter(filterId: string, value: JsonValue): void
-  setPage(page: number): void
-  setPerPage?(perPage: number): void
-  setSearch(search: string): void
-  setSort(sort: readonly { readonly column: string, readonly direction: 'asc' | 'desc' }[]): void
-  setVisibleColumns(columns: readonly string[]): void
-  subscribe(listener: TableStateListener<TRecord, TRecordId>): () => void
-}
+export type SvelteTableStore<TRecord extends object, TRecordId extends TableRecordId> = TableStore<TRecord, TRecordId>
 
 export interface SvelteTableRendererProps<TRecord extends object, TRecordId extends TableRecordId> {
   readonly actionTransport?: SvelteTableActionTransport<TRecordId>

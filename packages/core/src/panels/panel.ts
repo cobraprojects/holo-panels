@@ -1,7 +1,6 @@
 import { ConstructionBuilder } from '../builders/construction-builder'
 import { compilePanelAuth } from '../auth/compile'
 import type {
-  CompiledPanelAuth,
   PanelAuthPageConfiguration,
   PanelEmailChangeVerificationPageConfiguration,
   PanelEmailVerificationPageConfiguration,
@@ -65,7 +64,6 @@ interface PanelState<TActor> {
   actorHidden: readonly string[]
   actorPresenter: PanelActorPresenter<TActor>
   actorRecipientType: string
-  auth: ((path: string) => CompiledPanelAuth<TActor>) | null
   authFeatures: PanelAuthPageConfiguration<Readonly<Record<string, unknown>>, string, TActor, unknown, unknown>
   authPasswordBroker: string
   authRoutes: {
@@ -462,7 +460,6 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
       actorHidden: hiddenActorAttributes(actorSource),
       actorPresenter: defaultActorPresenter<TActor>(actorSource),
       actorRecipientType: actorRecipientType(actorSource),
-      auth: null,
       authFeatures: {},
       authPasswordBroker: 'users',
       authRoutes: {
@@ -585,17 +582,9 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
     return this.writeState('path', panelPath(value))
   }
 
-  guard(value: string): this {
+  authGuard(value: string): this {
     assertIdentifier(value, 'Panel guards')
     return this.writeState('guard', value)
-  }
-
-  authGuard(value: string): this {
-    return this.guard(value)
-  }
-
-  defaultPanel(value = true): this {
-    return this.writeState('defaultPanel', value)
   }
 
   locales(values: readonly string[]): this {
@@ -609,63 +598,11 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
   }
 
   ['default'](value = true): this {
-    return this.defaultPanel(value)
+    return this.writeState('defaultPanel', value)
   }
 
   access(policy: (context: PanelAccessContext<TActor>) => boolean | Promise<boolean>): this {
     return this.writeState('access', policy)
-  }
-
-  auth<
-    TProfileValues extends Readonly<Record<string, unknown>>,
-    TProfileField extends Extract<keyof TProfileValues, string>,
-    TTenantSource extends RuntimeTypeSource,
-    TServicesSource extends RuntimeTypeSource,
-  >(
-    sources: {
-      readonly services: TServicesSource
-      readonly tenant: TTenantSource
-    },
-    options: PanelAuthPageConfiguration<
-      TProfileValues,
-      TProfileField,
-      TActor,
-      RuntimeTypeValue<TTenantSource>,
-      RuntimeTypeValue<TServicesSource>
-    >,
-  ): this
-  auth<
-    TProfileValues extends Readonly<Record<string, unknown>> = Readonly<Record<never, never>>,
-    TProfileField extends Extract<keyof TProfileValues, string> = Extract<keyof TProfileValues, string>,
-    TTenant = unknown,
-    TServices = unknown,
-  >(
-    options: PanelAuthPageConfiguration<TProfileValues, TProfileField, TActor, TTenant, TServices>,
-  ): this
-  auth<
-    TProfileValues extends Readonly<Record<string, unknown>>,
-    TProfileField extends Extract<keyof TProfileValues, string>,
-    TTenant,
-    TServices,
-  >(
-    optionsOrSources: PanelAuthPageConfiguration<TProfileValues, TProfileField, TActor, TTenant, TServices> | {
-      readonly services: RuntimeTypeSource
-      readonly tenant: RuntimeTypeSource
-    },
-    profileOptions?: PanelAuthPageConfiguration<TProfileValues, TProfileField, TActor, TTenant, TServices>,
-  ): this {
-    const options = profileOptions ?? optionsOrSources as PanelAuthPageConfiguration<
-      TProfileValues,
-      TProfileField,
-      TActor,
-      TTenant,
-      TServices
-    >
-    if (this.readState().auth !== null) throw new Error('Panel authentication pages are already configured')
-    return this.writeState('auth', path => compilePanelAuth(options, {
-      panelPath: path,
-      route: (value, label) => destinationPath(value, path, label),
-    }))
   }
 
   login(configuration: boolean | PanelLoginPageConfiguration = true): this {
@@ -1363,31 +1300,16 @@ export class PanelBuilder<TActor = unknown> extends ConstructionBuilder<PanelSta
       throw new Error('Panels that require tenant subscriptions must configure a tenant billing provider')
     }
     const compiledTenancy = state.tenancy?.compile(state.tenancyConfiguration.resolveTenantUsing) ?? null
-    const legacyAuth = state.auth?.(state.path) ?? null
     const routedAuthFeatures = this.authFeaturesWithRoutes(state)
     const authFeatures = routedAuthFeatures.profile === true
       ? { ...routedAuthFeatures, profile: this.defaultProfileConfiguration() }
       : routedAuthFeatures
-    const fluentAuth = Object.keys(authFeatures).length === 0
+    const auth = Object.keys(authFeatures).length === 0
       ? null
       : compilePanelAuth(authFeatures, {
           panelPath: state.path,
           route: (value, label) => destinationPath(value, state.path, label),
         })
-    const auth = legacyAuth === null
-      ? fluentAuth
-      : fluentAuth === null
-        ? legacyAuth
-        : {
-            manifest: Object.freeze(Object.fromEntries(Object.entries(legacyAuth.manifest).map(([key, value]) => [
-              key,
-              fluentAuth.manifest[key as keyof typeof fluentAuth.manifest] ?? value,
-            ]))) as CompiledPanelAuth<TActor>['manifest'],
-            server: Object.freeze({
-              passwordBroker: fluentAuth.server.passwordBroker ?? legacyAuth.server.passwordBroker,
-              profile: fluentAuth.server.profile ?? legacyAuth.server.profile,
-            }),
-          }
     const navigation = state.navigation.map(item => ({ ...item, path: destinationPath(item.path, state.path, `Panel navigation item "${item.id}"`) }))
     const userMenu = state.userMenu.map(item => ({ ...item, path: destinationPath(item.path, state.path, `User menu item "${item.id}"`) }))
     const tenantMenuItems = state.tenancyConfiguration.menuItems.map(item => ({

@@ -17,7 +17,7 @@ function response(id: string, effects: Effect[]): Readonly<ResponseEnvelope> {
 }
 
 describe('client effect session', () => {
-  it('preserves rich toast presentations, maps legacy toasts, and redirects last', async () => {
+  it('preserves rich toast presentations and redirects last', async () => {
     const order: string[] = []
     const toastStore = new ClientToastStore()
     toastStore.subscribe((state) => order.push(`toast:${state.items.at(-1)?.id}`))
@@ -42,26 +42,15 @@ describe('client effect session', () => {
       { kind: 'redirect', url: '/orders/42' },
       { kind: 'toast', presentation: rich },
       { kind: 'refresh', target: 'page' },
-      { kind: 'toast', level: 'warning', message: 'Legacy body', title: 'Legacy title', duration: 0 },
     ]))
 
     expect(toastStore.state.items[0]).toMatchObject({
       ...rich,
       trusted: true,
     })
-    expect(toastStore.state.items[1]).toMatchObject({
-      body: 'Legacy body',
-      duration: null,
-      id: 'response.commerce.request-1.4',
-      persistent: true,
-      status: 'warning',
-      title: 'Legacy title',
-      trusted: true,
-    })
     expect(order).toEqual([
       'toast:order.ready',
       'refresh:page',
-      'toast:response.commerce.request-1.4',
       'redirect:/orders/42',
     ])
   })
@@ -73,8 +62,9 @@ describe('client effect session', () => {
       .mockResolvedValue(undefined)
     const redirect = vi.fn(async () => undefined)
     const session = new ClientEffectSession({ panelId: 'admin', toastStore, refresh, redirect })
+    const saved = panelNotification('records.saved').title('Saved').status('success').presentation()
     const envelope = response('request-2', [
-      { kind: 'toast', level: 'success', message: 'Saved' },
+      { kind: 'toast', presentation: saved },
       { kind: 'refresh' },
       { kind: 'redirect', url: '/done' },
     ])
@@ -97,12 +87,13 @@ describe('client effect session', () => {
     const dispose = vi.spyOn(firstToasts, 'dispose')
     const first = new ClientEffectSession({ panelId: 'admin', toastStore: firstToasts })
     const second = new ClientEffectSession({ panelId: 'vendor', toastStore: secondToasts })
-    const envelope = response('shared-response', [{ kind: 'toast', level: 'info', message: 'Scoped' }])
+    const scoped = panelNotification('response.scoped').title('Scoped').status('info').presentation()
+    const envelope = response('shared-response', [{ kind: 'toast', presentation: scoped }])
 
     await first.apply(envelope)
     await second.apply(envelope)
-    expect(firstToasts.state.items[0]?.id).toBe('response.admin.shared-response.1')
-    expect(secondToasts.state.items[0]?.id).toBe('response.vendor.shared-response.1')
+    expect(firstToasts.state.items[0]?.id).toBe('response.scoped')
+    expect(secondToasts.state.items[0]?.id).toBe('response.scoped')
 
     await expect(first.apply(response('unhandled', [{ kind: 'focus', componentId: 'search' }])))
       .rejects.toThrow('No client handler is configured for the "focus" effect')
@@ -110,8 +101,9 @@ describe('client effect session', () => {
     first.dispose()
     first.dispose()
     expect(dispose).toHaveBeenCalledTimes(1)
+    const obsolete = panelNotification('response.obsolete').title('Obsolete response').status('danger').presentation()
     await expect(first.apply(response('after-dispose', [
-      { kind: 'toast', level: 'danger', message: 'Obsolete response' },
+      { kind: 'toast', presentation: obsolete },
     ]))).resolves.toBeUndefined()
     expect(firstToasts.state.items).toHaveLength(1)
   })

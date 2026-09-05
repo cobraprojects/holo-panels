@@ -456,7 +456,7 @@ describe('Filament 5-shaped public API', () => {
     const panel = definePanel('admin')
       .default()
       .path('/admin')
-      .guard('admin')
+      .authGuard('admin')
       .discoverResources()
       .discoverPages()
       .discoverWidgets()

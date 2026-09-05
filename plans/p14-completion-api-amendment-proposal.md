@@ -252,8 +252,9 @@ After approval and implementation:
 ```ts
 // unchanged panel declaration
 export default definePanel('admin')
-  .guard('admin')
-  .auth({ login: true, logout: true, multiFactor: true })
+  .authGuard('admin')
+  .login()
+  .multiFactorAuthentication()
   .plugin(shield({ repository, actor, tenant }))
 
 // optional standard resources

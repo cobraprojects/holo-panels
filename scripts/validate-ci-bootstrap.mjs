@@ -7,9 +7,12 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
 const holoRoot = resolve(process.env.HOLO_PANELS_HOLO_JS_ROOT ?? resolve(repositoryRoot, '../holo-js'))
-const expectedRepository = 'cobraprojects/holo-js'
-const expectedRef = 'f8877ac093672514be59d2cf7fe4431352eaadfe'
-const expectedVersion = '0.3.12'
+const pin = await readFile(resolve(repositoryRoot, '.github/holo-js.env'), 'utf8')
+const pinMatch = /^HOLO_JS_REPOSITORY=(cobraprojects\/holo-js)\nHOLO_JS_REF=([a-f0-9]{40})\nHOLO_JS_VERSION=(\d+\.\d+\.\d+)\n$/u.exec(pin)
+if (!pinMatch) {
+  throw new Error('Invalid Holo-JS compatibility pin in .github/holo-js.env')
+}
+const [, , expectedRef, expectedVersion] = pinMatch
 const expectedCompatibilityRange = '>=0.3.9'
 
 function satisfiesCompatibilityLine(version) {
@@ -35,9 +38,9 @@ const releaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflow
 const hostReleaseWorkflow = await readFile(resolve(repositoryRoot, '.github/workflows/release-holo.yml'), 'utf8')
 
 const requiredWorkflowText = [
-  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
-  `HOLO_JS_REF: ${expectedRef}`,
-  `HOLO_JS_VERSION: ${expectedVersion}`,
+  'run: cat holo-panels/.github/holo-js.env >> "$GITHUB_ENV"',
+  'repository: ${{ env.HOLO_JS_REPOSITORY }}',
+  'ref: ${{ env.HOLO_JS_REF }}',
   'NODE_OPTIONS: --max-old-space-size=8192',
   'path: holo-panels',
   'path: holo-js',
@@ -61,9 +64,9 @@ if (workflow.includes('Validate P0-B')) {
 const requiredReleaseWorkflowText = [
   'workflow_dispatch:',
   'environment: npm-release',
-  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
-  `HOLO_JS_REF: ${expectedRef}`,
-  `HOLO_JS_VERSION: ${expectedVersion}`,
+  'run: cat holo-panels/.github/holo-js.env >> "$GITHUB_ENV"',
+  'repository: ${{ env.HOLO_JS_REPOSITORY }}',
+  'ref: ${{ env.HOLO_JS_REF }}',
   'NODE_OPTIONS: --max-old-space-size=8192',
   'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
   'bun install --frozen-lockfile --ignore-scripts',
@@ -86,9 +89,13 @@ if (releaseWorkflow.includes('pull_request:') || releaseWorkflow.includes('push:
 const requiredHostReleaseWorkflowText = [
   'workflow_dispatch:',
   'environment: npm-release',
-  `HOLO_JS_REPOSITORY: ${expectedRepository}`,
-  `HOLO_JS_REF: ${expectedRef}`,
-  `HOLO_JS_VERSION: ${expectedVersion}`,
+  'run: cat holo-panels/.github/holo-js.env >> "$GITHUB_ENV"',
+  'repository: ${{ env.HOLO_JS_REPOSITORY }}',
+  'ref: ${{ env.HOLO_JS_REF }}',
+  'path: holo-panels',
+  'path: holo-js',
+  'working-directory: holo-js',
+  'working-directory: .',
   'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}',
   'bun install --frozen-lockfile --ignore-scripts',
   'npm rebuild better-sqlite3',

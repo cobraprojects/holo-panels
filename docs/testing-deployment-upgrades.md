@@ -18,7 +18,9 @@ Code/
 └── holo-panels/
 ```
 
-The release candidate accepts every stable Holo-JS version at or above `0.3.9` through the `>=0.3.9` dependency floor. Holo-JS `0.3.9` was never published, so minimum-version packed compatibility starts with published Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`. Published `0.1.0-next.0` lifecycle evidence uses Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529`; current CI and release-candidate validation use Holo-JS `0.3.12` source at commit `9abcce12588feeb22353fd57869719df43d3ac39`. The workflows pin an immutable host revision for reproducible validation, not as an installation ceiling.
+The release candidate accepts every stable Holo-JS version at or above `0.3.9` through the `>=0.3.9` dependency floor. Holo-JS `0.3.9` was never published, so minimum-version packed compatibility starts with published Holo-JS `0.3.10` at commit `15ac56ba94d19b6735d9bc607ef56087ae11a243`. Published `0.1.0-next.0` lifecycle evidence uses Holo-JS `0.3.11` at commit `0d074287272b769cda83fe4886c2127c96c9c529`.
+
+CI and release workflows share the version and immutable source revision in [`.github/holo-js.env`](../.github/holo-js.env). To update the validation baseline, change `HOLO_JS_VERSION` and `HOLO_JS_REF` together in that file. Run `CI=true node scripts/validate-ci-bootstrap.mjs` with the adjacent Holo-JS checkout at the selected revision to verify the pin. The pin makes validation reproducible; the dependency floor controls installation compatibility.
 
 ## Test layers
 

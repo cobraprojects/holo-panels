@@ -7,9 +7,6 @@ permissions:
   contents: read
 
 env:
-  HOLO_JS_REPOSITORY: cobraprojects/holo-js
-  HOLO_JS_REF: f8877ac093672514be59d2cf7fe4431352eaadfe
-  HOLO_JS_VERSION: 0.3.12
   NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
@@ -22,6 +19,8 @@ jobs:
         with:
           path: holo-panels
           persist-credentials: false
+      - name: Load Holo-JS compatibility pin
+        run: cat holo-panels/.github/holo-js.env >> "$GITHUB_ENV"
       - name: Check out compatible Holo-JS
         uses: actions/checkout@v5
         with:

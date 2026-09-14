@@ -6,22 +6,29 @@ on:
 permissions:
   contents: read
 
-env:
-  HOLO_JS_REPOSITORY: cobraprojects/holo-js
-  HOLO_JS_REF: f8877ac093672514be59d2cf7fe4431352eaadfe
-  HOLO_JS_VERSION: 0.3.12
-
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: npm-release
+    defaults:
+      run:
+        working-directory: holo-js
     steps:
+      - name: Check out Holo Panels
+        uses: actions/checkout@v5
+        with:
+          path: holo-panels
+          persist-credentials: false
+      - name: Load Holo-JS compatibility pin
+        working-directory: .
+        run: cat holo-panels/.github/holo-js.env >> "$GITHUB_ENV"
       - name: Check out compatible Holo-JS
         uses: actions/checkout@v5
         with:
           repository: ${{ env.HOLO_JS_REPOSITORY }}
           ref: ${{ env.HOLO_JS_REF }}
+          path: holo-js
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:

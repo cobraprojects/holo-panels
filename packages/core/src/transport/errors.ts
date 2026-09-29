@@ -1,5 +1,5 @@
 import type { ErrorCategory, PanelsError } from '../protocol/envelopes'
-import { isValidationException } from '@holo-js/forms/schema'
+import { isValidationException } from '@holo-js/validation'
 
 const STATUS_CATEGORIES: Readonly<Record<number, ErrorCategory>> = Object.freeze({
   400: 'validation',

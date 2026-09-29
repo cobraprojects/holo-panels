@@ -1,6 +1,6 @@
 import { createPanelTranslator } from '../translations/presentation'
 import type { JsonObject } from '../protocol/json'
-import { isValidationException, ValidationException } from '@holo-js/forms/schema'
+import { isValidationException, ValidationException } from '@holo-js/validation'
 import { formValidationFields, validateFormFields } from '../fields/validation'
 import { toJsonValue } from '../protocol/serialization'
 import { resolveActionState } from './action'

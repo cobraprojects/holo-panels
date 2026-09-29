@@ -1,4 +1,4 @@
-import type { FieldDefinition, FormSchema, InferFormData } from '@holo-js/forms'
+import type { InferValidationSchemaData, FieldDefinition, ValidationSchema } from '@holo-js/validation'
 import type { JsonObject } from '../../protocol/json'
 import {
   FieldBuilder,
@@ -323,45 +323,45 @@ export class BuilderFieldBuilder<
   }
 }
 
-export class CollectionFieldFactory<TSchema extends FormSchema> {
+export class CollectionFieldFactory<TSchema extends ValidationSchema> {
   readonly #binding: FormSchemaBinding<TSchema>
 
   constructor(schema: TSchema) {
     this.#binding = new FormSchemaBinding(schema)
   }
 
-  tags<TPath extends FormFieldPathFor<InferFormData<TSchema>, readonly string[]>>(path: TPath): TagsFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, readonly string[] | null | undefined>> {
+  tags<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, readonly string[]>>(path: TPath): TagsFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, readonly string[] | null | undefined>> {
     return new TagsFieldBuilder(this.#binding.bind(path))
   }
 
-  keyValue<TPath extends FormFieldPathFor<InferFormData<TSchema>, readonly KeyValueEntry[]>>(path: TPath): KeyValueFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, readonly KeyValueEntry[] | null | undefined>> {
+  keyValue<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, readonly KeyValueEntry[]>>(path: TPath): KeyValueFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, readonly KeyValueEntry[] | null | undefined>> {
     return new KeyValueFieldBuilder(this.#binding.bind(path))
   }
 
-  code<TPath extends FormFieldPathFor<InferFormData<TSchema>, string>>(path: TPath): CodeFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, StringValue>> {
+  code<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, string>>(path: TPath): CodeFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, StringValue>> {
     return new CodeFieldBuilder(this.#binding.bind(path))
   }
 
-  markdown<TPath extends FormFieldPathFor<InferFormData<TSchema>, string>>(path: TPath): MarkdownFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, StringValue>> {
+  markdown<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, string>>(path: TPath): MarkdownFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, StringValue>> {
     return new MarkdownFieldBuilder(this.#binding.bind(path))
   }
 
-  richEditor<TPath extends FormFieldPathFor<InferFormData<TSchema>, string>>(path: TPath): RichEditorFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, StringValue>> {
+  richEditor<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, string>>(path: TPath): RichEditorFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, StringValue>> {
     return new RichEditorFieldBuilder(this.#binding.bind(path))
   }
 
-  repeater<TPath extends FormFieldPathFor<InferFormData<TSchema>, readonly object[]>>(path: TPath): RepeaterFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, ArrayValue>> {
+  repeater<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, readonly object[]>>(path: TPath): RepeaterFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, ArrayValue>> {
     return new RepeaterFieldBuilder(this.#binding.bind(path))
   }
 
   builder<
-    TPath extends FormFieldPathFor<InferFormData<TSchema>, readonly object[]>,
+    TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, readonly object[]>,
     TBlocks extends BuilderBlockMap,
-  >(path: TPath, blocks: TBlocks): BuilderFieldBuilder<InferFormData<TSchema>, TPath, Extract<FormFieldValue<InferFormData<TSchema>, TPath>, ArrayValue>, TBlocks> {
+  >(path: TPath, blocks: TBlocks): BuilderFieldBuilder<InferValidationSchemaData<TSchema>, TPath, Extract<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, ArrayValue>, TBlocks> {
     return new BuilderFieldBuilder(this.#binding.bind(path), blocks)
   }
 }
 
-export function collectionFields<TSchema extends FormSchema>(schema: TSchema): CollectionFieldFactory<TSchema> {
+export function collectionFields<TSchema extends ValidationSchema>(schema: TSchema): CollectionFieldFactory<TSchema> {
   return new CollectionFieldFactory(schema)
 }

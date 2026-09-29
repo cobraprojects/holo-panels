@@ -32,7 +32,8 @@
   "peerDependencies": {
     "@holo-js/flux": "catalog:",
     "@holo-js/forms": "catalog:",
-    "@holo-js/security": "catalog:"
+    "@holo-js/security": "catalog:",
+    "@holo-js/validation": "catalog:"
   },
   "peerDependenciesMeta": {
     "@holo-js/flux": {
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@holo-js/flux": "catalog:",
     "@holo-js/forms": "catalog:",
+    "@holo-js/validation": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

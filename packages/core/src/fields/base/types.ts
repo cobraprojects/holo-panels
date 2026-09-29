@@ -1,4 +1,4 @@
-import type { FieldDefinition, FormSchema, InferFormData } from '@holo-js/forms'
+import type { InferValidationSchemaData, FieldDefinition, ValidationSchema } from '@holo-js/validation'
 import type { JsonObject, JsonValue } from '../../protocol/json'
 
 type AtomicFieldValue = Blob | Date | bigint | boolean | number | string | symbol | null | undefined
@@ -35,7 +35,7 @@ export type FormFieldPathFor<TValues, TValue> = {
   [TPath in FormFieldPath<TValues>]: NonNullable<FormFieldValue<TValues, TPath>> extends TValue ? TPath : never
 }[FormFieldPath<TValues>]
 
-export type FormValues<TSchema extends FormSchema> = InferFormData<TSchema>
+export type FormValues<TSchema extends ValidationSchema> = InferValidationSchemaData<TSchema>
 
 export interface BoundFormField<TValues, TPath extends FormFieldPath<TValues>> {
   readonly path: TPath

@@ -1,5 +1,5 @@
 import { column, defineGeneratedTable, defineModel, hasMany } from '@holo-js/db'
-import { field, schema } from '@holo-js/forms'
+import { field, schema } from '@holo-js/validation'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   advancedColumnsFor,
@@ -77,6 +77,35 @@ const postForm = schema({
 })
 
 describe('complete public value-source inference contract', () => {
+  it('infers schema paths, callback values, and defaults without consumer type declarations', () => {
+    const input = schema({
+      title: field.string().required(),
+      score: field.number().required(),
+      enabled: field.boolean().default(false),
+      profile: { biography: field.string().optional() },
+    })
+    const form = fields(input)
+    const title = form.text('title').default(context => {
+      expectTypeOf(context.value).toEqualTypeOf<string>()
+      expectTypeOf(context.get('score')).toEqualTypeOf<number>()
+      expectTypeOf(context.get('enabled')).toEqualTypeOf<boolean>()
+      expectTypeOf(context.get('profile.biography')).toEqualTypeOf<string | undefined>()
+      expectTypeOf(context.values.title).toEqualTypeOf<string>()
+      return context.value.toUpperCase()
+    })
+    const biography = form.textarea('profile.biography').default(context => {
+      expectTypeOf(context.value).toEqualTypeOf<string | undefined>()
+      return context.value ?? context.get('title')
+    })
+
+    expectTypeOf(form.checkbox).parameter(0).toEqualTypeOf<'enabled'>()
+    expectTypeOf(form.slider).parameter(0).toEqualTypeOf<'score'>()
+    expectTypeOf(form.textarea).parameter(0).toEqualTypeOf<'title' | 'profile.biography'>()
+    expectTypeOf(title.compile().defaultValue).toEqualTypeOf<string | undefined>()
+    expect(biography.compile().path).toBe('profile.biography')
+    expect(title.compile().server.defaultValue).toBeTypeOf('function')
+  })
+
   it('infers every consumer callback and builder without manual type declarations', () => {
     const panel = definePanel('admin', Actor)
       .access(context => {

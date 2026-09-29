@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ValidationException } from '@holo-js/forms/schema'
+import { ValidationException } from '@holo-js/validation'
 import {
   createRequestEnvelope,
   decodeRequestEnvelope,

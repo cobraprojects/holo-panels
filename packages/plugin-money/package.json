@@ -70,7 +70,7 @@
     }
   },
   "devDependencies": {
-    "@holo-js/forms": "catalog:",
+    "@holo-js/validation": "catalog:",
     "@holo-js/panels-react": "workspace:*",
     "@holo-js/panels-svelte": "workspace:*",
     "@holo-js/panels-vue": "workspace:*",

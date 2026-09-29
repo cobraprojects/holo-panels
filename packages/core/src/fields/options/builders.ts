@@ -1,4 +1,4 @@
-import type { FieldDefinition, FormSchema, InferFormData } from '@holo-js/forms'
+import type { InferValidationSchemaData, FieldDefinition, ValidationSchema } from '@holo-js/validation'
 import type { JsonObject } from '../../protocol/json'
 import {
   FieldBuilder,
@@ -157,30 +157,30 @@ export class ChoiceFieldBuilder<
   }
 }
 
-export class ChoiceFieldFactory<TSchema extends FormSchema> {
+export class ChoiceFieldFactory<TSchema extends ValidationSchema> {
   readonly #binding: FormSchemaBinding<TSchema>
 
   constructor(schema: TSchema) {
     this.#binding = new FormSchemaBinding(schema)
   }
 
-  select<TPath extends FormFieldPath<InferFormData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferFormData<TSchema>, TPath, FormFieldValue<InferFormData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferFormData<TSchema>, TPath>>, OptionValue>, 'select'> {
+  select<TPath extends FormFieldPath<InferValidationSchemaData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferValidationSchemaData<TSchema>, TPath, FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>>, OptionValue>, 'select'> {
     return new ChoiceFieldBuilder('select', this.#binding.bind(path))
   }
 
-  multiselect<TPath extends FormFieldPath<InferFormData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferFormData<TSchema>, TPath, FormFieldValue<InferFormData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferFormData<TSchema>, TPath>> extends readonly (infer TItem)[] ? TItem : never, OptionValue>, 'multiselect'> {
+  multiselect<TPath extends FormFieldPath<InferValidationSchemaData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferValidationSchemaData<TSchema>, TPath, FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>> extends readonly (infer TItem)[] ? TItem : never, OptionValue>, 'multiselect'> {
     return new ChoiceFieldBuilder('multiselect', this.#binding.bind(path))
   }
 
-  checkboxList<TPath extends FormFieldPath<InferFormData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferFormData<TSchema>, TPath, FormFieldValue<InferFormData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferFormData<TSchema>, TPath>> extends readonly (infer TItem)[] ? TItem : never, OptionValue>, 'checkbox-list'> {
+  checkboxList<TPath extends FormFieldPath<InferValidationSchemaData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferValidationSchemaData<TSchema>, TPath, FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>> extends readonly (infer TItem)[] ? TItem : never, OptionValue>, 'checkbox-list'> {
     return new ChoiceFieldBuilder('checkbox-list', this.#binding.bind(path))
   }
 
-  toggleButtons<TPath extends FormFieldPath<InferFormData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferFormData<TSchema>, TPath, FormFieldValue<InferFormData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferFormData<TSchema>, TPath>> extends readonly (infer TItem)[] ? TItem : NonNullable<FormFieldValue<InferFormData<TSchema>, TPath>>, OptionValue>, 'toggle-buttons'> {
+  toggleButtons<TPath extends FormFieldPath<InferValidationSchemaData<TSchema>>>(path: TPath): ChoiceFieldBuilder<InferValidationSchemaData<TSchema>, TPath, FormFieldValue<InferValidationSchemaData<TSchema>, TPath>, Extract<NonNullable<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>> extends readonly (infer TItem)[] ? TItem : NonNullable<FormFieldValue<InferValidationSchemaData<TSchema>, TPath>>, OptionValue>, 'toggle-buttons'> {
     return new ChoiceFieldBuilder('toggle-buttons', this.#binding.bind(path))
   }
 }
 
-export function choiceFields<TSchema extends FormSchema>(schema: TSchema): ChoiceFieldFactory<TSchema> {
+export function choiceFields<TSchema extends ValidationSchema>(schema: TSchema): ChoiceFieldFactory<TSchema> {
   return new ChoiceFieldFactory(schema)
 }

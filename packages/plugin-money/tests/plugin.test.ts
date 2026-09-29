@@ -1,4 +1,4 @@
-import { field, schema } from '@holo-js/forms'
+import { field, schema } from '@holo-js/validation'
 import { bindFormSchema, columnsFor, validateFormFields, type CustomColumn, type ExtensionTypeId } from '@holo-js/panels-core'
 import { describe, expect, it } from 'vitest'
 import { currencyField, moneyColumn, moneyPlugin } from '../src/index'

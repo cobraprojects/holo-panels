@@ -1,4 +1,4 @@
-import type { FieldDefinition } from '@holo-js/forms'
+import type { FieldDefinition } from '@holo-js/validation'
 import { deepFreeze } from '../../builders/deep-freeze'
 import { ComponentDefaultsApplicator } from '../../defaults/apply-defaults'
 import { toJsonValue } from '../../protocol/serialization'

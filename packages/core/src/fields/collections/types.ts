@@ -1,4 +1,4 @@
-import type { FormSchema, InferFormData, StandardSchemaV1Issue } from '@holo-js/forms'
+import type { InferValidationSchemaData, StandardSchemaV1Issue, ValidationSchema } from '@holo-js/validation'
 import type { JsonObject, JsonValue } from '../../protocol/json'
 
 export interface KeyValueEntry {
@@ -41,7 +41,7 @@ export interface RichTextSanitizer {
   sanitize(document: RichTextDocument): RichTextDocument
 }
 
-export interface BuilderBlockDefinition<TSchema extends FormSchema = FormSchema> {
+export interface BuilderBlockDefinition<TSchema extends ValidationSchema = ValidationSchema> {
   readonly icon?: string
   readonly label: string
   readonly schema: TSchema
@@ -52,7 +52,7 @@ export type BuilderBlockMap = Readonly<Record<string, BuilderBlockDefinition>>
 
 export type BuilderBlockValue<TBlocks extends BuilderBlockMap> = {
   [TType in keyof TBlocks & string]: {
-    readonly data: InferFormData<TBlocks[TType]['schema']>
+    readonly data: InferValidationSchemaData<TBlocks[TType]['schema']>
     readonly type: TType
   }
 }[keyof TBlocks & string]

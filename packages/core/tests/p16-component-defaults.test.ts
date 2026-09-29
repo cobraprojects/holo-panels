@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { field, schema } from '@holo-js/forms'
+import { field, schema } from '@holo-js/validation'
 import { createViewAction } from '../src/actions/builtins'
 import { applyComponentDefaults, withComponentDefaults } from '../src/defaults/apply-defaults'
 import { componentDefault, definePanelsConfig } from '../src/defaults/component-default'

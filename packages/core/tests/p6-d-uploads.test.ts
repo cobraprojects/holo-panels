@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { field, schema } from '@holo-js/forms'
+import { field, schema } from '@holo-js/validation'
 import {
   createTemporaryUploadService,
   defineUploadPolicy,

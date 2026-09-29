@@ -1,4 +1,4 @@
-import { isFormSchema, type FieldDefinition, type FormSchema, type InferFormData } from '@holo-js/forms'
+import { type InferValidationSchemaData, isValidationSchema, type FieldDefinition, type ValidationSchema } from '@holo-js/validation'
 import type { BoundFormField, FormFieldPath } from './types'
 
 interface SchemaFieldNode {
@@ -14,19 +14,19 @@ function isSchemaFieldNode(value: SchemaFieldNode | SchemaBranch | undefined): v
   return value?.kind === 'field' && 'definition' in value
 }
 
-export class FormSchemaBinding<TSchema extends FormSchema> {
+export class FormSchemaBinding<TSchema extends ValidationSchema> {
   readonly schema: TSchema
 
   constructor(schema: TSchema) {
-    if (!isFormSchema(schema)) {
+    if (!isValidationSchema(schema)) {
       throw new Error('Fields must bind to a Holo form schema')
     }
     this.schema = schema
   }
 
-  bind<TPath extends FormFieldPath<InferFormData<TSchema>>>(
+  bind<TPath extends FormFieldPath<InferValidationSchemaData<TSchema>>>(
     path: TPath,
-  ): BoundFormField<InferFormData<TSchema>, TPath> {
+  ): BoundFormField<InferValidationSchemaData<TSchema>, TPath> {
     const segments = path.split('.')
     let current: SchemaFieldNode | SchemaBranch | undefined = this.schema.fields as SchemaBranch
     for (const segment of segments) {
@@ -45,6 +45,6 @@ export class FormSchemaBinding<TSchema extends FormSchema> {
   }
 }
 
-export function bindFormSchema<TSchema extends FormSchema>(schema: TSchema): FormSchemaBinding<TSchema> {
+export function bindFormSchema<TSchema extends ValidationSchema>(schema: TSchema): FormSchemaBinding<TSchema> {
   return new FormSchemaBinding(schema)
 }

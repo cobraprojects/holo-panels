@@ -1,4 +1,4 @@
-import type { FieldDefinition } from '@holo-js/forms'
+import type { FieldDefinition } from '@holo-js/validation'
 import type { JsonObject, JsonValue } from '../protocol/json'
 import type { ExtensionTypeId } from '../plugins/type-id'
 import { FieldBuilder } from './base/field-builder'

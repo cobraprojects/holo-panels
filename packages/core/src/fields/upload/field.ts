@@ -1,4 +1,4 @@
-import type { FieldDefinition, FormSchema, InferFormData, WebFileLike } from '@holo-js/forms'
+import type { InferValidationSchemaData, FieldDefinition, ValidationSchema, WebFileLike } from '@holo-js/validation'
 import type { JsonObject } from '../../protocol/json'
 import { toJsonValue } from '../../protocol/serialization'
 import {
@@ -41,21 +41,21 @@ export class UploadFieldBuilder<
 
 type UploadFieldValue = WebFileLike | readonly WebFileLike[]
 
-export class UploadFieldFactory<TSchema extends FormSchema> {
+export class UploadFieldFactory<TSchema extends ValidationSchema> {
   readonly #binding: FormSchemaBinding<TSchema>
 
   constructor(schema: TSchema) {
     this.#binding = new FormSchemaBinding(schema)
   }
 
-  file<TPath extends FormFieldPathFor<InferFormData<TSchema>, UploadFieldValue>>(
+  file<TPath extends FormFieldPathFor<InferValidationSchemaData<TSchema>, UploadFieldValue>>(
     path: TPath,
     policy: UploadPolicy,
-  ): UploadFieldBuilder<InferFormData<TSchema>, TPath> {
+  ): UploadFieldBuilder<InferValidationSchemaData<TSchema>, TPath> {
     return new UploadFieldBuilder(this.#binding.bind(path), policy)
   }
 }
 
-export function uploadFields<TSchema extends FormSchema>(schema: TSchema): UploadFieldFactory<TSchema> {
+export function uploadFields<TSchema extends ValidationSchema>(schema: TSchema): UploadFieldFactory<TSchema> {
   return new UploadFieldFactory(schema)
 }

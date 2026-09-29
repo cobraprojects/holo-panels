@@ -1,4 +1,4 @@
-import type { FieldDefinition, FormSchema, InferFormData } from '@holo-js/forms'
+import type { InferValidationSchemaData, FieldDefinition, ValidationSchema } from '@holo-js/validation'
 import type { JsonObject, JsonValue } from '../../protocol/json'
 import {
   FieldBuilder,
@@ -489,5 +489,5 @@ export class SlugFieldBuilder<
   }
 }
 
-export type BasicFormSchema = FormSchema
-export type BasicFormValues<TSchema extends BasicFormSchema> = InferFormData<TSchema>
+export type BasicFormSchema = ValidationSchema
+export type BasicFormValues<TSchema extends BasicFormSchema> = InferValidationSchemaData<TSchema>

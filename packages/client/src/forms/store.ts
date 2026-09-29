@@ -1,5 +1,5 @@
 import { FormClientState } from '@holo-js/forms/internal/client'
-import type { ValidationErrorBag } from '@holo-js/forms/schema'
+import type { ValidationErrorBag } from '@holo-js/validation'
 import { createPanelTranslator, validateFormFields, type FormValidationField } from '@holo-js/panels-core'
 import { formValidationErrors } from './validation'
 import { SchemaFocusIndex } from '../schema/focus'

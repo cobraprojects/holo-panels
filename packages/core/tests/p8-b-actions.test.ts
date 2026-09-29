@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ValidationException } from '@holo-js/forms/schema'
+import { ValidationException } from '@holo-js/validation'
 import { compileActionManifest, resolveActionState } from '../src/actions/action'
 import { createBuiltinAction } from '../src/actions/builtins'
 import { ActionEngine } from '../src/actions/engine'

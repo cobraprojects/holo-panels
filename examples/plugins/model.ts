@@ -1,4 +1,4 @@
-import { field, schema } from '@holo-js/forms'
+import { field, schema } from '@holo-js/validation'
 
 export class Product {
   readonly id = 0

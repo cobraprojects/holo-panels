@@ -1,4 +1,4 @@
-import type { FieldDefinition, FieldRule } from '@holo-js/forms'
+import type { FieldDefinition, FieldRule } from '@holo-js/validation'
 import type { JsonValue } from '../../protocol/json'
 import type { FieldClientHints } from './types'
 

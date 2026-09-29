@@ -1,4 +1,4 @@
-import { field as holoField, schema, type FieldDefinition, type FieldRule } from '@holo-js/forms/schema'
+import { field as holoField, schema, type FieldDefinition, type FieldRule } from '@holo-js/validation'
 import { createPanelTranslator, type PanelTranslator, type PanelTranslationKey } from '../translations/presentation'
 import type { FieldClientHints } from './base/types'
 

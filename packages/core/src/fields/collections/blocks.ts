@@ -1,4 +1,4 @@
-import type { StandardSchemaV1Issue } from '@holo-js/forms'
+import type { StandardSchemaV1Issue } from '@holo-js/validation'
 import type { BuilderBlockMap, BuilderBlockValidationIssue } from './types'
 
 export interface SubmittedBuilderBlock {

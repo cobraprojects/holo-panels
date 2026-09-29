@@ -1,4 +1,5 @@
-import { field, schema, type InferFormData } from '@holo-js/forms'
+import type { InferFormData } from '@holo-js/forms'
+import { field, schema } from '@holo-js/validation'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { JsonValue } from '../src/protocol/json'
 import type { FieldResolverContext, FormFieldPath, FormFieldValue } from '../src/fields/base'
